@@ -1,0 +1,17 @@
+
+          name: BNUMBER}"
+            - IMAGE="${DOCKER_HUB_USER}/${IMAGE_NAME}"
+            - docker tag "${IMAGE_NAME}" "${IMAGE}:${VERSION}"
+   b
+          deployment: Staging
+          services:
+            - docker
+          script:
+            - echo ${DOCKER_HUB_PASSWORD} | docker login --username "${DOCKER_HUB_USER}" --password-stdin
+            - IMAGE_NAME=${BITBUCKET_REPO_SLUG}
+            - docker load --input "${IMAGE_NAME}.tar"
+            - VERSION="${BITBUCKET_BUILD_NUMBER}"
+            - IMAGE="${DOCKER_HUB_USER}/${IMAGE_NAME}"
+            - docker tag "${IMAGE_NAME}" "${IMAGE}:${VERSION}"
+            - docker tag "${IMAGE_NAME}" "${IMAGE}:development"
+            - docker push "${IMAGE}" --all-tags

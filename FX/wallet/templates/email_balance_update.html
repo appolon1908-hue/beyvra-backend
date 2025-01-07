@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Manual Balance Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      body {
+        background-color: #f4f4f4;
+        font-size: 16px;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+
+      table {
+        max-width: 600px;
+        margin: 0 auto;
+        width: 100%;
+        border-spacing: 0;
+        border-collapse: collapse;
+      }
+
+      td {
+        padding: 0;
+        text-align: left;
+      }
+
+      a {
+        color: #1a73e8;
+        text-decoration: none;
+      }
+
+      .email-container {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+      }
+
+      .footer {
+        background-color: #ffffff;
+        color: #000;
+        padding: 30px 0;
+        text-align: center;
+      }
+
+      .footer a {
+        color: #1a73e8;
+        text-decoration: none;
+        margin: 0 10px;
+      }
+
+      .social-icons {
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      .social-icons a {
+        margin: 0 10px;
+      }
+
+      .social-icons i {
+        font-size: 24px;
+        color: red;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Main email container -->
+    <table cellpadding="0" cellspacing="0" border="0">
+      <!-- Logo section -->
+      <tr>
+        <td align="center" style="padding: 30px">
+          <img
+            src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/tradxlogo_utukxj.png"
+            alt="Tradx Logo"
+            style="max-width: 200px"
+          />
+        </td>
+      </tr>
+
+      <!-- Email content section -->
+      <tr>
+        <td class="email-container">
+          <p style="margin-bottom: 15px">
+            Hello <strong>{{ user }}</strong>,
+          </p>
+
+          <p style="margin-bottom: 15px">
+            Your wallet balance has been Update by {{ admin }}.
+          </p>
+
+          <p style="margin-bottom: 15px">
+            <strong>Previous Balance:</strong> {{ previous_balance }}<br />
+            <strong>New Balance:</strong> {{ new_balance }}<br />
+            <strong>Reason:</strong> {{ reason }}<br />
+            <strong>Updated By:</strong> {{ admin }}<br />
+            {% if description %}
+            <strong>Description:</strong> {{ description }}<br />
+            {% endif %}
+            <strong>Time:</strong> {{ created_at|date:"Y-m-d H:i:s T" }}<br />
+          </p>
+
+          <p style="margin-bottom: 15px">
+            If you have any questions or concerns, please contact support.
+            <a href="{{ frontend_url }}">here</a>
+          </p>
+
+          <p style="margin: 0">Sincerely,<br />The Tradx Team</p>
+        </td>
+      </tr>
+
+      <!-- Footer section -->
+      <tr>
+        <td class="footer">
+          <p style="margin: 0; font-size: 14px">
+            &copy; 2024 Tradx, Inc. All rights reserved.<br />
+            <a href="{{ frontend_url }}/privacy">Privacy Policy</a> |
+            <a href="{{ frontend_url }}/terms">Terms of Service</a>
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

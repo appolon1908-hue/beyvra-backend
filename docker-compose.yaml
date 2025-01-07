@@ -1,0 +1,150 @@
+version: "3.8"
+services:
+  web:
+    build: ./FX
+    command: ./web-init-prod.sh
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - 8000
+    volumes:
+      - static_files:/app/static
+      - ./media:/app/media
+      - logs:/var/log
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fx-network
+
+  daphne:
+    build: ./FX
+    command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
+    restart: unless-stopped
+    expose:
+      - 8001
+    env_file:
+      - .env
+    depends_on:
+      - web
+    extra_hosts:
+      - "localhost:host-gateway"
+    networks:
+      - fx-network
+
+  postgres:
+    image: postgres:12.9-alpine3.15
+    expose:
+      - 5432
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    networks:
+      - fx-network
+
+  redis:
+    image: redis:7.2.3-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - fx-network
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+
+  celery_worker:
+    build: ./FX
+    entrypoint: ["./worker-entrypoint.sh"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - fx-network
+    depends_on:
+      - redis
+      - web
+
+  celery-flower:
+    build:
+      context: ./FX
+    container_name: celery-flower
+    restart: unless-stopped
+    env_file:
+      - ".env"
+    command: >
+      bash -c
+      "celery -A FX flower --basic_auth=$FLOWER_USERNAME:$FLOWER_PASSWORD"
+    ports:
+      - "5555:5555"
+    networks:
+      - fx-network
+    depends_on:
+      - redis
+      - celery_worker
+
+  chart-data-publisher:
+    build: ./FX
+    command: python3 api_trade/scripts/fetch_data.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - fx-network
+    depends_on:
+      - web
+      - daphne
+      - redis
+
+  nginx:
+    build:
+      context: ./nginx
+      args:
+        CONFIG_FILE: nginx.prod.conf.template
+    restart: unless-stopped
+    ports:
+      - ${PORT}:80
+    volumes:
+      - static_files:/app/static
+      - ./media:/app/media
+    environment:
+      - WEB_HOST=web:8000
+      - DAPHNE_HOST=daphne:8001
+    networks:
+      - fx-network
+    depends_on:
+      - web
+      - daphne
+
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.26.0
+    container_name: statsd-exporter
+    restart: unless-stopped
+    ports:
+      - "9125:9125"
+      - "9102:9102"
+    volumes:
+      - ./statsd-exporter/statsd.conf:/statsd/statsd.conf
+    command:
+      - "--statsd.mapping-config=/statsd/statsd.conf"
+    networks:
+      - fx-network
+    depends_on:
+      - web
+
+volumes:
+  static_files:
+  postgres_data:
+  redis_data:
+  logs:
+
+networks:
+  fx-network:
+    driver: bridge

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Suspicious Activity Detected</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      body {
+        background-color: #f4f4f4;
+        font-size: 16px;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+
+      table {
+        max-width: 600px;
+        margin: 0 auto;
+        width: 100%;
+        border-spacing: 0;
+        border-collapse: collapse;
+      }
+
+      td {
+        padding: 0;
+        text-align: left;
+      }
+
+      a {
+        color: #1a73e8;
+        text-decoration: none;
+      }
+
+      .email-container {
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+      }
+
+      .footer {
+        background-color: #1a1a1a;
+        color: #ffffff;
+        padding: 30px 0;
+        text-align: center;
+      }
+
+      .footer a {
+        color: #ffffff;
+        text-decoration: none;
+        margin: 0 10px;
+      }
+
+      .social-icons {
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      .social-icons a {
+        margin: 0 10px;
+      }
+
+      .social-icons i {
+        font-size: 24px;
+        color: red;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Main email container -->
+    <table cellpadding="0" cellspacing="0" border="0">
+      <!-- Logo section -->
+      <tr>
+        <td align="center" style="padding: 30px">
+          <img
+            src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/tradxlogo_utukxj.png"
+            alt="Tradx Logo"
+            style="max-width: 200px"
+          />
+        </td>
+      </tr>
+
+      <!-- Email content section -->
+      <tr>
+        <td class="email-container">
+          <p style="margin-bottom: 15px">
+            Hello,<br/>
+            Please review the system's report of suspicious user activity.
+          </p>
+
+          <p style="margin-bottom: 15px">{{ dynamic_msg }}</p>
+
+          <p style="margin-bottom: 20px">
+            <strong>User Details:</strong><br />
+            <strong>First Name:</strong> {{ user.first_name }}<br />
+            <strong>Last Name:</strong> {{ user.last_name }}<br />
+            <strong>Email:</strong> {{ user.email }}<br />
+          </p>
+
+          <p style="margin-bottom: 15px">
+            <strong>Login Details:</strong><br />
+            <strong>Device:</strong> {{ details.device }}<br />
+            <strong>IP Address:</strong> {{ details.ip_address }}<br />
+            <strong>Location:</strong> {{ details.location }}<br />
+            <strong>Time:</strong> {{ details.created_at|date:"Y-m-d H:i:s T"}}<br />
+          </p>
+
+          <p style="margin-bottom: 15px">
+            Please take the necessary steps to investigate this activity and
+            ensure the security of the user's account.
+          </p>
+
+          <p style="margin: 0">Sincerely,<br />The Tradx Team</p>
+        </td>
+      </tr>
+
+      <!-- Footer section -->
+      <tr>
+        <td class="footer">
+          <p style="margin: 0; font-size: 14px">
+            &copy; 2024 Tradx, Inc. All rights reserved.<br />
+            <a href="{{ frontend_url }}/privacy">Privacy Policy</a> |
+            <a href="{{ frontend_url }}/terms">Terms of Service</a>
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

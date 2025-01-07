@@ -1,0 +1,5 @@
+ONLINE_COUNT_GROUP = "o_c"
+BARS_DATA_GROUP = "b_d"
+INIT_BARS_GROUP = "init_bars_data"
+WALLET_GROUP = "wt"
+TRADE_GROUP = "td"

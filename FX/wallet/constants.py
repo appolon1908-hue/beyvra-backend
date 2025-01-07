@@ -1,0 +1,2 @@
+DEMO_BALANCE = 1000
+DEMO_WALLET_NAME = "Demo account"

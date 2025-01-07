@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Data Display - All Routes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .data-section {
+            margin-bottom: 30px;
+        }
+        .data-section h2 {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        .data-display {
+            white-space: pre-wrap;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ccc;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WebSocket Data Display - All Routes</h1>
+
+    <!-- Crypto Market Data Section -->
+    <div class="data-section">
+        <h2>Crypto Market Data</h2>
+        <div id="cryptoDataDisplay" class="data-display">Connecting to Crypto Market Data...</div>
+    </div>
+
+    <!-- Stock Market Data Section -->
+    <div class="data-section">
+        <h2>Stock Market Data</h2>
+        <div id="stockDataDisplay" class="data-display">Connecting to Stock Market Data...</div>
+    </div>
+
+    <!-- Asset Data Section -->
+    <div class="data-section">
+        <h2>Asset Data</h2>
+        <div id="assetDataDisplay" class="data-display">Connecting to Asset Data...</div>
+    </div>
+
+    <!-- Current Balance Data Section -->
+    <div class="data-section">
+        <h2>Current Balance Data</h2>
+        <div id="balanceDataDisplay" class="data-display">Connecting to Current Balance Data...</div>
+    </div>
+
+    <!-- Profit Loss Data Section -->
+    <div class="data-section">
+        <h2>Profit Loss Data</h2>
+        <div id="profitLossDataDisplay" class="data-display">Connecting to Profit Loss Data...</div>
+    </div>
+
+    <script>
+        // Function to setup WebSocket and display data
+        function setupWebSocket(url, displayElementId) {
+            const ws = new WebSocket(url);
+
+            ws.onopen = function() {
+                document.getElementById(displayElementId).innerText = 'Connected to ' + url;
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                document.getElementById(displayElementId).innerText = JSON.stringify(data, null, 2);
+            };
+
+            ws.onerror = function(event) {
+                document.getElementById(displayElementId).innerText = 'WebSocket Error: ' + event.message;
+            };
+
+            ws.onclose = function() {
+                document.getElementById(displayElementId).innerText = 'WebSocket connection closed';
+            };
+        }
+
+        const ws_ticket = '5001bc22-085e-4f8d-912d-d85cea0d24c4';
+        // Setup WebSocket connections for each route
+        setupWebSocket('ws://localhost:8000/ws/crypto-market-data/?ws_ticket=' + ws_ticket, 'cryptoDataDisplay');
+        setupWebSocket('ws://localhost:8000/ws/stock-market-data/?ws_ticket=' + ws_ticket, 'stockDataDisplay');
+        setupWebSocket('ws://localhost:8000/ws/asset-data/1/?ws_ticket=' + ws_ticket, 'assetDataDisplay');
+        setupWebSocket('ws://localhost:8000/ws/current-balance/1/?ws_ticket=' + ws_ticket, 'balanceDataDisplay');
+        setupWebSocket('ws://localhost:8000/ws/profit-loss/1/?ws_ticket=' + ws_ticket, 'profitLossDataDisplay');
+    </script>
+
+</body>
+</html>
