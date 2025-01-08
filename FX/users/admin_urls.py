@@ -18,4 +18,5 @@ urlpatterns = [
     path("users/<int:user_id>/document/status/", views.UserDocumentVerificationStatus.as_view()),
     path("users/<int:user_id>/face/status/", views.UserFaceVerificationStatus.as_view()),
     path("users/<int:user_id>/verification/status/", views.UserVerificationStatus.as_view()),
+    path('users/search/', views.UserSearchView.as_view(), name='admin_user_search'),
 ]

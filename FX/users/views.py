@@ -23,6 +23,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 from users import messages
 from users.models import User
 from users.tasks import async_send_welcome_email
@@ -56,7 +57,7 @@ from .tasks import (
     async_send_user_ban_email,
 )
 from trade.models import Trade
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.db import connection
 from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
@@ -1301,7 +1302,48 @@ class UserVerificationStatus(generics.GenericAPIView):
             user.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
+class UserSearchPagination(PageNumberPagination):
+    page_size = 10
+
+
+class UserSearchView(generics.ListAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class = UserSerializer
+    pagination_class = UserSearchPagination
+
+    def get_queryset(self):
+        """
+        Search for users based on query parameters. If query is empty or not provided, return all users.
+        If no results are found, it will return an empty list.
+        """
+        queryset = User.objects.all()
+        query = self.request.query_params.get("query", "").strip()  # Strip any leading/trailing spaces
+
+        if query:
+            queryset = queryset.filter(
+                Q(email__icontains=query) |
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(phone_number__icontains=query)
+            )
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        if not queryset.exists():  # If no results
+            return Response([], status=200)  # Return empty list with a 200 OK status
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
 
 class UserSet2FAMethodView(generics.GenericAPIView):
     """
