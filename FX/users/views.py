@@ -43,6 +43,7 @@ from users.serializers import (
     WalkthroughSerializer,
     UserVerificationStatusSerializer,
     User2FAMethodSerializer,
+    AdminUserStatusSerializer,
 )
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -57,7 +58,7 @@ from .tasks import (
     async_send_user_ban_email,
 )
 from trade.models import Trade
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Case, When, Value, CharField
 from django.db import connection
 from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
@@ -1344,6 +1345,21 @@ class UserSearchView(generics.ListAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     
+
+class UserStatusPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class UserStatusView(generics.ListAPIView):
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserStatusSerializer
+    pagination_class = UserStatusPagination
+
+    def get_queryset(self):
+        return get_user_model().objects.all()
+
 
 class UserSet2FAMethodView(generics.GenericAPIView):
     """

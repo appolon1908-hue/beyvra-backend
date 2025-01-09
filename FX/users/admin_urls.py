@@ -19,4 +19,5 @@ urlpatterns = [
     path("users/<int:user_id>/face/status/", views.UserFaceVerificationStatus.as_view()),
     path("users/<int:user_id>/verification/status/", views.UserVerificationStatus.as_view()),
     path('users/search/', views.UserSearchView.as_view(), name='admin_user_search'),
+    path("users/statuses/", views.UserStatusView.as_view(), name="admin_user_statuses"),
 ]
