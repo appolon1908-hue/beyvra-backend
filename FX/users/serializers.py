@@ -80,6 +80,25 @@ class UserSerializer(BaseUserSerializer):
         return user
 
 
+class AdminUserStatusSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = get_user_model()
+        fields = [
+            "id", "email", "is_active", "status", "role", 
+            "last_login", "date_joined"
+        ]
+
+    def get_status(self, obj):
+        if not obj.is_active:
+            return "Suspended"
+        if obj.is_staff:
+            return "Super Admin" if obj.is_superuser else "Admin"
+        return "Active"
+
+
+
 class UserUpdateSerializer(BaseUserSerializer):
     first_name = serializers.CharField(validators=[ALPHABETS_REGEX_VALIDATOR])
     last_name = serializers.CharField(validators=[ALPHABETS_REGEX_VALIDATOR])
