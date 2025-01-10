@@ -1671,3 +1671,52 @@ def delete_user(request, user_id):
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def bulk_actions(request):
+    """
+    Perform bulk actions on multiple users.
+    - Delete users.
+    - Update roles or statuses for users.
+    """
+    action = request.data.get('action')
+    user_ids = request.data.get('user_ids')
+    if not user_ids:
+        return Response({"error": "No user IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if action == 'delete':
+        users_to_delete = User.objects.filter(id__in=user_ids)
+        deleted_count = users_to_delete.delete()[0]
+        return Response({"message": f"{deleted_count} users deleted successfully"}, status=status.HTTP_200_OK)
+
+    elif action == 'update_roles':
+        new_role = request.data.get('role')
+        if not new_role:
+            return Response({"error": "No role provided for update"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        users_to_update = User.objects.filter(id__in=user_ids)
+        updated_count = 0
+        for user in users_to_update:
+            user.role = new_role
+            user.save()
+            updated_count += 1
+
+        return Response({"message": f"{updated_count} users' roles updated to {new_role} successfully"}, status=status.HTTP_200_OK)
+
+    elif action == 'update_status':
+        new_status = request.data.get('is_active')
+        if new_status is None:
+            return Response({"error": "No status provided for update"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        users_to_update = User.objects.filter(id__in=user_ids)
+        updated_count = 0
+        for user in users_to_update:
+            user.is_active = new_status
+            user.save()
+            updated_count += 1
+
+        return Response({"message": f"{updated_count} users' statuses updated successfully"}, status=status.HTTP_200_OK)
+
+    else:
+        return Response({"error": "Invalid action. Please provide a valid action (delete, update_roles, or update_status)."}, status=status.HTTP_400_BAD_REQUEST)
