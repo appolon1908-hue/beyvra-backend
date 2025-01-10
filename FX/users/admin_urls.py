@@ -24,4 +24,8 @@ urlpatterns = [
     path('users/export/', views.export_users, name='export_users'),
     path('users/search_users/', views.search_users, name='search_users'),
     path('users/<int:user_id>/roles/', views.user_roles, name='user-roles'),
+    path('users/rbac/roles/', views.list_roles, name='list_roles'),
+    path('users/rbac/roles/assign-permissions/', views.assign_permissions_to_role, name='assign_permissions_to_role'),
+    path('users/rbac/users/assign-role/', views.assign_user_to_role, name='assign_user_to_role'),
+    path('users/rbac/users/check-permissions/', views.check_user_permissions, name='check_user_permissions'),
 ]

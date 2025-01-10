@@ -64,6 +64,8 @@ from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.contrib.auth.models import Group, Permission, User
+
 
 
 User = get_user_model()
@@ -1529,3 +1531,51 @@ def user_roles(request, user_id):
         user.save()
 
         return Response({"message": f"Role updated to {role} for user {user.email}."}, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def list_roles(request):
+    roles = Group.objects.all()
+    data = [{"id": role.id, "name": role.name} for role in roles]
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def assign_permissions_to_role(request):
+    role_id = request.data.get('role_id')
+    permission_ids = request.data.get('permission_ids', [])
+    try:
+        role = Group.objects.get(id=role_id)
+        permissions = Permission.objects.filter(id__in=permission_ids)
+        role.permissions.set(permissions)
+        return Response({"message": f"Permissions assigned to role '{role.name}' successfully."})
+    except Group.DoesNotExist:
+        return Response({"error": "Role not found."}, status=404)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def assign_user_to_role(request):
+    user_id = request.data.get('user_id')
+    role_id = request.data.get('role_id')
+    try:
+        user = User.objects.get(id=user_id)
+        role = Group.objects.get(id=role_id)
+        user.groups.add(role)
+        return Response({"message": f"User '{user.username}' assigned to role '{role.name}' successfully."})
+    except (User.DoesNotExist, Group.DoesNotExist) as e:
+        return Response({"error": str(e)}, status=404)
+
+
+@api_view(['POST'])
+def check_user_permissions(request):
+    user_id = request.data.get('user_id')
+    permission_name = request.data.get('permission')
+    try:
+        user = User.objects.get(id=user_id)
+        has_permission = user.has_perm(permission_name)
+        return Response({"has_permission": has_permission})
+    except User.DoesNotExist:
+        return Response({"error": "User not found."}, status=404)
