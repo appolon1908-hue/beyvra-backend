@@ -1387,7 +1387,11 @@ class UserSet2FAMethodView(generics.GenericAPIView):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def import_users(request):
+    if not request.user.is_staff:
+        return Response({"error": "You do not have permission to perform this action."}, status=403)
+
     file = request.FILES.get('file')
     if not file:
         return Response({"error": "No file provided"}, status=400)
@@ -1417,7 +1421,11 @@ def import_users(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def export_users(request):
+    if not request.user.is_staff:
+        return Response({"error": "You do not have permission to perform this action."}, status=403)
+
     filters = {}
     if 'is_active' in request.GET:
         filters['is_active'] = request.GET['is_active'] == 'true'
