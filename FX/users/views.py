@@ -62,6 +62,7 @@ from django.db.models import Sum, Q, Case, When, Value, CharField
 from django.db import connection
 from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
+from django.http import HttpResponse
 
 
 User = get_user_model()
@@ -1383,3 +1384,69 @@ class UserSet2FAMethodView(generics.GenericAPIView):
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+def import_users(request):
+    file = request.FILES.get('file')
+    if not file:
+        return Response({"error": "No file provided"}, status=400)
+
+    if file.name.endswith('.csv'):
+        df = pd.read_csv(file)
+    elif file.name.endswith('.xlsx'):
+        df = pd.read_excel(file)
+    else:
+        return Response({"error": "Unsupported file format. Please upload a CSV or Excel file."}, status=400)
+
+    users = []
+    for index, row in df.iterrows():
+        user_data = {
+            "first_name": row.get('first_name'),
+            "last_name": row.get('last_name'),
+            "email": row.get('email'),
+            "phone_number": row.get('phone_number', ''),
+        }
+        try:
+            user = User.objects.create(**user_data)
+            users.append(user)
+        except ValidationError as e:
+            return Response({"error": f"Error creating user at row {index}: {e}"}, status=400)
+
+    return Response({"message": f"{len(users)} users imported successfully."})
+
+
+@api_view(['GET'])
+def export_users(request):
+    filters = {}
+    if 'is_active' in request.GET:
+        filters['is_active'] = request.GET['is_active'] == 'true'
+    if 'role' in request.GET:
+        filters['role'] = request.GET['role']
+    
+    users = User.objects.filter(**filters)
+
+    user_data = [{
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'phone_number': user.phone_number,
+        'role': user.role,
+        'is_active': user.is_active,
+    } for user in users]
+
+    df = pd.DataFrame(user_data)
+
+    if 'csv' in request.GET:
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="users.csv"'
+        df.to_csv(path_or_buffer=response, index=False)
+        return response
+
+    elif 'excel' in request.GET:
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="users.xlsx"'
+        df.to_excel(path_or_buffer=response, index=False, engine='openpyxl')
+        return response
+
+    return Response({"error": "Invalid file type requested. Please specify 'csv' or 'excel'."}, status=400)
