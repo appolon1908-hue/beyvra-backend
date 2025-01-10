@@ -24,4 +24,6 @@ urlpatterns = [
     path('users/export/', views.export_users, name='export_users'),
     path('users/search_users/', views.search_users, name='search_users'),
     path('users/<int:user_id>/roles/', views.user_roles, name='user-roles'),
+    path('users/<int:user_id>/toggle-status/', views.toggle_user_status, name='toggle_user_status'),
+    path('users/<int:user_id>/update-status/', views.update_user_status, name='update_user_status'),
 ]

@@ -1529,3 +1529,40 @@ def user_roles(request, user_id):
         user.save()
 
         return Response({"message": f"Role updated to {role} for user {user.email}."}, status=200)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def toggle_user_status(request, user_id):
+    """
+    Toggle user status (active/inactive).
+    """
+    try:
+        user = User.objects.get(id=user_id)
+        user.is_active = not user.is_active  # Toggle active status
+        user.save()
+        return Response({"message": f"User status toggled. Active: {user.is_active}"}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def update_user_status(request, user_id):
+    """
+    Update user status (active/inactive).
+    """
+    status_value = request.data.get("status")
+    if status_value not in ["active", "inactive"]:
+        return Response({"error": "Invalid status. Please use 'active' or 'inactive'."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(id=user_id)
+        if status_value == "active":
+            user.is_active = True
+        elif status_value == "inactive":
+            user.is_active = False
+        user.save()
+        return Response({"message": f"User status updated to {status_value}"}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
