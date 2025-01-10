@@ -23,4 +23,5 @@ urlpatterns = [
     path('users/import/', views.import_users, name='import_users'),
     path('users/export/', views.export_users, name='export_users'),
     path('users/search_users/', views.search_users, name='search_users'),
+    path('users/<int:user_id>/roles/', views.user_roles, name='user-roles'),
 ]

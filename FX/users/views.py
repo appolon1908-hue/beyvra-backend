@@ -63,6 +63,7 @@ from django.db import connection
 from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 
 
 User = get_user_model()
@@ -1502,3 +1503,29 @@ def search_users(request):
 
     return paginator.get_paginated_response(user_data)
 
+
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAdminUser])
+def user_roles(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+
+    if request.method == 'GET':
+        return Response({
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role
+        })
+
+    elif request.method in ['PUT', 'PATCH']:
+        role = request.data.get("role")
+        if not role:
+            return Response({"error": "Role field is required."}, status=400)
+
+        allowed_roles = ['Admin', 'User', 'Manager']
+        if role not in allowed_roles:
+            return Response({"error": f"Invalid role. Allowed roles: {allowed_roles}"}, status=400)
+
+        user.role = role
+        user.save()
+
+        return Response({"message": f"Role updated to {role} for user {user.email}."}, status=200)
