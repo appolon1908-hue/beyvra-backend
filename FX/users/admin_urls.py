@@ -22,4 +22,5 @@ urlpatterns = [
     path("users/statuses/", views.UserStatusView.as_view(), name="admin_user_statuses"),
     path('users/import/', views.import_users, name='import_users'),
     path('users/export/', views.export_users, name='export_users'),
+    path('users/search_users/', views.search_users, name='search_users'),
 ]

@@ -1458,3 +1458,47 @@ def export_users(request):
         return response
 
     return Response({"error": "Invalid file type requested. Please specify 'csv' or 'excel'."}, status=400)
+
+
+class StandardResultsPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users(request):
+    if not request.user.is_staff:
+        return Response({"error": "You do not have permission to perform this action."}, status=403)
+
+    search_query = request.GET.get('search', '')
+    is_active = request.GET.get('is_active')
+    role = request.GET.get('role')
+
+    filters = Q()
+    if search_query:
+        filters |= Q(first_name__icontains=search_query) | Q(last_name__icontains=search_query) | Q(email__icontains=search_query)
+    if is_active is not None:
+        filters &= Q(is_active=is_active.lower() == 'true')
+    if role:
+        filters &= Q(role__icontains=role)
+
+    users = User.objects.filter(filters)
+
+    paginator = StandardResultsPagination()
+    paginated_users = paginator.paginate_queryset(users, request)
+
+    user_data = [{
+        'id': user.id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'phone_number': user.phone_number,
+        'role': user.role,
+        'is_active': user.is_active,
+        'date_joined': user.date_joined,
+        'last_login': user.last_login,
+    } for user in paginated_users]
+
+    return paginator.get_paginated_response(user_data)
+
