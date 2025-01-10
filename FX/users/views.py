@@ -1614,3 +1614,60 @@ def update_user_status(request, user_id):
         return Response({"message": f"User status updated to {status_value}"}, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def create_user(request):
+    """
+    Create a new user.
+    """
+    data = request.data
+    try:
+        user = User.objects.create_user(
+            username=data.get('username'),
+            first_name=data.get('first_name'),
+            last_name=data.get('last_name'),
+            email=data.get('email'),
+            password=data.get('password')
+        )
+        return Response({"message": f"User {user.username} created successfully"}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAdminUser])
+def update_user(request, user_id):
+    """
+    Update the user details.
+    """
+    data = request.data
+    try:
+        user = User.objects.get(id=user_id)
+        user.first_name = data.get('first_name', user.first_name)
+        user.last_name = data.get('last_name', user.last_name)
+        user.email = data.get('email', user.email)
+        user.save()
+        return Response({"message": f"User {user.username} updated successfully"}, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAdminUser])
+def delete_user(request, user_id):
+    """
+    Delete user with confirmation.
+    """
+    confirm = request.data.get('confirm', False)
+    if not confirm:
+        return Response({"error": "Please confirm deletion by adding 'confirm: true' in the request body."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(id=user_id)
+        user.delete()
+        return Response({"message": f"User {user.username} deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
