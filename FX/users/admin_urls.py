@@ -30,4 +30,7 @@ urlpatterns = [
     path('users/rbac/users/check-permissions/', views.check_user_permissions, name='check_user_permissions'),
     path('users/<int:user_id>/toggle-status/', views.toggle_user_status, name='toggle_user_status'),
     path('users/<int:user_id>/update-status/', views.update_user_status, name='update_user_status'),
+    path('users/create/', views.create_user, name='create_user'),
+    path('users/<int:user_id>/update/', views.update_user, name='update_user'),
+    path('users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
 ]
