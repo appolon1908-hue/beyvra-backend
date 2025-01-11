@@ -1720,3 +1720,36 @@ def bulk_actions(request):
 
     else:
         return Response({"error": "Invalid action. Please provide a valid action (delete, update_roles, or update_status)."}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def filter_users(request):
+    """
+    Filter users based on roles, statuses, and other criteria.
+    """
+    role = request.GET.get('role')
+    is_active = request.GET.get('is_active')
+    search = request.GET.get('search')
+
+    filters = Q()
+    if role:
+        filters &= Q(role=role)
+    if is_active is not None:
+        filters &= Q(is_active=is_active.lower() == 'true')
+    if search:
+        filters &= Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(email__icontains=search)
+
+    users = User.objects.filter(filters)
+
+    user_data = [{
+        'id': user.id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'role': getattr(user, 'role', 'N/A'),
+        'is_active': user.is_active,
+    } for user in users]
+
+    return Response({"users": user_data}, status=200)
+
