@@ -1753,3 +1753,27 @@ def filter_users(request):
 
     return Response({"users": user_data}, status=200)
 
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def user_details_view(request, user_id):
+    """
+    Fetch detailed information about a specific user.
+    """
+    user = get_object_or_404(User, id=user_id)
+
+    activity_logs = []  # Replace with actual activity log retrieval logic if implemented
+
+    user_data = {
+        'id': user.id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'role': getattr(user, 'role', 'N/A'),
+        'is_active': user.is_active,
+        'last_login': user.last_login,
+        'date_joined': user.date_joined,
+        'activity_logs': activity_logs,
+    }
+
+    return Response(user_data, status=200)
