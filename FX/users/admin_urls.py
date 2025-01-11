@@ -35,4 +35,5 @@ urlpatterns = [
     path('users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
     path('users/bulk/', views.bulk_actions, name='bulk-actions'),
     path('users/filters/', views.filter_users, name='filter-users'),
+    path('users/<int:user_id>/details/', views.user_details_view, name='user-details'),
 ]
