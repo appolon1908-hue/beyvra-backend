@@ -36,4 +36,6 @@ urlpatterns = [
     path('users/bulk/', views.bulk_actions, name='bulk-actions'),
     path('users/filters/', views.filter_users, name='filter-users'),
     path('users/<int:user_id>/details/', views.user_details_view, name='user-details'),
+    path('users/<int:user_id>/reset-password/', views.reset_password, name='reset-password'),
+    path('users/bulk-reset-password/', views.bulk_reset_passwords, name='bulk-reset-password'),
 ]

@@ -44,6 +44,8 @@ from users.serializers import (
     UserVerificationStatusSerializer,
     User2FAMethodSerializer,
     AdminUserStatusSerializer,
+    PasswordResetSerializer,
+    BulkPasswordResetSerializer,
 )
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -1777,3 +1779,40 @@ def user_details_view(request, user_id):
     }
 
     return Response(user_data, status=200)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def reset_user_password(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found."}, status=404)
+
+    serializer = PasswordResetSerializer(data=request.data)
+    if serializer.is_valid():
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        return Response({"message": "Password reset successfully."})
+    return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def bulk_reset_passwords(request):
+    serializer = BulkPasswordResetSerializer(data=request.data)
+    if serializer.is_valid():
+        user_ids = serializer.validated_data['user_ids']
+        new_password = serializer.validated_data['new_password']
+
+        users = User.objects.filter(id__in=user_ids)
+        if not users.exists():
+            return Response({"error": "No users found for the provided IDs."}, status=404)
+
+        for user in users:
+            user.set_password(new_password)
+            user.save()
+
+        return Response({"message": f"Passwords reset for {users.count()} users."})
+    return Response(serializer.errors, status=400)
+
