@@ -44,8 +44,6 @@ from users.serializers import (
     UserVerificationStatusSerializer,
     User2FAMethodSerializer,
     AdminUserStatusSerializer,
-    PasswordResetSerializer,
-    BulkPasswordResetSerializer,
 )
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -64,7 +62,7 @@ from django.db.models import Sum, Q, Case, When, Value, CharField
 from django.db import connection
 from wallet.models import Wallet, Currency
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import Group, Permission, User
 
@@ -1764,7 +1762,7 @@ def user_details_view(request, user_id):
     """
     user = get_object_or_404(User, id=user_id)
 
-    activity_logs = []  # Replace with actual activity log retrieval logic if implemented
+    activity_logs = []
 
     user_data = {
         'id': user.id,
@@ -1781,38 +1779,55 @@ def user_details_view(request, user_id):
     return Response(user_data, status=200)
 
 
-@api_view(['POST'])
-@permission_classes([IsAdminUser])
-def reset_user_password(request, user_id):
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({"error": "User not found."}, status=404)
+class ResetUserPasswordView(APIView):
+    permission_classes = [IsAdminUser]
 
-    serializer = PasswordResetSerializer(data=request.data)
-    if serializer.is_valid():
-        user.set_password(serializer.validated_data['new_password'])
+    def post(self, request, user_id, *args, **kwargs):
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+
+        if not new_password or not confirm_password:
+            return JsonResponse({"error": "Both 'new_password' and 'confirm_password' are required."},
+                                 status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user.set_password(new_password)
         user.save()
-        return Response({"message": "Password reset successfully."})
-    return Response(serializer.errors, status=400)
+
+        return JsonResponse({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-@permission_classes([IsAdminUser])
-def bulk_reset_passwords(request):
-    serializer = BulkPasswordResetSerializer(data=request.data)
-    if serializer.is_valid():
-        user_ids = serializer.validated_data['user_ids']
-        new_password = serializer.validated_data['new_password']
+class BulkResetPasswordView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, *args, **kwargs):
+        user_ids = request.data.get('user_ids')
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+
+        if not user_ids or not isinstance(user_ids, list) or not user_ids:
+            return JsonResponse({"error": "'user_ids' must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not new_password or not confirm_password:
+            return JsonResponse({"error": "Both 'new_password' and 'confirm_password' are required."},
+                                 status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
 
         users = User.objects.filter(id__in=user_ids)
         if not users.exists():
-            return Response({"error": "No users found for the provided IDs."}, status=404)
+            return JsonResponse({"error": "No users found for the provided IDs."}, status=status.HTTP_404_NOT_FOUND)
 
         for user in users:
             user.set_password(new_password)
             user.save()
 
-        return Response({"message": f"Passwords reset for {users.count()} users."})
-    return Response(serializer.errors, status=400)
-
+        return JsonResponse({"message": f"Passwords reset for {users.count()} users."}, status=status.HTTP_200_OK)
