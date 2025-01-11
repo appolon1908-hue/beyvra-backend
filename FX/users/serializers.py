@@ -319,26 +319,3 @@ class User2FAMethodSerializer(serializers.Serializer):
         user.two_fa_type = data["method"]
         user.save()
         return data
-
-
-class PasswordResetSerializer(serializers.Serializer):
-    new_password = serializers.CharField(write_only=True, min_length=8)
-    confirm_password = serializers.CharField(write_only=True, min_length=8)
-
-    def validate(self, data):
-        if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-        return data
-
-
-class BulkPasswordResetSerializer(serializers.Serializer):
-    user_ids = serializers.ListField(
-        child=serializers.IntegerField(), write_only=True, required=True
-    )
-    new_password = serializers.CharField(write_only=True, min_length=8, required=True)
-    confirm_password = serializers.CharField(write_only=True, min_length=8, required=True)
-
-    def validate(self, data):
-        if data['new_password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-        return data
