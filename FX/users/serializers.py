@@ -319,3 +319,11 @@ class User2FAMethodSerializer(serializers.Serializer):
         user.two_fa_type = data["method"]
         user.save()
         return data
+
+
+class PreferredLanguageSerializer(serializers.Serializer):
+    preferred_language = serializers.ChoiceField(
+        choices=[('en', 'English'), ('fr', 'French'), ('es', 'Spanish'), ('de', 'German')],
+        required=True,
+        allow_blank=False,
+    )

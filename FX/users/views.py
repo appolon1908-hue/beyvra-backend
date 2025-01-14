@@ -44,6 +44,7 @@ from users.serializers import (
     UserVerificationStatusSerializer,
     User2FAMethodSerializer,
     AdminUserStatusSerializer,
+    PreferredLanguageSerializer,
 )
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -1831,3 +1832,22 @@ class BulkResetPasswordView(APIView):
             user.save()
 
         return JsonResponse({"message": f"Passwords reset for {users.count()} users."}, status=status.HTTP_200_OK)
+
+
+@extend_schema(request=PreferredLanguageSerializer)
+class UpdatePreferredLanguageView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, *args, **kwargs):
+        serializer = PreferredLanguageSerializer(data=request.data)
+        if serializer.is_valid():
+            preferred_language = serializer.validated_data['preferred_language']
+            user = request.user
+            user.preferred_language = preferred_language
+            user.save()
+
+            return Response(
+                {"message": "Preferred language updated successfully.", "language": preferred_language},
+                status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
