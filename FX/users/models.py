@@ -63,7 +63,17 @@ class User(AbstractUser, TimeStampedModel):
         ("VERIFIED", "Verified"),
         ("CHANGE_PASSWORD", "Change Password"), # For bulk created users first login
     )
-
+    preferred_language = models.CharField(
+        max_length=10,
+        choices=[
+            ('en', 'English'),
+            ('fr', 'French'),
+            ('es', 'Spanish'),
+            ('de', 'German'),
+        ],
+        default='en',
+        verbose_name="Preferred Language",
+    )
     username = None
     email = models.EmailField(_("email address"), unique=True)
     first_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
