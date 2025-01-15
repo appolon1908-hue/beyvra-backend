@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import json
 import os
 from datetime import timedelta
+from celery.schedules import crontab
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,12 +29,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = 'rg22$!)t8ccu_b7_j$i)^v^pu@z(_echbcpsg@p(#%@!50&)%w'
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = int(os.getenv("DEBUG"))
+DEBUG = True
 
-ALLOWED_HOSTS = json.loads(os.getenv("ALLOWED_HOSTS"))
-CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
+ALLOWED_HOSTS = ['*']
+# CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
 
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
@@ -67,6 +68,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "channels",
+    "wsnotifications",
     "users",
     "api_trade",
     "wallet",
@@ -79,6 +81,7 @@ INSTALLED_APPS = [
     "bank_account_app",
     "security",
     "coinmarketcharts",
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -119,16 +122,16 @@ ASGI_APPLICATION = "FX.asgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", '5432'),
-    }
-}
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.postgresql",
+#         "NAME": os.getenv("DB_NAME"),
+#         "USER": os.getenv("DB_USER"),
+#         "PASSWORD": os.getenv("DB_PASSWORD"),
+#         "HOST": os.getenv("DB_HOST"),
+#         "PORT": os.getenv("DB_PORT", '5432'),
+#     }
+# }
 
 # REDIS
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)
@@ -140,29 +143,73 @@ REDIS_POOL_MAX_CONNECTIONS = os.getenv("REDIS_POOL_MAX_CONNECTIONS")
 REDIS_EXPIRE_KEY = os.getenv("REDIS_EXPIRE_KEY")
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DATABASE}"
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL,
-    }
-}
+# CACHES = {
+#     "default": {
+#         "BACKEND": "django.core.cache.backends.redis.RedisCache",
+#         "LOCATION": REDIS_URL,
+#     }
+# }
 
 # CELERY
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = {"application/json"}
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TASK_SERIALIZER = "json"
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# CELERY_ACCEPT_CONTENT = {"application/json"}
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TASK_SERIALIZER = "json"
 
+# CELERY_BEAT_SCHEDULE = {
+#     'update-market-prices': {
+#         'task': 'wsnotifications.tasks.update_market_prices',
+#         'schedule': 60.0,  # Run every 60 seconds
+#     },
+# }
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# Serialization
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+# Task execution settings
+CELERY_TASK_SOFT_TIME_LIMIT = 60
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_DEFAULT_RETRY_DELAY = 180  # 3 minutes
+CELERY_TASK_MAX_RETRIES = 3
+
+# Error handling & monitoring
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_SEND_SENT_EVENT = True
+CELERY_WORKER_SEND_TASK_EVENTS = True
+
+# Optional: Beat schedule for periodic tasks
+CELERY_BEAT_SCHEDULE = {
+    'periodic_price_updates': {
+        'task': 'wsnotifications.tasks.periodic_price_updates',
+        'schedule': crontab(minute="*/1")
+    }
+}
 # CHANNELS
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": ['redis://127.0.0.1:6379/0'],
         },
     },
 }
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',  # Adjust the host, port, and database index as needed
+    }
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -279,42 +326,49 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_SEND_FROM_NUMBER = os.getenv("TWILIO_SEND_FROM_NUMBER")
 
 
-# Logging
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-        },
-        "file": {
-            "level": LOG_LEVEL,
-            "class": "logging.FileHandler",
-            "filename": "/var/log/django.log",
-        },
-        "mail_admins": {
-            "level": "ERROR",
-            "class": "fx_utils.email.CustomAdminEmailHandler",
-            "include_html": True,
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "WARNING",
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
-            "propagate": True,
-        },
-        "django.request": {
-            "handlers": ["mail_admins"],
-            "level": "ERROR",
-            "propagate": True,
-        },
-    },
+
+# LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+# LOGGING = {
+#     "version": 1,
+#     "disable_existing_loggers": False,
+#     "handlers": {
+#         "console": {
+#             "class": "logging.StreamHandler",
+#         },
+#         "file": {
+#             "level": LOG_LEVEL,
+#             "class": "logging.FileHandler",
+#             "filename": "/var/log/django.log",
+#         },
+#         "mail_admins": {
+#             "level": "ERROR",
+#             "class": "fx_utils.email.CustomAdminEmailHandler",
+#             "include_html": True,
+#         },
+#     },
+#     "root": {
+#         "handlers": ["console"],
+#         "level": "WARNING",
+#     },
+#     "loggers": {
+#         "django": {
+#             "handlers": ["console", "file"],
+#             "level": LOG_LEVEL,
+#             "propagate": True,
+#         },
+#         "django.request": {
+#             "handlers": ["mail_admins"],
+#             "level": "ERROR",
+#             "propagate": True,
+#         },
+#     },
+# }
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
 
 # Admins who get notified on errors

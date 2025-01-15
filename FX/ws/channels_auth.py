@@ -1,11 +1,11 @@
 from urllib.parse import parse_qs
-
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from users.models import User
-
+# from wsnotifications import 
+from .utils import generate_and_store_ticket
 
 @database_sync_to_async
 def get_user(user_id: int) -> User:
@@ -34,15 +34,18 @@ class CustomTokenAuthMiddleware(BaseMiddleware):
         # if a user logs in another device invalidate the other sockets
 
         # get ticket from query param
+        generate_and_store_ticket(1)
         query_string = scope["query_string"].decode("utf-8")
         query_params = dict(parse_qs(query_string))
         ws_ticket = query_params.get("ws_ticket")[0]
+        print(ws_ticket)
         # get user id from redis cache
         user_id = cache.get(ws_ticket, None)
+        print(user_id)
         # delete ticket to make it accessible by one user only
         cache.delete(ws_ticket)
         if user_id is None:
-            scope["user"] = AnonymousUser()
+           scope["user"] = AnonymousUser()
         else:
             scope["user"] = await get_user(user_id)
 

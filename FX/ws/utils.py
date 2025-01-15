@@ -4,10 +4,27 @@ from channels.layers import get_channel_layer
 from trade.models import Trade
 from trade.serializers import TradeSerializer
 from users.models import User
-
+import uuid
+from django.core.cache import cache
 from .constants import ONLINE_COUNT_GROUP
 
 channel_layer = get_channel_layer()
+
+##Used this code to simulate the process of generating and storing tickets for a particular user with their id, so i can pass the custom authentication for the consumers
+def generate_and_store_ticket(user_id: int) -> str:
+    """
+    Generates a unique ticket and stores it in Redis with the user ID.
+    
+    Args:
+        user_id (int): The ID of the user to associate with the ticket.
+
+    Returns:
+        str: The generated ticket.
+    """
+    ticket = str(uuid.uuid4())
+    cache.set(ticket, user_id, timeout=600)
+    return ticket
+
 
 
 @database_sync_to_async

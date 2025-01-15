@@ -13,6 +13,8 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from twilio.rest import Client
 from datetime import datetime
+import uuid
+from django.core.cache import cache
 
 PHONE_REGEX_VALIDATOR = RegexValidator(
     regex=r"^\+\d{9,15}$",
@@ -239,3 +241,6 @@ def send_user_ban_email(user):
     msg.attach_alternative(html_content, "text/html")
     print("Sending user ban email")
     msg.send(fail_silently=False)
+
+
+

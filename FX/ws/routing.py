@@ -1,5 +1,5 @@
 from django.urls import re_path
-from ws.consumers import WebsocketConsumer
+from .consumer import WebsocketConsumer
 
 websocket_urlpatterns = [
     re_path("ws/external-api/", WebsocketConsumer.as_asgi()),

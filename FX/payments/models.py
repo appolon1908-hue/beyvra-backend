@@ -39,7 +39,7 @@ class PaymentMethod(TimeStampedModel):
         ("crypto", "crypto"),
     )
     name = models.CharField(max_length=50, unique=True)
-    type = models.CharField(choices=TYPE_CHOICES)
+    type = models.CharField(max_length=50, choices=TYPE_CHOICES)
     icon = models.FileField(
         upload_to=upload,
         blank=True,
