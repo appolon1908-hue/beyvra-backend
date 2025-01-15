@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import json
+import dj_database_url
 import os
 from datetime import timedelta
 from celery.schedules import crontab
@@ -29,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'rg22$!)t8ccu_b7_j$i)^v^pu@z(_echbcpsg@p(#%@!50&)%w'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -143,26 +144,6 @@ REDIS_POOL_MAX_CONNECTIONS = os.getenv("REDIS_POOL_MAX_CONNECTIONS")
 REDIS_EXPIRE_KEY = os.getenv("REDIS_EXPIRE_KEY")
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DATABASE}"
 
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-#         "LOCATION": REDIS_URL,
-#     }
-# }
-
-# CELERY
-# CELERY_BROKER_URL = 'redis://localhost:6379/0'
-# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-# CELERY_ACCEPT_CONTENT = {"application/json"}
-# CELERY_RESULT_SERIALIZER = "json"
-# CELERY_TASK_SERIALIZER = "json"
-
-# CELERY_BEAT_SCHEDULE = {
-#     'update-market-prices': {
-#         'task': 'wsnotifications.tasks.update_market_prices',
-#         'schedule': 60.0,  # Run every 60 seconds
-#     },
-# }
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
@@ -186,13 +167,15 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SEND_SENT_EVENT = True
 CELERY_WORKER_SEND_TASK_EVENTS = True
 
-# Optional: Beat schedule for periodic tasks
+#Beat schedule for periodic tasks
+
 CELERY_BEAT_SCHEDULE = {
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
         'schedule': crontab(minute="*/1")
     }
 }
+
 # CHANNELS
 CHANNEL_LAYERS = {
     "default": {
@@ -364,12 +347,18 @@ TWILIO_SEND_FROM_NUMBER = os.getenv("TWILIO_SEND_FROM_NUMBER")
 #     },
 # }
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+
+DATABASES = {}
+
+DATABASES["default"]=dj_database_url.parse('postgresql://tradx_user:oXL7cHXvJTqzAf7YETYBZiad4gUqShgi@dpg-cu40oq3v2p9s73dst060-a.oregon-postgres.render.com/tradx')
+
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 # Admins who get notified on errors
 ADMINS = []
@@ -385,3 +374,11 @@ if not DEBUG:
 
 
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "pub_5104020b15ee44b2ef4f00b0d7b0835337c8a")
+
+
+
+
+
+
+
+
