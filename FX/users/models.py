@@ -18,7 +18,6 @@ def validate_file_size(file_obj):
         raise ValidationError("Max file size is %s MB" % str(megabyte_limit))
 
 
-
 class TimeStampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -39,32 +38,43 @@ class User(AbstractUser, TimeStampedModel):
     )
 
     TWO_FACTOR_AUTH_TYPE = (
+        ("", ""),
         ("SMS", "SMS"),
         ("AUTHENTICATOR_APP", "AUTHENTICATOR APP"),
     )
-    
     PASSWORD_STRENGTH = (
+        ('', ''),
         ('STRONG', 'STRONG'),
         ('MODERATE', 'MODERATE'),
         ('WEAK', 'WEAK'),
     )    
-    
     PASSWORD_COMPLEXITY_CHOICES = (
+        ('', ''),
         ('SPECIAL_CHARACTERS', 'Special Characters'),
         ('UPPERCASE_LOWERCASE', 'Uppercase and Lowercase'),
         ('NUMBERS_AND_SPECIAL_CHARACTERS', 'Numbers and Special Characters'),
         ('CUSTOM', 'Custom')
     )
-    
     VERIFICATION_STATUS = (
+        ("", ""),
         ("PENDING", "Pending"),
         ("APPROVED", "Approved"),
         ("REJECTED", "Rejected"),
         ("VERIFIED", "Verified"),
-        ("CHANGE_PASSWORD", "Change Password"),
+        ("CHANGE_PASSWORD", "Change Password"), # For bulk created users first login
     )
-
-    username = models.CharField(max_length=250, blank=True, null=True)
+    preferred_language = models.CharField(
+        max_length=10,
+        choices=[
+            ('en', 'English'),
+            ('fr', 'French'),
+            ('es', 'Spanish'),
+            ('de', 'German'),
+        ],
+        default='en',
+        verbose_name="Preferred Language",
+    )
+    username = None
     email = models.EmailField(_("email address"), unique=True)
     first_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
     last_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
@@ -75,15 +85,13 @@ class User(AbstractUser, TimeStampedModel):
         null=True,
         validators=[validate_file_size],
     )
-    blured_email = models.CharField(max_length=255, blank=True, null=True)
-    blured_phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
-    gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True, max_length=500)
+    gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True, max_length=10)
     two_factor_authentication_enabled = models.BooleanField(default=False)
     hidden_account_balances_toggle_enabled = models.BooleanField(default=False)
     one_click_trade_toggle_enabled = models.BooleanField(default=False)
     one_click_trade_closing_toggle_enabled = models.BooleanField(default=False)
-    date_joined = models.DateTimeField(auto_now_add=True)
+    date_joined = models.DateTimeField(default=timezone.now)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     country_name = models.CharField(max_length=100, blank=True, null=True)
@@ -92,43 +100,29 @@ class User(AbstractUser, TimeStampedModel):
     is_mfa_enabled = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
     phone_verified = models.BooleanField(default=False)
-    trader_id = models.IntegerField(blank=True, null=True, unique=True)
-
-    # trader_id = models.BigIntegerField(unique=True, default=generate_trader_id, editable=False)
+    trader_id = models.BigIntegerField(null=True, blank=True, unique=True, default=generate_trader_id, editable=False)
     is_walkthrough = models.BooleanField(default=False)
     is_online = models.BooleanField(default=False)
     role = models.CharField(max_length=11, choices=USER_ROLES, default="User")
     ip_restricted = models.BooleanField(default=False)
     two_fa_type = models.CharField(
-        max_length=100, choices=TWO_FACTOR_AUTH_TYPE, blank=True, null=True)
+        max_length=100, choices=TWO_FACTOR_AUTH_TYPE, default='')
     password_complexity = models.CharField(
-        max_length=100, choices=PASSWORD_COMPLEXITY_CHOICES, blank=True, null=True)
+        max_length=100, choices=PASSWORD_COMPLEXITY_CHOICES, default='')
     custom_characters = models.CharField(
         max_length=255, null=True, blank=True,
         help_text="Enter password custom characters like @%^$ if 'Custom' is selected."
     )
     password_strength = models.CharField(
-        max_length=64, 
-        choices=PASSWORD_STRENGTH,
-        default='MODERATE'
-    )
+        max_length=64, choices=PASSWORD_STRENGTH, default='')
     password_min_length = models.PositiveIntegerField(default=8)
     password_max_length = models.PositiveIntegerField(default=20)
     document_verification = models.CharField(
-        max_length=100, 
-        choices=VERIFICATION_STATUS,
-        default="PENDING"
-    )
+        max_length=100, choices=VERIFICATION_STATUS, default="")
     face_verification = models.CharField(
-        max_length=100, 
-        choices=VERIFICATION_STATUS,
-        default="PENDING"  # Add default
-    )
+        max_length=100, choices=VERIFICATION_STATUS, default="")
     verification_status = models.CharField(
-        max_length=100, 
-        choices=VERIFICATION_STATUS,
-        default="PENDING"  # Add default
-    )
+        max_length=100, choices=VERIFICATION_STATUS, default="")
     brand = models.CharField(max_length=120, null=True, blank=True,
                              help_text="Where we got the contact from.")
 

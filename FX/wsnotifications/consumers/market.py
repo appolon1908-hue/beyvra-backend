@@ -3,9 +3,6 @@ import json
 
 
 
-
-# User = get_user_model()
-
 class MarketDataConsumer(BaseConsumer):
     """
     Handles real-time market data updates including prices,
@@ -25,15 +22,3 @@ class MarketDataConsumer(BaseConsumer):
             "type": "price_update",
             "data": message
         }))
-
-    # async def send_data(self):
-       
-
-    # async def send_market_snapshot(self):
-    #     """Send initial market data snapshot"""
-    #     # Get latest prices from your data source
-    #     snapshot = await self.get_market_snapshot()
-    #     await self.send_json({
-    #         'type': 'market_snapshot',
-    #         'data': snapshot
-    #     })
