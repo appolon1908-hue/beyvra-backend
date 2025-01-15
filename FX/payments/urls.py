@@ -11,5 +11,6 @@ urlpatterns = [
     path("deposits/history/", views.DepositHistoryView.as_view(), name="deposit_history"),
     path("wallet/balance/", views.WalletBalanceView.as_view(), name="wallet_balance"),
     path("wallet/transfer/", views.WalletTransferView.as_view(), name="wallet_transfer"),
+    path("process_payment/", views.PaymentProcessingView.as_view(), name="process_payment"),
 
 ]
