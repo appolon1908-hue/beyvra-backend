@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from wallet.models import Transaction, Wallet
+from decimal import Decimal
 
 from .models import PaymentMethod, Payment, PaymentsProvider
 from .serializers import BinancePaymentResponseSerializer, PaymentMethodSerializer, PaymentRequestSerializer, PaymentSerializer
@@ -240,3 +241,41 @@ class PaymentView(APIView):
         except Exception as e:
             return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
+
+class DepositHistoryView(APIView):
+    """
+    View deposit history for authenticated users.
+    """
+    def get(self, request):
+        deposits = Payment.objects.filter(user=request.user, type='Deposit').order_by('-payment_date')
+        serializer = PaymentSerializer(deposits, many=True)
+        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+
+
+class WalletBalanceView(APIView):
+    """
+    View wallet balance for authenticated users.
+    """
+    def get(self, request):
+        wallet = get_object_or_404(Wallet, user=request.user)
+        return Response({"balance": wallet.balance, "currency": wallet.currency.symbol}, status=status.HTTP_200_OK)
+
+
+class WalletTransferView(APIView):
+    """
+    Transfer funds between wallets.
+    """
+    def post(self, request):
+        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'))
+        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'))
+        amount = Decimal(request.data.get('amount', 0))
+
+        if source_wallet.balance < amount:
+            return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+
+        source_wallet.balance -= amount
+        target_wallet.balance += amount
+        source_wallet.save()
+        target_wallet.save()
+
+        return Response({"message": "Funds transferred successfully"}, status=status.HTTP_200_OK)
