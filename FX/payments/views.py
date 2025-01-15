@@ -279,3 +279,48 @@ class WalletTransferView(APIView):
         target_wallet.save()
 
         return Response({"message": "Funds transferred successfully"}, status=status.HTTP_200_OK)
+
+
+@extend_schema(request=PaymentRequestSerializer)
+class PaymentProcessingView(APIView):
+    """
+    Process payments using different payment methods.
+    """
+    @extend_schema(
+            request=PaymentRequestSerializer,
+            responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
+        )
+    def post(self, request):
+        serializer = PaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        payment_method = get_object_or_404(PaymentMethod, id=data['payment_method_id'], is_active=True)
+        wallet = get_object_or_404(Wallet, id=data['wallet_id'], user=request.user)
+        amount = data['amount']
+
+        if amount <= 0:
+            return Response({"error": "Invalid amount"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if payment_method.type == "credit_card":
+            return self.handle_credit_card_payment(wallet, amount, payment_method)
+        elif payment_method.type == "bank":
+            return self.handle_bank_transfer(wallet, amount, payment_method)
+        elif payment_method.type == "crypto":
+            return self.handle_crypto_payment(wallet, amount, payment_method)
+        elif payment_method.type == "e_wallet":
+            return self.handle_e_wallet_payment(wallet, amount, payment_method)
+        else:
+            return Response({"error": "Unsupported payment method"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def handle_credit_card_payment(self, wallet, amount, payment_method):
+        return Response({"message": "Credit card payment processed"}, status=status.HTTP_200_OK)
+
+    def handle_bank_transfer(self, wallet, amount, payment_method):
+        return Response({"message": "Bank transfer initiated"}, status=status.HTTP_200_OK)
+
+    def handle_crypto_payment(self, wallet, amount, payment_method):
+        return Response({"message": "Crypto payment request generated"}, status=status.HTTP_200_OK)
+
+    def handle_e_wallet_payment(self, wallet, amount, payment_method):
+        return Response({"message": "E-Wallet payment processed"}, status=status.HTTP_200_OK)

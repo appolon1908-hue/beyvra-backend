@@ -34,21 +34,25 @@ class PaymentsProvider(models.Model):
 
 class PaymentMethod(TimeStampedModel):
     TYPE_CHOICES = (
-        ("bank", "bank"),
-        ("epayment", "epayment"),
-        ("crypto", "crypto"),
+        ("bank", "Bank Transfer"),
+        ("credit_card", "Credit Card"),
+        ("crypto", "Cryptocurrency"),
+        ("e_wallet", "E-Wallet"),
     )
     name = models.CharField(max_length=50, unique=True)
-    type = models.CharField(choices=TYPE_CHOICES)
+    type = models.CharField(max_length=50, choices=TYPE_CHOICES)
     icon = models.FileField(
         upload_to=upload,
         blank=True,
         null=True,
         validators=[validate_file_size],
     )
-    account_id = models.CharField(max_length=100)
-    network = models.CharField(max_length=50, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    account_details = models.JSONField(default=dict, blank=True, help_text="Store payment-specific details")
+    
+    def __str__(self):
+        return f"{self.name} ({self.type})"
+
 
 
 class Payment(models.Model):
