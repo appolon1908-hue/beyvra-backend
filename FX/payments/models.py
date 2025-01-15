@@ -52,17 +52,23 @@ class PaymentMethod(TimeStampedModel):
 
 
 class Payment(models.Model):
+    TYPE_CHOICES = [
+        ('Deposit', 'Deposit'),
+        ('Withdrawal', 'Withdrawal'),
+    ]
     STATUS_CHOICES = [
         ('Pending', 'Pending'),
         ('Approved', 'Approved'),
         ('Rejected', 'Rejected'),
         ('Cancelled', 'Cancelled'),
+        ('In Progress', 'In Progress'),
     ]
     payment_id = models.UUIDField(default=uuid4, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     provider = models.ForeignKey(PaymentsProvider, on_delete=models.CASCADE)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=20, decimal_places=8)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Deposit')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     payment_date = models.DateTimeField(auto_now_add=True)
     reference = models.CharField(max_length=255, unique=True)
