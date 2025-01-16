@@ -34,4 +34,5 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
-        fields = "__all__"
+        fields = ['payment_id', 'user', 'provider', 'wallet', 'amount', 'type', 'status', 'payment_date', 'reference', 'qr_code_url', 'description']
+

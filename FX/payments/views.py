@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from wallet.models import Transaction, Wallet
+from decimal import Decimal
 
 from .models import PaymentMethod, Payment, PaymentsProvider
 from .serializers import BinancePaymentResponseSerializer, PaymentMethodSerializer, PaymentRequestSerializer, PaymentSerializer
@@ -240,3 +241,86 @@ class PaymentView(APIView):
         except Exception as e:
             return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
+
+class DepositHistoryView(APIView):
+    """
+    View deposit history for authenticated users.
+    """
+    def get(self, request):
+        deposits = Payment.objects.filter(user=request.user, type='Deposit').order_by('-payment_date')
+        serializer = PaymentSerializer(deposits, many=True)
+        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+
+
+class WalletBalanceView(APIView):
+    """
+    View wallet balance for authenticated users.
+    """
+    def get(self, request):
+        wallet = get_object_or_404(Wallet, user=request.user)
+        return Response({"balance": wallet.balance, "currency": wallet.currency.symbol}, status=status.HTTP_200_OK)
+
+
+class WalletTransferView(APIView):
+    """
+    Transfer funds between wallets.
+    """
+    def post(self, request):
+        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'))
+        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'))
+        amount = Decimal(request.data.get('amount', 0))
+
+        if source_wallet.balance < amount:
+            return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+
+        source_wallet.balance -= amount
+        target_wallet.balance += amount
+        source_wallet.save()
+        target_wallet.save()
+
+        return Response({"message": "Funds transferred successfully"}, status=status.HTTP_200_OK)
+
+
+@extend_schema(request=PaymentRequestSerializer)
+class PaymentProcessingView(APIView):
+    """
+    Process payments using different payment methods.
+    """
+    @extend_schema(
+            request=PaymentRequestSerializer,
+            responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
+        )
+    def post(self, request):
+        serializer = PaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        payment_method = get_object_or_404(PaymentMethod, id=data['payment_method_id'], is_active=True)
+        wallet = get_object_or_404(Wallet, id=data['wallet_id'], user=request.user)
+        amount = data['amount']
+
+        if amount <= 0:
+            return Response({"error": "Invalid amount"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if payment_method.type == "credit_card":
+            return self.handle_credit_card_payment(wallet, amount, payment_method)
+        elif payment_method.type == "bank":
+            return self.handle_bank_transfer(wallet, amount, payment_method)
+        elif payment_method.type == "crypto":
+            return self.handle_crypto_payment(wallet, amount, payment_method)
+        elif payment_method.type == "e_wallet":
+            return self.handle_e_wallet_payment(wallet, amount, payment_method)
+        else:
+            return Response({"error": "Unsupported payment method"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def handle_credit_card_payment(self, wallet, amount, payment_method):
+        return Response({"message": "Credit card payment processed"}, status=status.HTTP_200_OK)
+
+    def handle_bank_transfer(self, wallet, amount, payment_method):
+        return Response({"message": "Bank transfer initiated"}, status=status.HTTP_200_OK)
+
+    def handle_crypto_payment(self, wallet, amount, payment_method):
+        return Response({"message": "Crypto payment request generated"}, status=status.HTTP_200_OK)
+
+    def handle_e_wallet_payment(self, wallet, amount, payment_method):
+        return Response({"message": "E-Wallet payment processed"}, status=status.HTTP_200_OK)
