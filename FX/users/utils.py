@@ -287,6 +287,3 @@ def send_user_ban_email(user):
     msg.attach_alternative(html_content, "text/html")
     print("Sending user ban email")
     msg.send(fail_silently=False)
-
-
-
