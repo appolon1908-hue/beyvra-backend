@@ -22,7 +22,7 @@ def generate_and_store_ticket(user_id: int) -> str:
         str: The generated ticket.
     """
     ticket = str(uuid.uuid4())
-    cache.set(ticket, user_id, timeout=600)
+    cache.set(ticket, user_id, timeout=None)
     return ticket
 
 

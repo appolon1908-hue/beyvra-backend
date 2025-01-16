@@ -34,19 +34,21 @@ class CustomTokenAuthMiddleware(BaseMiddleware):
         # if a user logs in another device invalidate the other sockets
 
         # get ticket from query param
-        generate_and_store_ticket(1)
+        # result = generate_and_store_ticket(2)
+        # print(result)
+        print(scope["query_string"])
         query_string = scope["query_string"].decode("utf-8")
         query_params = dict(parse_qs(query_string))
         ws_ticket = query_params.get("ws_ticket")[0]
-        print(ws_ticket)
         # get user id from redis cache
         user_id = cache.get(ws_ticket, None)
         print(user_id)
         # delete ticket to make it accessible by one user only
-        cache.delete(ws_ticket)
+        # cache.delete(ws_ticket)
         if user_id is None:
            scope["user"] = AnonymousUser()
         else:
             scope["user"] = await get_user(user_id)
+            print(scope["user"])
 
         return await super().__call__(scope, receive, send)
