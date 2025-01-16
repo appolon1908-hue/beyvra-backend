@@ -20,6 +20,7 @@ CREATE_USER_URL = reverse("user:create")
 DISABLE_WALKTHROUGH_USER_URL = reverse("user:disable_walkthrough")
 ENABLE_MFA_USER_URL = reverse("user:enable_mfa")
 SET_TWO_FACTOR_USER_URL = reverse("user:set_two_factor")
+TOKEN_LOGOUT_USER_URL = reverse("user:token_logout")
 FORGOT_PASSWORD_USER_URL = reverse("user:password_reset")
 PASSWORD_CHANGE_USER_URL = reverse("user:password_change")
 
@@ -30,6 +31,16 @@ def check_login_activity(request: HttpRequest, user):
     even if the authentication backend raises an exception (e.g., incorrect password).
     """
     if request.path == LOGIN_USER_URL and request.method == "POST":
+        if user:
+            return user
+        else:
+            return False
+
+
+def check_logout_activity(request: HttpRequest):
+    """Check logout attempts"""
+    if request.path == TOKEN_LOGOUT_USER_URL and request.method == "POST":
+        user: User = get_logged_user(request)
         if user:
             return user
         else:
@@ -105,6 +116,7 @@ def check_user_password_change(request: HttpRequest):
 class UserActivitiesMiddleware(MiddlewareMixin):
     user_email = None
     login_user = None
+    logout_user = None
     signup_user = None
     update_user = None
     forgot_password_user = None
@@ -126,6 +138,9 @@ class UserActivitiesMiddleware(MiddlewareMixin):
 
         # CAPTURE LOGIN
         self.login_user: User | bool = check_login_activity(request, user)
+
+        # CAPTURE LOGOUT
+        self.logout_user: User | bool = check_logout_activity(request)
 
         # CAPTURE SIGNUP
         self.signup_user: User | bool = check_signup_activity(request, user)
@@ -153,6 +168,16 @@ class UserActivitiesMiddleware(MiddlewareMixin):
                 action_type=UserActivityActionTypes.LOGIN.value,
                 user=self.login_user,
                 identifier=self.login_user,
+                status_code=status_code,
+            )
+
+        # log logged-out user
+        if self.logout_user or self.logout_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.LOGOUT.value,
+                user=self.logout_user if isinstance(self.logout_user, User) else None,
+                identifier=self.logout_user if isinstance(self.logout_user, User) else self.logout_user,
                 status_code=status_code,
             )
 
