@@ -39,6 +39,7 @@ from users.serializers import (
     KYCFileSerializer,
     KYCSerializer,
     LoginSerializer,
+    LogoutSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -412,6 +413,17 @@ class LoginView(generics.CreateAPIView):
             {"detail": "Invalid credentials"},
             status=status.HTTP_401_UNAUTHORIZED,
         )
+
+
+class LogoutView(generics.GenericAPIView):
+    serializer_class = LogoutSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request)
+        return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
 
 
 class KYCFileListCreateView(generics.ListCreateAPIView):
