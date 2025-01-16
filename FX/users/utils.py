@@ -13,13 +13,7 @@ from django.http import JsonResponse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from twilio.rest import Client
-<<<<<<< HEAD
-from datetime import datetime
-import uuid
-from django.core.cache import cache
-=======
 from user_agents import parse
->>>>>>> main
 
 PHONE_REGEX_VALIDATOR = RegexValidator(
     regex=r"^\+\d{9,15}$",
