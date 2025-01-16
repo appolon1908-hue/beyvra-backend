@@ -76,6 +76,21 @@ class CreateUserView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
 
+class DeleteUserView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+
+        try:
+            user_to_delete = User.objects.get(email=user)
+        except User.DoesNotExist:
+            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+        user_to_delete.delete()
+        return Response({"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK)
+
+
 class GetUserView(APIView):
     """Get a user from the system."""
 
