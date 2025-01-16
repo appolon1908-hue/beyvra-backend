@@ -4,6 +4,7 @@ from django.core.validators import MinLengthValidator
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from security.login_anomaly_detection import AnomalyDetector
 from users import messages
 from users.models import UserDeviceInfo
@@ -238,6 +239,21 @@ class LoginSerializer(serializers.Serializer):
             device_info.save()
 
             async_send_device_verification_email.delay(user.id)
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+    default_error_messages = {"bad_token": "expired or  invalid token"}
+
+    def validate(self, data):
+        self.token = data["refresh"]
+        return data
+
+    def save(self, request):
+        try:
+            RefreshToken(self.token).blacklist()
+        except TokenError:
+            self.fail("bad_token")
 
 
 class ResendEmailVerfySerializer(serializers.Serializer):

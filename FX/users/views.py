@@ -39,6 +39,7 @@ from users.serializers import (
     KYCFileSerializer,
     KYCSerializer,
     LoginSerializer,
+    LogoutSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -73,6 +74,21 @@ class CreateUserView(generics.CreateAPIView):
 
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
+
+
+class DeleteUserView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+
+        try:
+            user_to_delete = User.objects.get(email=user)
+        except User.DoesNotExist:
+            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+        user_to_delete.delete()
+        return Response({"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK)
 
 
 class GetUserView(APIView):
@@ -412,6 +428,17 @@ class LoginView(generics.CreateAPIView):
             {"detail": "Invalid credentials"},
             status=status.HTTP_401_UNAUTHORIZED,
         )
+
+
+class LogoutView(generics.GenericAPIView):
+    serializer_class = LogoutSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request)
+        return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
 
 
 class KYCFileListCreateView(generics.ListCreateAPIView):
