@@ -4,6 +4,8 @@ asgiref==3.7.2
 celery[redis]==5.3.6
 channels-redis==4.2.0
 daphne==4.1.0
+hiredis==2.3.2
+pillow==10.2.0
 Django==5.0.2
 django-cors-headers==4.3.1
 django-import-export==3.3.7
@@ -16,8 +18,7 @@ drf-spectacular==0.27.1
 flower==2.0.1
 geoip2==4.8.0
 gunicorn==21.2.0
-hiredis==2.3.2
-pillow==10.2.0
+redis
 pre-commit==3.6.0
 psycopg2-binary==2.9.9
 pycountry==24.6.1

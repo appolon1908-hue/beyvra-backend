@@ -86,7 +86,7 @@ class User(AbstractUser, TimeStampedModel):
         validators=[validate_file_size],
     )
     address = models.TextField(blank=True, null=True)
-    gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True)
+    gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True, max_length=10)
     two_factor_authentication_enabled = models.BooleanField(default=False)
     hidden_account_balances_toggle_enabled = models.BooleanField(default=False)
     one_click_trade_toggle_enabled = models.BooleanField(default=False)
