@@ -313,42 +313,42 @@ TWILIO_SEND_FROM_NUMBER = os.getenv("TWILIO_SEND_FROM_NUMBER")
 
 
 
-# LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-# LOGGING = {
-#     "version": 1,
-#     "disable_existing_loggers": False,
-#     "handlers": {
-#         "console": {
-#             "class": "logging.StreamHandler",
-#         },
-#         "file": {
-#             "level": LOG_LEVEL,
-#             "class": "logging.FileHandler",
-#             "filename": "/var/log/django.log",
-#         },
-#         "mail_admins": {
-#             "level": "ERROR",
-#             "class": "fx_utils.email.CustomAdminEmailHandler",
-#             "include_html": True,
-#         },
-#     },
-#     "root": {
-#         "handlers": ["console"],
-#         "level": "WARNING",
-#     },
-#     "loggers": {
-#         "django": {
-#             "handlers": ["console", "file"],
-#             "level": LOG_LEVEL,
-#             "propagate": True,
-#         },
-#         "django.request": {
-#             "handlers": ["mail_admins"],
-#             "level": "ERROR",
-#             "propagate": True,
-#         },
-#     },
-# }
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+        "file": {
+            "level": LOG_LEVEL,
+            "class": "logging.FileHandler",
+            "filename": "/var/log/django.log",
+        },
+        "mail_admins": {
+            "level": "ERROR",
+            "class": "fx_utils.email.CustomAdminEmailHandler",
+            "include_html": True,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": LOG_LEVEL,
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["mail_admins"],
+            "level": "ERROR",
+            "propagate": True,
+        },
+    },
+}
 
 
 DATABASES = {}
