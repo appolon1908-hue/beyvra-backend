@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_celery_beat",
     "import_export",
     "django_prometheus",
     "drf_spectacular",
@@ -183,6 +184,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+    {
+        "NAME": "security.utils.PasswordPolicyValidator",
     },
 ]
 
