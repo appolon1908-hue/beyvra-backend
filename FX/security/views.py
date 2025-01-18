@@ -1,55 +1,56 @@
-from django.db.models import Q
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from security import models, serializers
 from users.models import UserDeviceInfo
-from security import models
-from security import serializers
 
 
 @extend_schema(
     parameters=[
-        OpenApiParameter(name="date_from",
-                         type=OpenApiTypes.DATE,
-                         description="Start date for filtering activities (YYYY-MM-DD)."),
-        OpenApiParameter(name="date_to",
-                         type=OpenApiTypes.DATE,
-                         description="End date for filtering activities (YYYY-MM-DD)."),
-        OpenApiParameter(name="action_type",
-                         type=OpenApiTypes.STR,
-                         enum=['LOGIN', 'LOGOUT'],
-                         description="Filter by action type."),
-        OpenApiParameter(name="action_status",
-                         enum=['SUCCESS', 'FAILED'],
-                         type=OpenApiTypes.STR,
-                         description="Filter by action status."),
-        OpenApiParameter(name="q", type=OpenApiTypes.STR,
-                         description="Search by user email, first_name and last_name."),
+        OpenApiParameter(
+            name="date_from", type=OpenApiTypes.DATE, description="Start date for filtering activities (YYYY-MM-DD)."
+        ),
+        OpenApiParameter(
+            name="date_to", type=OpenApiTypes.DATE, description="End date for filtering activities (YYYY-MM-DD)."
+        ),
+        OpenApiParameter(
+            name="action_type", type=OpenApiTypes.STR, enum=["LOGIN", "LOGOUT"], description="Filter by action type."
+        ),
+        OpenApiParameter(
+            name="action_status",
+            enum=["SUCCESS", "FAILED"],
+            type=OpenApiTypes.STR,
+            description="Filter by action status.",
+        ),
+        OpenApiParameter(
+            name="q", type=OpenApiTypes.STR, description="Search by user email, first_name and last_name."
+        ),
     ]
 )
 class UserActivityList(generics.ListAPIView):
     """
     List all user activities with search and filter capabilities.
     """
+
     serializer_class = serializers.UserActivitySerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
     def get_queryset(self):
         # Get query parameters
         qry = self.request.query_params
-        date_from = qry.get('date_from', None)
-        date_to = qry.get('date_to', None)
-        action_type = qry.get('action_type', None)
-        action_status = qry.get('action_status', None)
-        search_query = qry.get('q', None)
+        date_from = qry.get("date_from", None)
+        date_to = qry.get("date_to", None)
+        action_type = qry.get("action_type", None)
+        action_status = qry.get("action_status", None)
+        search_query = qry.get("q", None)
 
-        queryset = models.UserActivity.objects.exclude(
-            user=self.request.user)
+        queryset = models.UserActivity.objects.exclude(user=self.request.user)
 
         if date_from:
             queryset = queryset.filter(created_at__date__gte=date_from)
@@ -65,11 +66,12 @@ class UserActivityList(generics.ListAPIView):
 
         if search_query:
             queryset = queryset.filter(
-                Q(user__email__icontains=search_query) |
-                Q(user__first_name__icontains=search_query) |
-                Q(user__last_name__icontains=search_query))
+                Q(user__email__icontains=search_query)
+                | Q(user__first_name__icontains=search_query)
+                | Q(user__last_name__icontains=search_query)
+            )
 
-        queryset = queryset.order_by('-created_at')
+        queryset = queryset.order_by("-created_at")
 
         return queryset
 
@@ -78,6 +80,7 @@ class TrustedDeviceList(generics.ListAPIView):
     """
     List all trusted devices
     """
+
     serializer_class = serializers.UserDeviceInfoSerializer
     permission_classes = (IsAuthenticated,)
 
@@ -98,24 +101,23 @@ class SetGlobalTwoFactorAuth(generics.CreateAPIView):
 
     auth_type -- SMS or AUTHENTICATOR_APP
     """
+
     queryset = models.TwoFactorAuth.objects.all()
     serializer_class = serializers.TwoFactorAuthSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
     def create(self, request, *args, **kwargs):
-        auth_type = request.data.get('auth_type', 'SMS')
+        auth_type = request.data.get("auth_type", "SMS")
 
         # Get or create 2FA settings for the current admin
         two_factor_auth, created = models.TwoFactorAuth.objects.get_or_create(
-            admin=request.user,
-            defaults={'auth_type': auth_type}
+            admin=request.user, defaults={"auth_type": auth_type}
         )
 
         if created:
             serializer = self.get_serializer(data=request.data)
         else:
-            serializer = self.get_serializer(
-                two_factor_auth, data=request.data)
+            serializer = self.get_serializer(two_factor_auth, data=request.data)
 
         # Validate the serializer
         try:
@@ -135,6 +137,7 @@ class GetGlobalTwoFactorAuth(generics.RetrieveAPIView):
     """
     Retrieve the global 2FA settings for the current admin.
     """
+
     queryset = models.TwoFactorAuth.objects.all()
     serializer_class = serializers.TwoFactorAuthSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
@@ -162,6 +165,7 @@ class SetGlobalPasswordPolicy(generics.CreateAPIView):
 
     strength -- Password strength (WEAK, MODERATE, STRONG)
     """
+
     queryset = models.PasswordPolicy.objects.all()
     serializer_class = serializers.PasswordPolicySerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
@@ -169,15 +173,13 @@ class SetGlobalPasswordPolicy(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         # Get or create password policy settings for the current admin
         password_policy, created = models.PasswordPolicy.objects.get_or_create(
-            admin=request.user,
-            defaults=request.data
+            admin=request.user, defaults=request.data
         )
 
         if created:
             serializer = self.get_serializer(data=request.data)
         else:
-            serializer = self.get_serializer(
-                password_policy, data=request.data)
+            serializer = self.get_serializer(password_policy, data=request.data)
 
         # Validate the serializer
         try:
@@ -197,6 +199,7 @@ class GetGlobalPasswordPolicy(generics.RetrieveAPIView):
     """
     Retrieve the global password policy settings for the current admin.
     """
+
     queryset = models.PasswordPolicy.objects.all()
     serializer_class = serializers.PasswordPolicySerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
@@ -214,6 +217,7 @@ class IPWhitelist(generics.ListCreateAPIView):
 
     Only admin users can view or add IP addresses to whitelist.
     """
+
     serializer_class = serializers.IPWhitelistSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
@@ -226,15 +230,16 @@ class IPWhitelist(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        ip_address = request.data.get('ip_address', None)
+        ip_address = request.data.get("ip_address", None)
 
         if not ip_address:
-            return Response({'ip_address': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"ip_address": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the IP address already exists
-        if models.IPWhitelist.objects.filter(
-                admin=request.user, ip_address=ip_address).exists():
-            return Response({'ip_address': ['This IP address is already whitelisted.']}, status=status.HTTP_400_BAD_REQUEST)
+        if models.IPWhitelist.objects.filter(admin=request.user, ip_address=ip_address).exists():
+            return Response(
+                {"ip_address": ["This IP address is already whitelisted."]}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         serializer = self.get_serializer(data=request.data)
 
@@ -266,12 +271,12 @@ class CountryWhitelist(generics.ListCreateAPIView):
 
     Only admin users can view or add countries to whitelist.
     """
+
     serializer_class = serializers.CountryWhitelistSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
     def get_queryset(self):
-        return models.CountryWhitelist.objects.filter(
-            admin=self.request.user)
+        return models.CountryWhitelist.objects.filter(admin=self.request.user)
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -279,15 +284,14 @@ class CountryWhitelist(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        country = request.data.get('country', None)
+        country = request.data.get("country", None)
 
         if not country:
-            return Response({'country': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"country": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the country already exists
-        if models.CountryWhitelist.objects.filter(
-                admin=request.user, country=country).exists():
-            return Response({'country': ['This country is already whitelisted.']}, status=status.HTTP_400_BAD_REQUEST)
+        if models.CountryWhitelist.objects.filter(admin=request.user, country=country).exists():
+            return Response({"country": ["This country is already whitelisted."]}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(data=request.data)
 
@@ -319,6 +323,7 @@ class IPBlacklistView(generics.ListCreateAPIView):
 
     Only admin users can view or add IP addresses to blacklist.
     """
+
     serializer_class = serializers.IPBlacklistSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
@@ -331,15 +336,16 @@ class IPBlacklistView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        ip_address = request.data.get('ip_address', None)
+        ip_address = request.data.get("ip_address", None)
 
         if not ip_address:
-            return Response({'ip_address': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"ip_address": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the IP address already exists
-        if models.IPBlacklist.objects.filter(
-                admin=request.user, ip_address=ip_address).exists():
-            return Response({'ip_address': ['This IP address is already blacklisted.']}, status=status.HTTP_400_BAD_REQUEST)
+        if models.IPBlacklist.objects.filter(admin=request.user, ip_address=ip_address).exists():
+            return Response(
+                {"ip_address": ["This IP address is already blacklisted."]}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         serializer = self.get_serializer(data=request.data)
 
@@ -372,28 +378,24 @@ class IPRestrictionsView(generics.RetrieveUpdateAPIView):
 
     restriction_type -- ALLOW_ALL, RESTRICT_BY_COUNTRY, CUSTOM_IP_WHITELIST
     """
+
     serializer_class = serializers.IPRestrictionsSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get_object(self):
 
-        obj, created = models.IPRestrictions.objects.get_or_create(
-            admin=self.request.user)
+        obj, created = models.IPRestrictions.objects.get_or_create(admin=self.request.user)
 
         # Set newly added IPWhitelist and CountryWhitelist entries to the IPRestrictions object
-        obj.ip_whitelist.set(
-            models.IPWhitelist.objects.filter(admin=self.request.user))
-        obj.country_whitelist.set(
-            models.CountryWhitelist.objects.filter(admin=self.request.user))
-        obj.ip_blacklist.set(
-            models.IPBlacklist.objects.filter(admin=self.request.user))
+        obj.ip_whitelist.set(models.IPWhitelist.objects.filter(admin=self.request.user))
+        obj.country_whitelist.set(models.CountryWhitelist.objects.filter(admin=self.request.user))
+        obj.ip_blacklist.set(models.IPBlacklist.objects.filter(admin=self.request.user))
         return obj
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
-        serializer = self.get_serializer(
-            instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(serializer.data)
@@ -404,8 +406,9 @@ class IPRestrictionsView(generics.RetrieveUpdateAPIView):
 
 # User Setting Views
 
+
 class UserIPRestrictionView(generics.GenericAPIView):
-    """ 
+    """
     IP restrictions status update for a user.
 
     action: allow or block
@@ -423,8 +426,7 @@ class UserIPRestrictionView(generics.GenericAPIView):
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -449,8 +451,7 @@ class SetUser2FATypeView(generics.GenericAPIView):
         user = self.get_object()
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -475,8 +476,7 @@ class SetUserPasswordStrengthView(generics.GenericAPIView):
         user = self.get_object()
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -498,8 +498,7 @@ class SetUserPasswordLengthView(generics.GenericAPIView):
         user = self.get_object()
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -509,8 +508,8 @@ class SetUserPasswordComplexityView(generics.GenericAPIView):
     """
     Password complexity configuration for a user.
 
-    password_complexity: 
-        SPECIAL_CHARACTERS, UPPERCASE_LOWERCASE, 
+    password_complexity:
+        SPECIAL_CHARACTERS, UPPERCASE_LOWERCASE,
         NUMBERS_AND_SPECIAL_CHARACTERS or CUSTOM
 
     custom_characters: Custom characters for password complexity.
@@ -528,8 +527,7 @@ class SetUserPasswordComplexityView(generics.GenericAPIView):
         user = self.get_object()
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -539,6 +537,7 @@ class ResetUserSettingsView(generics.GenericAPIView):
     """
     Reset user settings to default.
     """
+
     serializer_class = serializers.ResetUserSettingsSerializer
     permission_classes = [IsAdminUser]
 
@@ -550,15 +549,14 @@ class ResetUserSettingsView(generics.GenericAPIView):
         user = self.get_object()
         if not user:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(
-            data=request.data, context={'view': self})
+        serializer = self.get_serializer(data=request.data, context={"view": self})
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserIPBlacklistView(generics.ListCreateAPIView):
-    """ 
+    """
     List and create user IP blacklist.
 
     Only accessible by admins.
@@ -568,8 +566,7 @@ class UserIPBlacklistView(generics.ListCreateAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        return models.UserIPBlacklist.objects.filter(
-            user_id=self.kwargs.get("user_id"), admin=self.request.user)
+        return models.UserIPBlacklist.objects.filter(user_id=self.kwargs.get("user_id"), admin=self.request.user)
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -577,19 +574,18 @@ class UserIPBlacklistView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        ip_address = request.data.get('ip_address', None)
+        ip_address = request.data.get("ip_address", None)
         user_id = self.kwargs.get("user_id")
 
         if not ip_address:
-            return Response({'ip_address': ['This field is required.']},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"ip_address": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if the IP address already exists
-        if models.UserIPBlacklist.objects.filter(
-                user_id=user_id, ip_address=ip_address).exists():
-            return Response({'ip_address': ['This IP address is already blacklisted.']},
-                            status=status.HTTP_400_BAD_REQUEST)
-        
+        if models.UserIPBlacklist.objects.filter(user_id=user_id, ip_address=ip_address).exists():
+            return Response(
+                {"ip_address": ["This IP address is already blacklisted."]}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = self.get_serializer(data=request.data)
 
         # Validate the serializer
@@ -604,7 +600,7 @@ class UserIPBlacklistView(generics.ListCreateAPIView):
 
 
 class UserIPBlacklistUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
-    """ 
+    """
     Get, Update and delete user IP blacklist by ID.
 
     Only accessible by admins.
@@ -617,13 +613,11 @@ class UserIPBlacklistUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         return models.UserIPBlacklist.objects.filter(admin=self.request.user)
 
     def get_object(self):
-        return get_object_or_404(
-            self.get_queryset(), id=self.kwargs.get("pk"))
+        return get_object_or_404(self.get_queryset(), id=self.kwargs.get("pk"))
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        serializer = self.get_serializer(
-            instance, data=request.data, partial=True)
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
