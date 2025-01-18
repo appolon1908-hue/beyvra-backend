@@ -93,6 +93,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
     "middleware.user_login_activity.UserLoginActivityMiddleware",
+    'django.middleware.locale.LocaleMiddleware',
+    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
 ]
 
 ROOT_URLCONF = "FX.urls"

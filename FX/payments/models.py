@@ -34,35 +34,45 @@ class PaymentsProvider(models.Model):
 
 class PaymentMethod(TimeStampedModel):
     TYPE_CHOICES = (
-        ("bank", "bank"),
-        ("epayment", "epayment"),
-        ("crypto", "crypto"),
+        ("bank", "Bank Transfer"),
+        ("credit_card", "Credit Card"),
+        ("crypto", "Cryptocurrency"),
+        ("e_wallet", "E-Wallet"),
     )
     name = models.CharField(max_length=50, unique=True)
-    type = models.CharField(choices=TYPE_CHOICES)
+    type = models.CharField(max_length=50, choices=TYPE_CHOICES)
     icon = models.FileField(
         upload_to=upload,
         blank=True,
         null=True,
         validators=[validate_file_size],
     )
-    account_id = models.CharField(max_length=100)
-    network = models.CharField(max_length=50, null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    account_details = models.JSONField(default=dict, blank=True, help_text="Store payment-specific details")
+    
+    def __str__(self):
+        return f"{self.name} ({self.type})"
+
 
 
 class Payment(models.Model):
+    TYPE_CHOICES = [
+        ('Deposit', 'Deposit'),
+        ('Withdrawal', 'Withdrawal'),
+    ]
     STATUS_CHOICES = [
         ('Pending', 'Pending'),
         ('Approved', 'Approved'),
         ('Rejected', 'Rejected'),
         ('Cancelled', 'Cancelled'),
+        ('In Progress', 'In Progress'),
     ]
     payment_id = models.UUIDField(default=uuid4, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     provider = models.ForeignKey(PaymentsProvider, on_delete=models.CASCADE)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=20, decimal_places=8)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='Deposit')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     payment_date = models.DateTimeField(auto_now_add=True)
     reference = models.CharField(max_length=255, unique=True)
