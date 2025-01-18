@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from security.login_anomaly_detection import AnomalyDetector
+from security.utils import password_check_policy
 from users import messages
 from users.models import UserDeviceInfo
 from users.tasks import async_send_device_verification_email, async_send_email_verification_email
@@ -67,7 +68,9 @@ class UserSerializer(BaseUserSerializer):
             "password_min_length",
             "password_max_length",
         )
-        extra_kwargs = {"password": {"write_only": True, "min_length": 5, "max_length": 20}}
+        extra_kwargs = {
+            "password": {"write_only": True, "min_length": 5, "max_length": 20, "validators": [password_check_policy]}
+        }
         read_only_fields = USER_READ_ONLY
 
     def create(self, validated_data):
