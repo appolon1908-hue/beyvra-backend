@@ -32,10 +32,14 @@ def async_send_user_anomaly_alert_to_admin(user_id, email_msg=None):
 
 @shared_task
 def async_check_anomalies():
+    anomalous_action_types = [
+        UserActivityActionTypes.USER_ANOMALY_ALERT.value,
+        UserActivityActionTypes.INVALID_IP.value,
+    ]
     schedule, created = AnomalyCheckSchedule.objects.get_or_create(defaults={"last_checked_time": timezone.now()})
     last_checked_time = schedule.last_checked_time
     new_anomalies = UserActivity.objects.filter(
-        action_type=UserActivityActionTypes.USER_ANOMALY_ALERT.value, created_at__gt=last_checked_time
+        action_type__in=anomalous_action_types, created_at__gt=last_checked_time
     )
 
     if new_anomalies.exists():
