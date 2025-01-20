@@ -1,0 +1,232 @@
+import json
+import logging
+
+from django.contrib.auth import get_user_model
+from django.http import HttpRequest
+from django.urls import resolve, reverse
+from django.utils.deprecation import MiddlewareMixin
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
+from middleware.log_activity import log
+from security.models import UserActivityActionTypes
+from security.utils import get_logged_user
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
+
+
+LOGIN_USER_URL = reverse("user:token_obtain_pair")
+CREATE_USER_URL = reverse("user:create")
+DISABLE_WALKTHROUGH_USER_URL = reverse("user:disable_walkthrough")
+ENABLE_MFA_USER_URL = reverse("user:enable_mfa")
+SET_TWO_FACTOR_USER_URL = reverse("user:set_two_factor")
+FORGOT_PASSWORD_USER_URL = reverse("user:password_reset")
+PASSWORD_CHANGE_USER_URL = reverse("user:password_change")
+
+
+def check_login_activity(request: HttpRequest, user):
+    """
+    Check login attempts. This allows logging for login attempts
+    even if the authentication backend raises an exception (e.g., incorrect password).
+    """
+    if request.path == LOGIN_USER_URL and request.method == "POST":
+        if user:
+            return user
+        else:
+            return False
+
+
+def check_signup_activity(request: HttpRequest, user):
+    """
+    Check signup attempts. This allows logging for signup attempts
+    even if the authentication backend raises an exception
+    (e.g., user already exists)."""
+    if request.path == CREATE_USER_URL and request.method == "POST":
+        if user:
+            return user
+        else:
+            return False
+
+
+def check_user_update_activity(request: HttpRequest):
+    """Check user update attempts."""
+    if request.path == ENABLE_MFA_USER_URL and request.method == "GET":
+        user: User = get_logged_user(request)
+        if user:
+            return {"user": user, "info": "Enable MFA", "status": True}
+        else:
+            return {"user": None, "info": "Enable MFA", "status": False}
+    elif request.path == SET_TWO_FACTOR_USER_URL and request.method == "PATCH":
+        user: User = get_logged_user(request)
+        if user:
+            return {"user": user, "info": "Set 2FA", "status": True}
+        else:
+            return {"user": None, "info": "Set 2FA", "status": False}
+
+
+def check_user_forgot_password_activity(request: HttpRequest):
+    """Check user forgot password attempts."""
+    if request.path == FORGOT_PASSWORD_USER_URL and request.method == "POST":
+        user: User = get_logged_user(request)
+        if user:
+            return user
+        else:
+            return False
+
+
+def check_user_password_reset(request: HttpRequest):
+    """Check user password reset attempts."""
+    match = resolve(request.path)
+    if match.url_name == "password_reset_confirm" and request.method == "POST":
+        uidb64 = match.kwargs.get("uidb64")
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user: User = User.objects.get(pk=uid)
+            if user:
+                return user
+            else:
+                return False
+        except Exception as e:
+            logger.warning(e)
+
+        return False
+
+
+def check_user_password_change(request: HttpRequest):
+    """Check user password change attempts."""
+    if request.path == PASSWORD_CHANGE_USER_URL and request.method == "POST":
+        user: User = get_logged_user(request)
+        if user:
+            return user
+        else:
+            return False
+
+
+class UserActivitiesMiddleware(MiddlewareMixin):
+    user_email = None
+    login_user = None
+    signup_user = None
+    update_user = None
+    forgot_password_user = None
+    password_reset_user = None
+    password_change_user = None
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        try:
+            # If content type is JSON, try to parse it
+            if request.content_type == "application/json":
+                data = json.loads(request.body.decode("utf-8"))
+            else:
+                data = request.POST
+            self.user_email = data.get("email")
+        except Exception as e:
+            logger.warning(f"Error parsing request data in middleware: {str(e)}")
+
+        user = User.objects.filter(email__iexact=self.user_email).first()
+
+        # CAPTURE LOGIN
+        self.login_user: User | bool = check_login_activity(request, user)
+
+        # CAPTURE SIGNUP
+        self.signup_user: User | bool = check_signup_activity(request, user)
+
+        # CAPTURE UPDATE
+        self.update_user: User | bool = check_user_update_activity(request)
+
+        # CAPTURE FORGOT PASSWORD
+        self.forgot_password_user: User | bool = check_user_forgot_password_activity(request)
+
+        # CAPTURE PASSWORD RESET
+        self.password_reset_user: User | bool = check_user_password_reset(request)
+
+        # CAPTURE PASSWORD CHANGE
+        self.password_change_user: User | bool = check_user_password_change(request)
+
+        return None
+
+    def process_response(self, request, response):
+        status_code = response.status_code
+        # log logged-in user
+        if self.login_user or self.login_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.LOGIN.value,
+                user=self.login_user,
+                identifier=self.login_user,
+                status_code=status_code,
+            )
+
+        # log user signup
+        if isinstance(self.signup_user, User) or self.signup_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.CREATE.value,
+                user=self.signup_user if isinstance(self.signup_user, User) else None,
+                identifier=self.user_email,
+                status_code=status_code,
+            )
+
+        # log user update
+        if self.update_user:
+            self._log_action(
+                request=request,
+                action_type=f"{UserActivityActionTypes.UPDATE.value}",
+                desc=self.update_user["info"],
+                user=self.update_user["user"],
+                identifier=self.update_user["user"] if self.update_user["user"] else self.update_user["status"],
+                status_code=status_code,
+            )
+
+        # log user forgot password
+        if self.forgot_password_user or self.forgot_password_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.FORGOT_PASSWORD.value,
+                user=self.forgot_password_user if isinstance(self.forgot_password_user, User) else None,
+                identifier=self.user_email,
+                status_code=status_code,
+            )
+
+        # log user password reset
+        if self.password_reset_user or self.password_reset_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.PASSWORD_RESET.value,
+                user=self.password_reset_user if isinstance(self.password_reset_user, User) else None,
+                identifier=(
+                    self.password_reset_user.email
+                    if isinstance(self.password_reset_user, User)
+                    else self.password_reset_user
+                ),
+                status_code=status_code,
+            )
+
+        # log user password change
+        if self.password_change_user or self.password_change_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.CHANGE_PASSWORD.value,
+                user=self.password_change_user if isinstance(self.password_change_user, User) else None,
+                identifier=(
+                    self.password_change_user.email
+                    if isinstance(self.password_change_user, User)
+                    else self.password_change_user
+                ),
+                status_code=status_code,
+            )
+
+        return response
+
+    def _log_action(self, request, user, action_type, identifier, status_code=200, desc: str = ""):
+        # handle anonymous user
+        if identifier is False or identifier is None:
+            user = None
+            identifier = "Unknown user"
+        log(
+            request=request,
+            action_type=action_type,
+            desc=f"{action_type} - {desc}  attempt success -> {identifier}",
+            err_msg=f"{action_type} - {desc} attempt failed -> {identifier}",
+            user=user,
+            status_code=status_code,
+        )
