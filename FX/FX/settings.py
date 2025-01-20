@@ -92,9 +92,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
-    "middleware.user_login_activity.UserLoginActivityMiddleware",
-    'django.middleware.locale.LocaleMiddleware',
-    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
+    "middleware.user_activity.UserActivitiesMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
+    "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -128,7 +128,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", '5432'),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
 
