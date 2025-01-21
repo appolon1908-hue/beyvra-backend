@@ -22,6 +22,12 @@ class UserActivityActionTypes(Enum):
     PASSWORD_RESET = "PASSWORD_RESET"
     FORGOT_PASSWORD = "FORGOT_PASSWORD"
     CHANGE_PASSWORD = "CHANGE_PASSWORD"
+    WHITELISTED_IP = "WHITELISTED_IP"
+    WHITELISTED_COUNTRY = "WHITELISTED_COUNTRY"
+    WHITELISTED_USER = "WHITELISTED_USER"
+    BLACKLISTED_IP = "BLACKLISTED_IP"
+    BLACKLISTED_COUNTRY = "BLACKLISTED_COUNTRY"
+    BLACKLISTED_USER = "BLACKLISTED_USER"
 
     @classmethod
     def choices(cls):
@@ -134,6 +140,16 @@ class CountryWhitelist(TimeStampedModel):
         return f"{self.admin.email} - {self.country}"
 
 
+class CountryBlacklist(TimeStampedModel):
+    """Model to store countries to blacklist."""
+
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="country_blacklists")
+    country = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.admin.email} - {self.country}"
+
+
 class IPBlacklist(TimeStampedModel):
     """Model to store IP addresses to blacklist."""
 
@@ -142,6 +158,17 @@ class IPBlacklist(TimeStampedModel):
 
     def __str__(self):
         return f"{self.admin.email} - {self.ip_address}"
+
+
+class UserIPBlacklist(TimeStampedModel):
+    """Model to store blacklisted users IP address by admin"""
+
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blacklisted_users")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    ip_address = models.GenericIPAddressField()
+
+    def __str__(self):
+        return f"{self.admin.email} - {self.user}"
 
 
 class IPRestrictions(TimeStampedModel):
@@ -156,18 +183,12 @@ class IPRestrictions(TimeStampedModel):
     restriction_type = models.CharField(max_length=50, choices=RESTRICTION_TYPES, default="ALLOW_ALL")
     ip_whitelist = models.ManyToManyField(IPWhitelist, blank=True, related_name="ip_restrictions")
     country_whitelist = models.ManyToManyField(CountryWhitelist, blank=True, related_name="ip_restrictions")
+    country_blacklist = models.ManyToManyField(CountryBlacklist, blank=True, related_name="ip_restrictions")
     ip_blacklist = models.ManyToManyField(IPBlacklist, blank=True, related_name="ip_restrictions")
+    user_ip_blacklist = models.ManyToManyField(UserIPBlacklist, blank=True, related_name="ip_restrictions")
 
     def __str__(self):
         return f"{self.admin.email} - Restriction: {self.restriction_type}"
-
-
-class UserIPBlacklist(TimeStampedModel):
-    """Model to store blacklisted users IP address by admin"""
-
-    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blacklisted_users")
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    ip_address = models.GenericIPAddressField()
 
 
 class AdminRoles(models.Model):
