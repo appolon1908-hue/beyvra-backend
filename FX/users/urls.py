@@ -7,6 +7,7 @@ app_name = "user"
 urlpatterns = [
     path("create/", views.CreateUserView.as_view(), name="create"),
     path("get-user/<int:id>/", views.GetUserView.as_view(), name="create"),
+    path("delete/", views.DeleteUserView.as_view(), name="delete"),
     path(
         "send_email_verification/",
         views.SendEmailVerificationView.as_view(),
