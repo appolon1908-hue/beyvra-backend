@@ -38,7 +38,9 @@ urlpatterns = [
     path("api/bank_account/", include("bank_account_app.urls")),
     path("api/charts/", include("coinmarketcharts.urls")),
 
-
+    # Dashboard metrics
+    path("api/reporting/", include("reporting.urls")),
+    
     # Portfolio
     path("api/portfolio/", include("portfolio.urls")),
 ]

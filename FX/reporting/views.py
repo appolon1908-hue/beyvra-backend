@@ -1,13 +1,11 @@
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Transaction, Revenue, UserActivity, Trade, Report
-from django.db.models import Sum
 #from django.shortcuts import render
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from .serializers import DashboardMetricsSerializer
-from datetime import date, timedelta
+from .utils import get_or_set_metrics_cache
 
 @extend_schema(
     description='Get dashboard metrics',
@@ -28,19 +26,19 @@ from datetime import date, timedelta
     request=DashboardMetricsSerializer,
     responses={200: 'Success', 400: 'Bad Request'},
 )
-@api_view(['GET'])
+@api_view(['POST'])
 def dashboard_metrics(request):
     serializer = DashboardMetricsSerializer(data=request.data)
 
     if serializer.is_valid():
-        
         categories_filters = serializer.validated_data.get('categories_filters', None)
         start_date = serializer.validated_data.get('start_date', None)
         end_date = serializer.validated_data.get('end_date', None)
+        serializer_data = serializer.data
 
+        metrics_data = get_or_set_metrics_cache(request.get_full_path(), start_date, end_date, categories_filters)
 
-
-        return Response({}, status=status.HTTP_200_OK)
+        return Response(metrics_data, status=status.HTTP_200_OK)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -33,3 +33,8 @@ class Report(models.Model):
         ('weekly', 'Weekly'),
         ('monthly', 'Monthly')
     ), null=True, blank=True)
+
+class SystemHealth(models.Model):
+    status = models.CharField(max_length=20, choices=(('good', 'Good'), ('issue', 'Issue')))
+    last_check = models.DateTimeField(auto_now=True)
+    details = models.TextField()

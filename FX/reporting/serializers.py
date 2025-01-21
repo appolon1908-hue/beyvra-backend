@@ -2,61 +2,70 @@ from rest_framework import status
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from api_trade.utils.alpaca_util import validate_date_range
+from .utils import is_correct_datetime_string
 from datetime import datetime
 import json
 
 class DashboardMetricsSerializer(serializers.Serializer):
-    types_rules = {
-                    'integer': {
-                                'operators': ['=', '>', '<', '<=', '>=',], 
-                                'type': int,
-                    },
-                    'decimal': {
-                                'operators': ['=', '>', '<', '<=', '>=',], 
-                                'type': float,
-                    },
-                    'char': {
-                                'operators': ['=', 'like',], 
-                                'type': str,
-                    },
-                    'text': {
-                                'operators': ['=', 'like',], 
-                                'type': str,
-                    },
-                    'datetime': {
-                                'operators': ['=', '>', '<', '<=', '>=',], 
-                                'type': str,
-                    },
-                    'bool': {
-                                'operators': ['='], 
-                                'type': bool,
-                    },
-                }
+    datetime_format = '%Y-%m-%d %H:%M:%S'
+
+    @property
+    def types_rules(self) -> dict: 
+        return {
+            'integer': {
+                        'operators': ['=', '>', '<', '<=', '>=',], 
+                        'type': int,
+            },
+            'decimal': {
+                        'operators': ['=', '>', '<', '<=', '>=',], 
+                        'type_check_funct': lambda val: type(val) is float or type(val) is int,
+                        'type_name': 'decimal',
+            },
+            'char': {
+                        'operators': ['=', 'like',], 
+                        'type': str,
+            },
+            'text': {
+                        'operators': ['=', 'like',], 
+                        'type': str,
+            },
+            'datetime': {
+                        'operators': ['=', '>', '<', '<=', '>=',], 
+                        'type_check_funct': lambda val: type(val) is str and is_correct_datetime_string(val, self.datetime_format),
+                        'type_name': 'datetime',
+            },
+            'bool': {
+                        'operators': ['='], 
+                        'type': bool,
+            },
+        }
     
-    filters_conf = {
-                    'transactions': {
-                                        'user': 'integer',
-                                        'amount': 'decimal',
-                                        'date': 'datetime',
-                                        'transaction_type': 'char',
-                                        'category': 'char',
-                                    },
-                    'revenues': {
-                                    'date': 'datetime',
+    @property
+    def filters_conf(self) -> dict:
+        return {
+                'transactions': {
+                                    'user': 'integer',
                                     'amount': 'decimal',
+                                    'date': 'datetime',
+                                    'transaction_type': 'char',
+                                    'category': 'char',
                                 },
-                    'users_activities': {
-                                            'user': 'integer',
-                                            'last_active': 'datetime',
-                                            'is_active': 'bool',
-                                        },
-                    'trades': {
-                                'user': 'integer',
-                                'asset': 'char',
-                                'trade_volume': 'decimal',
-                                'trade_date': 'datetime',
+                'revenues': {
+                                'date': 'datetime',
+                                'amount': 'decimal',
                             },
-                    }
+                'users_activities': {
+                                        'user': 'integer',
+                                        'last_active': 'datetime',
+                                        'is_active': 'bool',
+                                    },
+                'trades': {
+                            'user': 'integer',
+                            'asset': 'char',
+                            'trade_volume': 'decimal',
+                            'trade_date': 'datetime',
+                        },
+                }
     
     start_date = serializers.DateField(required=False, input_formats=['%Y-%m-%d'])
     end_date = serializers.DateField(required=False, input_formats=['%Y-%m-%d'])
@@ -74,20 +83,23 @@ class DashboardMetricsSerializer(serializers.Serializer):
                         if cat_name in self.filters_conf:
                             filters = category_dict['filters']
                             allowed_category_fields = self.filters_conf[cat_name]
-                            for filter in filters:
-                                if type(filter) is dict and 'field' in filter and type(filter['field']) is str and 'operator' in filter and type(filter['operator']) is str and 'value' in filter:
-                                    filter_field = filter['field']
-                                    filter_operator = filter['operator']
-                                    filter_value = filter['value']
+                            for filter_dict in filters:
+                                if type(filter_dict) is dict and 'field' in filter_dict and type(filter_dict['field']) is str and 'operator' in filter_dict and type(filter_dict['operator']) is str and 'value' in filter_dict:
+                                    filter_field = filter_dict['field']
+                                    filter_operator = filter_dict['operator']
+                                    filter_value = filter_dict['value']
                                     if filter_field in allowed_category_fields:
                                         field_type = allowed_category_fields[filter_field]
                                         type_rules = self.types_rules[field_type]
                                         # Check if filter operator is allowed
                                         if filter_operator not in type_rules['operators']:
                                             raise ValidationError(f'Filter operator "{filter_operator}" is not allowed for "{field_type}" field')
-                                        # Check if filter value has correct type
                                         
-                                        if type(filter_value) is not type_rules['type']:
+                                        # Check if filter value has correct type
+                                        if 'type_check_funct' in type_rules:
+                                            if not type_rules['type_check_funct'](filter_value):
+                                                raise ValidationError('Type of value {} doesn\'t match with "{}"'.format(filter_value, type_rules['type_name']))   
+                                        elif type(filter_value) is not type_rules['type']:
                                             raise ValidationError('Type of value {} doesn\'t match with "{}"'.format(filter_value, type_rules['type'].__name__))
                                     else:
                                         raise ValidationError(f'Field "{filter_field}" is not allowed for filtering category "{cat_name}"')
