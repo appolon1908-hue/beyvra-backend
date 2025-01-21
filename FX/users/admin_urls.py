@@ -41,4 +41,5 @@ urlpatterns = [
     path('users/update-language/', views.UpdatePreferredLanguageView.as_view(), name='update-language'),
     path('users/admin-settings/', views.AdminSettingsView.as_view(), name='admin-settings'),
     path('users/time-zone/', views.TimeZoneView.as_view(), name='time-zone'),
+    path('users/<int:user_id>/toggle-status/', views.ToggleUserStatusView.as_view(), name='toggle-status'),
 ]
