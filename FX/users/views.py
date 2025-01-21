@@ -46,12 +46,14 @@ from users.serializers import (
     AdminUserStatusSerializer,
     PreferredLanguageSerializer,
 )
+from .serializers import AdminSettingsSerializer
+
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
 from trade.models import Transaction
 
 
-from .models import KYC, KYCFile, PhoneVerificationCode
+from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings
 from .tasks import (
     async_send_email_verification_email,
     async_send_mobile_verification_code,
@@ -1851,3 +1853,23 @@ class UpdatePreferredLanguageView(APIView):
                 status=status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(request=AdminSettingsSerializer)
+class AdminSettingsView(APIView):
+    def get(self, request):
+        settings = AdminSettings.objects.first()
+        if settings:
+            serializer = AdminSettingsSerializer(settings)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"error": "Settings not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request):
+        settings = AdminSettings.objects.first()
+        if settings:
+            serializer = AdminSettingsSerializer(settings, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Settings not found"}, status=status.HTTP_404_NOT_FOUND)

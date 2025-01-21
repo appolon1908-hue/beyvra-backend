@@ -39,4 +39,5 @@ urlpatterns = [
     path('users/<int:user_id>/reset-password/', views.ResetUserPasswordView.as_view(), name='reset-user-password'),
     path('users/bulk-reset-password/', views.BulkResetPasswordView.as_view(), name='bulk-reset-password'),
     path('users/update-language/', views.UpdatePreferredLanguageView.as_view(), name='update-language'),
+    path('users/admin-settings/', views.AdminSettingsView.as_view(), name='admin-settings'),
 ]

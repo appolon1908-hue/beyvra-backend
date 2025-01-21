@@ -187,3 +187,11 @@ class UserDeviceInfo(models.Model):
 
     def __str__(self):
         return f"Device info for {self.user.id}"
+
+
+class AdminSettings(models.Model):
+    time_zone = models.CharField(max_length=100, default='UTC')
+    date_format = models.CharField(max_length=50, default='YYYY-MM-DD')
+
+    def __str__(self):
+        return f"Time Zone: {self.time_zone}, Date Format: {self.date_format}"
