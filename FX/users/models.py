@@ -125,6 +125,7 @@ class User(AbstractUser, TimeStampedModel):
         max_length=100, choices=VERIFICATION_STATUS, default="")
     brand = models.CharField(max_length=120, null=True, blank=True,
                              help_text="Where we got the contact from.")
+    time_zone = models.CharField(max_length=100, default='UTC')
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

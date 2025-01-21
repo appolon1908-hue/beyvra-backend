@@ -46,7 +46,7 @@ from users.serializers import (
     AdminUserStatusSerializer,
     PreferredLanguageSerializer,
 )
-from .serializers import AdminSettingsSerializer
+from .serializers import AdminSettingsSerializer, TimeZoneSerializer
 
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -1873,3 +1873,19 @@ class AdminSettingsView(APIView):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({"error": "Settings not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+
+@extend_schema(request=TimeZoneSerializer)
+class TimeZoneView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = TimeZoneSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        serializer = TimeZoneSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
