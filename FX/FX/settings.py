@@ -96,6 +96,7 @@ MIDDLEWARE = [
     "middleware.user_activity.UserActivitiesMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
+    "middleware.ip_restrictions.RestrictionMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
