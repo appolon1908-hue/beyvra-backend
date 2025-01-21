@@ -72,6 +72,18 @@ services:
       - redis
       - web
 
+  celery_beat:
+    build: ./FX
+    entrypoint: ["./beat-entrypoint.sh"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - fx-network
+    depends_on:
+      - redis
+      - web
+
   celery-flower:
     build:
       context: ./FX
