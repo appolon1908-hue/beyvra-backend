@@ -26,8 +26,10 @@ class UserActivityActionTypes(Enum):
     WHITELISTED_COUNTRY = "WHITELISTED_COUNTRY"
     WHITELISTED_USER = "WHITELISTED_USER"
     BLACKLISTED_IP = "BLACKLISTED_IP"
+    INVALID_IP = "INVALID_IP"
     BLACKLISTED_COUNTRY = "BLACKLISTED_COUNTRY"
     BLACKLISTED_USER = "BLACKLISTED_USER"
+    USER_ANOMALY_ALERT = "USER_ANOMALY_ALERT"
 
     @classmethod
     def choices(cls):
@@ -238,3 +240,22 @@ class EncryptionKeys(models.Model):
 
     def __str__(self):
         return f"{self.key_name}"
+
+
+class AnomalyCheckSchedule(models.Model):
+    last_checked_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Anomaly Check Status"
+        verbose_name_plural = "Anomaly Check Statuses"
+
+    @classmethod
+    def get_last_checked_time(cls):
+        obj, created = cls.objects.get_or_create(id=1)
+        return obj.last_checked_time
+
+    @classmethod
+    def update_last_checked_time(cls, timestamp):
+        obj, created = cls.objects.get_or_create(id=1)
+        obj.last_checked_time = timestamp
+        obj.save()
