@@ -140,3 +140,8 @@ Thumbs.db
 *.env
 venv/
 .venv/
+
+# Oleksandr files
+FX/ninichuk_manage.py
+ninichuk-docker-compose.yaml
+ninichuk-docker-compose-dev.yaml
