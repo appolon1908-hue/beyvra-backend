@@ -18,6 +18,7 @@ User = get_user_model()
 LOGIN_USER_URL = reverse("user:token_obtain_pair")
 TOKEN_LOGOUT_USER_URL = reverse("user:token_logout")
 CREATE_USER_URL = reverse("user:create")
+DELETE_USER_URL = reverse("user:delete")
 DISABLE_WALKTHROUGH_USER_URL = reverse("user:disable_walkthrough")
 ENABLE_MFA_USER_URL = reverse("user:enable_mfa")
 SET_TWO_FACTOR_USER_URL = reverse("user:set_two_factor")
@@ -53,6 +54,16 @@ def check_signup_activity(request: HttpRequest, user):
     even if the authentication backend raises an exception
     (e.g., user already exists)."""
     if request.path == CREATE_USER_URL and request.method == "POST":
+        if user:
+            return user
+        else:
+            return False
+
+
+def check_delete_activity(request: HttpRequest):
+    """Check delete user attempts."""
+    if request.path == DELETE_USER_URL and request.method == "DELETE":
+        user: User = get_logged_user(request)
         if user:
             return user
         else:
@@ -118,6 +129,7 @@ class UserActivitiesMiddleware(MiddlewareMixin):
     login_user = None
     logout_user = None
     signup_user = None
+    delete_user = None
     update_user = None
     forgot_password_user = None
     password_reset_user = None
@@ -144,6 +156,9 @@ class UserActivitiesMiddleware(MiddlewareMixin):
 
         # CAPTURE SIGNUP
         self.signup_user: User | bool = check_signup_activity(request, user)
+
+        # CAPTURE DELETE
+        self.delete_user: User | bool = check_delete_activity(request)
 
         # CAPTURE UPDATE
         self.update_user: User | bool = check_user_update_activity(request)
@@ -188,6 +203,16 @@ class UserActivitiesMiddleware(MiddlewareMixin):
                 action_type=UserActivityActionTypes.CREATE.value,
                 user=self.signup_user if isinstance(self.signup_user, User) else None,
                 identifier=self.user_email,
+                status_code=status_code,
+            )
+
+        # log user delete
+        if isinstance(self.delete_user, User) or self.delete_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.DELETE.value,
+                user=None,
+                identifier=self.delete_user.email if isinstance(self.delete_user, User) else self.delete_user,
                 status_code=status_code,
             )
 
