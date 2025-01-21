@@ -10,7 +10,7 @@ from users.tasks import async_send_device_verification_email, async_send_email_v
 from users.utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR, get_user_location, mask_email, mask_phone
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
-from .models import KYC, KYCFile
+from .models import KYC, KYCFile, AdminSettings
 from security.login_anomaly_detection import AnomalyDetector
 
 USER_READ_ONLY = (
@@ -327,3 +327,9 @@ class PreferredLanguageSerializer(serializers.Serializer):
         required=True,
         allow_blank=False,
     )
+
+
+class AdminSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdminSettings
+        fields = ['id', 'time_zone', 'date_format']

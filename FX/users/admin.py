@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.html import format_html
 from import_export.admin import ImportExportModelAdmin
-from users.models import KYC, KYCFile, User, UserDeviceInfo
+from users.models import KYC, KYCFile, User, UserDeviceInfo, AdminSettings
 from users.resources import UserResource
 from users.signals import update_user_upon_creation
 from django.db.models.signals import post_save
@@ -149,3 +149,10 @@ class KYCAdmin(admin.ModelAdmin):
 @admin.register(KYCFile)
 class KYCFileAdmin(admin.ModelAdmin):
     list_display = ["kyc", "file", "desc"]
+
+
+@admin.register(AdminSettings)
+class AdminSettingsAdmin(admin.ModelAdmin):
+    list_display = ('time_zone', 'date_format')  # Fields to display in the list view
+    list_editable = ('date_format',)            # Fields editable directly in the list view
+    list_display_links = ('time_zone',)         # Field that acts as a link to the detail page
