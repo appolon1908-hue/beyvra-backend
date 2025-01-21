@@ -2,6 +2,7 @@
 
 from django.utils import timezone
 from security.models import UserActivity
+
 from .tasks import async_send_user_anomaly_alert_to_admin
 
 
@@ -18,8 +19,8 @@ class AnomalyDetector:
 
         failed_attempts = UserActivity.objects.filter(
             user=self.user,
-            action_type='LOGIN',
-            action_status='FAILED',
+            action_type="LOGIN",
+            action_status="FAILED",
             created_at__gte=self.time_threshold,
         ).count()
         return failed_attempts >= max_attempts
@@ -27,24 +28,34 @@ class AnomalyDetector:
     def detect_rapid_logins_from_different_locations(self, max_locations=3):
         """Detect logins from different locations in a short time window."""
 
-        distinct_ips = UserActivity.objects.filter(
-            user=self.user,
-            action_type='LOGIN',
-            action_status='SUCCESS',
-            created_at__gte=self.time_threshold,
-        ).values('ip_address').distinct().count()
+        distinct_ips = (
+            UserActivity.objects.filter(
+                user=self.user,
+                action_type="LOGIN",
+                action_status="SUCCESS",
+                created_at__gte=self.time_threshold,
+            )
+            .values("ip_address")
+            .distinct()
+            .count()
+        )
 
         return distinct_ips >= max_locations
 
     def detect_simultaneous_logins_from_different_devices(self):
         """Detect simultaneous logins from different devices."""
 
-        distinct_devices = UserActivity.objects.filter(
-            user=self.user,
-            action_type='LOGIN',
-            action_status='SUCCESS',
-            created_at__gte=self.time_threshold,
-        ).values('user_agent').distinct().count()
+        distinct_devices = (
+            UserActivity.objects.filter(
+                user=self.user,
+                action_type="LOGIN",
+                action_status="SUCCESS",
+                created_at__gte=self.time_threshold,
+            )
+            .values("user_agent")
+            .distinct()
+            .count()
+        )
 
         return distinct_devices > 3
 
@@ -52,18 +63,18 @@ class AnomalyDetector:
         if self.detect_multiple_failed_logins():
             # Multiple Failed Logins Detection:
             email_msg = f"Multiple failed login attempts detected for user {self.user.email}."
-            async_send_user_anomaly_alert_to_admin(self.user.id, email_msg)
+            async_send_user_anomaly_alert_to_admin.delay(self.user.id, email_msg)
             return False
 
         if self.detect_rapid_logins_from_different_locations():
             # Rapid Logins from Different Locations:
             email_msg = f"Rapid logins from different locations detected for user {self.user.email}."
-            async_send_user_anomaly_alert_to_admin(self.user.id, email_msg)
+            async_send_user_anomaly_alert_to_admin.delay(self.user.id, email_msg)
             return False
         if self.detect_simultaneous_logins_from_different_devices():
             # Simultaneous Logins from Different Devices:
             email_msg = f"Simultaneous logins from different devices detected for user {self.user.email}."
-            async_send_user_anomaly_alert_to_admin(self.user.id, email_msg)
+            async_send_user_anomaly_alert_to_admin.delay(self.user.id, email_msg)
             return False
 
         return True
