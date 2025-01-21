@@ -46,7 +46,7 @@ from users.serializers import (
     AdminUserStatusSerializer,
     PreferredLanguageSerializer,
 )
-from .serializers import AdminSettingsSerializer, TimeZoneSerializer
+from .serializers import AdminSettingsSerializer, TimeZoneSerializer, ToggleUserStatusSerializer
 
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -1857,6 +1857,8 @@ class UpdatePreferredLanguageView(APIView):
 
 @extend_schema(request=AdminSettingsSerializer)
 class AdminSettingsView(APIView):
+    permission_classes = [IsAdminUser]
+
     def get(self, request):
         settings = AdminSettings.objects.first()
         if settings:
@@ -1877,7 +1879,7 @@ class AdminSettingsView(APIView):
 
 @extend_schema(request=TimeZoneSerializer)
 class TimeZoneView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         serializer = TimeZoneSerializer(request.user)
@@ -1889,3 +1891,17 @@ class TimeZoneView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+@extend_schema(request=ToggleUserStatusSerializer)
+class ToggleUserStatusView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            user.is_active = not user.is_active
+            user.save()
+            serializer = ToggleUserStatusSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)

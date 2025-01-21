@@ -339,3 +339,9 @@ class TimeZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['time_zone']
+
+
+class ToggleUserStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'is_active']
