@@ -1,11 +1,18 @@
+import ipaddress
+
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 from django.utils.deprecation import MiddlewareMixin
 from middleware.log_activity import log
 from rest_framework import status
 from security import models
 from security.models import UserActivityActionTypes
 from security.utils import get_logged_user
+from users.models import UserRoles
 from users.utils import get_ip_address, get_user_location_mod
+
+User = get_user_model()
 
 
 def check_ip_blacklist(ip_address):
@@ -13,6 +20,25 @@ def check_ip_blacklist(ip_address):
     if models.IPBlacklist.objects.filter(ip_address__iexact=ip_address).exists():
         return True
     return False
+
+
+def check_invalid_ip(ip_address, user):
+    """Check if the IP address is Invalid, and blacklist both user and ip"""
+    try:
+        ipaddress.ip_address(ip_address)
+        return False
+    except ValueError:
+        admin = User.objects.filter(
+            Q(role__iexact=UserRoles.Admin.value) | Q(role__iexact=UserRoles.Super_Admin.value)
+        ).first()
+        add_ip_to_blacklist = models.IPBlacklist.objects.get_or_create(admin=admin, ip_address=ip_address)
+        if user:
+            add_user_to_blacklist = models.UserIPBlacklist.objects.get_or_create(
+                admin=admin,
+                user=user,
+                ip_address=ip_address,
+            )
+        return True
 
 
 def check_ip_whitelist(ip_address):
@@ -73,6 +99,16 @@ class RestrictionMiddleware(MiddlewareMixin):
                 user=user,
                 identifier=ip_address,
                 action_type=UserActivityActionTypes.BLACKLISTED_IP.value,
+            )
+            raise PermissionDenied("Access denied")
+
+        # Check invalid IP and blacklist
+        if check_invalid_ip(ip_address, user):
+            self._log_blacklist_action(
+                request=request,
+                user=user,
+                identifier=ip_address,
+                action_type=UserActivityActionTypes.INVALID_IP.value,
             )
             raise PermissionDenied("Access denied")
 
