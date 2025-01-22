@@ -1817,7 +1817,7 @@ class UpdatePreferredLanguageView(APIView):
 
 class SetGlobal2FAMethodView(generics.GenericAPIView):
     """
-    Set Global User 2FA Method.
+    Set Global User 2FA Method, requiring explicit confirmation to proceed
     method: SMS, AUTHENTICATOR_APP
     """
 
@@ -1827,21 +1827,31 @@ class SetGlobal2FAMethodView(generics.GenericAPIView):
     def patch(self, request, *args, **kwargs):
         serializer = Global2FAMethodSerializer(data=request.data)
         if serializer.is_valid():
-            # Extract the 2FA method
-            two_fa_method = serializer.validated_data["method"]
-            # Update 2FA method for all users
-            users = User.objects.all()
-            updated_users = []
-            for user in users:
-                user.two_fa_type = two_fa_method  # Update with the 2FA method
-                user.save()
-                updated_users.append(user.email)
-            # Return a response with a success message
-            return Response(
-                {
-                    "message": f"2FA method: {two_fa_method} set for {len(updated_users)} users successfully.",
-                    "updated_users": updated_users,
-                },
-                status=status.HTTP_200_OK,
-            )
+            if serializer.validated_data["confirm_override"] is True:
+                # Extract the 2FA method
+                two_fa_method = serializer.validated_data["method"]
+                # Update 2FA method for all users
+                users = User.objects.all()
+                updated_users = []
+                for user in users:
+                    user.two_fa_type = two_fa_method  # Update with the 2FA method
+                    user.save()
+                    updated_users.append(user.email)
+                # Return a response with a success message
+                return Response(
+                    {
+                        "message": f"2FA method: {two_fa_method} set for {len(updated_users)} users successfully.",
+                        "updated_users": updated_users,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                # Return a response with a failed message
+                return Response(
+                    {
+                        "message": "2FA method override aborted.",
+                        "updated_users": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

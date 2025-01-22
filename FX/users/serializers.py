@@ -354,3 +354,4 @@ class PreferredLanguageSerializer(serializers.Serializer):
 
 class Global2FAMethodSerializer(serializers.Serializer):
     method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
+    confirm_override = serializers.BooleanField()
