@@ -13,6 +13,16 @@ from .constants import KYC_FILE_STATUS, KYC_ID_CH, KYC_STATUS_CH
 from .utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR
 
 
+class TwoFactorAuthType(Enum):
+    NOT_SET = ""
+    SMS = "SMS"
+    AUTHENTICATOR_APP = "AUTHENTICATOR APP"
+
+    @classmethod
+    def choices(cls):
+        return [(tag.name, tag.value) for tag in cls]
+
+
 def validate_file_size(file_obj):
     filesize = file_obj.size
     megabyte_limit = 5.0
@@ -44,11 +54,6 @@ class User(AbstractUser, TimeStampedModel):
         ("F", "Female"),
     )
 
-    TWO_FACTOR_AUTH_TYPE = (
-        ("", ""),
-        ("SMS", "SMS"),
-        ("AUTHENTICATOR_APP", "AUTHENTICATOR APP"),
-    )
     PASSWORD_STRENGTH = (
         ("", ""),
         ("STRONG", "STRONG"),
@@ -112,7 +117,9 @@ class User(AbstractUser, TimeStampedModel):
     is_online = models.BooleanField(default=False)
     role = models.CharField(max_length=11, choices=UserRoles.choices(), default=UserRoles.User.value)
     ip_restricted = models.BooleanField(default=False)
-    two_fa_type = models.CharField(max_length=100, choices=TWO_FACTOR_AUTH_TYPE, default="")
+    two_fa_type = models.CharField(
+        max_length=100, choices=TwoFactorAuthType.choices(), default=TwoFactorAuthType.NOT_SET.value
+    )
     password_complexity = models.CharField(max_length=100, choices=PASSWORD_COMPLEXITY_CHOICES, default="")
     custom_characters = models.CharField(
         max_length=255,
