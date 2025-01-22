@@ -16,6 +16,8 @@ from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
+from celery.schedules import crontab
+
 
 load_dotenv()
 
@@ -79,6 +81,8 @@ INSTALLED_APPS = [
     "bank_account_app",
     "security",
     "coinmarketcharts",
+    "django_celery_beat",
+    "wsnotifications"
 ]
 
 MIDDLEWARE = [
@@ -156,6 +160,12 @@ CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
 
+
+CELERY_BEAT_SCHEDULE = {
+    'periodic_price_updates': {
+        'task': 'wsnotifications.tasks.periodic_price_updates',
+        'schedule': crontab(minute="*/1")}}
+
 # CHANNELS
 CHANNEL_LAYERS = {
     "default": {
@@ -201,8 +211,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
+STATIC_ROOT = '/app/static'
 
-STATIC_ROOT = BASE_DIR / "static"
 
 
 # Default primary key field type
