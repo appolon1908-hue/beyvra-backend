@@ -8,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from security.login_anomaly_detection import AnomalyDetector
 from security.utils import password_check_policy
 from users import messages
-from users.models import UserDeviceInfo
+from users.models import TwoFactorAuthType, UserDeviceInfo
 from users.tasks import async_send_device_verification_email, async_send_email_verification_email
 from users.utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR, get_user_location, mask_email, mask_phone
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
@@ -334,7 +334,7 @@ class UserVerificationStatusSerializer(serializers.Serializer):
 
 
 class User2FAMethodSerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=["SMS", "AUTHENTICATOR_APP"])
+    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
 
     def validate(self, data):
         # Accessing the user from the request
@@ -350,3 +350,7 @@ class PreferredLanguageSerializer(serializers.Serializer):
         required=True,
         allow_blank=False,
     )
+
+
+class Global2FAMethodSerializer(serializers.Serializer):
+    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])

@@ -30,6 +30,7 @@ class UserActivityActionTypes(Enum):
     BLACKLISTED_COUNTRY = "BLACKLISTED_COUNTRY"
     BLACKLISTED_USER = "BLACKLISTED_USER"
     USER_ANOMALY_ALERT = "USER_ANOMALY_ALERT"
+    ADMIN_GLOBAL_SET_2FA = "ADMIN_GLOBAL_SET_2FA"
 
     @classmethod
     def choices(cls):
