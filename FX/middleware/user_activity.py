@@ -24,6 +24,7 @@ ENABLE_MFA_USER_URL = reverse("user:enable_mfa")
 SET_TWO_FACTOR_USER_URL = reverse("user:set_two_factor")
 FORGOT_PASSWORD_USER_URL = reverse("user:password_reset")
 PASSWORD_CHANGE_USER_URL = reverse("user:password_change")
+ADMIN_SET_GLOBAL_2FA_USER_URL = reverse("admin_set_global_two_factor")
 
 
 def check_login_activity(request: HttpRequest, user):
@@ -124,6 +125,16 @@ def check_user_password_change(request: HttpRequest):
             return False
 
 
+def check_admin_global_set_2fa_activity(request: HttpRequest):
+    """Check when admin sets 2fa for global users attempts."""
+    if request.path == ADMIN_SET_GLOBAL_2FA_USER_URL and request.method == "PATCH":
+        user: User = get_logged_user(request)
+        if user:
+            return user
+        else:
+            return False
+
+
 class UserActivitiesMiddleware(MiddlewareMixin):
     user_email = None
     login_user = None
@@ -134,6 +145,7 @@ class UserActivitiesMiddleware(MiddlewareMixin):
     forgot_password_user = None
     password_reset_user = None
     password_change_user = None
+    admin_user = None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         try:
@@ -171,6 +183,9 @@ class UserActivitiesMiddleware(MiddlewareMixin):
 
         # CAPTURE PASSWORD CHANGE
         self.password_change_user: User | bool = check_user_password_change(request)
+
+        # CAPTURE ADMIN SET GLOBAL USER 2FA
+        self.admin_user: User | bool = check_admin_global_set_2fa_activity(request)
 
         return None
 
@@ -262,6 +277,16 @@ class UserActivitiesMiddleware(MiddlewareMixin):
                     if isinstance(self.password_change_user, User)
                     else self.password_change_user
                 ),
+                status_code=status_code,
+            )
+
+        # log admin set 2FA
+        if self.admin_user or self.admin_user is False:
+            self._log_action(
+                request=request,
+                action_type=UserActivityActionTypes.ADMIN_GLOBAL_SET_2FA.value,
+                user=self.admin_user if isinstance(self.admin_user, User) else None,
+                identifier=(self.admin_user.email if isinstance(self.admin_user, User) else self.admin_user),
                 status_code=status_code,
             )
 
