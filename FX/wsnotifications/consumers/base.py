@@ -19,19 +19,14 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         await self.accept()
         user = self.scope['user']
-        updated_user = await db_user_connected(user)
-        logger.info(updated_user)
-        result = await db_online_users_count()
-        ##result of active users will be sent to admin
-        logger.info(result)
+        await db_user_connected(user)
+        await db_online_users_count()
         
         
     async def disconnect(self, close_code):
         user = self.scope['user']
-        print(user)
         await db_user_disconnected(user)
         result =  await db_online_users_count()
-        print(result)
         await self.close()
 
     async def receive(self, text_data):

@@ -82,7 +82,9 @@ class UserNotificationService:
     @staticmethod
     def market_price_update(url):
         """Notify user on market price updates"""
+        logger.info(f"Fetching market price updates from: {url}")
         response = UserNotificationService.make_request(url)
+        logger.info(f"{response.status_code}")
         try:
             if response.status_code == 200:
                 try:
@@ -118,14 +120,14 @@ class UserNotificationService:
         
     @staticmethod
     def handle_asset_specific_sub(url, asset_id):
-        asset_id = asset_id
-        logger.info(asset_id)
         response = UserNotificationService.make_request(url)
         if response.status_code == 200:
             data = response.json()
+            logger.info(data)
             channel_layer = get_channel_layer()
+            logger.info(f"asset_{asset_id}")
             async_to_sync(channel_layer.group_send)(
-                "asset_{asset_id}",
+                f"asset_{asset_id}",
                 {
                     "type": "send_asset_update",
                     "message": data
@@ -133,7 +135,8 @@ class UserNotificationService:
             )
             return data
         else:
-            print(f"No result found for asset")
+            data = response.json()
+            logger.info(data)
 
     @staticmethod
     def trade_update(self, user):

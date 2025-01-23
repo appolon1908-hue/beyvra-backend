@@ -17,13 +17,12 @@ class MarketDataConsumer(BaseConsumer):
 
     async def connect(self):
         await super().connect()
-        user = self.scope.get('user')
-        logger.info(f"New {user}")
+        user = self.scope['user']
         query_string = self.scope["query_string"].decode("utf-8")
         query_params = dict(parse_qs(query_string))
-        asset_id = query_params.get("asset_id")[0]
-        logger.info(asset_id)
-
+        asset_id = query_params.get("asset_id",None)
+        if asset_id:
+            cache.set('asset_id', asset_id, timeout=None) #used to set the id for asset specific update
         if user and user.is_authenticated:
             if user.is_staff:
                 await self.channel_layer.group_add(
@@ -31,15 +30,15 @@ class MarketDataConsumer(BaseConsumer):
                     self.channel_name
                 )
             if asset_id:
-                logger.info(True)
+                asset_id = asset_id[0]
+                cache.set('asset_id', asset_id, timeout=600)
+                logger.info(asset_id)
                 asset_group_name = f'asset_{asset_id}'
+                logger.info(asset_group_name)
                 await self.channel_layer.group_add(
                     asset_group_name,
                     self.channel_name
                 )
-                
-                cache.set('asset_id', asset_id, timeout=600)
-            
             else:
                 await self.channel_layer.group_add(
                     'market_prices',
@@ -65,7 +64,7 @@ class MarketDataConsumer(BaseConsumer):
     async def send_asset_update(self, event):
         message = event["message"]
         await self.send(text_data=json.dumps({
-            "type": "send_asset_update",
+            "type": "asset_update",
             "data": message
         }))
 

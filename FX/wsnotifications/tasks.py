@@ -17,13 +17,12 @@ def periodic_price_updates():
 
 
 
-@shared_task(name='wsnotifications.tasks.asset_price_updates')
+@shared_task(name='wsnotifications.tasks.send_asset_specific_updates')
 def send_asset_specific_updates():
     asset_id = cache.get('asset_id')
-    logger.info(asset_id)
-    url = 'https://api.coingecko.com/api/v3/coins/{asset_id}'
+    url = f"https://api.coingecko.com/api/v3/coins/{asset_id}"
     data = UserNotificationService.handle_asset_specific_sub(url, asset_id)
-    cache.delete(asset_id)
+    cache.delete('asset_id')
     return data
 
 
