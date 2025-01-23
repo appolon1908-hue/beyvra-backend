@@ -33,3 +33,4 @@ sqlparse==0.4.4
 stripe==8.3.0
 twilio==9.0.0
 user-agents==2.2.0
+django_celery_beat
