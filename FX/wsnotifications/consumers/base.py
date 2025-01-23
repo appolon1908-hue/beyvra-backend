@@ -3,7 +3,7 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
 
 from django.core.cache import cache
-from wsnotifications.utils import db_online_users_count, db_user_connected, db_user_disconnected, can_access_group
+from wsnotifications.utils import db_online_users_count, db_user_connected, db_user_disconnected
 
 
 import logging
