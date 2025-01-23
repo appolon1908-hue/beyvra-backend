@@ -151,7 +151,7 @@ def check_admin_global_set_2fa_activity(request: HttpRequest):
 
 
 def check_admin_activities(request: HttpRequest):
-    """Check when admin sets 2fa for global users attempts."""
+    """Check all admin activities attempts, except for those in predefined actions since they are already captured"""
     user = request.user
     if user:
         is_admin = User.objects.filter(
