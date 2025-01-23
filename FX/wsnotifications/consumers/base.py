@@ -31,7 +31,6 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
         print(user)
         await db_user_disconnected(user)
         result =  await db_online_users_count()
-        print(result)
         await self.close()
 
     async def receive(self, text_data):
