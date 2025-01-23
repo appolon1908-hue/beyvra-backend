@@ -165,7 +165,8 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULE = {
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")}}
+        'schedule': crontab(minute="*/1")
+}}
 
 # CHANNELS
 CHANNEL_LAYERS = {
