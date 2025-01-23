@@ -9,11 +9,16 @@ from django.conf import settings
 # This method can be executed ONLY when "categories_filters" is valid
 def get_or_set_metrics_cache(url: str, start_date: Union[date, None], end_date: Union[date, None], categories_filters: Union[str, None]) -> dict:
     # Create completed URL which includes date range parameters and categories_filters
-    completed_url = url + '?start_date=' + start_date.strftime('%Y-%m-%d') + '&end_date=' + end_date.strftime('%Y-%m-%d') + '&categories_filters=' + categories_filters 
+    start_date_param = start_date.strftime('%Y-%m-%d') if start_date else 'none'
+    end_date_param = end_date.strftime('%Y-%m-%d') if end_date else 'none'
+    categories_filters_param = categories_filters if categories_filters else 'none'
+
+    completed_url = f'{url}?start_date={start_date_param}&end_date={end_date_param}&categories_filters={categories_filters_param}'
+
     # Check cache first
     cached_response = cache.get(completed_url)
     if cached_response:
-        return cached_response
+        return json.loads(cached_response)
 
     categories_filters = json.loads(categories_filters) if categories_filters else categories_filters
     prepared_filters = {
@@ -54,19 +59,18 @@ def get_or_set_metrics_cache(url: str, start_date: Union[date, None], end_date: 
                 prepared_filters[cat_name][filter_key] = filter_dict['value']
     
     data = {
-        "transactions_count": Transaction.objects.filter(prepared_filters['transactions']).count(),
-        "revenue": Revenue.objects.filter(prepared_filters['revenues']).aggregate(Sum('amount')),
-        "transaction_volumes": Transaction.objects.filter(prepared_filters['transactions']).aggregate(Sum('amount')),
-        "user_activity": UserActivity.objects.filter(prepared_filters['users_activities']).count(),
-        "total_trades": Trade.objects.filter(prepared_filters['trades']).count(),
+        "transactions": Transaction.objects.filter(**prepared_filters['transactions']).count(),
+        "revenue": float(Revenue.objects.filter(**prepared_filters['revenues']).aggregate(Sum('amount'))['amount__sum']),
+        "transaction_volumes": float(Transaction.objects.filter(**prepared_filters['transactions']).aggregate(Sum('amount'))['amount__sum']),
+        "user_activity": UserActivity.objects.filter(**prepared_filters['users_activities']).count(),
+        "all_user_activity": UserActivity.objects.all().count(),
+        "total_trades": Trade.objects.filter(**prepared_filters['trades']).count(),
         #"system_health": SystemHealth.get_status(),
     }
-
     # Cache ready metrics as json
-    json_data = json.dumps(data)
-    cache.set(completed_url, json_data)
+    cache.set(completed_url, json.dumps(data))
     
-    return json_data
+    return data
 
 def is_correct_datetime_string(datetime_string: str, format: str) -> bool:
     try:
