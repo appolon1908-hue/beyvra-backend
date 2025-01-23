@@ -4,14 +4,17 @@ from django.core.validators import MinLengthValidator
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from security.login_anomaly_detection import AnomalyDetector
+from security.utils import password_check_policy
 from users import messages
-from users.models import UserDeviceInfo
+from users.models import TwoFactorAuthType, UserDeviceInfo
 from users.tasks import async_send_device_verification_email, async_send_email_verification_email
 from users.utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR, get_user_location, mask_email, mask_phone
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
+
 from .models import KYC, KYCFile
-from security.login_anomaly_detection import AnomalyDetector
 
 USER_READ_ONLY = (
     "is_active",
@@ -53,15 +56,26 @@ class UserSerializer(BaseUserSerializer):
 
     class Meta:
         model = get_user_model()
-        exclude = ("groups", "user_permissions", "mfa_secret", "password_complexity",
-                    "custom_characters", "ip_restricted", "two_fa_type", "password_strength",
-                    "password_min_length", "password_max_length")
-        extra_kwargs = {"password": {"write_only": True, "min_length": 5, "max_length": 20}}
+        exclude = (
+            "groups",
+            "user_permissions",
+            "mfa_secret",
+            "password_complexity",
+            "custom_characters",
+            "ip_restricted",
+            "two_fa_type",
+            "password_strength",
+            "password_min_length",
+            "password_max_length",
+        )
+        extra_kwargs = {
+            "password": {"write_only": True, "min_length": 5, "max_length": 20, "validators": [password_check_policy]}
+        }
         read_only_fields = USER_READ_ONLY
 
     def create(self, validated_data):
         user = get_user_model().objects.create_user(**validated_data)
-        
+
         # Set the is_walkthrough to True on new user register
         user.is_walkthrough = True
         user.save()
@@ -85,10 +99,7 @@ class AdminUserStatusSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = get_user_model()
-        fields = [
-            "id", "email", "is_active", "status", "role", 
-            "last_login", "date_joined"
-        ]
+        fields = ["id", "email", "is_active", "status", "role", "last_login", "date_joined"]
 
     def get_status(self, obj):
         if not obj.is_active:
@@ -96,7 +107,6 @@ class AdminUserStatusSerializer(serializers.ModelSerializer):
         if obj.is_staff:
             return "Super Admin" if obj.is_superuser else "Admin"
         return "Active"
-
 
 
 class UserUpdateSerializer(BaseUserSerializer):
@@ -230,6 +240,21 @@ class LoginSerializer(serializers.Serializer):
             async_send_device_verification_email.delay(user.id)
 
 
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+    default_error_messages = {"bad_token": "expired or  invalid token"}
+
+    def validate(self, data):
+        self.token = data["refresh"]
+        return data
+
+    def save(self, request):
+        try:
+            RefreshToken(self.token).blacklist()
+        except TokenError:
+            self.fail("bad_token")
+
+
 class ResendEmailVerfySerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
@@ -291,9 +316,9 @@ class KYCSerializer(serializers.ModelSerializer):
         instance.status = "P"
         return super().update(instance, validated_data)
 
+
 class UserVerificationStatusSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(
-        choices=["PENDING", "APPROVED", "REJECTED", "VERIFIED"])
+    status = serializers.ChoiceField(choices=["PENDING", "APPROVED", "REJECTED", "VERIFIED"])
 
     def validate(self, data):
         user_id = self.context["view"].kwargs.get("user_id")
@@ -302,16 +327,14 @@ class UserVerificationStatusSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("User not found.")
         if user.is_superuser:
-            raise serializers.ValidationError(
-                "Cannot perform this action for a superuser.")
+            raise serializers.ValidationError("Cannot perform this action for a superuser.")
         if user.is_staff:
-            raise serializers.ValidationError(
-                "Cannot perform this action for a staff user.")
+            raise serializers.ValidationError("Cannot perform this action for a staff user.")
         return data
 
 
 class User2FAMethodSerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=["SMS", "AUTHENTICATOR_APP"])
+    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
 
     def validate(self, data):
         # Accessing the user from the request
@@ -323,7 +346,12 @@ class User2FAMethodSerializer(serializers.Serializer):
 
 class PreferredLanguageSerializer(serializers.Serializer):
     preferred_language = serializers.ChoiceField(
-        choices=[('en', 'English'), ('fr', 'French'), ('es', 'Spanish'), ('de', 'German')],
+        choices=[("en", "English"), ("fr", "French"), ("es", "Spanish"), ("de", "German")],
         required=True,
         allow_blank=False,
     )
+
+
+class Global2FAMethodSerializer(serializers.Serializer):
+    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
+    confirm_override = serializers.BooleanField()

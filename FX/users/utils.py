@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from random import randint
 
 import pycountry
@@ -12,7 +13,7 @@ from django.http import JsonResponse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from twilio.rest import Client
-from datetime import datetime
+from user_agents import parse
 
 PHONE_REGEX_VALIDATOR = RegexValidator(
     regex=r"^\+\d{9,15}$",
@@ -200,6 +201,46 @@ def get_user_location(ip_address: str) -> str:
     except Exception as e:
         # Handle any other unexpected exceptions
         return f"An error occurred: {str(e)}"
+
+
+def get_user_location_mod(ip_address: str) -> [dict, str]:
+    try:
+        response = requests.get(f"http://ip-api.com/json/{ip_address}")
+        if response.status_code != 200:
+            return {"city": None, "country": None}
+        data = response.json()
+        city = data.get("city")
+        country = data.get("country")
+        return {"city": city, "country": country}
+    except requests.exceptions.RequestException as e:
+        # Handle any network-related exceptions
+        return f"Network error: {str(e)}"
+    except Exception as e:
+        # Handle any other unexpected exceptions
+        return f"An error occurred: {str(e)}"
+
+
+def get_ip_address(request):
+    # Get the currently authenticated user
+    ip_address = request.META.get("HTTPX_FORWARDED_FOR")
+    if ip_address:
+        ip_address = ip_address.split(",")[-1]
+    else:
+        ip_address = request.META.get("REMOTE_ADDR")
+    return ip_address
+
+
+def get_user_agent(request) -> dict:
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
+    parsed_user_agent = parse(user_agent)
+    device_type = parsed_user_agent.device.family if parsed_user_agent.device.family else "Unknown"
+    device_model = parsed_user_agent.device.model if parsed_user_agent.device.model else "Unknown"
+    user_agent_data = {
+        "device_type": device_type,
+        "device_model": device_model,
+        "user_agent": user_agent,
+    }
+    return user_agent_data
 
 
 def send_user_device_info_alert(user, details):

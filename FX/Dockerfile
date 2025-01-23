@@ -33,6 +33,8 @@ RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 COPY . /app/
 
 COPY worker-entrypoint.sh /app/worker-entrypoint.sh
+COPY beat-entrypoint.sh /app/beat-entrypoint.sh
 
 RUN chmod +x /app/worker-entrypoint.sh
+RUN chmod +x /app/beat-entrypoint.sh
 RUN chmod +x /app/web-init-prod.sh

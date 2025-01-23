@@ -1,9 +1,11 @@
+adyen==12.3.0
 alpaca-py==0.15.0
 asgiref==3.7.2
 celery[redis]==5.3.6
 channels-redis==4.2.0
 daphne==4.1.0
 Django==5.0.2
+django-celery-beat==2.7.0
 django-cors-headers==4.3.1
 django-import-export==3.3.7
 django-ipware==7.0.1
@@ -30,5 +32,4 @@ shortuuid==1.0.12
 sqlparse==0.4.4
 stripe==8.3.0
 twilio==9.0.0
-adyen==12.3.0
-django-celery-beat
+user-agents==2.2.0
