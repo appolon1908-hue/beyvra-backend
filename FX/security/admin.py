@@ -1,4 +1,5 @@
 from django.contrib import admin
+from rangefilter.filters import DateRangeFilter
 from security import models
 
 # Register your models here.
@@ -6,7 +7,7 @@ from security import models
 
 class UserActivityAdmin(admin.ModelAdmin):
     list_display = ("user", "anonymous_user", "action_type", "description", "action_status", "created_at")
-    list_filter = ("action_type", "action_status")
+    list_filter = ("action_type", "action_status", ("created_at", DateRangeFilter))
     search_fields = ("user__email", "ip_address", "user_agent")
 
 
