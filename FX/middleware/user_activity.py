@@ -2,6 +2,7 @@ import json
 import logging
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.http import HttpRequest
 from django.urls import resolve, reverse
 from django.utils.deprecation import MiddlewareMixin
@@ -10,6 +11,7 @@ from django.utils.http import urlsafe_base64_decode
 from middleware.log_activity import log
 from security.models import UserActivityActionTypes
 from security.utils import get_logged_user
+from users.models import UserRoles
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -25,6 +27,19 @@ SET_TWO_FACTOR_USER_URL = reverse("user:set_two_factor")
 FORGOT_PASSWORD_USER_URL = reverse("user:password_reset")
 PASSWORD_CHANGE_USER_URL = reverse("user:password_change")
 ADMIN_SET_GLOBAL_2FA_USER_URL = reverse("admin_set_global_two_factor")
+
+preset_actions = [
+    LOGIN_USER_URL,
+    TOKEN_LOGOUT_USER_URL,
+    CREATE_USER_URL,
+    DELETE_USER_URL,
+    DISABLE_WALKTHROUGH_USER_URL,
+    ENABLE_MFA_USER_URL,
+    SET_TWO_FACTOR_USER_URL,
+    FORGOT_PASSWORD_USER_URL,
+    PASSWORD_CHANGE_USER_URL,
+    ADMIN_SET_GLOBAL_2FA_USER_URL,
+]
 
 
 def check_login_activity(request: HttpRequest, user):
@@ -135,6 +150,21 @@ def check_admin_global_set_2fa_activity(request: HttpRequest):
             return False
 
 
+def check_admin_activities(request: HttpRequest):
+    """Check when admin sets 2fa for global users attempts."""
+    user = request.user
+    if user:
+        is_admin = User.objects.filter(
+            Q(role__iexact=UserRoles.Admin.value) | Q(role__iexact=UserRoles.Super_Admin.value)
+        ).first()
+        if is_admin and request.path not in preset_actions:
+            # get path name if available
+            path_name = resolve(request.path).url_name
+            action = f"{UserActivityActionTypes.OTHER_ADMIN_ACTION.value}_{(path_name if path_name else request.path)}"
+
+            return {"user": user, "action": action}
+
+
 class UserActivitiesMiddleware(MiddlewareMixin):
     user_email = None
     login_user = None
@@ -146,6 +176,7 @@ class UserActivitiesMiddleware(MiddlewareMixin):
     password_reset_user = None
     password_change_user = None
     admin_user = None
+    other_admin_actions = None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         try:
@@ -186,6 +217,9 @@ class UserActivitiesMiddleware(MiddlewareMixin):
 
         # CAPTURE ADMIN SET GLOBAL USER 2FA
         self.admin_user: User | bool = check_admin_global_set_2fa_activity(request)
+
+        # CAPTURE ALL OTHER ADMIN ACTIONS
+        self.other_admin_actions: dict | bool = check_admin_activities(request)
 
         return None
 
@@ -287,6 +321,16 @@ class UserActivitiesMiddleware(MiddlewareMixin):
                 action_type=UserActivityActionTypes.ADMIN_GLOBAL_SET_2FA.value,
                 user=self.admin_user if isinstance(self.admin_user, User) else None,
                 identifier=(self.admin_user.email if isinstance(self.admin_user, User) else self.admin_user),
+                status_code=status_code,
+            )
+
+        # log other admin actions
+        if self.other_admin_actions:
+            self._log_action(
+                request=request,
+                action_type=self.other_admin_actions["action"],
+                user=self.other_admin_actions["user"] if isinstance(self.other_admin_actions, dict) else None,
+                identifier=self.other_admin_actions["user"].email,
                 status_code=status_code,
             )
 
