@@ -1,6 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APITestCase
 from django.urls import reverse
+from django.contrib.auth import get_user_model
 from users.models import User
 from .models import Transaction, Revenue, UserActivity, Trade
 from datetime import datetime
@@ -10,6 +11,7 @@ import json
 class DashboardMetricsTestCase(APITestCase):
 
     def setUp(self):
+        self.dashboard_metrics_url = reverse("dashboard_metrics")
         tz = timezone.get_current_timezone()
     
         user1_data = {
@@ -25,9 +27,27 @@ class DashboardMetricsTestCase(APITestCase):
             "email": 'another55@anothermail.com',
             "phone_number": '+888888888',
         }
-        
+
+        # Adding users        
         user1 = User.objects.create(**user1_data)
         user2 = User.objects.create(**user2_data)
+
+        # Create test user
+        test_user_details = {
+            "email": "test@example.com",
+            "password": "testpass123",
+            "first_name": "Test",
+            "last_name": "Test Name",
+            "phone_number": "123456789123",
+        }
+        get_user_model().objects.create_user(**test_user_details)
+        # Get token for authentication which will be used by tests
+        payload = {
+            "email": test_user_details["email"],
+            "password": test_user_details["password"],
+        }
+        res = self.client.post(reverse("user:token_obtain_pair"), payload, HTTP_USER_AGENT='python-requests/2.31.0', REMOTE_ADDR='127.0.0.1')
+        self.access_token = res.data['access']
         
         # Adding transactions
         Transaction.objects.create(user=user1, amount=25.6, date=timezone.make_aware(datetime(2015, 4, 11, 14, 25, 28), tz), transaction_type='Buy', category='cat1')
@@ -45,29 +65,36 @@ class DashboardMetricsTestCase(APITestCase):
         Trade.objects.create(user=user1, asset='stocks', trade_volume=507.64, trade_date=timezone.make_aware(datetime(2016, 6, 17, 10, 38, 19), tz))
         Trade.objects.create(user=user2, asset='bonds', trade_volume=101.15, trade_date=timezone.make_aware(datetime(2015, 3, 2, 12, 14, 43), tz))
 
-    '''
-    Tests related with getting metrics using date range selection
-    '''
+
+    # Tests related with getting metrics using date range selection
 
     def test_metrics_with_date_range(self):
         payload = {'start_date': '2015-01-01', 'end_date': '2017-12-31'}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
-        expected_result = b'{"transactions":1,"revenue":120.0,"transaction_volumes":25.6,"user_activity":1,"all_user_activity":2,"total_trades":2}'
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        expected_result = {
+                            "transactions": 25.6,
+                            "revenue": 120,
+                            "transaction_volumes": 1,
+                            "user_activity": 1,
+                            "total_trades": 2
+                            }
         
-        self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned not correct metrics for date range')
+        #self.assertTrue(response.status_code == 200 and response.json == expected_result, 'Returned not correct metrics for date range')
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(json.loads(response.content), expected_result, 'Returned not correct metrics for date range')
 
     def test_not_correct_start_date_range(self):
         payload = {'start_date': 'random_string'}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"start_date":["Date has wrong format. Use one of these formats instead: YYYY-MM-DD."]}'
         
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation of date range param format is failed')
 
-    '''
-    Tests related with getting metrics using categories filters
-    '''
+    
+    # Tests related with getting metrics using categories filters
+    
     def test_filters_for_all_fields(self):
         filters_dict = {
                             'categories': [
@@ -167,10 +194,18 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
-        expected_result = b'{"transactions":1,"revenue":120.0,"transaction_volumes":25.6,"user_activity":1,"all_user_activity":2,"total_trades":1}'
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        expected_result = {
+                            "transactions": 25.6,
+                            "revenue": 120.0,
+                            "transaction_volumes": 1,
+                            "user_activity": 1,
+                            "total_trades":1
+                            }
 
-        self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
+        #self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(json.loads(response.content), expected_result, 'Returned metrics doesn\'t match with expected result')
 
     def test_filters_with_specific_operators(self):
         filters_dict = {
@@ -211,26 +246,21 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
-        expected_result = b'{"transactions":2,"revenue":120.0,"transaction_volumes":93.4,"user_activity":1,"all_user_activity":2,"total_trades":1}'
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+        expected_result = {
+                            "transactions": 93.4,
+                            "revenue": 120.0,
+                            "transaction_volumes": 2,
+                            "user_activity": 1,
+                            "total_trades": 1
+                            }
 
-        self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
+        #self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(json.loads(response.content), expected_result, 'Returned metrics doesn\'t match with expected result')
+
+    # Test related with checking if filters are empty
     
-    '''
-    Tests related with checking if categories or filters are empty
-    '''
-    def test_is_categories_empty(self):
-        filters_dict = {
-                            'categories': []
-                        }
-        filters_for_test = json.dumps(filters_dict)
-        payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
-        
-        response = self.client.post(reverse('dashboard_metrics'), payload)
-        expected_result = b'{"categories_filters":["\\"categories\\" Array is empty. It must contain at least 1 category."]}'
-
-        self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "is categories empty" is failed')
-
     def test_is_filters_of_category_empty(self):
         filters_dict = {
                             'categories': [
@@ -243,14 +273,14 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["\\"filters\\" Array for category \\"transactions\\" is empty. It must contain at least 1 filter."]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "is filters of category empty" is failed')
 
-    '''
-    Test cases of not correct format of json
-    '''
+    
+    # Test cases of not correct format of json
+    
 
     def test_missing_categories_property(self):
         filters_dict = {
@@ -260,7 +290,7 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["JSON object must have property \\"categories\\"(type \\"Array\\")."]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "missing categories property" is failed')
@@ -277,7 +307,7 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Each category must be object with properties \\"name\\"(type \\"String\\"), \\"filters\\"(type \\"Array\\")"]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "not correct format of category" is failed')
@@ -301,14 +331,14 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Each filter must be object with properties \\"field\\"(type \\"string\\"), \\"operator\\"(type \\"string\\"), \\"value\\""]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "not correct format of filter" is failed')
 
-    '''
-    Test requests with invalid data
-    '''
+    
+    # Test requests with invalid data
+    
 
     def test_not_existing_category(self):
         filters_dict = {
@@ -328,7 +358,7 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["There is no category with name \\"random_name\\""]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "not existing category" is failed')
@@ -351,7 +381,7 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Field \\"random_name\\" is not allowed for filtering category \\"transactions\\""]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "not existing field for category" is failed')
@@ -374,12 +404,14 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Filter operator \\"random_string\\" is not allowed for \\"decimal\\" field"]}'
 
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "invalid operator for field" is failed')
-
+    
     def test_invalid_type_of_value_for_field(self):
+        
+        
         filters_dict = {
                             'categories': [
                                             {
@@ -397,7 +429,8 @@ class DashboardMetricsTestCase(APITestCase):
         filters_for_test = json.dumps(filters_dict)
         payload = {'start_date': '2011-01-01', 'categories_filters': filters_for_test}
         
-        response = self.client.post(reverse('dashboard_metrics'), payload)
+        response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Type of value string_value doesn\'t match with \\"decimal\\""]}'
-
+        
         self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "invalid type of value for field" is failed')
+        

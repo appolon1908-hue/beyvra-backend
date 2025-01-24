@@ -1,13 +1,12 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
-#from django.shortcuts import render
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from .serializers import DashboardMetricsSerializer
 from .utils import get_or_set_metrics_cache
-from rest_framework.permissions import AllowAny
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from rest_framework.throttling import UserRateThrottle
+
 
 @extend_schema(
     description='Get dashboard metrics',
@@ -29,8 +28,7 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
     responses={200: 'Success', 400: 'Bad Request'},
 )
 @api_view(['POST'])
-@permission_classes([AllowAny])
-@throttle_classes([AnonRateThrottle, UserRateThrottle])
+@throttle_classes([UserRateThrottle])
 def dashboard_metrics(request):
     serializer = DashboardMetricsSerializer(data=request.data)
 

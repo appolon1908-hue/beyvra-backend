@@ -1,10 +1,10 @@
 from django.core.cache import cache
 from django.db.models import Sum
-from .models import Transaction, Revenue, UserActivity, Trade, Report
+from .models import Transaction, Revenue, UserActivity, Trade
 from typing import Union
 from datetime import date, datetime
 import json
-from django.conf import settings
+import hashlib
 
 # This method can be executed ONLY when "categories_filters" is valid
 def get_or_set_metrics_cache(url: str, start_date: Union[date, None], end_date: Union[date, None], categories_filters: Union[str, None]) -> dict:
@@ -13,10 +13,10 @@ def get_or_set_metrics_cache(url: str, start_date: Union[date, None], end_date: 
     end_date_param = end_date.strftime('%Y-%m-%d') if end_date else 'none'
     categories_filters_param = categories_filters if categories_filters else 'none'
 
-    completed_url = f'{url}?start_date={start_date_param}&end_date={end_date_param}&categories_filters={categories_filters_param}'
+    metrics_key = hashlib.md5(f'{url}?start_date={start_date_param}&end_date={end_date_param}&categories_filters={categories_filters_param}'.encode()).hexdigest()
 
     # Check cache first
-    cached_response = cache.get(completed_url)
+    cached_response = cache.get(metrics_key)
     if cached_response:
         return json.loads(cached_response)
 
@@ -58,17 +58,18 @@ def get_or_set_metrics_cache(url: str, start_date: Union[date, None], end_date: 
                 filter_key = filter_dict['field'] + operators_helpers[filter_operator]
                 prepared_filters[cat_name][filter_key] = filter_dict['value']
     
+    user_activity = UserActivity.objects.filter(**prepared_filters['users_activities']).count()
+
     data = {
-        "transactions": Transaction.objects.filter(**prepared_filters['transactions']).count(),
+        "transactions": float(Transaction.objects.filter(**prepared_filters['transactions']).aggregate(Sum('amount'))['amount__sum']),
         "revenue": float(Revenue.objects.filter(**prepared_filters['revenues']).aggregate(Sum('amount'))['amount__sum']),
-        "transaction_volumes": float(Transaction.objects.filter(**prepared_filters['transactions']).aggregate(Sum('amount'))['amount__sum']),
-        "user_activity": UserActivity.objects.filter(**prepared_filters['users_activities']).count(),
-        "all_user_activity": UserActivity.objects.all().count(),
+        "transaction_volumes": Transaction.objects.filter(**prepared_filters['transactions']).count(),
+        "user_activity": user_activity,
         "total_trades": Trade.objects.filter(**prepared_filters['trades']).count(),
         #"system_health": SystemHealth.get_status(),
     }
     # Cache ready metrics as json
-    cache.set(completed_url, json.dumps(data))
+    cache.set(metrics_key, json.dumps(data))
     
     return data
 

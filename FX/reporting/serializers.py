@@ -76,9 +76,6 @@ class DashboardMetricsSerializer(serializers.Serializer):
 
         if type(prepared_data) is dict:
             if 'categories' in prepared_data and type(prepared_data['categories']) is list:
-                if len(prepared_data['categories']) == 0:
-                    raise ValidationError(f'"categories" Array is empty. It must contain at least 1 category.')
-
                 for category_dict in prepared_data['categories']:
                     if type(category_dict) is dict and 'name' in category_dict and type(category_dict['name']) is str and 'filters' in category_dict and type(category_dict['filters']) is list:
                         cat_name = category_dict['name']
