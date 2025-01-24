@@ -15,9 +15,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
-from dotenv import load_dotenv
 from celery.schedules import crontab
-
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -77,13 +76,14 @@ INSTALLED_APPS = [
     "ws",
     "news_app",
     "trade",
+    "tickets",
     "payments",
     "portfolio",
     "bank_account_app",
     "security",
     "coinmarketcharts",
     "django_celery_beat",
-    "wsnotifications"
+    "wsnotifications",
 ]
 
 MIDDLEWARE = [
@@ -98,8 +98,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
     "middleware.user_login_activity.UserLoginActivityMiddleware",
-    'django.middleware.locale.LocaleMiddleware',
-    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
+    "django.middleware.locale.LocaleMiddleware",
+    "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -133,7 +133,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", '5432'),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
 
@@ -163,15 +163,14 @@ CELERY_TASK_SERIALIZER = "json"
 
 
 CELERY_BEAT_SCHEDULE = {
-    'periodic_price_updates': {
-        'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")
+    "periodic_price_updates": {
+        "task": "wsnotifications.tasks.periodic_price_updates",
+        "schedule": crontab(minute="*/1"),
     },
-    
-    'asset_price_updates': {
-        'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/1")
-    }
+    "asset_price_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/1"),
+    },
 }
 
 # CHANNELS
@@ -219,8 +218,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
-STATIC_ROOT = '/app/static'
-
+STATIC_ROOT = "/app/static"
 
 
 # Default primary key field type
