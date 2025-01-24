@@ -82,7 +82,7 @@ INSTALLED_APPS = [
     "security",
     "coinmarketcharts",
     "django_celery_beat",
-    "wsnotifications"
+    "wsnotifications",
 ]
 
 MIDDLEWARE = [
@@ -159,16 +159,22 @@ CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
+    
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
         'schedule': crontab(minute="*/1")
     },
-    
-    'asset_price_updates': {
+    'send_asset_specific_updates': {
         'task': 'wsnotifications.tasks.send_asset_specific_updates',
+        'schedule': crontab(minute="*/2")
+    },
+    'send_email_verification_reminder': {
+        'task': 'wsnotifications.tasks.send_email_verification_reminder',
         'schedule': crontab(minute="*/1")
     }
 }

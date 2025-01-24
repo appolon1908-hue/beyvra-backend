@@ -3,6 +3,8 @@ from typing import Dict, Any, Optional
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import requests
+from users.models import User
+import json
 
 
 import logging
@@ -137,20 +139,56 @@ class UserNotificationService:
         else:
             data = response.json()
             logger.info(data)
-
+    
     @staticmethod
-    def trade_update(self, user):
-        """Notify users about trade update"""
-        return self._send_user_notification(
-            message=f"New user registered: {user.email}",
-            group_name = f"trade_updates{user.id}"
+    def send_account_created(user, message):
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"users_{user.id}",
+            {
+                "type": "send_message",
+                "message": message
+            }
+        )
+    ##Used to send verify message once a user is connected
+    @staticmethod
+    async def email_verification_reminder(user):
+        message = {"title": "email_verification_reminder", "message": "Please verify your email to activate your account"}
+        channel_layer = get_channel_layer()
+        await channel_layer.group_send(
+            f"user_{user.id}",
+            {
+                "type": "send_message",
+                "message": message
+            }
         )
         
     @staticmethod
-    def price_threshold(self, event_type: str, details: Dict[str, Any]):
+    def send_email_verification_message():
+        message = {
+        "title": "email_verification_reminder", 
+        "message": "Please verify your email to activate your account"
+        }
+        unverified_users = User.objects.filter(email_verified=False)
+        channel_layer = get_channel_layer()
+        async def send_messages():
+            for user in unverified_users:
+                await channel_layer.group_send(
+                    f"user_{user.id}",
+                    {
+                        'type': 'send_message',
+                        'message': message
+                    }
+                )
+    
+    
+    @staticmethod
+    def password_reset_confirmation(user_id):
         pass
-    def balance_changes(self, event_type: str, details: Dict[str, Any]):
-        pass
+        
+       
+    
+
 
 
 
