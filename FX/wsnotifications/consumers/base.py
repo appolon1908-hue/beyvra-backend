@@ -8,7 +8,8 @@ from wsnotifications.utils import db_online_users_count, db_user_connected, db_u
 
 import logging
 
-logger = logging.getLogger("my_logger")
+logger = logging.getLogger(__name__)
+
 
 class BaseConsumer(AsyncJsonWebsocketConsumer):
     """
@@ -19,12 +20,15 @@ class BaseConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         await self.accept()
         user = self.scope['user']
+        logger.info(f"Base Consumer {user}")
         await db_user_connected(user)
         await db_online_users_count()
         
         
+        
     async def disconnect(self, close_code):
         user = self.scope['user']
+        print(user)
         await db_user_disconnected(user)
         result =  await db_online_users_count()
         await self.close()
