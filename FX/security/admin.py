@@ -1,4 +1,5 @@
 from django.contrib import admin
+from rangefilter.filters import DateRangeFilter
 from security import models
 from security.custom_filters import CustomActionTypeFilter
 
@@ -7,7 +8,7 @@ from security.custom_filters import CustomActionTypeFilter
 
 class UserActivityAdmin(admin.ModelAdmin):
     list_display = ("user", "anonymous_user", "custom_action_type", "description", "action_status", "created_at")
-    list_filter = (CustomActionTypeFilter, "action_status")
+    list_filter = (CustomActionTypeFilter, "action_status", ("created_at", DateRangeFilter))
     search_fields = ("user__email", "ip_address", "user_agent")
 
     def custom_action_type(self, obj):
