@@ -5,11 +5,6 @@ from django.core.cache import cache
 import uuid
 
 
-import logging
-
-logger = logging.getLogger(__name__)
-
-
 
 
 @database_sync_to_async
@@ -22,23 +17,15 @@ def db_user_connected(user: User) -> User:
 
 @database_sync_to_async
 def db_online_users_count():
-    ##Added cache to optimize database
-    cache_key = 'online_users_count'
-    cached_result = cache.get(cache_key)
-    logger.info(cached_result)
-    if cached_result is None:
-        counts = User.objects.aggregate(
-        regular_users=Count('id', filter=Q(is_online=True, is_staff=False)),
-        admin_users=Count('id', filter=Q(is_online=True, is_staff=True))
-        )
-        data = {
-            'regular_users': counts['regular_users'],
-            'admin_users': counts['admin_users'],
-            'total_users': counts['regular_users']+ counts['admin_users']
-        }
-        cache.set('online_users_count', data, timeout=None)
-        return data
-    return cached_result
+    counts = User.objects.aggregate(
+    regular_users=Count('id', filter=Q(is_online=True, is_staff=False)),
+    admin_users=Count('id', filter=Q(is_online=True, is_staff=True))
+    )
+    return {
+        'regular_users': counts['regular_users'],
+        'admin_users': counts['admin_users'],
+        'total_users': counts['regular_users']+ counts['admin_users']
+    }
 
 
 @database_sync_to_async

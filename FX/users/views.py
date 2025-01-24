@@ -55,6 +55,7 @@ from users.serializers import (
 )
 from users.signals import update_user_upon_creation
 from users.tasks import async_send_welcome_email
+from users.utils import confirm_action
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 from wallet.serializers import WalletDetailSerializer
@@ -616,6 +617,11 @@ class FetchUserDetailView(generics.GenericAPIView):
         if not user.is_staff:
             return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
 
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         try:
             user_to_delete = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -633,6 +639,10 @@ class FetchUserDetailView(generics.GenericAPIView):
         if not user.is_staff:
             return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
 
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
         try:
             user_to_update = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -670,6 +680,11 @@ class BulkCreateUserView(APIView):
 
         if not file.name.endswith(".csv"):
             return Response({"detail": "Only CSV files are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
 
         try:
             df = pd.read_csv(file, dtype={"phone_number": str})
@@ -1139,6 +1154,11 @@ def accept_kyc_file(request, file_id):
     except KYCFile.DoesNotExist:
         return Response({"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
+
     if kyc_file.status == "A":
         return Response({"detail": "KYC File already accepted."}, status=status.HTTP_409_CONFLICT)
 
@@ -1163,6 +1183,11 @@ def reject_kyc_file(request, file_id):
         kyc_file = KYCFile.objects.get(id=file_id)
     except KYCFile.DoesNotExist:
         return Response({"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
 
     if kyc_file.status == "R":
         return Response({"detail": "KYC File already rejected."}, status=status.HTTP_409_CONFLICT)
@@ -1192,6 +1217,11 @@ class UserDocumentVerificationStatus(generics.GenericAPIView):
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         if serializer.is_valid():
             user.document_verification = serializer.validated_data.get("status")
             user.save()
@@ -1216,6 +1246,11 @@ class UserFaceVerificationStatus(generics.GenericAPIView):
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         if serializer.is_valid():
             user.face_verification = serializer.validated_data.get("status")
             user.save()
@@ -1240,6 +1275,11 @@ class UserVerificationStatus(generics.GenericAPIView):
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         if serializer.is_valid():
             user.verification_status = serializer.validated_data.get("status")
             user.save()
@@ -1335,6 +1375,11 @@ def import_users(request):
     file = request.FILES.get("file")
     if not file:
         return Response({"error": "No file provided"}, status=400)
+
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
 
     if file.name.endswith(".csv"):
         df = pd.read_csv(file)
@@ -1471,6 +1516,11 @@ def user_roles(request, user_id):
         if role not in allowed_roles:
             return Response({"error": f"Invalid role. Allowed roles: {allowed_roles}"}, status=400)
 
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         user.role = role
         user.save()
 
@@ -1531,6 +1581,11 @@ def toggle_user_status(request, user_id):
     """
     Toggle user status (active/inactive).
     """
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
+
     try:
         user = User.objects.get(id=user_id)
         user.is_active = not user.is_active  # Toggle active status
@@ -1551,6 +1606,11 @@ def update_user_status(request, user_id):
         return Response(
             {"error": "Invalid status. Please use 'active' or 'inactive'."}, status=status.HTTP_400_BAD_REQUEST
         )
+
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
 
     try:
         user = User.objects.get(id=user_id)
@@ -1591,6 +1651,11 @@ def update_user(request, user_id):
     Update the user details.
     """
     data = request.data
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
+
     try:
         user = User.objects.get(id=user_id)
         user.first_name = data.get("first_name", user.first_name)
@@ -1635,6 +1700,11 @@ def bulk_actions(request):
     user_ids = request.data.get("user_ids")
     if not user_ids:
         return Response({"error": "No user IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # check action confirmation
+    confirm_response = confirm_action(request)
+    if isinstance(confirm_response, Response):
+        return confirm_response
 
     if action == "delete":
         users_to_delete = User.objects.filter(id__in=user_ids)
@@ -1754,6 +1824,11 @@ class ResetUserPasswordView(APIView):
         if new_password != confirm_password:
             return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -1785,6 +1860,11 @@ class BulkResetPasswordView(APIView):
         if new_password != confirm_password:
             return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # check action confirmation
+        confirm_response = confirm_action(request)
+        if isinstance(confirm_response, Response):
+            return confirm_response
+
         users = User.objects.filter(id__in=user_ids)
         if not users.exists():
             return JsonResponse({"error": "No users found for the provided IDs."}, status=status.HTTP_404_NOT_FOUND)
@@ -1803,6 +1883,11 @@ class UpdatePreferredLanguageView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = PreferredLanguageSerializer(data=request.data)
         if serializer.is_valid():
+            # check action confirmation
+            confirm_response = confirm_action(request)
+            if isinstance(confirm_response, Response):
+                return confirm_response
+
             preferred_language = serializer.validated_data["preferred_language"]
             user = request.user
             user.preferred_language = preferred_language

@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "import_export",
     "django_prometheus",
     "drf_spectacular",
+    "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
     "channels",
@@ -166,7 +167,13 @@ CELERY_BEAT_SCHEDULE = {
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
         'schedule': crontab(minute="*/1")
-}}
+    },
+    
+    'asset_price_updates': {
+        'task': 'wsnotifications.tasks.send_asset_specific_updates',
+        'schedule': crontab(minute="*/1")
+    }
+}
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -315,7 +322,7 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "WARNING",
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {

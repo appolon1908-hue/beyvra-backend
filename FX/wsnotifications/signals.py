@@ -9,6 +9,13 @@ from django.contrib.auth.models import User
 from .service import UserNotificationService
 
 
+
+@receiver(post_save, sender=Trade)
+def send_trade_updates(sender, instance, created, **kwargs):
+    if created:
+        print(instance)
+        # subject = "New User Registration"
+        # message = f"A new user has registered with the username: {instance.username}"
         
 
         

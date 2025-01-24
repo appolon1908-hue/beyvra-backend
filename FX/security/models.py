@@ -31,6 +31,7 @@ class UserActivityActionTypes(Enum):
     BLACKLISTED_USER = "BLACKLISTED_USER"
     USER_ANOMALY_ALERT = "USER_ANOMALY_ALERT"
     ADMIN_GLOBAL_SET_2FA = "ADMIN_GLOBAL_SET_2FA"
+    OTHER_ADMIN_ACTION = "OTHER_ADMIN_ACTION"
 
     @classmethod
     def choices(cls):
@@ -58,7 +59,7 @@ class UserActivity(TimeStampedModel):
         blank=True,
     )
     anonymous_user = models.CharField(max_length=50, null=True, blank=True)
-    action_type = models.CharField(max_length=50, choices=UserActivityActionTypes.choices(), default="")
+    action_type = models.CharField(max_length=100, choices=UserActivityActionTypes.choices(), default="")
     action_status = models.CharField(max_length=50, choices=UserActivityActionStatus.choices(), default="")
     description = models.TextField(null=True, blank=True)
     ip_address = models.GenericIPAddressField()
@@ -67,9 +68,17 @@ class UserActivity(TimeStampedModel):
     device_model = models.CharField(max_length=100, null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)
 
+    @property
+    def custom_action_type(self):
+        if UserActivityActionTypes.OTHER_ADMIN_ACTION.value in self.action_type:
+            return self.action_type
+        return self.action_type
+
     def save(self, *args, **kwargs):
         if not isinstance(self.user, User):
             self.user = self.user
+        if self.action_type.startswith(UserActivityActionTypes.OTHER_ADMIN_ACTION.value):
+            self.action_type = self.action_type
         super(UserActivity, self).save(*args, **kwargs)
 
     def __str__(self):
