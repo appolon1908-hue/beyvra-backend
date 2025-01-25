@@ -2061,10 +2061,10 @@ class RestoreDataView(APIView):
 
 
 class MaintenanceModeView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminUser]  # Only admin users can access this
 
     def get(self, request):
-        # Get the current state of maintenance mode
+        """Retrieve the current maintenance mode status and message."""
         maintenance_mode = MaintenanceMode.objects.first()
         if maintenance_mode:
             return Response({
@@ -2072,13 +2072,15 @@ class MaintenanceModeView(APIView):
                 'message': maintenance_mode.message or "No maintenance message set."
             })
         else:
-            return Response({'error': 'Maintenance Mode not configured yet.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Maintenance mode is not configured yet.'}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
-        # Toggle maintenance mode (enable or disable)
+        """Toggle maintenance mode and set a custom message."""
+        # Get or create the maintenance mode object
         maintenance_mode, created = MaintenanceMode.objects.get_or_create(id=1)
-        
-        is_active = request.data.get('is_active', None)
+
+        # Get data from the request
+        is_active = request.data.get('is_active')
         message = request.data.get('message', '')
 
         if is_active is not None:
@@ -2092,4 +2094,4 @@ class MaintenanceModeView(APIView):
                 'maintenance_message': maintenance_mode.message
             })
 
-        return Response({'error': 'Invalid input. Please specify "is_active" and "message".'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Invalid input. Please specify "is_active" and optionally "message".'}, status=status.HTTP_400_BAD_REQUEST)
