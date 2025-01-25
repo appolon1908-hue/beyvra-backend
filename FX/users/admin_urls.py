@@ -47,4 +47,5 @@ urlpatterns = [
     path('users/manual-backup/', views.ManualBackupView.as_view(), name='manual-backup'),
     path('users/restore-data/', views.RestoreDataView.as_view(), name='restore-data'),
     path('users/maintenance-mode/', views.MaintenanceModeView.as_view(), name='maintenance-mode'),
+    path('users/software-update/', views.SoftwareUpdateView.as_view(), name='software-update'),
 ]

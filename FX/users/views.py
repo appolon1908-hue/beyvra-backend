@@ -53,7 +53,7 @@ from trade.serializers import TradeDetailSerializer,TransactionSerializer
 from trade.models import Transaction
 
 
-from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings, MaintenanceMode
+from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings, MaintenanceMode, SoftwareUpdate
 from .tasks import (
     async_send_email_verification_email,
     async_send_mobile_verification_code,
@@ -73,7 +73,7 @@ import openpyxl
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from django.core.files.storage import default_storage
-from .utils import create_database_backup, restore_database  # import the backup function
+from .utils import create_database_backup, restore_database, check_for_updates, schedule_update
 import os
 
 
@@ -2095,3 +2095,58 @@ class MaintenanceModeView(APIView):
             })
 
         return Response({'error': 'Invalid input. Please specify "is_active" and optionally "message".'}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class SoftwareUpdateView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        """
+        Check for available software updates manually.
+        """
+        current_update = SoftwareUpdate.objects.last()
+        if not current_update:
+            return Response({"error": "No update record found."}, status=status.HTTP_404_NOT_FOUND)
+
+        latest_version = check_for_updates()
+        current_update.latest_version = latest_version
+        current_update.save()
+
+        return Response({
+            "current_version": current_update.current_version,
+            "latest_version": latest_version,
+            "message": "Update check completed."
+        })
+
+    def post(self, request):
+        """
+        Schedule an update at a specific time.
+        """
+        scheduled_time = request.data.get("scheduled_time")
+        if not scheduled_time:
+            return Response({"error": "Scheduled time is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            scheduled_time = datetime.fromisoformat(scheduled_time)
+        except ValueError:
+            return Response({"error": "Invalid datetime format. Use ISO 8601 format."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if scheduled_time < now():
+            return Response({"error": "Scheduled time must be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+
+        latest_version = check_for_updates()
+        update_instance = SoftwareUpdate.objects.create(
+            current_version="1.0.0",  # Replace with your logic to get the current version
+            latest_version=latest_version,
+            scheduled_time=scheduled_time,
+            update_status="pending"
+        )
+
+        # Optionally, use a task scheduler like Celery to handle updates
+        schedule_update(update_instance)
+
+        return Response({
+            "message": "Update scheduled successfully.",
+            "scheduled_time": scheduled_time.isoformat(),
+            "latest_version": latest_version
+        })
