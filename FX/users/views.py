@@ -72,6 +72,9 @@ from docx import Document
 import openpyxl
 from io import BytesIO
 from reportlab.pdfgen import canvas
+from django.core.files.storage import default_storage
+from .utils import create_database_backup  # import the backup function
+import os
 
 
 User = get_user_model()
@@ -2003,3 +2006,25 @@ class DownloadDataView(APIView):
         response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="users.xlsx"'
         return response
+    
+
+class ManualBackupView(APIView):
+    def post(self, request):
+        # Trigger the backup process
+        backup_file = create_database_backup()
+        
+        if backup_file:
+            # Optionally, store the backup in a persistent location (if required)
+            storage_path = default_storage.save(f"backups/{os.path.basename(backup_file)}", backup_file)
+            
+            # Provide the file for download
+            with open(backup_file, 'rb') as f:
+                response = Response(f.read(), content_type='application/sql')
+                response['Content-Disposition'] = f'attachment; filename="{os.path.basename(backup_file)}"'
+            
+            # Clean up the temporary backup file after download
+            os.remove(backup_file)
+
+            return response
+        else:
+            return Response({"error": "Backup failed. Please check the logs for more details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
