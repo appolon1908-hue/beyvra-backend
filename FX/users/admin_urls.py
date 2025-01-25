@@ -42,4 +42,5 @@ urlpatterns = [
     path('users/admin-settings/', views.AdminSettingsView.as_view(), name='admin-settings'),
     path('users/time-zone/', views.TimeZoneView.as_view(), name='time-zone'),
     path('users/<int:user_id>/toggle-status/', views.ToggleUserStatusView.as_view(), name='toggle-status'),
+    path('users/settings/backup-frequency/', views.BackupFrequencyView.as_view(), name='backup-frequency'),
 ]

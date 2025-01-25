@@ -196,6 +196,16 @@ class UserDeviceInfo(models.Model):
 class AdminSettings(models.Model):
     time_zone = models.CharField(max_length=100, default='UTC')
     date_format = models.CharField(max_length=50, default='YYYY-MM-DD')
+    BACKUP_FREQUENCY_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+    ]
+    backup_frequency = models.CharField(
+        max_length=10, 
+        choices=BACKUP_FREQUENCY_CHOICES, 
+        default='daily'
+    )
 
     def __str__(self):
-        return f"Time Zone: {self.time_zone}, Date Format: {self.date_format}"
+        return f"Time Zone: {self.time_zone}, Date Format: {self.date_format}, Backup Frequency: {self.backup_frequency}"

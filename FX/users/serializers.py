@@ -345,3 +345,15 @@ class ToggleUserStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'is_active']
+
+
+class BackupFrequencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AdminSettings
+        fields = ['backup_frequency']
+
+    def validate_backup_frequency(self, value):
+        allowed_frequencies = ['daily', 'weekly', 'monthly']
+        if value not in allowed_frequencies:
+            raise serializers.ValidationError("Invalid backup frequency. Allowed values are: daily, weekly, monthly.")
+        return value
