@@ -209,3 +209,11 @@ class AdminSettings(models.Model):
 
     def __str__(self):
         return f"Time Zone: {self.time_zone}, Date Format: {self.date_format}, Backup Frequency: {self.backup_frequency}"
+
+
+class MaintenanceMode(models.Model):
+    is_active = models.BooleanField(default=False)
+    message = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"Maintenance Mode: {'Active' if self.is_active else 'Inactive'}"

@@ -46,4 +46,5 @@ urlpatterns = [
     path('users/data/download/<str:format>/', views.DownloadDataView.as_view(), name='download-data'),
     path('users/manual-backup/', views.ManualBackupView.as_view(), name='manual-backup'),
     path('users/restore-data/', views.RestoreDataView.as_view(), name='restore-data'),
+    path('users/maintenance-mode/', views.MaintenanceModeView.as_view(), name='maintenance-mode'),
 ]
