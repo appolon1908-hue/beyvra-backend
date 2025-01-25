@@ -24,11 +24,11 @@ class MaintenanceModeMiddleware:
 
     def __call__(self, request):
         maintenance_mode = MaintenanceMode.objects.first()
-        
+
         # Check if maintenance mode is active and the user is not an admin
         if maintenance_mode and maintenance_mode.is_active and not request.user.is_staff:
             return HttpResponse(
-                f"Site is under maintenance. {maintenance_mode.message or ''}", 
+                f"Site is under maintenance. {maintenance_mode.message or ''}",
                 status=503
             )
 
