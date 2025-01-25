@@ -9,3 +9,4 @@ class SupportTicket(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     subject = models.CharField(max_length=255, null=True, blank=True)
     message = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
