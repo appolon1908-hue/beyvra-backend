@@ -68,7 +68,10 @@ from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import Group, Permission, User
-
+from docx import Document
+import openpyxl
+from io import BytesIO
+from reportlab.pdfgen import canvas
 
 
 User = get_user_model()
@@ -1932,3 +1935,71 @@ class BackupFrequencyView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class DownloadDataView(APIView):
+    def get(self, request, format=None):
+        if format not in ['pdf', 'doc', 'excel']:
+            return Response({"error": "Invalid format. Allowed formats are: pdf, doc, excel."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch data (example: list of users)
+        users = User.objects.all()
+
+        if format == 'pdf':
+            return self.generate_pdf(users)
+        elif format == 'doc':
+            return self.generate_doc(users)
+        elif format == 'excel':
+            return self.generate_excel(users)
+
+    def generate_pdf(self, users):
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer)
+        p.drawString(100, 800, "User List")
+
+        y = 750
+        for user in users:
+            p.drawString(100, y, f"Username: {user.username}, Email: {user.email}")
+            y -= 20
+
+        p.save()
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="users.pdf"'
+        return response
+
+    def generate_doc(self, users):
+        document = Document()
+        document.add_heading("User List", level=1)
+
+        for user in users:
+            document.add_paragraph(f"Username: {user.username}, Email: {user.email}")
+
+        buffer = BytesIO()
+        document.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        response['Content-Disposition'] = 'attachment; filename="users.docx"'
+        return response
+
+    def generate_excel(self, users):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "User List"
+
+        # Add headers
+        sheet.append(["Username", "Email"])
+
+        # Add user data
+        for user in users:
+            sheet.append([user.username, user.email])
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="users.xlsx"'
+        return response
