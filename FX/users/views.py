@@ -46,7 +46,7 @@ from users.serializers import (
     AdminUserStatusSerializer,
     PreferredLanguageSerializer,
 )
-from .serializers import AdminSettingsSerializer, TimeZoneSerializer, ToggleUserStatusSerializer
+from .serializers import AdminSettingsSerializer, TimeZoneSerializer, ToggleUserStatusSerializer, BackupFrequencySerializer
 
 from wallet.serializers import WalletDetailSerializer
 from trade.serializers import TradeDetailSerializer,TransactionSerializer
@@ -1905,3 +1905,30 @@ class ToggleUserStatusView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+
+@extend_schema(request=BackupFrequencySerializer)
+class BackupFrequencyView(APIView):
+    def get(self, request):
+        try:
+            settings = AdminSettings.objects.first()
+            if not settings:
+                return Response({"error": "Admin settings not found"}, status=status.HTTP_404_NOT_FOUND)
+            serializer = BackupFrequencySerializer(settings)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request):
+        try:
+            settings = AdminSettings.objects.first()
+            if not settings:
+                settings = AdminSettings.objects.create()  # Create default settings if none exist
+
+            serializer = BackupFrequencySerializer(settings, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
