@@ -44,4 +44,5 @@ urlpatterns = [
     path('users/<int:user_id>/toggle-status/', views.ToggleUserStatusView.as_view(), name='toggle-status'),
     path('users/settings/backup-frequency/', views.BackupFrequencyView.as_view(), name='backup-frequency'),
     path('users/data/download/<str:format>/', views.DownloadDataView.as_view(), name='download-data'),
+    path('users/manual-backup/', views.ManualBackupView.as_view(), name='manual-backup'),
 ]

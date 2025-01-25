@@ -13,6 +13,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from twilio.rest import Client
 from datetime import datetime
+import subprocess
 
 PHONE_REGEX_VALIDATOR = RegexValidator(
     regex=r"^\+\d{9,15}$",
@@ -239,3 +240,23 @@ def send_user_ban_email(user):
     msg.attach_alternative(html_content, "text/html")
     print("Sending user ban email")
     msg.send(fail_silently=False)
+
+
+def create_database_backup():
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    backup_filename = f"backup_{timestamp}.sql"
+    
+    # Database connection details
+    db_host = settings.DATABASES['default']['HOST']
+    db_name = settings.DATABASES['default']['NAME']
+    db_user = settings.DATABASES['default']['USER']
+    db_password = settings.DATABASES['default']['PASSWORD']
+    
+    # Constructing the command for PostgreSQL (Change for MySQL if needed)
+    backup_command = f"PGPASSWORD={db_password} pg_dump -h {db_host} -U {db_user} {db_name} > /tmp/{backup_filename}"
+    
+    try:
+        subprocess.run(backup_command, shell=True, check=True)
+        return f"/tmp/{backup_filename}"
+    except subprocess.CalledProcessError as e:
+        return None
