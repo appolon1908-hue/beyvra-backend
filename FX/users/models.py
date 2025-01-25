@@ -35,6 +35,9 @@ class User(AbstractUser, TimeStampedModel):
         ("User", "User"),
         ("Admin", "Admin"),
         ("Super Admin", "Super Admin"),
+        ('Trader', 'Trader'),
+        ('Viewer', 'Viewer'),
+        ('Worker', 'Worker'),
     )
 
     TWO_FACTOR_AUTH_TYPE = (
