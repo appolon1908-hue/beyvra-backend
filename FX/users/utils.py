@@ -260,3 +260,19 @@ def create_database_backup():
         return f"/tmp/{backup_filename}"
     except subprocess.CalledProcessError as e:
         return None
+
+
+def restore_database(backup_file_path):
+    db_host = settings.DATABASES['default']['HOST']
+    db_name = settings.DATABASES['default']['NAME']
+    db_user = settings.DATABASES['default']['USER']
+    db_password = settings.DATABASES['default']['PASSWORD']
+
+    # Construct the command for PostgreSQL (change it for MySQL if needed)
+    restore_command = f"PGPASSWORD={db_password} psql -h {db_host} -U {db_user} -d {db_name} -f {backup_file_path}"
+
+    try:
+        subprocess.run(restore_command, shell=True, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        return False

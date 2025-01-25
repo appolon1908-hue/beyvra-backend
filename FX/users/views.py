@@ -16,7 +16,7 @@ from django.core.cache import cache
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, swagger_auto_schema
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated,IsAdminUser
@@ -73,7 +73,7 @@ import openpyxl
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from django.core.files.storage import default_storage
-from .utils import create_database_backup  # import the backup function
+from .utils import create_database_backup, restore_database  # import the backup function
 import os
 
 
@@ -1941,6 +1941,8 @@ class BackupFrequencyView(APIView):
         
 
 class DownloadDataView(APIView):
+    permission_classes = [IsAdminUser]
+
     def get(self, request, format=None):
         if format not in ['pdf', 'doc', 'excel']:
             return Response({"error": "Invalid format. Allowed formats are: pdf, doc, excel."}, status=status.HTTP_400_BAD_REQUEST)
@@ -2009,6 +2011,9 @@ class DownloadDataView(APIView):
     
 
 class ManualBackupView(APIView):
+    permission_classes = [IsAdminUser]
+
+    @swagger_auto_schema(operation_description="Trigger a manual backup")
     def post(self, request):
         # Trigger the backup process
         backup_file = create_database_backup()
@@ -2028,3 +2033,28 @@ class ManualBackupView(APIView):
             return response
         else:
             return Response({"error": "Backup failed. Please check the logs for more details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+class RestoreDataView(APIView):
+    permission_classes = [IsAdminUser]
+
+    @swagger_auto_schema(operation_description="Restore data from a backup")
+    def post(self, request):
+        # Get the backup file from the request
+        backup_file = request.FILES.get('backup_file')
+        if not backup_file:
+            return JsonResponse({'error': 'Backup file is required'}, status=400)
+
+        # Save the file temporarily
+        backup_path = default_storage.save(f'temp/{backup_file.name}', backup_file)
+
+        # Try to restore the database from the backup file
+        success = restore_database(backup_path)
+
+        if success:
+            # Optionally, delete the temporary file after restoration
+            default_storage.delete(backup_path)
+            return JsonResponse({'message': 'Data restoration successful!'})
+        else:
+            return JsonResponse({'error': 'Data restoration failed'}, status=500)
