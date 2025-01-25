@@ -53,7 +53,7 @@ from trade.serializers import TradeDetailSerializer,TransactionSerializer
 from trade.models import Transaction
 
 
-from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings
+from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings, MaintenanceMode
 from .tasks import (
     async_send_email_verification_email,
     async_send_mobile_verification_code,
@@ -2058,3 +2058,38 @@ class RestoreDataView(APIView):
             return JsonResponse({'message': 'Data restoration successful!'})
         else:
             return JsonResponse({'error': 'Data restoration failed'}, status=500)
+
+
+class MaintenanceModeView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Get the current state of maintenance mode
+        maintenance_mode = MaintenanceMode.objects.first()
+        if maintenance_mode:
+            return Response({
+                'is_active': maintenance_mode.is_active,
+                'message': maintenance_mode.message or "No maintenance message set."
+            })
+        else:
+            return Response({'error': 'Maintenance Mode not configured yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request):
+        # Toggle maintenance mode (enable or disable)
+        maintenance_mode, created = MaintenanceMode.objects.get_or_create(id=1)
+        
+        is_active = request.data.get('is_active', None)
+        message = request.data.get('message', '')
+
+        if is_active is not None:
+            maintenance_mode.is_active = is_active
+            maintenance_mode.message = message
+            maintenance_mode.save()
+
+            return Response({
+                'message': 'Maintenance mode updated successfully.',
+                'is_active': maintenance_mode.is_active,
+                'maintenance_message': maintenance_mode.message
+            })
+
+        return Response({'error': 'Invalid input. Please specify "is_active" and "message".'}, status=status.HTTP_400_BAD_REQUEST)
