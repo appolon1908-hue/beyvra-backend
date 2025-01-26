@@ -19,11 +19,14 @@ class UserConsumer(BaseConsumer):
         await super().connect()
         user = self.scope['user']
         if user.is_authenticated:
-            await self.channel_layer.group_add(f"user_{user.id}", self.channel_name)
-            if not user.email_verified:
-                await UserNotificationService.email_verification_reminder(user)         
+            group_name = f"user_{user.id}"
+            logger.info(group_name)
+            await self.channel_layer.group_add(group_name, self.channel_name)
+            logger.info("Connecting to group users")
+            await self.channel_layer.group_add("users", self.channel_name)    
+            logger.info("Connected to group Users")    
         else:
-            await self.channel_layer.group_add(f"users", self.channel_name)
+            pass
 
     async def disconnect(self, close_code):
         user =self.scope['user']
