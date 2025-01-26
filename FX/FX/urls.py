@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/security/", include("security.urls")),
     path("api/bank_account/", include("bank_account_app.urls")),
     path("api/charts/", include("coinmarketcharts.urls")),
+    path("api/threshold/", include("wsnotifications.urls")),
 
 
     # Portfolio

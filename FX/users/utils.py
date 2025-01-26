@@ -12,6 +12,8 @@ from django.core.validators import RegexValidator
 from django.http import JsonResponse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from rest_framework import status
+from rest_framework.response import Response
 from twilio.rest import Client
 from user_agents import parse
 
@@ -280,3 +282,17 @@ def send_user_ban_email(user):
     msg.attach_alternative(html_content, "text/html")
     print("Sending user ban email")
     msg.send(fail_silently=False)
+
+
+def confirm_action(request) -> bool | Response:
+    """ensures a double check on the action to be performed"""
+    confirm = request.data.get("confirm", False)
+    if isinstance(confirm, bool) and confirm is True:
+        return True
+
+    return Response(
+        {
+            "error": "Please confirm action by adding 'confirm: true' in the request body.",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )

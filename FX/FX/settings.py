@@ -15,6 +15,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -61,13 +62,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django_celery_beat",
     "import_export",
     "django_prometheus",
     "drf_spectacular",
+    "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",
     "channels",
     "users",
     "api_trade",
@@ -76,11 +76,14 @@ INSTALLED_APPS = [
     "ws",
     "news_app",
     "trade",
+    "tickets",
     "payments",
     "portfolio",
     "bank_account_app",
     "security",
     "coinmarketcharts",
+    "django_celery_beat",
+    "wsnotifications",
 ]
 
 MIDDLEWARE = [
@@ -94,10 +97,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
-    "middleware.user_activity.UserActivitiesMiddleware",
+    "middleware.user_login_activity.UserLoginActivityMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
-    "middleware.ip_restrictions.RestrictionMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -152,12 +154,25 @@ CACHES = {
     }
 }
 
+
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
+
+
+CELERY_BEAT_SCHEDULE = {
+    "periodic_price_updates": {
+        "task": "wsnotifications.tasks.periodic_price_updates",
+        "schedule": crontab(minute="*/1"),
+    },
+    "asset_price_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/1"),
+    },
+}
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -185,9 +200,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
-    {
-        "NAME": "security.utils.PasswordPolicyValidator",
-    },
 ]
 
 
@@ -207,8 +219,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
-
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_ROOT = "/app/static"
 
 
 # Default primary key field type
@@ -309,7 +320,7 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "WARNING",
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {
