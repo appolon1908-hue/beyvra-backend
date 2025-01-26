@@ -7,4 +7,5 @@ websocket_urlpatterns = [
     re_path('ws/market/', market.MarketDataConsumer.as_asgi()),
     re_path('ws/trades/', trades.TradeConsumer.as_asgi()),
     re_path('ws/admin/', admin.AdminDataConsumer.as_asgi()),
+    re_path('ws/users/', users.UserConsumer.as_asgi())
 ]

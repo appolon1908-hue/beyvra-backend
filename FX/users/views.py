@@ -3,7 +3,7 @@ import io
 import re
 from datetime import datetime
 from uuid import uuid4
-
+from django.contrib.auth.signals import user_logged_in
 import pandas as pd
 import pyotp
 import qrcode
@@ -301,6 +301,7 @@ def password_change(request):
     # Reset verification status if user is in change password status
     if user.verification_status == "CHANGE_PASSWORD":
         user.verification_status = ""
+    user._password_changed = True
     user.save()
 
     return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
@@ -403,7 +404,7 @@ class LoginView(generics.CreateAPIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid(raise_exception=True):
             user = serializer.validated_data["user"]
-
+            user_logged_in.send(sender=user.__class__, request=request, user=user)
             # check if user is not active
             if not user.is_active:
                 return Response(
@@ -415,7 +416,7 @@ class LoginView(generics.CreateAPIView):
 
             # TODO: blacklist existing user refresh_tokens first
             refresh = AuthTokenObtainPairSerializer.get_token(user)
-
+            
             return Response(
                 {
                     "refresh": str(refresh),

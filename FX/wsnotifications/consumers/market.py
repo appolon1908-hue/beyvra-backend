@@ -32,9 +32,7 @@ class MarketDataConsumer(BaseConsumer):
             if asset_id:
                 asset_id = asset_id[0]
                 cache.set('asset_id', asset_id, timeout=600)
-                logger.info(asset_id)
                 asset_group_name = f'asset_{asset_id}'
-                logger.info(asset_group_name)
                 await self.channel_layer.group_add(
                     asset_group_name,
                     self.channel_name
