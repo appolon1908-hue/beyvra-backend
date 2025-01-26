@@ -10,7 +10,7 @@ from tickets.serializers import TicketSerializer
 class GetTicketView(APIView):
     """Get a support ticket from the system."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAdminUser]
 
     @extend_schema(
         parameters=[
