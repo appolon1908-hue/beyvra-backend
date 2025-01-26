@@ -79,7 +79,6 @@ INSTALLED_APPS = [
     "news_app",
     "trade",
     "tickets",
-    "tickets",
     "payments",
     "portfolio",
     "bank_account_app",
