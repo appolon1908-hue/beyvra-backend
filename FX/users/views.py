@@ -36,6 +36,7 @@ from users.serializers import (
     AdminUserStatusSerializer,
     AuthSerializer,
     AuthTokenObtainPairSerializer,
+    GetKYCSerializer,
     Global2FAMethodSerializer,
     KYCFileSerializer,
     KYCSerializer,
@@ -1033,6 +1034,35 @@ def get_user_trading_statistics(request, user_id):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@extend_schema(
+    description="Get user KYC",
+    responses={
+        200: GetKYCSerializer,
+        403: {"description": "Unauthorized action."},
+        404: {"description": "User not found."},
+    },
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user_kyc(request, user_id):
+    user = request.user
+    if not user.is_staff:
+        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+    user_kyc = KYC.objects.filter(user=user).first()
+    if not user_kyc:
+        return Response({"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if user_kyc:
+        kyc_data = GetKYCSerializer(user_kyc).data
+        return Response(kyc_data, status=status.HTTP_200_OK)
 
 
 @extend_schema(

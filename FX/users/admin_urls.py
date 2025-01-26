@@ -14,6 +14,7 @@ urlpatterns = [
     path(
         "users/trade_statistics/<int:user_id>/", views.get_user_trading_statistics, name="user_trades_statistics_view"
     ),
+    path("users/kyc/<int:user_id>/", views.get_user_kyc, name="get_user_kyc_detail"),
     path("users/kyc/verify/<int:user_id>/", views.verify_user_kyc, name="verify_user_kyc_status"),
     path("users/kyc/files/<int:file_id>/accept/", views.accept_kyc_file, name="accept_kyc_file_status"),
     path("users/kyc/files/<int:file_id>/reject/", views.reject_kyc_file, name="reject_kyc_file_status"),
