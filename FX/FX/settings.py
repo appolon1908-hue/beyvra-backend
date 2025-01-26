@@ -68,7 +68,6 @@ INSTALLED_APPS = [
     "django_prometheus",
     "drf_spectacular",
     "rangefilter",
-    "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
     "channels",
@@ -87,7 +86,6 @@ INSTALLED_APPS = [
     "security",
     "coinmarketcharts",
     "django_celery_beat",
-    "wsnotifications",
     "wsnotifications",
 ]
 
