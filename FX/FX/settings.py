@@ -18,7 +18,7 @@ from pathlib import Path
 from celery.schedules import crontab
 from dotenv import load_dotenv
 from celery.schedules import crontab
-
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "django_prometheus",
     "drf_spectacular",
     "rangefilter",
+    "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
     "channels",
@@ -79,12 +80,14 @@ INSTALLED_APPS = [
     "news_app",
     "trade",
     "tickets",
+    "tickets",
     "payments",
     "portfolio",
     "bank_account_app",
     "security",
     "coinmarketcharts",
     "django_celery_beat",
+    "wsnotifications",
     "wsnotifications",
 ]
 
@@ -100,8 +103,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
     "middleware.user_login_activity.UserLoginActivityMiddleware",
-    'django.middleware.locale.LocaleMiddleware',
-    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
+    "django.middleware.locale.LocaleMiddleware",
+    "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -135,7 +138,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", '5432'),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
 
@@ -155,6 +158,7 @@ CACHES = {
         "LOCATION": REDIS_URL,
     }
 }
+
 
 
 # CELERY
@@ -228,8 +232,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
-STATIC_ROOT = '/app/static'
-
+STATIC_ROOT = "/app/static"
 
 
 # Default primary key field type
