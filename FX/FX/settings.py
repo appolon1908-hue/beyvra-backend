@@ -17,6 +17,8 @@ from pathlib import Path
 
 from celery.schedules import crontab
 from dotenv import load_dotenv
+from celery.schedules import crontab
+
 
 load_dotenv()
 
@@ -98,8 +100,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
     "middleware.user_login_activity.UserLoginActivityMiddleware",
-    "django.middleware.locale.LocaleMiddleware",
-    "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
+    'django.middleware.locale.LocaleMiddleware',
+    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -133,7 +135,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", "5432"),
+        "PORT": os.getenv("DB_PORT", '5432'),
     }
 }
 
@@ -161,17 +163,24 @@ CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
-    "periodic_price_updates": {
-        "task": "wsnotifications.tasks.periodic_price_updates",
-        "schedule": crontab(minute="*/1"),
+    
+    'periodic_price_updates': {
+        'task': 'wsnotifications.tasks.periodic_price_updates',
+        'schedule': crontab(minute="*/1")
     },
-    "asset_price_updates": {
-        "task": "wsnotifications.tasks.send_asset_specific_updates",
-        "schedule": crontab(minute="*/1"),
+    'send_asset_specific_updates': {
+        'task': 'wsnotifications.tasks.send_asset_specific_updates',
+        'schedule': crontab(minute="*/2")
     },
+    'send_email_verification_reminder': {
+        'task': 'wsnotifications.tasks.send_email_verification_reminder',
+        'schedule': crontab(minute="*/1")
+    }
 }
 
 # CHANNELS
@@ -219,7 +228,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
-STATIC_ROOT = "/app/static"
+STATIC_ROOT = '/app/static'
+
 
 
 # Default primary key field type
