@@ -33,12 +33,11 @@ urlpatterns = [
     path("api/payment/", include("payments.urls")),
     path("api/news/", include("news_app.urls")),
     path("api/admin/", include("users.admin_urls")),
+    path("api/admin/", include("tickets.admin_urls")),
     path("api/trades/", include("trade.urls")),
     path("api/security/", include("security.urls")),
     path("api/bank_account/", include("bank_account_app.urls")),
     path("api/charts/", include("coinmarketcharts.urls")),
-
-
     # Portfolio
     path("api/portfolio/", include("portfolio.urls")),
 ]
