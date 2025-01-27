@@ -140,6 +140,23 @@ class LinkedAccount(models.Model):
     account_name = models.CharField(max_length=100)
     bank_name = models.CharField(max_length=100)
     is_verified = models.BooleanField(default=False)
+    withdrawal_limit = models.DecimalField(max_digits=12, decimal_places=2, default=1000)  # Default limit
+    requires_approval = models.BooleanField(default=False)  # Flag for approval
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.account_name} - {self.bank_name} ({self.account_number})"
+    
+
+class WithdrawalWalletRequest(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=[('Pending', 'Pending'), ('Approved', 'Approved'), ('Rejected', 'Rejected')],
+        default='Pending'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

@@ -29,4 +29,5 @@ urlpatterns = [
     path('manual-balance-updates/', views.ManualBalanceUpdateListCreateView.as_view()),
     path('manual-balance-updates/<int:pk>/', views.ManualBalanceUpdateDetailView.as_view()),
     path("wallet/withdraw/", views.WithdrawFundsView.as_view(), name="withdraw-funds"),
+    path("wallet/withdraw-limited/", views.WithdrawWalletFundsView.as_view(), name="withdraw-funds-limited"),
 ]
