@@ -291,6 +291,28 @@ class KYCFileSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class UserKYCSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = get_user_model()
+        fields = [
+            "id",
+            "email",
+            "verification_status",
+            "document_verification",
+            "face_verification",
+            "verification_status",
+        ]
+
+
+class GetKYCSerializer(serializers.ModelSerializer):
+    user = UserKYCSerializer()
+
+    class Meta:
+        model = KYC
+        fields = "__all__"
+        read_only_fields = ["status", "verified", "created_at", "updated_at"]
+
+
 class KYCSerializer(serializers.ModelSerializer):
     user = UserSerializer(
         default=serializers.CreateOnlyDefault(serializers.CurrentUserDefault()),

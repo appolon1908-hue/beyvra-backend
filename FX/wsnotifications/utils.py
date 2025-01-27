@@ -3,7 +3,12 @@ from users.models import User
 from django.db.models import Count, Q
 from django.core.cache import cache
 import uuid
+from users.models import UserDeviceInfo
 
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 

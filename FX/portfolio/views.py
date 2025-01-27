@@ -6,6 +6,10 @@ from .models import Asset, AssetBalance, AssetProfitLoss
 from .serializers import AssetSerializer
 from django.db import models
 from drf_spectacular.utils import extend_schema
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class CryptoMarketDataView(APIView):
@@ -15,7 +19,6 @@ class CryptoMarketDataView(APIView):
         url = "https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey=tYg3o04wAvVaxPnROtNVXEpFOQKoEWI3"
         response = requests.get(url)
         data = response.json()
-        print(data)
         return Response(data)
     
 class StockMarketDataView(APIView):
