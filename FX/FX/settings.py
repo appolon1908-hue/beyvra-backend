@@ -181,6 +181,10 @@ CELERY_BEAT_SCHEDULE = {
     'send_email_verification_reminder': {
         'task': 'wsnotifications.tasks.send_email_verification_reminder',
         'schedule': crontab(minute="*/1")
+    },
+    'send_price_threshold_update': {
+        'task': 'wsnotifications.tasks.send_price_threshold_update',
+        'schedule': crontab(minute="*/2")
     }
 }
 
