@@ -132,3 +132,14 @@ class ManualBalanceUpdate(TimeStampedModel):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class LinkedAccount(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="linked_accounts")
+    account_number = models.CharField(max_length=50)
+    account_name = models.CharField(max_length=100)
+    bank_name = models.CharField(max_length=100)
+    is_verified = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.account_name} - {self.bank_name} ({self.account_number})"
