@@ -173,3 +173,12 @@ class ManualBalanceUpdateSerializer(serializers.ModelSerializer):
         wallet = validated_data['wallet']
         validated_data['previous_balance'] = wallet.balance
         return super().create(validated_data)
+    
+class WithdrawFundsSerializer(serializers.Serializer):
+    account_id = serializers.IntegerField(required=True)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Withdrawal amount must be greater than zero.")
+        return value

@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from bank_account_app.models import WithdrawalRequest
-from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate
+from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate, LinkedAccount
 from wallet.permissions import IsOwner
 from wallet.serializers import (
     CurrencySerializer,
@@ -19,6 +19,7 @@ from wallet.serializers import (
     WithdrawSerializer,
     TransferSerializer,
     ManualBalanceUpdateSerializer,
+    WithdrawFundsSerializer,
 )
 from wallet.services import (
     BitPayService,
@@ -463,3 +464,41 @@ class ManualBalanceUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
     queryset = ManualBalanceUpdate.objects.all()
     serializer_class = ManualBalanceUpdateSerializer
+
+
+class WithdrawFundsView(APIView):
+    def post(self, request):
+        serializer = WithdrawFundsSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            account_id = serializer.validated_data['account_id']
+            amount = serializer.validated_data['amount']
+
+            try:
+                linked_account = LinkedAccount.objects.get(id=account_id, user=user, is_verified=True)
+            except LinkedAccount.DoesNotExist:
+                return Response({"error": "Invalid or unverified account."}, status=status.HTTP_404_NOT_FOUND)
+
+            try:
+                wallet = Wallet.objects.get(user=user, is_active=True, is_real=True)
+            except Wallet.DoesNotExist:
+                return Response({"error": "Active wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if wallet.balance < amount:
+                return Response({"error": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                wallet.debit(amount, wallet.currency)
+            except ValueError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response(
+                {
+                    "message": "Withdrawal successful.",
+                    "withdrawn_amount": amount,
+                    "remaining_balance": wallet.balance,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
