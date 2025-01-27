@@ -3,12 +3,13 @@ import io
 import re
 from datetime import datetime
 from uuid import uuid4
-from django.contrib.auth.signals import user_logged_in
+
 import pandas as pd
 import pyotp
 import qrcode
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.db import connection, transaction
@@ -23,13 +24,13 @@ from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
 from trade.models import Trade, Transaction
-from trade.serializers import TradeDetailSerializer, TransactionSerializer
+from trade.serializers import TradeDetailSerializer, TradeHistorySerializer, TransactionSerializer
 from users import messages
 from users.models import User
 from users.serializers import (
@@ -417,7 +418,7 @@ class LoginView(generics.CreateAPIView):
 
             # TODO: blacklist existing user refresh_tokens first
             refresh = AuthTokenObtainPairSerializer.get_token(user)
-            
+
             return Response(
                 {
                     "refresh": str(refresh),
@@ -963,6 +964,33 @@ def get_user_trading_activity(request, user_id):
     trades = Trade.objects.filter(wallet__user=user)
 
     return Response(TradeDetailSerializer(trades, many=True).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    description="get user trading history",
+    responses={
+        200: TradeHistorySerializer(many=True),
+        403: {"description": "Unauthorized action."},
+    },
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user_trading_history(request, user_id):
+    user = request.user
+    if not user.is_staff:
+        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+
+    trades = Trade.objects.filter(wallet__user=user)
+    paginator = LimitOffsetPagination()
+    paginated_trades = paginator.paginate_queryset(trades, request)
+    trade_data = TradeHistorySerializer(paginated_trades, many=True).data
+
+    return paginator.get_paginated_response(trade_data)
 
 
 @extend_schema(
