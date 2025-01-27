@@ -6,8 +6,9 @@ import time
 from urllib.parse import urlencode
 import json
 from django.conf import settings
-from wallet.models import Transaction
+from wallet.models import Transaction, Wallet
 from bank_account_app.models import WithdrawalRequest
+from .utils import fetch_exchange_rate
 
 
 def update_transaction(status, transaction_id, amount=None, currency=None):
@@ -298,3 +299,38 @@ class BitPayService:
         response = requests.post(f"{self.base_url}/invoice", headers=headers, data=json.dumps(payload))
         result = update_transaction(response.status_code, amount, currency, transaction_id)
         return result
+    
+
+class WalletService:
+    @staticmethod
+    def withdraw_with_conversion(wallet_id, amount, target_currency):
+        # Fetch the wallet and perform the withdrawal logic with conversion
+        wallet = Wallet.objects.get(id=wallet_id)
+        exchange_rate = fetch_exchange_rate(wallet.currency, target_currency)
+        converted_amount = float(amount) * exchange_rate
+
+        if wallet.balance < amount:
+            raise ValueError("Insufficient balance.")
+
+        wallet.balance -= amount
+        wallet.save()
+        return converted_amount
+
+    @staticmethod
+    def transfer_with_conversion(wallet_id, target_wallet_id, amount, target_currency):
+        # Fetch the wallets and perform the transfer logic with conversion
+        source_wallet = Wallet.objects.get(id=wallet_id)
+        target_wallet = Wallet.objects.get(id=target_wallet_id)
+
+        exchange_rate = fetch_exchange_rate(source_wallet.currency, target_currency)
+        converted_amount = float(amount) * exchange_rate
+
+        if source_wallet.balance < amount:
+            raise ValueError("Insufficient balance.")
+
+        source_wallet.balance -= amount
+        target_wallet.balance += converted_amount
+
+        source_wallet.save()
+        target_wallet.save()
+        return converted_amount
