@@ -26,4 +26,8 @@ def send_asset_specific_updates():
     return data
 
 
-    
+
+@shared_task(name='wsnotifications.tasks.send_email_verification_reminder')
+def send_email_verification_reminder():
+    data = UserNotificationService.send_email_verification_message()
+    return data

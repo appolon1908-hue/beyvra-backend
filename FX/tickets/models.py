@@ -1,4 +1,5 @@
 import uuid
+from enum import Enum
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -12,6 +13,16 @@ class TicketStatus(models.TextChoices):
     RESOLVED = "Resolved", _("Resolved")
     CANCELLED = "Cancelled", _("Cancelled")
     REOPENED = "Reopened", _("Reopened")
+
+
+class TicketMessages(Enum):
+    TICKET_NOT_FOUND = "Ticket not found."
+    TICKET_DELETED_SUCCESS = "Ticket deleted successfully."
+    TICKET_BANNED_SUCCESS = "Ticket banned successfully."
+    TICKET_ALREADY_BANNED = "Ticket is already banned."
+    TICKET_UPDATED_SUCCESS = "Ticket updated successfully."
+    TICKET_ALREADY_UNBANNED = "Ticket is already unbanned."
+    TICKET_UNBANNED_SUCCESS = "Ticket unbanned successfully."
 
 
 class SupportTicket(models.Model):
