@@ -6,7 +6,7 @@ from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from bank_account_app.models import WithdrawalRequest
-from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate, LinkedAccount
+from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate, LinkedAccount, WithdrawalWalletRequest
 from wallet.permissions import IsOwner
 from wallet.serializers import (
     CurrencySerializer,
@@ -502,3 +502,44 @@ class WithdrawFundsView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WithdrawWalletFundsView(APIView):
+    """
+    Handles withdrawal requests with limits and approval workflows.
+    """
+
+    def post(self, request):
+        user = request.user
+        wallet_id = request.data.get("wallet_id")
+        amount = request.data.get("amount")
+
+        try:
+            wallet = Wallet.objects.get(id=wallet_id, user=user)
+        except Wallet.DoesNotExist:
+            return Response({"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        linked_account = LinkedAccount.objects.filter(user=user).first()
+        if not linked_account:
+            return Response({"error": "No linked account found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount > linked_account.withdrawal_limit:
+            return Response(
+                {"error": f"Amount exceeds withdrawal limit of {linked_account.withdrawal_limit}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if wallet.balance < amount:
+            return Response({"error": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if linked_account.requires_approval:
+            withdrawal_request = WithdrawalWalletRequest.objects.create(
+                user=user, wallet=wallet, amount=amount, status="Pending"
+            )
+            return Response(
+                {"message": "Withdrawal request created and pending approval.", "id": withdrawal_request.id},
+                status=status.HTTP_201_CREATED,
+            )
+
+        wallet.debit(amount, wallet.currency)
+        return Response({"message": "Withdrawal successful."}, status=status.HTTP_200_OK)

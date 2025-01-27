@@ -1,7 +1,7 @@
 
 from decimal import Decimal
 from rest_framework import serializers
-from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate
+from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate, WithdrawalWalletRequest
 from users.serializers import UserSerializer
 
 WALLET_BASE_READ_ONLY = [
@@ -182,3 +182,8 @@ class WithdrawFundsSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("Withdrawal amount must be greater than zero.")
         return value
+
+class WithdrawalRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WithdrawalWalletRequest
+        fields = "__all__"
