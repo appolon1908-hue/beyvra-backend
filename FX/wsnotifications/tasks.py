@@ -20,7 +20,7 @@ def periodic_price_updates():
 @shared_task(name='wsnotifications.tasks.send_asset_specific_updates')
 def send_asset_specific_updates():
     asset_id = cache.get('asset_id')
-    url = f"https://api.coingecko.com/api/v3/coins/{asset_id}"
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={asset_id}&vs_currencies=usd"
     data = UserNotificationService.handle_asset_specific_sub(url, asset_id)
     cache.delete('asset_id')
     return data
@@ -30,4 +30,10 @@ def send_asset_specific_updates():
 @shared_task(name='wsnotifications.tasks.send_email_verification_reminder')
 def send_email_verification_reminder():
     data = UserNotificationService.send_email_verification_message()
+    return data
+
+@shared_task(name='wsnotifications.tasks.send_price_threshold_update')
+def send_price_threshold_update():
+    asset_id = cache.get('asset_id')
+    data = UserNotificationService.send_price_threshold_update()
     return data

@@ -70,6 +70,12 @@ async def handle_maintenance_schedule(consumer, event):
         "type": "Scheduled_Maintenance",
         "data": event["message"]
     }))
+    
+async def handle_price_threshold_update(consumer, event):
+    await consumer.send(text_data=json.dumps({
+        "type": "Price Alerts",
+        "data": event["message"]
+    }))
 
 
 ##Defined Notification Types
@@ -85,6 +91,7 @@ MESSAGE_HANDLERS = {
     "Account_suspension": handle_account_suspension,
     "KYC/AML_status_update": handle_kyc_status_update,
     "Scheduled_Maintenance": handle_maintenance_schedule,
+    "price_alerts_threshold": handle_price_threshold_update,
 }
 
 async def dispatch_message(consumer, event):
@@ -92,7 +99,6 @@ async def dispatch_message(consumer, event):
     Dynamically dispatch messages to the appropriate handler based on the type.
     """
     message_type = event.get("message")["title"]
-    logger.info(f"its  me{message_type}")
     handler = MESSAGE_HANDLERS.get(message_type)
     logger.info(handler)
     if handler:

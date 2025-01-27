@@ -7,7 +7,8 @@ from users.models import User
 import json
 from asgiref.sync import sync_to_async
 import asyncio
-
+from notifications.models import UserAlerts
+from decimal import Decimal
 
 import logging
 
@@ -186,10 +187,8 @@ class UserNotificationService:
         channel_layer = get_channel_layer()
         message = {"title": "email_verification_reminder", "message": "Please verify your email to activate your account"}
         unverified_users = User.objects.filter(email_verified=False)
-        logger.info(unverified_users)
+        # logger.info(unverified_users)
         for user in unverified_users:
-            logger.info(f"user_{user.id}")
-            logger.info(f"Processing user {user.id}")
             UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_email_verification_message")
 
         
@@ -286,6 +285,77 @@ class UserNotificationService:
                 pass
         else:
             logger.error(f"General Channel layer is not configured")
+            
+            
+    def send_price_threshold_update():
+        """Used to send users info about their set price threshold
+
+        Args:
+            user (user): used to get the user for price threshold alert
+            message (dict): messgae being sent to the users
+        """
+        try:
+            active_alerts = UserAlerts.objects.filter(status=True)
+            asset_ids = active_alerts.values_list("asset_id", flat=True).distinct()
+            logger.info(active_alerts)
+
+            # Generate URL for fetching all required asset prices
+            assets_query = ",".join(asset_ids)  # Join all asset IDs into a single query
+            logger.info(assets_query)
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={assets_query}&vs_currencies=usd"
+            
+            # Fetch price data
+            response = UserNotificationService.make_request(url)
+            data = response.json()
+
+            # Iterate over users with active alerts
+            users_with_alerts = active_alerts.values("user").distinct()
+            logger.info(users_with_alerts)
+            for user_data in users_with_alerts:
+                user_id = user_data["user"]
+                user = User.objects.get(id=user_id)
+                user_alerts = active_alerts.filter(user=user)
+                logger.info(user_alerts)
+                channel_layer = get_channel_layer()
+
+                for alert in user_alerts:
+                    asset_id = alert.asset_id
+                    triggered = False
+                    # Get the current price for this asset
+                    current_price = Decimal(str(data[asset_id]["usd"]))
+                    logger.info(f"Current Price{current_price}")
+                    logger.info(alert.price_threshold)
+
+                    # Check if the threshold is triggered
+                    if alert.direction == "UP" and current_price >= alert.price_threshold:
+                        triggered = True
+                        logger.info(True)
+                    elif alert.direction == "DOWN" and current_price <= alert.price_threshold:
+                        triggered = True
+                        logger.info(True)
+
+                    if triggered:
+                        message = {
+                            "title": "price_alerts_threshold",
+                            "alert_id": str(alert.id),
+                            "asset_id": alert.asset_id,
+                            "current_price": str(current_price),
+                            "threshold_price": str(alert.price_threshold),
+                            "direction": alert.direction,
+                        }
+                        async_to_sync(channel_layer.group_send)(
+                            f"pricethreshold_{user_id}",
+                            {
+                                "type": "send_message",
+                                "message": message,
+                            }
+                        )
+                        # alert.status = False  # Mark alert as processed
+                        # alert.save()
+
+        except Exception as e:
+            print(f"Error checking price alerts: {e}")
+        
             
     
             
