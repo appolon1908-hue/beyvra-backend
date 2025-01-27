@@ -90,3 +90,35 @@ def send_balance_update_email(balance):
     msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [context['email']])
     msg.attach_alternative(html_content, "text/html")
     msg.send(fail_silently=False)
+
+
+def fetch_exchange_rate(from_currency, to_currency):
+    """
+    Fetch the exchange rate between two currencies.
+
+    Args:
+        from_currency (str): The source currency code (e.g., "USD").
+        to_currency (str): The target currency code (e.g., "EUR").
+
+    Returns:
+        Decimal: The exchange rate.
+
+    Raises:
+        ValueError: If the exchange rate cannot be found.
+    """
+    # If currencies are the same, return a 1:1 exchange rate
+    if from_currency == to_currency:
+        return Decimal(1)
+
+    # Example exchange rate map (replace with API call or database query)
+    exchange_rate_map = {
+        ("USD", "EUR"): Decimal("0.85"),
+        ("EUR", "USD"): Decimal("1.18"),
+        ("USD", "JPY"): Decimal("110"),
+    }
+
+    rate = exchange_rate_map.get((from_currency, to_currency))
+    if not rate:
+        raise ValueError(f"Exchange rate not available for {from_currency} to {to_currency}.")
+    return rate
+

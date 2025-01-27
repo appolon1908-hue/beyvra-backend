@@ -30,4 +30,14 @@ urlpatterns = [
     path('manual-balance-updates/<int:pk>/', views.ManualBalanceUpdateDetailView.as_view()),
     path("wallet/withdraw/", views.WithdrawFundsView.as_view(), name="withdraw-funds"),
     path("wallet/withdraw-limited/", views.WithdrawWalletFundsView.as_view(), name="withdraw-funds-limited"),
+    path(
+        "wallets/<int:wallet_id>/withdraw-with-conversion/",
+        views.WithdrawWithConversionView.as_view(),
+        name="withdraw_with_conversion",
+    ),
+    path(
+        "wallets/<int:wallet_id>/transfer-with-conversion/",
+        views.TransferWithConversionView.as_view(),
+        name="transfer_with_conversion",
+    ),
 ]

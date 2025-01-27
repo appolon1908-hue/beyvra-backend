@@ -25,7 +25,8 @@ from wallet.services import (
     BitPayService,
     AdyenService,
     PayRetailersService,
-    BinanceService
+    BinanceService,
+    WalletService
 )
 
 from .constants import DEMO_BALANCE
@@ -543,3 +544,40 @@ class WithdrawWalletFundsView(APIView):
 
         wallet.debit(amount, wallet.currency)
         return Response({"message": "Withdrawal successful."}, status=status.HTTP_200_OK)
+    
+
+class WithdrawWithConversionView(APIView):
+    def post(self, request, wallet_id):
+        """
+        Handle withdrawal with currency conversion.
+        """
+        amount = request.data.get("amount")
+        target_currency = request.data.get("currency")
+
+        if not amount or not target_currency:
+            return Response({"error": "Amount and target currency are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            converted_amount = WalletService.withdraw_with_conversion(wallet_id, amount, target_currency)
+            return Response({"message": "Withdrawal successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TransferWithConversionView(APIView):
+    def post(self, request, wallet_id):
+        """
+        Handle transfer with currency conversion.
+        """
+        amount = request.data.get("amount")
+        target_currency = request.data.get("currency")
+        target_wallet_id = request.data.get("target_wallet_id")
+
+        if not amount or not target_currency or not target_wallet_id:
+            return Response({"error": "Amount, target currency, and target wallet ID are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            converted_amount = WalletService.transfer_with_conversion(wallet_id, target_wallet_id, amount, target_currency)
+            return Response({"message": "Transfer successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
