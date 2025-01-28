@@ -42,4 +42,5 @@ urlpatterns = [
     ),
 
     path("wallet/withdraw/approve/<uuid:transaction_id>/", views.ApproveTransactionView.as_view(), name="approve-withdrawal"),
+    path("wallets/<int:wallet_id>/multi-currency-balance/", views.MultiCurrencyBalanceView.as_view(), name="multi_currency_balance"),
 ]

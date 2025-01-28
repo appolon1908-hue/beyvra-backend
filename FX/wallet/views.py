@@ -35,6 +35,7 @@ from decimal import Decimal
 import pycountry
 import logging
 from .throttles import DepositRateThrottle, WithdrawalRateThrottle, TransferRateThrottle
+from .utils import convert_currency
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -630,3 +631,43 @@ class ApproveTransactionView(APIView):
             transaction.approved_at = now()
             transaction.save()
             return Response({"message": "Transaction rejected", "transaction_id": transaction.transaction_id})
+        
+
+class MultiCurrencyBalanceView(APIView):
+    """
+    API endpoint to fetch wallet balances in multiple currencies 
+    based on the user's local region or a specified currency.
+    """
+
+    def get(self, request, wallet_id):
+        # Fetch the wallet
+        try:
+            wallet = Wallet.objects.get(id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get region-based currency or a requested currency
+        region_currency = request.query_params.get("currency", wallet.currency)
+
+        # Get the current balance in the wallet's default currency
+        default_balance = wallet.balance
+
+        # Convert the balance to the target currency
+        try:
+            converted_balance = convert_currency(default_balance, wallet.currency, region_currency)
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to convert currency: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "wallet_id": wallet.id,
+                "default_currency": wallet.currency,
+                "default_balance": default_balance,
+                "converted_currency": region_currency,
+                "converted_balance": converted_balance,
+            },
+            status=status.HTTP_200_OK,
+        )
