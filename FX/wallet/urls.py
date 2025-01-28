@@ -40,4 +40,6 @@ urlpatterns = [
         views.TransferWithConversionView.as_view(),
         name="transfer_with_conversion",
     ),
+
+    path("wallet/withdraw/approve/<uuid:transaction_id>/", views.ApproveTransactionView.as_view(), name="approve-withdrawal"),
 ]

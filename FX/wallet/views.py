@@ -520,6 +520,18 @@ class WithdrawWalletFundsView(APIView):
         wallet_id = request.data.get("wallet_id")
         amount = request.data.get("amount")
 
+        if not wallet_id:
+            return Response({"error": "Wallet ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not amount:
+            return Response({"error": "Amount is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(amount)
+            if amount <= 0:
+                raise ValueError("Amount must be greater than zero.")
+        except (InvalidOperation, ValueError):
+            return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             wallet = Wallet.objects.get(id=wallet_id, user=user)
         except Wallet.DoesNotExist:
@@ -542,6 +554,7 @@ class WithdrawWalletFundsView(APIView):
             withdrawal_request = WithdrawalWalletRequest.objects.create(
                 user=user, wallet=wallet, amount=amount, status="Pending"
             )
+            self.notify_admin(withdrawal_request)
             return Response(
                 {"message": "Withdrawal request created and pending approval.", "id": withdrawal_request.id},
                 status=status.HTTP_201_CREATED,
@@ -549,6 +562,9 @@ class WithdrawWalletFundsView(APIView):
 
         wallet.debit(amount, wallet.currency)
         return Response({"message": "Withdrawal successful."}, status=status.HTTP_200_OK)
+
+    def notify_admin(self, withdrawal_request):
+        print(f"Admin Notification: Withdrawal request {withdrawal_request.id} is pending approval.")
     
 
 class WithdrawWithConversionView(APIView):
@@ -586,3 +602,31 @@ class TransferWithConversionView(APIView):
             return Response({"message": "Transfer successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ApproveTransactionView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, transaction_id):
+        action = request.data.get("action")
+        if action not in ["approve", "reject"]:
+            return Response({"error": "Invalid action"}, status=400)
+
+        try:
+            transaction = Transaction.objects.get(transaction_id=transaction_id, requires_approval=True, status="P")
+        except Transaction.DoesNotExist:
+            return Response({"error": "Transaction not found or already processed"}, status=404)
+
+        if action == "approve":
+            transaction.status = "S"
+            transaction.approved_by = request.user
+            transaction.approved_at = now()
+            transaction.save()
+            return Response({"message": "Transaction approved", "transaction_id": transaction.transaction_id})
+
+        if action == "reject":
+            transaction.status = "F"
+            transaction.approved_by = request.user
+            transaction.approved_at = now()
+            transaction.save()
+            return Response({"message": "Transaction rejected", "transaction_id": transaction.transaction_id})
