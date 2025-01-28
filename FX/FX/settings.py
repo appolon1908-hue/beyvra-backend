@@ -228,6 +228,9 @@ if os.environ.get("RATE_LIMIT", False):
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "anon": "30/minute",
         "user": "60/minute",
+        "deposit": "5/minute",  # Allow 5 deposits per minute
+        "withdrawal": "3/minute",  # Allow 3 withdrawals per minute
+        "transfer": "10/minute",  # Allow 10 transfers per minute
     }
 
 # Simple-jwt
