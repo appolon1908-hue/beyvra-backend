@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -70,6 +71,20 @@ class Trade(TimeStampedModel):
     @property
     def total_value(self):
         return self.quantity * self.price_per_unit
+
+    @property
+    def percentage_change(self) -> Decimal:
+        """
+        Calculates the percentage change (gain or loss) for the trade.
+        Returns:
+            Decimal: Percentage change. Positive for gain, negative for loss.
+        """
+        if self.open != 0:
+            # Ensure proper arithmetic with decimals
+            change = ((Decimal(self.close) - Decimal(self.open)) / Decimal(self.open)) * 100
+            # Round to 2 decimal places
+            return round(change, 2)
+        return Decimal("0.00")
 
     def clean(self):
         # Ensure quantity is greater than zero
