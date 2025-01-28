@@ -13,21 +13,66 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+from django.db import models
+from utils.encryption import encrypt_data, decrypt_data
+
 class BankAccount(TimeStampedModel):
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='bank_accounts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bank_accounts')
     bank_name = models.CharField(max_length=255)
-    account_number = models.CharField(max_length=50, unique=True)
+    
+    # Encrypted fields
+    _encrypted_account_number = models.CharField(max_length=255, blank=True, null=True)
+    _encrypted_routing_number = models.CharField(max_length=255, blank=True, null=True)
+    _encrypted_iban = models.CharField(max_length=255, blank=True, null=True)
+
     account_holder_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255, null=True, blank=True,
-                                 help_text='Last name of the account holder')
-    routing_number = models.CharField(max_length=50, null=True, blank=True)
+    last_name = models.CharField(max_length=255, null=True, blank=True)
     swift_code = models.CharField(max_length=50, null=True, blank=True)
-    iban = models.CharField(max_length=50, null=True, blank=True)
     country = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.user.email} - {self.bank_name} - {self.account_number}"
+        return f"{self.user.email} - {self.bank_name} - {self.get_account_number()}"
+
+    # Setters for encrypted fields
+    def set_account_number(self, value):
+        self._encrypted_account_number = encrypt_data(value)
+
+    def set_routing_number(self, value):
+        self._encrypted_routing_number = encrypt_data(value)
+
+    def set_iban(self, value):
+        self._encrypted_iban = encrypt_data(value)
+
+    # Getters for encrypted fields
+    def get_account_number(self):
+        return decrypt_data(self._encrypted_account_number) if self._encrypted_account_number else None
+
+    def get_routing_number(self):
+        return decrypt_data(self._encrypted_routing_number) if self._encrypted_routing_number else None
+
+    def get_iban(self):
+        return decrypt_data(self._encrypted_iban) if self._encrypted_iban else None
+
+    # Override save to encrypt data before saving
+    def save(self, *args, **kwargs):
+        if self.account_number:
+            self.set_account_number(self.account_number)
+        if self.routing_number:
+            self.set_routing_number(self.routing_number)
+        if self.iban:
+            self.set_iban(self.iban)
+        super().save(*args, **kwargs)
+    
+    # Optionally, you can create a method to return decrypted details for API responses
+    def get_decrypted_details(self):
+        return {
+            "account_number": self.get_account_number(),
+            "routing_number": self.get_routing_number(),
+            "iban": self.get_iban(),
+            "swift_code": self.swift_code,
+            "bank_name": self.bank_name,
+            "account_holder_name": self.account_holder_name,
+        }
 
 
 class WithdrawalRequest(TimeStampedModel):

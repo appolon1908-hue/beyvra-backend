@@ -12,64 +12,102 @@ from django.shortcuts import get_object_or_404
 from users.models import User
 from drf_spectacular.utils import extend_schema
 
+from .models import BankAccount
+from .serializers import BankAccountSerializer
+from utils.encryption import encrypt_data
+
 class BankAccountView(APIView):
-    """ APIs to get, create, update and delete a bank account for a user. """
-    
+    """APIs to get, create, update, and delete a bank account for a user."""
+
     def get(self, request):
+        """Retrieve all bank accounts for the authenticated user."""
         user_id = request.user.id
-        # get_object_or_404(User, id=user_id)
-        bank_account_instance = BankAccount.objects.filter(user=user_id)
-        return Response({"data":BankAccountSerializer(bank_account_instance, many=True).data}, status=status.HTTP_200_OK)
+        bank_account_instances = BankAccount.objects.filter(user=user_id)
+        serializer = BankAccountSerializer(bank_account_instances, many=True)
+        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=BankAccountSerializer,
         responses={201: BankAccountSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        """Create a new bank account for the user."""
         try:
             bank_account_serializer = BankAccountSerializer(
-                data=request.data, context={'request': request})
-            
+                data=request.data, context={'request': request}
+            )
+
             if bank_account_serializer.is_valid(raise_exception=True):
                 bank_account_serializer.save()
-                return Response({"data": bank_account_serializer.data}, status=status.HTTP_201_CREATED)
+                return Response(
+                    {"data": bank_account_serializer.data}, status=status.HTTP_201_CREATED
+                )
         except Exception as e:
             return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     @extend_schema(
         request=BankAccountSerializer,
-        responses={201: BankAccountSerializer, 400: 'Bad Request'},
+        responses={200: BankAccountSerializer, 400: 'Bad Request'},
     )
     def patch(self, request):
+        """Update an existing bank account."""
         try:
-            bank_account = BankAccount.objects.filter(user=request.user, bank_name=request.data['bank_name']).first()
+            bank_account = BankAccount.objects.filter(
+                user=request.user, bank_name=request.data.get('bank_name')
+            ).first()
+
             if not bank_account:
-                return Response({"Error": "Bank account not found for user {} in {} bank".format(request.data['user'], request.data['bank_name'])}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"Error": f"Bank account not found for user {request.user} in {request.data.get('bank_name')} bank"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             serializer = BankAccountSerializer(
-                bank_account, data=request.data, context={'request': request}, partial=True)
-            if not serializer.is_valid():
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            serializer.save()
-            return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+                bank_account, data=request.data, context={'request': request}, partial=True
+            )
+
+            if serializer.is_valid(raise_exception=True):
+                serializer.save()
+                return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
+        """Delete a bank account."""
         try:
             account_number = request.data.get('account_number')
-            user = request.data.get('user')
             bank_name = request.data.get('bank_name')
-            if not account_number or not user or not bank_name:
-                return Response({"Error": "Missing required fields: bank_account_number, user, and bank_name"}, status=status.HTTP_400_BAD_REQUEST)
-            bank_account = BankAccount.objects.filter(account_number=account_number, user=user, bank_name=bank_name).first()
+
+            if not account_number or not bank_name:
+                return Response(
+                    {"Error": "Missing required fields: account_number and bank_name"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Encrypt the account_number to match the stored encrypted value
+            encrypted_account_number = encrypt_data(account_number)
+
+            bank_account = BankAccount.objects.filter(
+                _encrypted_account_number=encrypted_account_number,
+                user=request.user,
+                bank_name=bank_name,
+            ).first()
+
             if not bank_account:
-                return Response({"Error": "Bank account not found for account number {}, user {}, in {} bank".format(account_number, user, bank_name)}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"Error": f"Bank account not found for account number {account_number} in {bank_name} bank"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             bank_account.delete()
-            return Response({"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)
-        
+            return Response(
+                {"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK
+            )
+
         except Exception as e:
             return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 
 class WithdrawalRequestView(APIView):
     """ APIs to get, create, update a withdrawal request """
