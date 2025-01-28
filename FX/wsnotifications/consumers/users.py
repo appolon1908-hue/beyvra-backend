@@ -49,7 +49,7 @@ class PriceThresholdConsumer(BaseConsumer):
         await super().connect()
         user = self.scope['user']
         if user.is_authenticated:
-            group_name = f"pricethreshold_{user.id}"
+            group_name = f"price_alerts_{user.id}"
             logger.info("Price Threshold Added")
             await self.channel_layer.group_add(group_name, self.channel_name)   
         else:

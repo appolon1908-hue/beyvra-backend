@@ -33,8 +33,8 @@ def send_account_creation_notification(sender, instance, created, **kwargs):
             "title": "Account_creation",
             "body": f"Welcome, to Trade App! Your account has been created successfully.",
         }
-        async_to_sync(UserNotificationService.send_account_created)(user_id, message)
-        async_to_sync(AdminNotificationService.send_new_user_notification)(instance)
+        UserNotificationService.send_account_created(user_id, message)
+        # async_to_sync(AdminNotificationService.send_new_user_notification)(instance)
         
 
 @receiver(pre_save, sender=User)
@@ -42,9 +42,6 @@ def send_account_verification_message(sender, instance, **kwargs):
     if instance.email_verified == True:
         AdminNotificationService.send_account_verification(user=instance)
         
-        
-    
-    
         
         
    

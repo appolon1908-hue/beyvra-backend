@@ -70,31 +70,28 @@ class AdminNotificationService:
 class UserNotificationService:
     
     @staticmethod
-    async def _send_user_notification(type, group_name, user_id=None, message=None,):
-        """Internal method to send notifications to user groups"""
-        # Prepare notification payload
+    async def send_user_notification(user_id, message, type, group_name):
+        """Send price update for a specific asset"""
         channel_layer = get_channel_layer()
         if channel_layer:
             try:
-                # Send a message to the user's group
                 await channel_layer.group_send(
-                    f"{group_name}",  # Group name
+                    group_name,
                     {
-                        "type": type,  # Type corresponds to a consumer method
-                        "message": message,     # Actual message payload
+                        "type": type,
+                        "message": message
                     }
                 )
-                logger.info(f"{type} message sent to user_{user_id}")
+                logger.info(f"{type} update sent for {user_id}")
             except Exception as e:
-                logger.error(f"Failed to send message to user_{user_id}: {e}")
-        else:
-            logger.error(f"{type}Channel layer is not configured")
+                logger.error(f"Failed to send {type} update for {user_id}: {e}")
+            
             
     @staticmethod
-    def sync_send_user_notification(type, group_name, user_id=None, message=None):
-        """Synchronous wrapper for _send_user_notification"""
+    def sync_send_user_notification(user_id, message, type, group_name):
+        """Synchronous wrapper for send_asset_price_update"""
         async def wrapper():
-            await UserNotificationService._send_user_notification(type, group_name, user_id, message)
+            await UserNotificationService.send_user_notification(user_id,  message, type, group_name)
         
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -103,7 +100,7 @@ class UserNotificationService:
         finally:
             loop.close()
 
-    
+
     @staticmethod
     def make_request(url):
         headers = {
@@ -131,67 +128,65 @@ class UserNotificationService:
                     {"name": coin["name"], "price": coin["current_price"]}
                     for coin in data
                 ]
-                UserNotificationService._send_user_notification(message=coins_and_prices, type="send_price_updates",group_name="market_prices")
-                
-                # try:
-                #     channel_layer = get_channel_layer()
-                #     async_to_sync(channel_layer.group_send)(
-                #         "market_prices",
-                #         {
-                #             "type": "send_price_update",
-                #             "message": coins_and_prices
-                #         }
-                #     )
-                # except Exception as e:
-                #     # Handle issues with channel layer
-                #     logger.info(f"Error sending data to channel layer: {e}")
-                #     return None
+                UserNotificationService.sync_send_user_notification(user_id=None, message=coins_and_prices, type="send_price_update",group_name="market_prices")
             else:
                 logger.info(f"Failed to fetch data: HTTP {response.status_code} - {response.reason}")
                 return None
         except Exception as e:
             logger.info(f"An unexpected error occurred: {e}")
             return None
+        
+        
+        
+    @staticmethod
+    async def send_asset_price_update(asset_id, price_data):
+        """Send price update for a specific asset"""
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            try:
+                await channel_layer.group_send(
+                    f"price_updates_{asset_id}",
+                    {
+                        "type": "price_update",
+                        "message": {
+                            "asset_id": asset_id,
+                            "price": price_data
+                        }
+                    }
+                )
+                logger.info(f"Price update sent for {asset_id}")
+            except Exception as e:
+                logger.error(f"Failed to send price update for {asset_id}: {e}")
+                
+    @staticmethod
+    def sync_send_asset_price_update(asset_id, price_data):
+        """Synchronous wrapper for send_asset_price_update"""
+        async def wrapper():
+            await UserNotificationService.send_asset_price_update(asset_id, price_data)
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(wrapper())
+        finally:
+            loop.close()
             
-        
-    @staticmethod
-    def handle_asset_specific_sub(url, asset_id):
-        response = UserNotificationService.make_request(url)
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(data)
-            UserNotificationService._send_user_notification(message=data, type="send_asset_update",group_name=f"asset_{asset_id}")
-            return data
-        else:
-            data = response.json()
-            logger.info(data)
-    
-    @staticmethod
-    def send_account_created(user_id, message):
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
-    
-    
-    @staticmethod
-    def email_verification_reminder(user):
-        message = {"title": "email_verification_reminder", "message": "Please verify your email to activate your account"}
-        UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_message", group_name=f"user_{user.id}")
-        
-
     @staticmethod
     def send_email_verification_message():
-        channel_layer = get_channel_layer()
         message = {"title": "email_verification_reminder", "message": "Please verify your email to activate your account"}
         unverified_users = User.objects.filter(email_verified=False)
-        # logger.info(unverified_users)
         for user in unverified_users:
-            UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_message", group_name=f"user_{user.id}")
-
+            UserNotificationService.sync_send_user_notification(user_id=user.id, message=message, type="send_message", group_name=f"user_{user.id}")
+        
         
     @staticmethod
     def password_changed_confirmation(user_id, message):
         logger.info("Reached")
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
-
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
+        
+    @staticmethod
+    def send_account_created(user_id, message):
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
     
     @staticmethod
     def trade_order_placed(user_id, message):
@@ -202,13 +197,8 @@ class UserNotificationService:
         :param message: The message to be sent.
         """
         logger.info("Reached Trade Order")
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
-        # Get the channel layer for WebSocket communication
-        channel_layer = get_channel_layer()
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
-        
-            
-            
     @staticmethod
     def trade_order_executed(user_id, message):
         """
@@ -218,9 +208,7 @@ class UserNotificationService:
         :param message: The message to be sent.
         """
         logger.info("Reached Trade Placed")
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
-        
-     
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
     @staticmethod
     def handle_deposit(user_id, message):
@@ -231,33 +219,30 @@ class UserNotificationService:
         :param message: The message to be sent.
         """
         logger.info("Handling Deposit")
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
-            
     @staticmethod
     def handle_login_activity(user_id, message):
         """
         Used to detect user activity
         """
         logger.info("Handling Login Activity")
-        UserNotificationService._send_user_notification(user_id, message, type='send_message', group_name=f"user_{user_id}")
+        UserNotificationService.sync_send_user_notification(user_id, message, type='send_message', group_name=f"user_{user_id}")
         
-            
-            
     @staticmethod
     def handle_account_suspension(user_id, message):
         """
-        Used to send account Suspension Message
+        Used to send account Suspension Message 
         """
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", user_id=f"user_{user_id}")
-       
-            
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
+        
+    
     @staticmethod
     def handle_kyc_notification(user_id, message):
         """
         Used to send account Suspension Message
         """
-        UserNotificationService._send_user_notification(user_id, message, type="send_message", user_id=f"user_{user_id}")
+        UserNotificationService.sync_send_user_notification(user_id, message, type="send_message", user_id=f"user_{user_id}")
             
             
     @staticmethod   
@@ -265,69 +250,51 @@ class UserNotificationService:
         """
         Used to send general notification
         """
-        UserNotificationService._send_user_notification(message, type="send_message", group_name="users")
-            
-            
+        UserNotificationService.sync_send_user_notification(message, type="send_message", group_name="users")
+        
     @staticmethod
     def send_price_threshold_update():
+        
         """Celery task to send users info about their set price threshold"""
         try:
             active_alerts = UserAlerts.objects.filter(status=True)
-            asset_ids = active_alerts.values_list("asset_id", flat=True).distinct()
             logger.info(active_alerts)
-
-            # Generate URL for fetching all required asset prices
-            assets_query = ",".join(asset_ids)
-            logger.info(assets_query)
-            url = f"https://api.coingecko.com/api/v3/simple/price?ids={assets_query}&vs_currencies=usd"
-            
-            # Fetch price data
+            # Group all asset IDs into a single batch API request
+            asset_ids = ",".join(str(alert.asset_id) for alert in active_alerts)
+            ##The url cant be moved to settings.py because i am accesing the asset_id from here
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={asset_ids}&vs_currencies=usd"
             response = UserNotificationService.make_request(url)
             data = response.json()
-
-            # Iterate over users with active alerts
-            users_with_alerts = active_alerts.values("user").distinct()
-            logger.info(users_with_alerts)
-            
-            for user_data in users_with_alerts:
-                user_id = user_data["user"]
-                user = User.objects.get(id=user_id)
-                user_alerts = active_alerts.filter(user=user)
-                logger.info(user_alerts)
-
-                for alert in user_alerts:
-                    asset_id = alert.asset_id
-                    if not asset_id or asset_id not in data:
-                        continue
-
+            if active_alerts:
+                for user_alert in active_alerts:
+                    asset_id = str(user_alert.asset_id)
                     current_price = Decimal(str(data[asset_id]["usd"]))
-                    logger.info(f"Current Price: {current_price}")
-                    logger.info(f"Alert threshold: {alert.price_threshold}")
-
                     triggered = (
-                        (alert.direction == "UP" and current_price >= alert.price_threshold) or
-                        (alert.direction == "DOWN" and current_price <= alert.price_threshold)
+                        (user_alert.direction == "UP" and current_price >= user_alert.price_threshold) or
+                        (user_alert.direction == "DOWN" and current_price <= user_alert.price_threshold)
                     )
 
                     if triggered:
                         message = {
                             "title": "price_alerts_threshold",
-                            "alert_id": str(alert.id),
-                            "asset_id": alert.asset_id,
+                            "alert_id": str(user_alert.id),
+                            "asset_id": user_alert.asset_id,
                             "current_price": str(current_price),
-                            "threshold_price": str(alert.price_threshold),
-                            "direction": alert.direction,
+                            "threshold_price": str(user_alert.price_threshold),
+                            "direction": user_alert.direction,
+                            
                         }
-                        sync_to_async(UserNotificationService._send_user_notification)(
-                        group_name = "send_message"
-                        message=message
-                       )
+                        UserNotificationService.sync_send_user_notification(
+                        user_id= user_alert.user.id,
+                        message=message,
+                        type = "send_message",
+                        group_name=f"price_alerts_{user_alert.user.id}", 
+                    )
+            else:
+                logger.info(f"No active alerts")
         except Exception as e:
             logger.error(f"Error checking price alerts: {e}")
             raise
             
-                
-        
-                
-        
-        
+            
+    

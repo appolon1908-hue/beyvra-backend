@@ -176,7 +176,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'send_asset_specific_updates': {
         'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/2")
+        'schedule': timedelta(seconds=60),
     },
     'send_email_verification_reminder': {
         'task': 'wsnotifications.tasks.send_email_verification_reminder',
@@ -184,7 +184,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'send_price_threshold_update': {
         'task': 'wsnotifications.tasks.send_price_threshold_update',
-        'schedule': crontab(minute="*/2")
+        'schedule': crontab(minute="*/1")
     }
 }
 

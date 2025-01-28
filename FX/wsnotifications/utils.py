@@ -4,6 +4,7 @@ from django.db.models import Count, Q
 from django.core.cache import cache
 import uuid
 from users.models import UserDeviceInfo
+from wsnotifications.models import AssetSubscription
 
 
 import logging
@@ -11,6 +12,25 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+
+
+
+
+@database_sync_to_async
+def subscribe_to_asset(user, asset_id):
+    AssetSubscription.objects.get_or_create(
+        user= user,
+        asset_id=asset_id
+    )
+    return asset_id
+    
+@database_sync_to_async
+def unsubscribe_from_asset(user, asset_id):
+    AssetSubscription.objects.filter(
+        user= user,
+        asset_id=asset_id
+    ).delete()
+    return asset_id
 
 @database_sync_to_async
 def db_user_connected(user: User) -> User:
