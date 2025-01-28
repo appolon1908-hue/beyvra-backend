@@ -99,6 +99,7 @@ class User(AbstractUser, TimeStampedModel):
     )
     address = models.TextField(blank=True, null=True)
     gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True)
+    dob = models.DateField(blank=True, null=True)
     two_factor_authentication_enabled = models.BooleanField(default=False)
     hidden_account_balances_toggle_enabled = models.BooleanField(default=False)
     one_click_trade_toggle_enabled = models.BooleanField(default=False)

@@ -1102,7 +1102,7 @@ def get_user_kyc(request, user_id):
         404: {"description": "User not found."},
     },
 )
-@api_view(["PATCH"])
+@api_view(["PATCH", "GET"])
 @permission_classes([IsAuthenticated])
 def verify_user_kyc(request, user_id):
     user = request.user
@@ -1110,20 +1110,43 @@ def verify_user_kyc(request, user_id):
         return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
 
     try:
-        user = User.objects.get(id=user_id)
+        user_profile = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
 
-    kyc = KYC.objects.filter(user=user).first()
+    kyc = KYC.objects.filter(user=user_profile).first()
     if not kyc:
         return Response({"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if kyc.verified:
         return Response({"detail": "User KYC already verified."}, status=status.HTTP_200_OK)
 
-    kyc.verified = True
-    kyc.status = "S"
-    kyc.save()
+    if request.method == "GET":
+        # Extract KYC fields
+        kyc_fullname, kyc_dob, kyc_address = kyc.full_name, kyc.dob, kyc.address
+
+        # Extract User fields
+        user_fullname = f"{user_profile.first_name} {user_profile.last_name}"
+        user_dob, user_address = user_profile.dob, user_profile.address
+
+        # Perform comparisons
+        results = {
+            "fullname_match": kyc_fullname == user_fullname,
+            "dob_match": kyc_dob == user_dob,
+            "address_match": kyc_address == user_address,
+        }
+
+        # Calculate progress percentage
+        total_fields = len(results)
+        passed_fields = sum(results.values())
+        results["percentage_progress"] = int((passed_fields / total_fields) * 100)
+
+        return Response(results, status=status.HTTP_200_OK)
+
+    elif request.method == "PATCH":
+        kyc.verified = True
+        kyc.status = "S"
+        kyc.save()
 
     return Response({"detail": "User KYC verified successfully."}, status=status.HTTP_200_OK)
 

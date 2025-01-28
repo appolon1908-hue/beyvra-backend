@@ -1,19 +1,17 @@
 from django.contrib import admin
-from django.utils.html import format_html
+from django.db.models.signals import post_save
 from django.utils.html import format_html
 from import_export.admin import ImportExportModelAdmin
 from users.models import KYC, KYCFile, User, UserDeviceInfo
 from users.resources import UserResource
 from users.signals import update_user_upon_creation
-from django.db.models.signals import post_save
 
 admin.site.site_header = "FX Portal Administration"
 
 
 class CustomUserAdmin(ImportExportModelAdmin):
     # Disconnect the post_save signal to avoid sending email
-    post_save.disconnect(update_user_upon_creation, sender=User,
-                         dispatch_uid="update_user_upon_creation")
+    post_save.disconnect(update_user_upon_creation, sender=User, dispatch_uid="update_user_upon_creation")
 
     resource_class = UserResource  # Attach the UserResource for import/export validation
     list_display = (
@@ -35,6 +33,7 @@ class CustomUserAdmin(ImportExportModelAdmin):
                     "first_name",
                     "last_name",
                     "phone_number",
+                    "dob",
                     "profile_picture",
                     "address",
                     "gender",
@@ -45,7 +44,7 @@ class CustomUserAdmin(ImportExportModelAdmin):
                     "one_click_trade_toggle_enabled",
                     "one_click_trade_closing_toggle_enabled",
                     "is_walkthrough",
-                    "role"
+                    "role",
                 )
             },
         ),
