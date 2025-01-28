@@ -1,6 +1,6 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from wsnotifications.service import UserNotificationService
+from wsnotifications.service import UserNotificationService, AdminNotificationService
 from django.contrib.auth import get_user_model
 from trade.models import Trade
 from payments.models import Payment
@@ -9,11 +9,14 @@ import geoip2.database
 from users.models import UserDeviceInfo, KYC
 from notifications.models import UserNotifications, Notifications
 import os
+from asgiref.sync import async_to_sync
 
-User = get_user_model()
 import logging
 
+
+User = get_user_model()
 logger = logging.getLogger(__name__)
+
 
 
 
@@ -30,7 +33,19 @@ def send_account_creation_notification(sender, instance, created, **kwargs):
             "title": "Account_creation",
             "body": f"Welcome, to Trade App! Your account has been created successfully.",
         }
-        UserNotificationService.send_account_created(user_id, message)
+        async_to_sync(UserNotificationService.send_account_created)(user_id, message)
+        async_to_sync(AdminNotificationService.send_new_user_notification)(instance)
+        
+
+@receiver(pre_save, sender=User)
+def send_account_verification_message(sender, instance, **kwargs):
+    if instance.email_verified == True:
+        AdminNotificationService.send_account_verification(user=instance)
+        
+        
+    
+    
+        
         
    
 @receiver(post_save, sender=Trade, dispatch_uid="trade_order_placed")

@@ -15,26 +15,38 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AdminNotificationService:
-    def send_system_alert(self, message: str, severity: str = "WARNING", metadata: Optional[Dict] = None):
-        """System alerts for critical application events"""
-        return self._send_admin_notification(
-            message=message,
-            notification_type=severity,
-            category="SYSTEM_ALERT",
-        )
+    
+    async def _send_admin_notification(self, message: str, notification_type: str, category: str):
+        """Internal method to send notifications to admin group"""
+        # Prepare notification payload
+        payload = {
+            "type": "notification_message",
+            "message": {
+                "message": message,
+                "type": notification_type,
+                "category": category,
+            }
+        }
 
-    def send_new_user_notification(self, user):
+        # Send to admin group via channels
+        channel_layer = get_channel_layer()
+        await channel_layer.group_send(
+            "admin_notification",
+            payload
+        )
         
-        """Notify admins about new user registrations"""
-        return self._send_admin_notification(
-            message=f"New user registered: {user.email}",
-            notification_type="INFO",
-            category="USER_MANAGEMENT",
-            metadata={
-                "user_id": user.id,
-                "email": user.email,
-                "date_joined": user.date_joined.isoformat(),
-                "action_url": f"/admin/auth/user/{user.id}/change/"
+    async def send_new_user_notification(user):
+        logger.info("Sending message to Admin group")
+        message = {
+            "title": "Account_creation",
+            "body": f"New user {user.email} just registered at {user.date_joined}",
+        }
+        channel_layer = get_channel_layer()
+        await channel_layer.group_send(
+            "Admin",
+            {
+                "type": "send_message",
+                "message": message,
             }
         )
 
@@ -52,41 +64,23 @@ class AdminNotificationService:
             }
         )
 
-    def _send_admin_notification(self, message: str, notification_type: str, category: str, metadata: Optional[Dict] = None):
-        """Internal method to send notifications to admin group"""
-        # Prepare notification payload
-        payload = {
-            "type": "notification_message",
-            "message": {
-                "message": message,
-                "type": notification_type,
-                "category": category,
-                "metadata": metadata,
-            }
-        }
-
-        # Send to admin group via channels
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            "admin_notification",
-            payload
-        )
+    
 
 
 class UserNotificationService:
     
     @staticmethod
-    def _send_user_notification(user_id, message, type):
+    async def _send_user_notification(type, group_name, user_id=None, message=None,):
         """Internal method to send notifications to user groups"""
         # Prepare notification payload
         channel_layer = get_channel_layer()
         if channel_layer:
             try:
                 # Send a message to the user's group
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{user_id}",  # Group name
+                await channel_layer.group_send(
+                    f"{group_name}",  # Group name
                     {
-                        "type": "send_message",  # Type corresponds to a consumer method
+                        "type": type,  # Type corresponds to a consumer method
                         "message": message,     # Actual message payload
                     }
                 )
@@ -95,6 +89,19 @@ class UserNotificationService:
                 logger.error(f"Failed to send message to user_{user_id}: {e}")
         else:
             logger.error(f"{type}Channel layer is not configured")
+            
+    @staticmethod
+    def sync_send_user_notification(type, group_name, user_id=None, message=None):
+        """Synchronous wrapper for _send_user_notification"""
+        async def wrapper():
+            await UserNotificationService._send_user_notification(type, group_name, user_id, message)
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(wrapper())
+        finally:
+            loop.close()
 
     
     @staticmethod
@@ -124,19 +131,21 @@ class UserNotificationService:
                     {"name": coin["name"], "price": coin["current_price"]}
                     for coin in data
                 ]
-                try:
-                    channel_layer = get_channel_layer()
-                    async_to_sync(channel_layer.group_send)(
-                        "market_prices",
-                        {
-                            "type": "send_price_update",
-                            "message": coins_and_prices
-                        }
-                    )
-                except Exception as e:
-                    # Handle issues with channel layer
-                    logger.info(f"Error sending data to channel layer: {e}")
-                    return None
+                UserNotificationService._send_user_notification(message=coins_and_prices, type="send_price_updates",group_name="market_prices")
+                
+                # try:
+                #     channel_layer = get_channel_layer()
+                #     async_to_sync(channel_layer.group_send)(
+                #         "market_prices",
+                #         {
+                #             "type": "send_price_update",
+                #             "message": coins_and_prices
+                #         }
+                #     )
+                # except Exception as e:
+                #     # Handle issues with channel layer
+                #     logger.info(f"Error sending data to channel layer: {e}")
+                #     return None
             else:
                 logger.info(f"Failed to fetch data: HTTP {response.status_code} - {response.reason}")
                 return None
@@ -151,15 +160,7 @@ class UserNotificationService:
         if response.status_code == 200:
             data = response.json()
             logger.info(data)
-            channel_layer = get_channel_layer()
-            logger.info(f"asset_{asset_id}")
-            async_to_sync(channel_layer.group_send)(
-                f"asset_{asset_id}",
-                {
-                    "type": "send_asset_update",
-                    "message": data
-                }
-            )
+            UserNotificationService._send_user_notification(message=data, type="send_asset_update",group_name=f"asset_{asset_id}")
             return data
         else:
             data = response.json()
@@ -167,19 +168,13 @@ class UserNotificationService:
     
     @staticmethod
     def send_account_created(user_id, message):
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"user_{user_id}",
-            {
-                "type": "send_message",
-                "message": message
-            }
-        )
-    ##Used to send verify message once a user is connected
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
+    
+    
     @staticmethod
     def email_verification_reminder(user):
         message = {"title": "email_verification_reminder", "message": "Please verify your email to activate your account"}
-        UserNotificationService._send_user_notification(user_id=user.id, message=message, type="Email_Verification")
+        UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_message", group_name=f"user_{user.id}")
         
 
     @staticmethod
@@ -189,13 +184,13 @@ class UserNotificationService:
         unverified_users = User.objects.filter(email_verified=False)
         # logger.info(unverified_users)
         for user in unverified_users:
-            UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_email_verification_message")
+            UserNotificationService._send_user_notification(user_id=user.id, message=message, type="send_message", group_name=f"user_{user.id}")
 
         
     @staticmethod
     def password_changed_confirmation(user_id, message):
         logger.info("Reached")
-        UserNotificationService._send_user_notification(user_id, message, type="Password Change")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
 
     
     @staticmethod
@@ -210,7 +205,7 @@ class UserNotificationService:
         
         # Get the channel layer for WebSocket communication
         channel_layer = get_channel_layer()
-        UserNotificationService._send_user_notification(user_id, message, type="Trade")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
             
             
@@ -223,7 +218,7 @@ class UserNotificationService:
         :param message: The message to be sent.
         """
         logger.info("Reached Trade Placed")
-        UserNotificationService._send_user_notification(user_id, message, type="Trade_Executed")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
      
         
@@ -236,7 +231,7 @@ class UserNotificationService:
         :param message: The message to be sent.
         """
         logger.info("Handling Deposit")
-        UserNotificationService._send_user_notification(user_id, message, type="Deposit")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", group_name=f"user_{user_id}")
         
             
     @staticmethod
@@ -245,7 +240,7 @@ class UserNotificationService:
         Used to detect user activity
         """
         logger.info("Handling Login Activity")
-        UserNotificationService._send_user_notification(user_id, message, type='Login Activity')
+        UserNotificationService._send_user_notification(user_id, message, type='send_message', group_name=f"user_{user_id}")
         
             
             
@@ -254,7 +249,7 @@ class UserNotificationService:
         """
         Used to send account Suspension Message
         """
-        UserNotificationService._send_user_notification(user_id, message, type="Account Suspension")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", user_id=f"user_{user_id}")
        
             
     @staticmethod
@@ -262,7 +257,7 @@ class UserNotificationService:
         """
         Used to send account Suspension Message
         """
-        UserNotificationService._send_user_notification(user_id, message, type="KYC Notification")
+        UserNotificationService._send_user_notification(user_id, message, type="send_message", user_id=f"user_{user_id}")
             
             
     @staticmethod   
@@ -270,37 +265,19 @@ class UserNotificationService:
         """
         Used to send general notification
         """
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            try:
-                # Send a message to the user's group
-                async_to_sync(channel_layer.group_send)(
-                    f"users",  # Group name
-                    {
-                        "type": "send_message",  # Type corresponds to a consumer method
-                        "message": message,     # Actual message payload
-                    }
-                )
-            except Exception as e:
-                pass
-        else:
-            logger.error(f"General Channel layer is not configured")
+        UserNotificationService._send_user_notification(message, type="send_message", group_name="users")
             
             
+    @staticmethod
     def send_price_threshold_update():
-        """Used to send users info about their set price threshold
-
-        Args:
-            user (user): used to get the user for price threshold alert
-            message (dict): messgae being sent to the users
-        """
+        """Celery task to send users info about their set price threshold"""
         try:
             active_alerts = UserAlerts.objects.filter(status=True)
             asset_ids = active_alerts.values_list("asset_id", flat=True).distinct()
             logger.info(active_alerts)
 
             # Generate URL for fetching all required asset prices
-            assets_query = ",".join(asset_ids)  # Join all asset IDs into a single query
+            assets_query = ",".join(asset_ids)
             logger.info(assets_query)
             url = f"https://api.coingecko.com/api/v3/simple/price?ids={assets_query}&vs_currencies=usd"
             
@@ -311,28 +288,26 @@ class UserNotificationService:
             # Iterate over users with active alerts
             users_with_alerts = active_alerts.values("user").distinct()
             logger.info(users_with_alerts)
+            
             for user_data in users_with_alerts:
                 user_id = user_data["user"]
                 user = User.objects.get(id=user_id)
                 user_alerts = active_alerts.filter(user=user)
                 logger.info(user_alerts)
-                channel_layer = get_channel_layer()
 
                 for alert in user_alerts:
                     asset_id = alert.asset_id
-                    triggered = False
-                    # Get the current price for this asset
-                    current_price = Decimal(str(data[asset_id]["usd"]))
-                    logger.info(f"Current Price{current_price}")
-                    logger.info(alert.price_threshold)
+                    if not asset_id or asset_id not in data:
+                        continue
 
-                    # Check if the threshold is triggered
-                    if alert.direction == "UP" and current_price >= alert.price_threshold:
-                        triggered = True
-                        logger.info(True)
-                    elif alert.direction == "DOWN" and current_price <= alert.price_threshold:
-                        triggered = True
-                        logger.info(True)
+                    current_price = Decimal(str(data[asset_id]["usd"]))
+                    logger.info(f"Current Price: {current_price}")
+                    logger.info(f"Alert threshold: {alert.price_threshold}")
+
+                    triggered = (
+                        (alert.direction == "UP" and current_price >= alert.price_threshold) or
+                        (alert.direction == "DOWN" and current_price <= alert.price_threshold)
+                    )
 
                     if triggered:
                         message = {
@@ -343,21 +318,16 @@ class UserNotificationService:
                             "threshold_price": str(alert.price_threshold),
                             "direction": alert.direction,
                         }
-                        async_to_sync(channel_layer.group_send)(
-                            f"pricethreshold_{user_id}",
-                            {
-                                "type": "send_message",
-                                "message": message,
-                            }
-                        )
-                        # alert.status = False  # Mark alert as processed
-                        # alert.save()
-
+                        sync_to_async(UserNotificationService._send_user_notification)(
+                        group_name = "send_message"
+                        message=message
+                       )
         except Exception as e:
-            print(f"Error checking price alerts: {e}")
+            logger.error(f"Error checking price alerts: {e}")
+            raise
+            
+                
         
-            
-    
-            
-    
-    
+                
+        
+        
