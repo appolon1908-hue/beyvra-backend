@@ -107,8 +107,18 @@ class Transaction(TimeStampedModel):
     reference = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
 
+     # New fields for approval
+    requires_approval = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_transactions"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f"{self.type} - {self.amount} {self.wallet.currency}"
+
+    def is_large_transaction(self, threshold=10000):
+        return self.amount > threshold
 
 
 
