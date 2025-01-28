@@ -4,6 +4,7 @@ from .models import BankAccount, WithdrawalRequest
 from wallet.serializers import CurrencySerializer
 from users.serializers import UserSerializer
 from wallet.models import Transaction
+from utils.encryption import encrypt_data, decrypt_data
 
 
 class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
@@ -35,27 +36,49 @@ class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
 class BankAccountSerializer(serializers.ModelSerializer):
     # Nesting WithdrawalRequestSerializer (for incoming withdrawal requests)
     withdrawal_request = WithdrawalRequestCreateWithBank(
-        write_only=True, required=False)
+        write_only=True, required=False
+    )
+
+    # Add fields that should expose decrypted data
+    account_number = serializers.SerializerMethodField()
+    routing_number = serializers.SerializerMethodField()
+    iban = serializers.SerializerMethodField()
 
     class Meta:
         model = BankAccount
-        # Ensure the user is added automatically in the view
-        exclude = ['user']
+        exclude = ['user', '_encrypted_account_number', '_encrypted_routing_number', '_encrypted_iban']
+
+    # Get decrypted data for sensitive fields
+    def get_account_number(self, obj):
+        return decrypt_data(obj._encrypted_account_number) if obj._encrypted_account_number else None
+
+    def get_routing_number(self, obj):
+        return decrypt_data(obj._encrypted_routing_number) if obj._encrypted_routing_number else None
+
+    def get_iban(self, obj):
+        return decrypt_data(obj._encrypted_iban) if obj._encrypted_iban else None
 
     def create(self, validated_data):
-        withdrawal_request_data = validated_data.pop(
-            'withdrawal_request', None)
+        withdrawal_request_data = validated_data.pop('withdrawal_request', None)
         user = self.context['request'].user
+
+        # Encrypt sensitive fields before saving to the database
+        if 'account_number' in validated_data:
+            validated_data['_encrypted_account_number'] = encrypt_data(validated_data.pop('account_number'))
+        if 'routing_number' in validated_data:
+            validated_data['_encrypted_routing_number'] = encrypt_data(validated_data.pop('routing_number'))
+        if 'iban' in validated_data:
+            validated_data['_encrypted_iban'] = encrypt_data(validated_data.pop('iban'))
 
         # Check if the bank account already exists for the user
         bank_account = BankAccount.objects.filter(
-            user=user, account_number=validated_data['account_number']).first()
+            user=user, _encrypted_account_number=validated_data['_encrypted_account_number']
+        ).first()
 
         if not bank_account:
-            bank_account = BankAccount.objects.create(
-                user=user, **validated_data)
+            bank_account = BankAccount.objects.create(user=user, **validated_data)
 
-        # If there is a withdrawal request, handling it here
+        # If there is a withdrawal request, handle it here
         if withdrawal_request_data:
             WithdrawalRequest.objects.create(
                 bank_account=bank_account,
@@ -63,14 +86,6 @@ class BankAccountSerializer(serializers.ModelSerializer):
                 **withdrawal_request_data
             )
 
-            # Create a pending transaction
-            # transaction = Transaction.objects.create(
-            #     user=user,
-            #     amount=withdrawal_request_data['amount'],
-            #     type="W",
-            #     status="P",
-            #     wallet=wallet,
-            # )
         return bank_account
 
 
