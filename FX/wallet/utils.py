@@ -122,3 +122,27 @@ def fetch_exchange_rate(from_currency, to_currency):
         raise ValueError(f"Exchange rate not available for {from_currency} to {to_currency}.")
     return rate
 
+
+def convert_currency(amount, from_currency, to_currency):
+    """
+    Converts an amount from one currency to another using a third-party API.
+    """
+    if from_currency == to_currency:
+        return amount  # No conversion needed
+
+    # Example of a free API: ExchangeRate-API, Fixer.io, or others
+    api_url = f"https://api.exchangerate-api.com/v4/latest/{from_currency}"
+
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        exchange_rates = response.json().get("rates", {})
+
+        if to_currency not in exchange_rates:
+            raise ValueError(f"Currency {to_currency} not supported.")
+
+        conversion_rate = exchange_rates[to_currency]
+        return round(amount * conversion_rate, 2)
+
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Failed to fetch exchange rates: {str(e)}")
