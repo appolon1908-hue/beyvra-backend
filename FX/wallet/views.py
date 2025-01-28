@@ -34,6 +34,7 @@ from .pagination import PaginationMeta
 from decimal import Decimal
 import pycountry
 import logging
+from .throttles import DepositRateThrottle, WithdrawalRateThrottle, TransferRateThrottle
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -210,6 +211,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
 class DepositToWalletView(APIView):
     """ Deposit to wallet view. """
 
+    throttle_classes = [DepositRateThrottle]
     permission_classes = [IsAuthenticated]
     serializer_class = DepositSerializer
 
@@ -391,6 +393,7 @@ class WithdrawFromWalletView(APIView):
 class TransferFromWalletView(APIView):
     """ Transfer from wallet view. """
 
+    throttle_classes = [TransferRateThrottle]
     permission_classes = [IsAuthenticated]
     serializer_class = TransferSerializer
 
@@ -509,6 +512,8 @@ class WithdrawWalletFundsView(APIView):
     """
     Handles withdrawal requests with limits and approval workflows.
     """
+
+    throttle_classes = [WithdrawalRateThrottle]
 
     def post(self, request):
         user = request.user
