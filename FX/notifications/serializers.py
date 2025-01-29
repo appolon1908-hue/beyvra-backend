@@ -15,10 +15,9 @@ class UserNotificationSerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     """Notification Serializer"""
-
     class Meta:
         model = Notifications
-        fields = "__all__"
+        fields = ["id", "name", "description", "is_read", "created_at"]
 
 
 class PriceAlertSerializer(serializers.ModelSerializer):

@@ -36,6 +36,8 @@ import pycountry
 import logging
 from .throttles import DepositRateThrottle, WithdrawalRateThrottle, TransferRateThrottle
 from .utils import convert_currency
+from notifications.models import Notifications
+from notifications.serializers import NotificationSerializer
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -671,3 +673,40 @@ class MultiCurrencyBalanceView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class NotificationListView(APIView):
+    """
+    API endpoint to fetch user notifications and mark them as read.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Retrieve all notifications for the logged-in user.
+        """
+        notifications = Notifications.objects.filter(user=request.user).order_by("-created_at")
+        return Response({"data": NotificationSerializer(notifications, many=True).data}, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """
+        Create a new notification manually (for testing or admin use).
+        """
+        serializer = NotificationSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response({"message": "Notification created."}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        """
+        Mark a notification as read.
+        """
+        notification_id = request.data.get("notification_id")
+        try:
+            notification = Notifications.objects.get(id=notification_id, user=request.user)
+            notification.is_read = True
+            notification.save()
+            return Response({"message": "Notification marked as read."}, status=status.HTTP_200_OK)
+        except Notifications.DoesNotExist:
+            return Response({"error": "Notification not found."}, status=status.HTTP_404_NOT_FOUND)
