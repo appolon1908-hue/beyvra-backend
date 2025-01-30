@@ -40,6 +40,7 @@ urlpatterns = [
     path("api/charts/", include("coinmarketcharts.urls")),
     # Portfolio
     path("api/portfolio/", include("portfolio.urls")),
+    path("api/reporting/", include("reporting.urls")),
 ]
 
 if settings.DEBUG:

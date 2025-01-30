@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "coinmarketcharts",
     "django_celery_beat",
     "wsnotifications",
+    "reporting",
 ]
 
 MIDDLEWARE = [
