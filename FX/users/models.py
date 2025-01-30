@@ -1,3 +1,5 @@
+from enum import Enum
+
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -7,8 +9,18 @@ from fx_utils.generators import generate_trader_id
 from users.managers import UserManager
 from users.utils import blur_email, blur_phone_number
 
-from .constants import KYC_ID_CH, KYC_STATUS_CH,KYC_FILE_STATUS
+from .constants import KYC_FILE_STATUS, KYC_ID_CH, KYC_STATUS_CH
 from .utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR
+
+
+class TwoFactorAuthType(Enum):
+    NOT_SET = ""
+    SMS = "SMS"
+    AUTHENTICATOR_APP = "AUTHENTICATOR APP"
+
+    @classmethod
+    def choices(cls):
+        return [(tag.name, tag.value) for tag in cls]
 
 
 def validate_file_size(file_obj):
@@ -26,6 +38,16 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class UserRoles(Enum):
+    User = "User"
+    Admin = "Admin"
+    Super_Admin = "Super Admin"
+
+    @classmethod
+    def choices(cls):
+        return [(tag.name, tag.value) for tag in cls]
+
+
 class User(AbstractUser, TimeStampedModel):
     GENDER_CHOICES = (
         ("M", "Male"),
@@ -40,23 +62,18 @@ class User(AbstractUser, TimeStampedModel):
         ('Worker', 'Worker'),
     )
 
-    TWO_FACTOR_AUTH_TYPE = (
-        ("", ""),
-        ("SMS", "SMS"),
-        ("AUTHENTICATOR_APP", "AUTHENTICATOR APP"),
-    )
     PASSWORD_STRENGTH = (
-        ('', ''),
-        ('STRONG', 'STRONG'),
-        ('MODERATE', 'MODERATE'),
-        ('WEAK', 'WEAK'),
-    )    
+        ("", ""),
+        ("STRONG", "STRONG"),
+        ("MODERATE", "MODERATE"),
+        ("WEAK", "WEAK"),
+    )
     PASSWORD_COMPLEXITY_CHOICES = (
-        ('', ''),
-        ('SPECIAL_CHARACTERS', 'Special Characters'),
-        ('UPPERCASE_LOWERCASE', 'Uppercase and Lowercase'),
-        ('NUMBERS_AND_SPECIAL_CHARACTERS', 'Numbers and Special Characters'),
-        ('CUSTOM', 'Custom')
+        ("", ""),
+        ("SPECIAL_CHARACTERS", "Special Characters"),
+        ("UPPERCASE_LOWERCASE", "Uppercase and Lowercase"),
+        ("NUMBERS_AND_SPECIAL_CHARACTERS", "Numbers and Special Characters"),
+        ("CUSTOM", "Custom"),
     )
     VERIFICATION_STATUS = (
         ("", ""),
@@ -64,17 +81,17 @@ class User(AbstractUser, TimeStampedModel):
         ("APPROVED", "Approved"),
         ("REJECTED", "Rejected"),
         ("VERIFIED", "Verified"),
-        ("CHANGE_PASSWORD", "Change Password"), # For bulk created users first login
+        ("CHANGE_PASSWORD", "Change Password"),  # For bulk created users first login
     )
     preferred_language = models.CharField(
         max_length=10,
         choices=[
-            ('en', 'English'),
-            ('fr', 'French'),
-            ('es', 'Spanish'),
-            ('de', 'German'),
+            ("en", "English"),
+            ("fr", "French"),
+            ("es", "Spanish"),
+            ("de", "German"),
         ],
-        default='en',
+        default="en",
         verbose_name="Preferred Language",
     )
     username = None
@@ -90,6 +107,7 @@ class User(AbstractUser, TimeStampedModel):
     )
     address = models.TextField(blank=True, null=True)
     gender = models.CharField(choices=GENDER_CHOICES, blank=True, null=True)
+    dob = models.DateField(blank=True, null=True)
     two_factor_authentication_enabled = models.BooleanField(default=False)
     hidden_account_balances_toggle_enabled = models.BooleanField(default=False)
     one_click_trade_toggle_enabled = models.BooleanField(default=False)
@@ -106,18 +124,19 @@ class User(AbstractUser, TimeStampedModel):
     trader_id = models.BigIntegerField(null=True, blank=True, unique=True, default=generate_trader_id, editable=False)
     is_walkthrough = models.BooleanField(default=False)
     is_online = models.BooleanField(default=False)
-    role = models.CharField(max_length=11, choices=USER_ROLES, default="User")
+    role = models.CharField(max_length=11, choices=UserRoles.choices(), default=UserRoles.User.value)
     ip_restricted = models.BooleanField(default=False)
     two_fa_type = models.CharField(
-        max_length=100, choices=TWO_FACTOR_AUTH_TYPE, default='')
-    password_complexity = models.CharField(
-        max_length=100, choices=PASSWORD_COMPLEXITY_CHOICES, default='')
-    custom_characters = models.CharField(
-        max_length=255, null=True, blank=True,
-        help_text="Enter password custom characters like @%^$ if 'Custom' is selected."
+        max_length=100, choices=TwoFactorAuthType.choices(), default=TwoFactorAuthType.NOT_SET.value
     )
-    password_strength = models.CharField(
-        max_length=64, choices=PASSWORD_STRENGTH, default='')
+    password_complexity = models.CharField(max_length=100, choices=PASSWORD_COMPLEXITY_CHOICES, default="")
+    custom_characters = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Enter password custom characters like @%^$ if 'Custom' is selected.",
+    )
+    password_strength = models.CharField(max_length=64, choices=PASSWORD_STRENGTH, default="")
     password_min_length = models.PositiveIntegerField(default=8)
     password_max_length = models.PositiveIntegerField(default=20)
     document_verification = models.CharField(

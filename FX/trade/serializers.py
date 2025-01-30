@@ -17,6 +17,18 @@ class AssetSerializer(serializers.ModelSerializer):
         ]
 
 
+class TransactionCompactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = ["transaction_id", "amount"]
+
+
+class AssetCompactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = ["name", "symbol"]
+
+
 class TradeSerializer(serializers.ModelSerializer):
     category = serializers.SlugRelatedField(queryset=TradeCategory.objects.all(), slug_field="name")
 
@@ -61,23 +73,56 @@ class TradeSerializer(serializers.ModelSerializer):
         wallet.save()
         validated_data["transaction"] = transaction
         return super().create(validated_data)
-    
 
 
 class TradeDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trade
         fields = [
-            'id', 'wallet', 'asset', 'quantity', 'price_per_unit', 
-            'trade_type', 'transaction', 'category', 'duration', 
-            'result_time', 'net', 'open', 'close', 'is_active','created_at', 'updated_at'
+            "id",
+            "wallet",
+            "asset",
+            "quantity",
+            "price_per_unit",
+            "trade_type",
+            "transaction",
+            "category",
+            "duration",
+            "result_time",
+            "net",
+            "open",
+            "close",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class TradeHistorySerializer(serializers.ModelSerializer):
+    asset = AssetCompactSerializer()
+    transaction = TransactionCompactSerializer()
+
+    class Meta:
+        model = Trade
+        fields = [
+            "id",
+            "asset",
+            "quantity",
+            "trade_type",
+            "transaction",
+            "duration",
+            "open",
+            "close",
+            "percentage_change",
+            "result_time",
+            "created_at",
         ]
 
 
 class TransactionSerializer(serializers.ModelSerializer):
     wallet = serializers.SlugRelatedField(slug_field="name", read_only=True)
-    type = serializers.CharField(source='get_type_display', read_only=True)
-    status = serializers.CharField(source='get_status_display', read_only=True)
+    type = serializers.CharField(source="get_type_display", read_only=True)
+    status = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = Transaction

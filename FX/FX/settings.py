@@ -15,6 +15,9 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
+from dotenv import load_dotenv
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,6 +67,7 @@ INSTALLED_APPS = [
     "import_export",
     "django_prometheus",
     "drf_spectacular",
+    "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
     "channels",
@@ -74,11 +78,15 @@ INSTALLED_APPS = [
     "ws",
     "news_app",
     "trade",
+    "tickets",
     "payments",
     "portfolio",
     "bank_account_app",
     "security",
     "coinmarketcharts",
+    "django_celery_beat",
+    "wsnotifications",
+    "reporting",
 ]
 
 MIDDLEWARE = [
@@ -129,7 +137,7 @@ DATABASES = {
         "USER": os.getenv("DB_USER"),
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", '5432'),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
 
@@ -150,12 +158,33 @@ CACHES = {
     }
 }
 
+
+
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
+
+
+CELERY_BEAT_SCHEDULE = {
+    
+    'periodic_price_updates': {
+        'task': 'wsnotifications.tasks.periodic_price_updates',
+        'schedule': crontab(minute="*/1")
+    },
+    'send_asset_specific_updates': {
+        'task': 'wsnotifications.tasks.send_asset_specific_updates',
+        'schedule': crontab(minute="*/2")
+    },
+    'send_email_verification_reminder': {
+        'task': 'wsnotifications.tasks.send_email_verification_reminder',
+        'schedule': crontab(minute="*/1")
+    }
+}
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -202,8 +231,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "/static/"
-
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_ROOT = "/app/static"
 
 
 # Default primary key field type
@@ -307,7 +335,7 @@ LOGGING = {
     },
     "root": {
         "handlers": ["console"],
-        "level": "WARNING",
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {

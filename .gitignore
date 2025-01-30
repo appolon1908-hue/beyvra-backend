@@ -140,3 +140,8 @@ Thumbs.db
 *.env
 venv/
 .venv/
+
+# Additional files for debug
+FX/dhelp_manage.py
+dhelp-docker-compose.yaml
+dhelp-docker-compose-dev.yaml
