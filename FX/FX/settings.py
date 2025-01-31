@@ -17,8 +17,6 @@ from pathlib import Path
 
 from celery.schedules import crontab
 from dotenv import load_dotenv
-from celery.schedules import crontab
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -32,6 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = int(os.getenv("DEBUG"))
 
@@ -101,9 +100,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
     "middleware.user_login_activity.UserLoginActivityMiddleware",
-    'django.middleware.locale.LocaleMiddleware',
-    'middleware.user_preferred_language.UserPreferredLanguageMiddleware',
-    'users.middleware.UserTimeZoneMiddleware',
+    "django.middleware.locale.LocaleMiddleware",
+    "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
+    "users.middleware.UserTimeZoneMiddleware",
 ]
 
 ROOT_URLCONF = "FX.urls"
@@ -159,31 +158,29 @@ CACHES = {
 }
 
 
-
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
-CELERY_TIMEZONE = 'UTC'
+CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
-    
-    'periodic_price_updates': {
-        'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")
+    "periodic_price_updates": {
+        "task": "wsnotifications.tasks.periodic_price_updates",
+        "schedule": crontab(minute="*/1"),
     },
-    'send_asset_specific_updates': {
-        'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/2")
+    "send_asset_specific_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/2"),
     },
-    'send_email_verification_reminder': {
-        'task': 'wsnotifications.tasks.send_email_verification_reminder',
-        'schedule': crontab(minute="*/1")
-    }
+    "send_email_verification_reminder": {
+        "task": "wsnotifications.tasks.send_email_verification_reminder",
+        "schedule": crontab(minute="*/1"),
+    },
 }
 
 # CHANNELS
