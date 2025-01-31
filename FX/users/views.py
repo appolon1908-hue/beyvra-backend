@@ -1,9 +1,12 @@
 import base64
 import io
+import os
 import re
 from datetime import datetime
+from io import BytesIO
 from uuid import uuid4
 
+import openpyxl
 import pandas as pd
 import pyotp
 import qrcode
@@ -12,6 +15,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.models import Case, CharField, Q, Sum, Value, When
 from django.db.models.signals import post_save
@@ -21,7 +25,10 @@ from django.utils.crypto import get_random_string
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt
-from drf_spectacular.utils import OpenApiParameter, extend_schema, swagger_auto_schema
+from docx import Document
+from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_yasg.utils import swagger_auto_schema
+from reportlab.pdfgen import canvas
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
@@ -55,44 +62,27 @@ from users.serializers import (
     VerifyPhoneCodeSerializer,
     WalkthroughSerializer,
 )
-<<<<<<< HEAD
-from .serializers import AdminSettingsSerializer, TimeZoneSerializer, ToggleUserStatusSerializer, BackupFrequencySerializer
-
-=======
 from users.signals import update_user_upon_creation
 from users.tasks import async_send_welcome_email
 from users.utils import confirm_action
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
->>>>>>> main
 from wallet.serializers import WalletDetailSerializer
 
-from .models import KYC, KYCFile, PhoneVerificationCode, AdminSettings, MaintenanceMode, SoftwareUpdate
+from .models import KYC, AdminSettings, KYCFile, MaintenanceMode, PhoneVerificationCode, SoftwareUpdate
+from .serializers import (
+    AdminSettingsSerializer,
+    BackupFrequencySerializer,
+    TimeZoneSerializer,
+    ToggleUserStatusSerializer,
+)
 from .tasks import (
     async_send_email_verification_email,
     async_send_mobile_verification_code,
     async_send_password_reset_link_email,
     async_send_user_ban_email,
 )
-<<<<<<< HEAD
-from trade.models import Trade
-from django.db.models import Sum, Q, Case, When, Value, CharField
-from django.db import connection
-from wallet.models import Wallet, Currency
-from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.models import Group, Permission, User
-from docx import Document
-import openpyxl
-from io import BytesIO
-from reportlab.pdfgen import canvas
-from django.core.files.storage import default_storage
-from .utils import create_database_backup, restore_database, check_for_updates, schedule_update
-import os
-
-=======
->>>>>>> main
+from .utils import check_for_updates, create_database_backup, restore_database, schedule_update
 
 User = get_user_model()
 
@@ -2006,7 +1996,6 @@ class UpdatePreferredLanguageView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-<<<<<<< HEAD
 @extend_schema(request=AdminSettingsSerializer)
 class AdminSettingsView(APIView):
     permission_classes = [IsAdminUser]
@@ -2027,7 +2016,7 @@ class AdminSettingsView(APIView):
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({"error": "Settings not found"}, status=status.HTTP_404_NOT_FOUND)
-    
+
 
 @extend_schema(request=TimeZoneSerializer)
 class TimeZoneView(APIView):
@@ -2043,7 +2032,8 @@ class TimeZoneView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+
 @extend_schema(request=ToggleUserStatusSerializer)
 class ToggleUserStatusView(APIView):
     permission_classes = [IsAdminUser]
@@ -2057,7 +2047,7 @@ class ToggleUserStatusView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        
+
 
 @extend_schema(request=BackupFrequencySerializer)
 class BackupFrequencyView(APIView):
@@ -2084,23 +2074,25 @@ class BackupFrequencyView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 
 class DownloadDataView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, format=None):
-        if format not in ['pdf', 'doc', 'excel']:
-            return Response({"error": "Invalid format. Allowed formats are: pdf, doc, excel."}, status=status.HTTP_400_BAD_REQUEST)
+        if format not in ["pdf", "doc", "excel"]:
+            return Response(
+                {"error": "Invalid format. Allowed formats are: pdf, doc, excel."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Fetch data (example: list of users)
         users = User.objects.all()
 
-        if format == 'pdf':
+        if format == "pdf":
             return self.generate_pdf(users)
-        elif format == 'doc':
+        elif format == "doc":
             return self.generate_doc(users)
-        elif format == 'excel':
+        elif format == "excel":
             return self.generate_excel(users)
 
     def generate_pdf(self, users):
@@ -2116,8 +2108,8 @@ class DownloadDataView(APIView):
         p.save()
         buffer.seek(0)
 
-        response = HttpResponse(buffer, content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="users.pdf"'
+        response = HttpResponse(buffer, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="users.pdf"'
         return response
 
     def generate_doc(self, users):
@@ -2131,8 +2123,10 @@ class DownloadDataView(APIView):
         document.save(buffer)
         buffer.seek(0)
 
-        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        response['Content-Disposition'] = 'attachment; filename="users.docx"'
+        response = HttpResponse(
+            buffer, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        response["Content-Disposition"] = 'attachment; filename="users.docx"'
         return response
 
     def generate_excel(self, users):
@@ -2151,10 +2145,12 @@ class DownloadDataView(APIView):
         workbook.save(buffer)
         buffer.seek(0)
 
-        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename="users.xlsx"'
+        response = HttpResponse(
+            buffer, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="users.xlsx"'
         return response
-    
+
 
 class ManualBackupView(APIView):
     permission_classes = [IsAdminUser]
@@ -2163,23 +2159,25 @@ class ManualBackupView(APIView):
     def post(self, request):
         # Trigger the backup process
         backup_file = create_database_backup()
-        
+
         if backup_file:
             # Optionally, store the backup in a persistent location (if required)
             storage_path = default_storage.save(f"backups/{os.path.basename(backup_file)}", backup_file)
-            
+
             # Provide the file for download
-            with open(backup_file, 'rb') as f:
-                response = Response(f.read(), content_type='application/sql')
-                response['Content-Disposition'] = f'attachment; filename="{os.path.basename(backup_file)}"'
-            
+            with open(backup_file, "rb") as f:
+                response = Response(f.read(), content_type="application/sql")
+                response["Content-Disposition"] = f'attachment; filename="{os.path.basename(backup_file)}"'
+
             # Clean up the temporary backup file after download
             os.remove(backup_file)
 
             return response
         else:
-            return Response({"error": "Backup failed. Please check the logs for more details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            return Response(
+                {"error": "Backup failed. Please check the logs for more details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class RestoreDataView(APIView):
@@ -2188,12 +2186,12 @@ class RestoreDataView(APIView):
     @swagger_auto_schema(operation_description="Restore data from a backup")
     def post(self, request):
         # Get the backup file from the request
-        backup_file = request.FILES.get('backup_file')
+        backup_file = request.FILES.get("backup_file")
         if not backup_file:
-            return JsonResponse({'error': 'Backup file is required'}, status=400)
+            return JsonResponse({"error": "Backup file is required"}, status=400)
 
         # Save the file temporarily
-        backup_path = default_storage.save(f'temp/{backup_file.name}', backup_file)
+        backup_path = default_storage.save(f"temp/{backup_file.name}", backup_file)
 
         # Try to restore the database from the backup file
         success = restore_database(backup_path)
@@ -2201,9 +2199,9 @@ class RestoreDataView(APIView):
         if success:
             # Optionally, delete the temporary file after restoration
             default_storage.delete(backup_path)
-            return JsonResponse({'message': 'Data restoration successful!'})
+            return JsonResponse({"message": "Data restoration successful!"})
         else:
-            return JsonResponse({'error': 'Data restoration failed'}, status=500)
+            return JsonResponse({"error": "Data restoration failed"}, status=500)
 
 
 class MaintenanceModeView(APIView):
@@ -2213,12 +2211,14 @@ class MaintenanceModeView(APIView):
         """Retrieve the current maintenance mode status and message."""
         maintenance_mode = MaintenanceMode.objects.first()
         if maintenance_mode:
-            return Response({
-                'is_active': maintenance_mode.is_active,
-                'message': maintenance_mode.message or "No maintenance message set."
-            })
+            return Response(
+                {
+                    "is_active": maintenance_mode.is_active,
+                    "message": maintenance_mode.message or "No maintenance message set.",
+                }
+            )
         else:
-            return Response({'error': 'Maintenance mode is not configured yet.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Maintenance mode is not configured yet."}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
         """Toggle maintenance mode and set a custom message."""
@@ -2226,22 +2226,27 @@ class MaintenanceModeView(APIView):
         maintenance_mode, created = MaintenanceMode.objects.get_or_create(id=1)
 
         # Get data from the request
-        is_active = request.data.get('is_active')
-        message = request.data.get('message', '')
+        is_active = request.data.get("is_active")
+        message = request.data.get("message", "")
 
         if is_active is not None:
             maintenance_mode.is_active = is_active
             maintenance_mode.message = message
             maintenance_mode.save()
 
-            return Response({
-                'message': 'Maintenance mode updated successfully.',
-                'is_active': maintenance_mode.is_active,
-                'maintenance_message': maintenance_mode.message
-            })
+            return Response(
+                {
+                    "message": "Maintenance mode updated successfully.",
+                    "is_active": maintenance_mode.is_active,
+                    "maintenance_message": maintenance_mode.message,
+                }
+            )
 
-        return Response({'error': 'Invalid input. Please specify "is_active" and optionally "message".'}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response(
+            {"error": 'Invalid input. Please specify "is_active" and optionally "message".'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
 
 class SoftwareUpdateView(APIView):
     permission_classes = [IsAdminUser]
@@ -2258,11 +2263,13 @@ class SoftwareUpdateView(APIView):
         current_update.latest_version = latest_version
         current_update.save()
 
-        return Response({
-            "current_version": current_update.current_version,
-            "latest_version": latest_version,
-            "message": "Update check completed."
-        })
+        return Response(
+            {
+                "current_version": current_update.current_version,
+                "latest_version": latest_version,
+                "message": "Update check completed.",
+            }
+        )
 
     def post(self, request):
         """
@@ -2275,9 +2282,11 @@ class SoftwareUpdateView(APIView):
         try:
             scheduled_time = datetime.fromisoformat(scheduled_time)
         except ValueError:
-            return Response({"error": "Invalid datetime format. Use ISO 8601 format."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid datetime format. Use ISO 8601 format."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if scheduled_time < now():
+        if scheduled_time < datetime.now():
             return Response({"error": "Scheduled time must be in the future."}, status=status.HTTP_400_BAD_REQUEST)
 
         latest_version = check_for_updates()
@@ -2285,18 +2294,21 @@ class SoftwareUpdateView(APIView):
             current_version="1.0.0",  # Replace with your logic to get the current version
             latest_version=latest_version,
             scheduled_time=scheduled_time,
-            update_status="pending"
+            update_status="pending",
         )
 
         # Optionally, use a task scheduler like Celery to handle updates
         schedule_update(update_instance)
 
-        return Response({
-            "message": "Update scheduled successfully.",
-            "scheduled_time": scheduled_time.isoformat(),
-            "latest_version": latest_version
-        })
-=======
+        return Response(
+            {
+                "message": "Update scheduled successfully.",
+                "scheduled_time": scheduled_time.isoformat(),
+                "latest_version": latest_version,
+            }
+        )
+
+
 class SetGlobal2FAMethodView(generics.GenericAPIView):
     """
     Set Global User 2FA Method, requiring explicit confirmation to proceed
@@ -2337,4 +2349,3 @@ class SetGlobal2FAMethodView(generics.GenericAPIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
->>>>>>> main

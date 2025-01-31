@@ -1,4 +1,5 @@
 import os
+import subprocess
 from datetime import datetime
 from random import randint
 
@@ -15,12 +16,7 @@ from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.response import Response
 from twilio.rest import Client
-<<<<<<< HEAD
-from datetime import datetime
-import subprocess
-=======
 from user_agents import parse
->>>>>>> main
 
 PHONE_REGEX_VALIDATOR = RegexValidator(
     regex=r"^\+\d{9,15}$",
@@ -290,18 +286,18 @@ def send_user_ban_email(user):
 
 
 def create_database_backup():
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     backup_filename = f"backup_{timestamp}.sql"
-    
+
     # Database connection details
-    db_host = settings.DATABASES['default']['HOST']
-    db_name = settings.DATABASES['default']['NAME']
-    db_user = settings.DATABASES['default']['USER']
-    db_password = settings.DATABASES['default']['PASSWORD']
-    
+    db_host = settings.DATABASES["default"]["HOST"]
+    db_name = settings.DATABASES["default"]["NAME"]
+    db_user = settings.DATABASES["default"]["USER"]
+    db_password = settings.DATABASES["default"]["PASSWORD"]
+
     # Constructing the command for PostgreSQL (Change for MySQL if needed)
     backup_command = f"PGPASSWORD={db_password} pg_dump -h {db_host} -U {db_user} {db_name} > /tmp/{backup_filename}"
-    
+
     try:
         subprocess.run(backup_command, shell=True, check=True)
         return f"/tmp/{backup_filename}"
@@ -310,10 +306,10 @@ def create_database_backup():
 
 
 def restore_database(backup_file_path):
-    db_host = settings.DATABASES['default']['HOST']
-    db_name = settings.DATABASES['default']['NAME']
-    db_user = settings.DATABASES['default']['USER']
-    db_password = settings.DATABASES['default']['PASSWORD']
+    db_host = settings.DATABASES["default"]["HOST"]
+    db_name = settings.DATABASES["default"]["NAME"]
+    db_user = settings.DATABASES["default"]["USER"]
+    db_password = settings.DATABASES["default"]["PASSWORD"]
 
     # Construct the command for PostgreSQL (change it for MySQL if needed)
     restore_command = f"PGPASSWORD={db_password} psql -h {db_host} -U {db_user} -d {db_name} -f {backup_file_path}"
@@ -332,6 +328,7 @@ def check_for_updates():
     latest_version = "1.1.0"  # Example latest version
     return latest_version
 
+
 def schedule_update(update_instance):
     """
     Simulate scheduling an update. You could integrate with Celery or a similar library here.
@@ -342,6 +339,8 @@ def schedule_update(update_instance):
     update_instance.update_status = "completed"
     update_instance.current_version = update_instance.latest_version
     update_instance.save()
+
+
 def confirm_action(request) -> bool | Response:
     """ensures a double check on the action to be performed"""
     confirm = request.data.get("confirm", False)

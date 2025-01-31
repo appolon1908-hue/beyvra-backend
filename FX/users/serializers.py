@@ -13,13 +13,8 @@ from users.tasks import async_send_device_verification_email, async_send_email_v
 from users.utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR, get_user_location, mask_email, mask_phone
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
-<<<<<<< HEAD
-from .models import KYC, KYCFile, AdminSettings, User
-from security.login_anomaly_detection import AnomalyDetector
-=======
 
-from .models import KYC, KYCFile
->>>>>>> main
+from .models import KYC, AdminSettings, KYCFile, User
 
 USER_READ_ONLY = (
     "is_active",
@@ -382,31 +377,33 @@ class PreferredLanguageSerializer(serializers.Serializer):
 class AdminSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminSettings
-        fields = ['id', 'time_zone', 'date_format']
+        fields = ["id", "time_zone", "date_format"]
 
 
 class TimeZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['time_zone']
+        fields = ["time_zone"]
 
 
 class ToggleUserStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'is_active']
+        fields = ["id", "is_active"]
 
 
 class BackupFrequencySerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminSettings
-        fields = ['backup_frequency']
+        fields = ["backup_frequency"]
 
     def validate_backup_frequency(self, value):
-        allowed_frequencies = ['daily', 'weekly', 'monthly']
+        allowed_frequencies = ["daily", "weekly", "monthly"]
         if value not in allowed_frequencies:
             raise serializers.ValidationError("Invalid backup frequency. Allowed values are: daily, weekly, monthly.")
         return value
+
+
 class Global2FAMethodSerializer(serializers.Serializer):
     method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
     confirm_override = serializers.BooleanField()
