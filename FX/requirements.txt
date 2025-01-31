@@ -1,4 +1,5 @@
 adyen==12.3.0
+adyen==12.3.0
 alpaca-py
 asgiref==3.7.2
 celery[redis]==5.3.6
@@ -12,9 +13,11 @@ django-import-export==3.3.7
 django-ipware==7.0.1
 django-prometheus==2.3.1
 django-silk==5.1.0
+django_celery_beat
 djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.1
 drf-spectacular==0.27.1
+drf-yasg==1.21.8
 flower==2.0.1
 geoip2==4.8.0
 gunicorn==21.2.0
@@ -24,17 +27,15 @@ pre-commit==3.6.0
 psycopg2-binary==2.9.9
 pycountry==24.6.1
 pyotp==2.9.0
+python-docx
 python-dotenv==1.0.1
 pytz==2024.1
 qrcode==7.4.2
 redis==5.0.1
+reportlab
 requests==2.31.0
 shortuuid==1.0.12
 sqlparse==0.4.4
 stripe==8.3.0
 twilio==9.0.0
-adyen==12.3.0
-python-docx
-reportlab
 user-agents==2.2.0
-django_celery_beat
