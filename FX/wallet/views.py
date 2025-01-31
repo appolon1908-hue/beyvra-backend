@@ -1,43 +1,40 @@
+import decimal
 import json
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
-from rest_framework import generics, mixins, status, viewsets
-from rest_framework.views import APIView
-from rest_framework.decorators import api_view
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework.response import Response
+import logging
+from datetime import datetime
+from decimal import Decimal
+
+import pycountry
 from bank_account_app.models import WithdrawalRequest
-from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate, LinkedAccount, WithdrawalWalletRequest
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
+from notifications.models import Notifications
+from notifications.serializers import NotificationSerializer
+from rest_framework import generics, mixins, status, viewsets
+from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from wallet.models import Currency, LinkedAccount, ManualBalanceUpdate, Transaction, Wallet, WithdrawalWalletRequest
 from wallet.permissions import IsOwner
 from wallet.serializers import (
     CurrencySerializer,
+    DepositSerializer,
+    ManualBalanceUpdateSerializer,
     TransactionSerializer,
+    TransferSerializer,
     WalletArchivedSerializer,
     WalletCreateSerializer,
     WalletDetailSerializer,
     WalletListSerializer,
-    DepositSerializer,
-    WithdrawSerializer,
-    TransferSerializer,
-    ManualBalanceUpdateSerializer,
     WithdrawFundsSerializer,
+    WithdrawSerializer,
 )
-from wallet.services import (
-    BitPayService,
-    AdyenService,
-    PayRetailersService,
-    BinanceService,
-    WalletService
-)
+from wallet.services import AdyenService, BinanceService, BitPayService, PayRetailersService, WalletService
 
 from .constants import DEMO_BALANCE
 from .pagination import PaginationMeta
-from decimal import Decimal
-import pycountry
-import logging
-from .throttles import DepositRateThrottle, WithdrawalRateThrottle, TransferRateThrottle
+from .throttles import DepositRateThrottle, TransferRateThrottle, WithdrawalRateThrottle
 from .utils import convert_currency
-from notifications.models import Notifications
-from notifications.serializers import NotificationSerializer
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -49,8 +46,7 @@ class CurrencyList(generics.ListAPIView):
 
 
 class WalletListCreateView(generics.ListCreateAPIView):
-    queryset = Wallet.objects.select_related("currency").filter(
-        is_archived=False).order_by("-created_at")
+    queryset = Wallet.objects.select_related("currency").filter(is_archived=False).order_by("-created_at")
     serializer_class = WalletListSerializer
     permission_classes = [IsAuthenticated, IsOwner]
 
@@ -74,8 +70,7 @@ class WalletDetailView(generics.RetrieveUpdateAPIView):
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
-        serializer = self.get_serializer(
-            instance, data=request.data, partial=True)
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response({"wallet": serializer.data}, status=status.HTTP_200_OK)
@@ -112,8 +107,7 @@ class WalletArchiveView(generics.GenericAPIView):
                 {"detail": "You do not have permission to archive this wallet."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = self.get_serializer(
-            instance, data=request.data, partial=True)
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.context["request"] = request
         if serializer.is_valid():
             serializer.save()
@@ -212,7 +206,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
 
 
 class DepositToWalletView(APIView):
-    """ Deposit to wallet view. """
+    """Deposit to wallet view."""
 
     throttle_classes = [DepositRateThrottle]
     permission_classes = [IsAuthenticated]
@@ -228,8 +222,7 @@ class DepositToWalletView(APIView):
 
         # Ensure wallet ID belongs to the authenticated user.
         if wallet.user.id != request.user.id:
-            response = {
-                "detail": "You do not have permission to perform this action."}
+            response = {"detail": "You do not have permission to perform this action."}
             return Response(response, status=status.HTTP_403_FORBIDDEN)
 
         # Validate input using the serializer
@@ -238,12 +231,12 @@ class DepositToWalletView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = serializer.validated_data
-        amount = validated_data['amount']
-        currency = validated_data['currency']
-        gateway = validated_data['gateway']
-        payment_method = validated_data.get('payment_method', '')
-        paymentMethodTagName = validated_data.get('paymentMethodTagName', '')
-        token = validated_data.get('token', '')
+        amount = validated_data["amount"]
+        currency = validated_data["currency"]
+        gateway = validated_data["gateway"]
+        payment_method = validated_data.get("payment_method", "")
+        paymentMethodTagName = validated_data.get("paymentMethodTagName", "")
+        token = validated_data.get("token", "")
 
         try:
             # Create a pending transaction
@@ -258,50 +251,43 @@ class DepositToWalletView(APIView):
             # Payment Gateway Integration:
             if gateway == "Adyen":
                 adyen_service = AdyenService()
-                result = adyen_service.deposit_to_wallet(
-                    amount, currency, payment_method, transaction.transaction_id)
+                result = adyen_service.deposit_to_wallet(amount, currency, payment_method, transaction.transaction_id)
 
             elif gateway == "PayRetailers":
                 pay_service = PayRetailersService()
-                transfer_details = {
-                    "paymentMethodTagName": paymentMethodTagName}
-                result = pay_service.deposit_to_wallet(
-                    amount, currency, transfer_details, transaction.transaction_id)
+                transfer_details = {"paymentMethodTagName": paymentMethodTagName}
+                result = pay_service.deposit_to_wallet(amount, currency, transfer_details, transaction.transaction_id)
 
             elif gateway == "Bitpay":
                 bitpay_service = BitPayService()
-                result = bitpay_service.deposit_to_wallet(
-                    amount, currency, transaction.transaction_id, token)
+                result = bitpay_service.deposit_to_wallet(amount, currency, transaction.transaction_id, token)
 
             elif gateway == "Binance":
                 binance_service = BinanceService()
                 result = binance_service.get_deposit_address(currency, amount)
 
             else:
-                return Response({
-                    "detail": f"Unsupported payment gateway: {gateway}"},
-                    status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": f"Unsupported payment gateway: {gateway}"}, status=status.HTTP_400_BAD_REQUEST
+                )
 
             if "error" in result:
                 logger.error(f"Payment gateway error: {result['error']}")
-                return Response({
-                    "detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
             # Success
-            return Response({
-                "detail": "Wallet deposit successful.",
-                "result": result
-                }, status=status.HTTP_200_OK)
+            return Response({"detail": "Wallet deposit successful.", "result": result}, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Deposit to wallet failed: {str(e)}", exc_info=True)
-            return Response({
-                "detail": "An unexpected error occurred during the deposit process."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "An unexpected error occurred during the deposit process."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class WithdrawFromWalletView(APIView):
-    """ Withdraw from wallet view. """
+    """Withdraw from wallet view."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = WithdrawSerializer
@@ -315,23 +301,20 @@ class WithdrawFromWalletView(APIView):
         try:
             wallet = Wallet.objects.get(id=wallet_id)
         except Wallet.DoesNotExist:
-            return Response({
-                "detail": f"Wallet with ID {wallet_id} does not exist."},
-                status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": f"Wallet with ID {wallet_id} does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
         if wallet.user.id != request.user.id:
-            return Response({
-                "detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+            )
 
-        amount = serializer.validated_data['amount']
-        gateway = serializer.validated_data['gateway']
-        address = serializer.validated_data.get('address')
+        amount = serializer.validated_data["amount"]
+        gateway = serializer.validated_data["gateway"]
+        address = serializer.validated_data.get("address")
 
         # Check for sufficient balance
         if wallet.balance < amount:
-            return Response({
-                "detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Create withdrawal request
@@ -339,7 +322,7 @@ class WithdrawFromWalletView(APIView):
                 user=request.user,
                 wallet=wallet,
                 amount=amount,
-                status='Pending',
+                status="Pending",
                 currency=wallet.currency,
             )
             transaction = Transaction.objects.create(
@@ -348,7 +331,7 @@ class WithdrawFromWalletView(APIView):
                 wallet=wallet,
                 amount=amount,
                 type="W",
-                status="P"
+                status="P",
             )
 
             # Handle payment gateway integration
@@ -356,30 +339,36 @@ class WithdrawFromWalletView(APIView):
                 adyen_service = AdyenService()
                 transfer_details = {}
                 result = adyen_service.withdraw_from_wallet(
-                    amount, wallet.currency, transfer_details, transaction.transaction_id)
+                    amount, wallet.currency, transfer_details, transaction.transaction_id
+                )
 
             elif gateway == "PayRetailers":
                 pay_service = PayRetailersService()
                 transfer_details = {}
-                result = pay_service.withdraw_from_wallet(
-                    transfer_details, transaction.transaction_id)
+                result = pay_service.withdraw_from_wallet(transfer_details, transaction.transaction_id)
 
             elif gateway == "Bitpay":
                 if not address:
-                    return Response({"detail": "Address is required for Bitpay withdrawals."}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"detail": "Address is required for Bitpay withdrawals."}, status=status.HTTP_400_BAD_REQUEST
+                    )
                 bitpay_service = BitPayService()
                 result = bitpay_service.withdraw_from_wallet(
-                    address, amount, wallet.currency, transaction.transaction_id)
+                    address, amount, wallet.currency, transaction.transaction_id
+                )
 
             elif gateway == "Binance":
                 if not address:
-                    return Response({"detail": "Address is required for Binance withdrawals."}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"detail": "Address is required for Binance withdrawals."}, status=status.HTTP_400_BAD_REQUEST
+                    )
                 binance_service = BinanceService()
-                result = binance_service.withdraw_crypto(
-                    wallet.currency, amount, address)
+                result = binance_service.withdraw_crypto(wallet.currency, amount, address)
 
             else:
-                return Response({"detail": f"Unsupported payment gateway: {gateway}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": f"Unsupported payment gateway: {gateway}"}, status=status.HTTP_400_BAD_REQUEST
+                )
 
             if "error" in result:
                 logger.error(f"Withdrawal error: {result['error']}")
@@ -390,11 +379,14 @@ class WithdrawFromWalletView(APIView):
 
         except Exception as e:
             logger.error(f"Withdrawal from wallet failed: {str(e)}", exc_info=True)
-            return Response({"detail": "An unexpected error occurred during the withdrawal process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "An unexpected error occurred during the withdrawal process."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TransferFromWalletView(APIView):
-    """ Transfer from wallet view. """
+    """Transfer from wallet view."""
 
     throttle_classes = [TransferRateThrottle]
     permission_classes = [IsAuthenticated]
@@ -411,13 +403,15 @@ class TransferFromWalletView(APIView):
         except Wallet.DoesNotExist:
             return Response({"detail": f"Wallet with ID {wallet_id} does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
-        recipient_id = serializer.validated_data['recipient_id']
+        recipient_id = serializer.validated_data["recipient_id"]
         try:
             recipient_wallet = Wallet.objects.get(id=recipient_id)
         except Wallet.DoesNotExist:
-            return Response({"detail": f"Recipient wallet with ID {recipient_id} does not exist."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": f"Recipient wallet with ID {recipient_id} does not exist."}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        amount = serializer.validated_data['amount']
+        amount = serializer.validated_data["amount"]
 
         if wallet.balance < amount:
             return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
@@ -432,21 +426,24 @@ class TransferFromWalletView(APIView):
 
         except Exception as e:
             logger.error(f"Transfer from wallet failed: {str(e)}", exc_info=True)
-            return Response({"detail": "An unexpected error occurred during the transfer process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "An unexpected error occurred during the transfer process."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 @api_view(["GET"])
 def get_currency(request, country):
     country = pycountry.countries.get(name=country)
     currency = pycountry.currencies.get(numeric=country.numeric)
-    response = {'detail': json.dumps(currency)}
+    response = {"detail": json.dumps(currency)}
     return Response(response, status=status.HTTP_200_OK)
 
 
 class ManualBalanceUpdateListCreateView(generics.ListCreateAPIView):
-    """ 
+    """
     List and create view for ManualBalanceUpdate.
-    
+
     Only admin users can access this view.
 
     Reason for manual balance update:
@@ -455,7 +452,7 @@ class ManualBalanceUpdateListCreateView(generics.ListCreateAPIView):
     - BONUS: Adding a bonus to a user's wallet.
     - OTHER: Any other reason not covered
     """
-    
+
     permission_classes = [IsAdminUser]
     queryset = ManualBalanceUpdate.objects.all()
     serializer_class = ManualBalanceUpdateSerializer
@@ -464,10 +461,10 @@ class ManualBalanceUpdateListCreateView(generics.ListCreateAPIView):
 class ManualBalanceUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Retrieve, update, and delete view for ManualBalanceUpdate.
-    
+
     Only admin users can access this view.
     """
-    
+
     permission_classes = [IsAdminUser]
     queryset = ManualBalanceUpdate.objects.all()
     serializer_class = ManualBalanceUpdateSerializer
@@ -478,8 +475,8 @@ class WithdrawFundsView(APIView):
         serializer = WithdrawFundsSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
-            account_id = serializer.validated_data['account_id']
-            amount = serializer.validated_data['amount']
+            account_id = serializer.validated_data["account_id"]
+            amount = serializer.validated_data["amount"]
 
             try:
                 linked_account = LinkedAccount.objects.get(id=account_id, user=user, is_verified=True)
@@ -532,7 +529,7 @@ class WithdrawWalletFundsView(APIView):
             amount = Decimal(amount)
             if amount <= 0:
                 raise ValueError("Amount must be greater than zero.")
-        except (InvalidOperation, ValueError):
+        except (decimal.InvalidOperation, ValueError):
             return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -568,7 +565,7 @@ class WithdrawWalletFundsView(APIView):
 
     def notify_admin(self, withdrawal_request):
         print(f"Admin Notification: Withdrawal request {withdrawal_request.id} is pending approval.")
-    
+
 
 class WithdrawWithConversionView(APIView):
     def post(self, request, wallet_id):
@@ -583,7 +580,9 @@ class WithdrawWithConversionView(APIView):
 
         try:
             converted_amount = WalletService.withdraw_with_conversion(wallet_id, amount, target_currency)
-            return Response({"message": "Withdrawal successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Withdrawal successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK
+            )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -598,11 +597,18 @@ class TransferWithConversionView(APIView):
         target_wallet_id = request.data.get("target_wallet_id")
 
         if not amount or not target_currency or not target_wallet_id:
-            return Response({"error": "Amount, target currency, and target wallet ID are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Amount, target currency, and target wallet ID are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            converted_amount = WalletService.transfer_with_conversion(wallet_id, target_wallet_id, amount, target_currency)
-            return Response({"message": "Transfer successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK)
+            converted_amount = WalletService.transfer_with_conversion(
+                wallet_id, target_wallet_id, amount, target_currency
+            )
+            return Response(
+                {"message": "Transfer successful.", "converted_amount": converted_amount}, status=status.HTTP_200_OK
+            )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -623,21 +629,21 @@ class ApproveTransactionView(APIView):
         if action == "approve":
             transaction.status = "S"
             transaction.approved_by = request.user
-            transaction.approved_at = now()
+            transaction.approved_at = datetime.now()
             transaction.save()
             return Response({"message": "Transaction approved", "transaction_id": transaction.transaction_id})
 
         if action == "reject":
             transaction.status = "F"
             transaction.approved_by = request.user
-            transaction.approved_at = now()
+            transaction.approved_at = datetime.now()
             transaction.save()
             return Response({"message": "Transaction rejected", "transaction_id": transaction.transaction_id})
-        
+
 
 class MultiCurrencyBalanceView(APIView):
     """
-    API endpoint to fetch wallet balances in multiple currencies 
+    API endpoint to fetch wallet balances in multiple currencies
     based on the user's local region or a specified currency.
     """
 
@@ -679,6 +685,7 @@ class NotificationListView(APIView):
     """
     API endpoint to fetch user notifications and mark them as read.
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -692,7 +699,7 @@ class NotificationListView(APIView):
         """
         Create a new notification manually (for testing or admin use).
         """
-        serializer = NotificationSerializer(data=request.data, context={'request': request})
+        serializer = NotificationSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save(user=request.user)
             return Response({"message": "Notification created."}, status=status.HTTP_201_CREATED)

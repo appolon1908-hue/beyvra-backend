@@ -1,10 +1,13 @@
 import os
+from decimal import Decimal
+from uuid import uuid4
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from users.models import User
-from uuid import uuid4
-from decimal import Decimal
+
 from .utils import ExchangeRateService
+
 
 def validate_file_size(file_obj):
     filesize = file_obj.size
@@ -55,7 +58,7 @@ class Wallet(TimeStampedModel):
 
     def __str__(self):
         return f"{self.user}-{self.name}"
-    
+
     def credit(self, amount, currency):
         """
         Add funds to the wallet. Converts amount to wallet's currency if needed.
@@ -107,10 +110,10 @@ class Transaction(TimeStampedModel):
     reference = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
 
-     # New fields for approval
+    # New fields for approval
     requires_approval = models.BooleanField(default=False)
     approved_by = models.ForeignKey(
-        "auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_transactions"
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_transactions"
     )
     approved_at = models.DateTimeField(null=True, blank=True)
 
@@ -121,13 +124,12 @@ class Transaction(TimeStampedModel):
         return self.amount > threshold
 
 
-
 class ManualBalanceUpdate(TimeStampedModel):
     REASON_CHOICES = [
-        ('CORRECTION', 'Correction'),
-        ('BONUS', 'Bonus'),
-        ('FEE', 'Fee Deduction'),
-        ('OTHER', 'Other'),
+        ("CORRECTION", "Correction"),
+        ("BONUS", "Bonus"),
+        ("FEE", "Fee Deduction"),
+        ("OTHER", "Other"),
     ]
 
     admin = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -136,12 +138,12 @@ class ManualBalanceUpdate(TimeStampedModel):
     new_balance = models.DecimalField(max_digits=20, decimal_places=2)
     reason = models.CharField(max_length=20, choices=REASON_CHOICES, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    
+
     def __str__(self):
         return f"{self.admin} updated balance from {self.previous_balance} to {self.new_balance} for {self.wallet} on {self.created_at}"
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
 
 class LinkedAccount(models.Model):
@@ -157,7 +159,7 @@ class LinkedAccount(models.Model):
 
     def __str__(self):
         return f"{self.account_name} - {self.bank_name} ({self.account_number})"
-    
+
 
 class WithdrawalWalletRequest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -165,8 +167,8 @@ class WithdrawalWalletRequest(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(
         max_length=20,
-        choices=[('Pending', 'Pending'), ('Approved', 'Approved'), ('Rejected', 'Rejected')],
-        default='Pending'
+        choices=[("Pending", "Pending"), ("Approved", "Approved"), ("Rejected", "Rejected")],
+        default="Pending",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
