@@ -4,7 +4,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("users", "0026_alter_user_role"),
+        ("users", "0026_alter_user_role_adminsettings"),
     ]
     operations = [
         migrations.AlterField(
@@ -15,5 +15,10 @@ class Migration(migrations.Migration):
                 default="",
                 max_length=100,
             ),
+        ),
+        migrations.AddField(
+            model_name="user",
+            name="time_zone",
+            field=models.CharField(default="UTC", max_length=100),
         ),
     ]

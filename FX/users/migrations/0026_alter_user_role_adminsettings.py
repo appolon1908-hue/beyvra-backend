@@ -16,4 +16,12 @@ class Migration(migrations.Migration):
                 max_length=11,
             ),
         ),
+        migrations.CreateModel(
+            name="AdminSettings",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("time_zone", models.CharField(default="UTC", max_length=100)),
+                ("date_format", models.CharField(default="YYYY-MM-DD", max_length=50)),
+            ],
+        ),
     ]

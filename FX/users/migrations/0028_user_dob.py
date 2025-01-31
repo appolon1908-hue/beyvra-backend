@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("users", "0027_alter_user_two_fa_type"),
+        ("users", "0027_user_time_zone_alter_user_two_fa_type"),
     ]
 
     operations = [
