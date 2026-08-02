@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from rest_framework import serializers
 
@@ -6,8 +7,8 @@ from .models import PaymentMethod, Payment
 
 
 class PaymentRequestSerializer(serializers.Serializer):
-    amount = serializers.FloatField()
-    wallet_id = serializers.UUIDField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    wallet_id = serializers.IntegerField()
 
 
 class BinancePaymentResponseSerializer(serializers.Serializer):
@@ -35,4 +36,10 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = ['payment_id', 'user', 'provider', 'wallet', 'amount', 'type', 'status', 'payment_date', 'reference', 'qr_code_url', 'description']
+        read_only_fields = ['payment_id', 'user', 'status', 'payment_date']
 
+    def validate_wallet(self, wallet):
+        request = self.context.get('request')
+        if request is None or wallet.user_id != request.user.id:
+            raise serializers.ValidationError('Wallet does not belong to the authenticated user.')
+        return wallet

@@ -217,10 +217,10 @@ class LoginSerializer(serializers.Serializer):
         user = self.validated_data["user"]
 
         # device info
-        user_agent = request.META.get("HTTP_USER_AGENT")[0:255]
+        user_agent = (request.META.get("HTTP_USER_AGENT") or "unknown")[0:255]
         ip_address = request.META.get("REMOTE_ADDR")
         location = get_user_location(ip_address)
-        device = f"{user_agent.split('/')[0]} {user_agent.split('/')[1].split(' ')[0]}"
+        device = user_agent.split(" ", 1)[0][:255]
 
         self._handle_user_device_info(user, ip_address, user_agent, location, device)
 

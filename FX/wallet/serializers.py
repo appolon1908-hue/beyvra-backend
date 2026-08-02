@@ -142,7 +142,7 @@ class WithdrawSerializer(serializers.Serializer):
 
 class TransferSerializer(serializers.Serializer):
     recipient_id = serializers.IntegerField()
-    amount = serializers.FloatField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
 
 
 class ManualBalanceUpdateSerializer(serializers.ModelSerializer):

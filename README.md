@@ -15,7 +15,7 @@ Make sure you have the following installed on your machine:
 1. **Clone the Repository:**
 
     ```bash
-    git clone git@bitbucket.org:client-portal-90/backend.git
+    git clone https://github.com/appolon1908-hue/backend.git
     cd backend
     ```
 

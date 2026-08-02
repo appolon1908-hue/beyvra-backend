@@ -1,6 +1,7 @@
 import json
 import asyncio
 import aiohttp
+from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Asset
@@ -16,6 +17,9 @@ class BaseDataConsumer(AsyncWebsocketConsumer):
     """
 
     async def connect(self):
+        if not self.scope["user"].is_authenticated:
+            await self.close(code=4401)
+            return
         await self.accept()
         self.keep_sending = True
         self.session = aiohttp.ClientSession()
@@ -41,7 +45,7 @@ class BaseDataConsumer(AsyncWebsocketConsumer):
 
 class CryptoMarketDataConsumer(BaseDataConsumer):
     async def send_data(self):
-        url = "https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey=juvxg68ZjiGFZ1PlOMgCNG2CAApBqXmW"
+        url = f"https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
         while self.keep_sending:
             response = await self.get_market_data(url)
             await self.send(text_data=json.dumps(response))
@@ -49,7 +53,7 @@ class CryptoMarketDataConsumer(BaseDataConsumer):
 
 class StockMarketDataConsumer(BaseDataConsumer):
     async def send_data(self):
-        url = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey=juvxg68ZjiGFZ1PlOMgCNG2CAApBqXmW"
+        url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
         while self.keep_sending:
             response = await self.get_market_data(url)
             await self.send(text_data=json.dumps(response))
@@ -58,6 +62,9 @@ class StockMarketDataConsumer(BaseDataConsumer):
 class AssetConsumer(BaseDataConsumer):
     async def send_data(self):
         user_id = self.scope["url_route"]["kwargs"]["user_id"]  # Récupérer l'ID utilisateur
+        if int(user_id) != self.scope["user"].id:
+            await self.close(code=4403)
+            return
         user = await self.get_user(user_id)  # Obtenir l'utilisateur à partir de l'ID
         while self.keep_sending:
             assets = await self.get_assets(user)
@@ -76,6 +83,9 @@ class AssetConsumer(BaseDataConsumer):
 class CurrentBalanceConsumer(BaseDataConsumer):
     async def send_data(self):
         user_id = self.scope["url_route"]["kwargs"]["user_id"]  # Récupérer l'ID utilisateur
+        if int(user_id) != self.scope["user"].id:
+            await self.close(code=4403)
+            return
         while self.keep_sending:
             current_balance = await self.get_current_balance(user_id)
             await self.send(text_data=json.dumps({"current_balance": current_balance}))
@@ -90,6 +100,9 @@ class CurrentBalanceConsumer(BaseDataConsumer):
 class ProfitLossConsumer(BaseDataConsumer):
     async def send_data(self):
         user_id = self.scope["url_route"]["kwargs"]["user_id"]  # Récupérer l'ID utilisateur
+        if int(user_id) != self.scope["user"].id:
+            await self.close(code=4403)
+            return
         while self.keep_sending:
             profit_loss = await self.get_profit_loss(user_id)
             await self.send(text_data=json.dumps({"profit_loss": profit_loss}))

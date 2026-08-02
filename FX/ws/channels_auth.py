@@ -41,13 +41,12 @@ class CustomTokenAuthMiddleware(BaseMiddleware):
         # get ticket from query param
         query_string = scope["query_string"].decode("utf-8")
         query_params = dict(parse_qs(query_string))
-        if query_params:
-            ws_ticket = query_params.get("ws_ticket")[0]
+        tickets = query_params.get("ws_ticket", [])
+        if tickets:
+            ws_ticket = tickets[0]
             # get user id from redis cache
             user_id = cache.get(ws_ticket, "None")
-            logger.info(user_id)
-            # delete ticket to make it accessible by one user only
-            # cache.delete(ws_ticket)
+            cache.delete(ws_ticket)
         else:
             user_id = "None"
         if user_id == "None":

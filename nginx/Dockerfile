@@ -1,8 +1,10 @@
-FROM nginx:1.21.3-alpine
+FROM nginx:1.29-alpine
 
 ARG CONFIG_FILE=nginx.prod.conf.template
 
 WORKDIR /app
+
+RUN apk upgrade --no-cache
 
 RUN rm /etc/nginx/conf.d/default.conf
 

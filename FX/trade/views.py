@@ -11,6 +11,13 @@ class AssetListView(generics.ListAPIView):
 
 
 class TradeListCreateView(generics.ListCreateAPIView):
-    queryset = Trade.objects.all()
     serializer_class = TradeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Trade.objects.filter(wallet__user=self.request.user)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context

@@ -7,6 +7,7 @@ from .serializers import AssetSerializer
 from django.db import models
 from drf_spectacular.utils import extend_schema
 import logging
+from django.conf import settings
 
 
 logger = logging.getLogger(__name__)
@@ -16,8 +17,9 @@ class CryptoMarketDataView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        url = "https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey=tYg3o04wAvVaxPnROtNVXEpFOQKoEWI3"
-        response = requests.get(url)
+        url = f"https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
         data = response.json()
         return Response(data)
     
@@ -25,18 +27,19 @@ class StockMarketDataView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        url = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey=tYg3o04wAvVaxPnROtNVXEpFOQKoEWI3"
-        response = requests.get(url)
+        url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
         data = response.json()
-        print(data)
         return Response(data)
 
 class AssetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id, *args, **kwargs):
-        user = id
-        assets = Asset.objects.filter(user=user)
+        if id != request.user.id:
+            return Response({"detail": "Not found."}, status=404)
+        assets = Asset.objects.filter(user=request.user)
         serializer = AssetSerializer(assets, many=True)
         return Response(serializer.data)
 
@@ -68,13 +71,12 @@ class TotalBalanceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        total_balance = AssetBalance.objects.aggregate(total_balance=models.Sum('current_balance'))['total_balance']
+        total_balance = AssetBalance.objects.filter(asset__user=request.user).aggregate(total_balance=models.Sum('current_balance'))['total_balance']
         return Response(total_balance)
 
 class TotalProfitLossView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        total_profit_loss = AssetProfitLoss.objects.aggregate(total_profit_loss=models.Sum('profit_loss'))['total_profit_loss']
+        total_profit_loss = AssetProfitLoss.objects.filter(asset__user=request.user).aggregate(total_profit_loss=models.Sum('profit_loss'))['total_profit_loss']
         return Response(total_profit_loss)
-

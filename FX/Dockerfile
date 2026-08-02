@@ -1,9 +1,11 @@
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app/
 
 # # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     gcc \
@@ -12,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     postgresql-client \
     redis-tools \
-    netcat \
+    netcat-openbsd \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,9 +27,9 @@ COPY requirements.txt /app/requirements.txt
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install --upgrade pip
-RUN pip install --upgrade pip wheel setuptools
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
+    && pip install --no-cache-dir --requirement /app/requirements.txt \
+    && pip uninstall --yes pip setuptools wheel
 
 # Copy the source code
 COPY . /app/

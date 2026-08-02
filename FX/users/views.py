@@ -12,6 +12,8 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
+from django.core import signing
+from django.core.signing import BadSignature, SignatureExpired
 from django.db import connection, transaction
 from django.db.models import Case, CharField, Q, Sum, Value, When
 from django.db.models.signals import post_save
@@ -365,11 +367,22 @@ class EnableMFAView(generics.GenericAPIView):
 
 
 class VerifyMFAView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
     serializer_class = AuthSerializer
 
     def post(self, request, *args, **kwargs):
-        user = request.user
+        login_token = request.data.get("login_token")
+        completing_login = bool(login_token)
+        if completing_login:
+            try:
+                payload = signing.loads(login_token, salt="mfa-login", max_age=300)
+                user = User.objects.get(pk=payload["user_id"], is_active=True)
+            except (BadSignature, SignatureExpired, KeyError, User.DoesNotExist):
+                return Response({"detail": "Invalid or expired MFA challenge."}, status=status.HTTP_401_UNAUTHORIZED)
+        elif request.user.is_authenticated:
+            user = request.user
+        else:
+            return Response({"detail": "Authentication is required."}, status=status.HTTP_401_UNAUTHORIZED)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp_code = serializer.validated_data["otp"]
@@ -380,7 +393,15 @@ class VerifyMFAView(generics.GenericAPIView):
             if not user.two_factor_authentication_enabled:
                 user.two_factor_authentication_enabled = True
             user.save()
-            return Response({"message": "OTP verified successfully"}, status=status.HTTP_200_OK)
+            response = {"message": "OTP verified successfully"}
+            if completing_login:
+                refresh = AuthTokenObtainPairSerializer.get_token(user)
+                response.update({
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                    "user": UserSerializer(user).data,
+                })
+            return Response(response, status=status.HTTP_200_OK)
         return Response({"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -416,7 +437,13 @@ class LoginView(generics.CreateAPIView):
 
             serializer.save(request)
 
-            # TODO: blacklist existing user refresh_tokens first
+            if user.two_factor_authentication_enabled:
+                login_token = signing.dumps({"user_id": user.pk}, salt="mfa-login")
+                return Response(
+                    {"mfa_required": True, "login_token": login_token},
+                    status=status.HTTP_202_ACCEPTED,
+                )
+
             refresh = AuthTokenObtainPairSerializer.get_token(user)
 
             return Response(
@@ -517,7 +544,7 @@ class KYCUpdateView(generics.UpdateAPIView):
     },
 )
 class FetchUserView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = UserSerializer
 
     def get_queryset(self):
@@ -572,7 +599,7 @@ class FetchUserView(generics.ListAPIView):
 
 
 class FetchUserDetailView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request, user_id):
         if not request.user.is_staff:

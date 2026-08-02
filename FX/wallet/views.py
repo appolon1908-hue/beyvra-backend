@@ -1,4 +1,5 @@
 import json
+from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.views import APIView
@@ -337,7 +338,6 @@ class WithdrawFromWalletView(APIView):
             )
             transaction = Transaction.objects.create(
                 reference=withdrawal_request.withdrawal_id,
-                user=request.user,
                 wallet=wallet,
                 amount=amount,
                 type="W",
@@ -398,26 +398,34 @@ class TransferFromWalletView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            wallet = Wallet.objects.get(id=wallet_id)
-        except Wallet.DoesNotExist:
-            return Response({"detail": f"Wallet with ID {wallet_id} does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
         recipient_id = serializer.validated_data['recipient_id']
-        try:
-            recipient_wallet = Wallet.objects.get(id=recipient_id)
-        except Wallet.DoesNotExist:
-            return Response({"detail": f"Recipient wallet with ID {recipient_id} does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
         amount = serializer.validated_data['amount']
 
-        if wallet.balance < amount:
-            return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+        if wallet_id == recipient_id:
+            return Response({"detail": "Source and recipient wallets must be different."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Perform the transfer operation
-            recipient_wallet.credit(amount, wallet.currency)
-            wallet.debit(amount)
+            # Lock both rows in a stable order so concurrent transfers cannot
+            # spend the same balance. The source wallet must belong to the
+            # authenticated user; returning 404 avoids disclosing its owner.
+            with transaction.atomic():
+                wallets = {
+                    wallet.id: wallet
+                    for wallet in Wallet.objects.select_for_update()
+                    .filter(id__in=sorted([wallet_id, recipient_id]), is_active=True, is_archived=False)
+                    .order_by("id")
+                }
+                wallet = wallets.get(wallet_id)
+                recipient_wallet = wallets.get(recipient_id)
+                if wallet is None or wallet.user_id != request.user.id:
+                    return Response({"detail": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+                if recipient_wallet is None:
+                    return Response({"detail": "Recipient wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+                if wallet.balance < amount:
+                    return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+
+                recipient_wallet.credit(amount, wallet.currency)
+                wallet.debit(amount, wallet.currency)
 
             # Success response
             return Response({"detail": "Transfer successful."}, status=status.HTTP_200_OK)

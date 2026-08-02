@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 class ExchangeRateService:
     def __init__(self):
-        self.api_key = settings.FIXER_API_KEY  # Your API key for Fixer.io, CurrencyLayer, etc.
-        self.api_url = 'http://data.fixer.io/api/latest'  # Replace with the actual API URL
+        self.api_key = getattr(settings, "FIXER_API_KEY", "")
+        self.api_url = 'https://data.fixer.io/api/latest'
         self.cache_timeout = 3600  # Cache exchange rates for 1 hour
 
     def get_rate(self, base_currency, target_currency):
@@ -35,7 +35,9 @@ class ExchangeRateService:
         while retries > 0:
             try:
                 response = requests.get(
-                    f'{self.api_url}?access_key={self.api_key}&base={base_currency}&symbols={target_currency}'
+                    self.api_url,
+                    params={"access_key": self.api_key, "base": str(base_currency), "symbols": str(target_currency)},
+                    timeout=10,
                 )
                 data = response.json()
 
