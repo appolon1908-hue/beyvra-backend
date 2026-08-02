@@ -41,6 +41,9 @@ class PublicTransactionsApiTests(TestCase):
         user = get_user_model().objects.get(email=payload["email"])
         self.assertTrue(user.check_password(payload["password"]))
         self.assertNotIn("password", res.data)
+        self.assertIn("access", res.data)
+        self.assertIn("refresh", res.data)
+        self.assertEqual(res.data["user"]["email"], payload["email"])
 
     def test_user_with_email_exists_error(self):
         """Test error returned if user with email exists."""

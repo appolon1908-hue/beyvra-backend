@@ -82,6 +82,20 @@ class CreateUserView(generics.CreateAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        refresh = AuthTokenObtainPairSerializer.get_token(user)
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class DeleteUserView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -332,7 +346,7 @@ class DisableWalkthroughView(generics.UpdateAPIView):
 
     def put(self, request, *args, **kwargs):
         user = self.get_object()
-        serializer = self.get_serializer(user, data={"is_walkthrough": True}, partial=True)
+        serializer = self.get_serializer(user, data={"is_walkthrough": False}, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
