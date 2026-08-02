@@ -108,7 +108,7 @@ services:
       - ".env"
     command: >
       bash -c
-      "celery -A FX flower --basic_auth=$FLOWER_USERNAME:$FLOWER_PASSWORD"
+      "celery -A FX flower --basic_auth=$$FLOWER_USERNAME:$$FLOWER_PASSWORD"
     ports:
       - "127.0.0.1:5555:5555"
     networks:
