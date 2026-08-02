@@ -40,6 +40,33 @@ class Asset(TimeStampedModel):
         return f"{self.name} ({self.symbol})"
 
 
+class MarketCandle(models.Model):
+    symbol = models.CharField(max_length=32)
+    interval = models.CharField(max_length=8, default="1m")
+    timestamp = models.DateTimeField()
+    open = models.DecimalField(max_digits=24, decimal_places=10)
+    high = models.DecimalField(max_digits=24, decimal_places=10)
+    low = models.DecimalField(max_digits=24, decimal_places=10)
+    close = models.DecimalField(max_digits=24, decimal_places=10)
+    volume = models.DecimalField(max_digits=30, decimal_places=10, default=0)
+    provider = models.CharField(max_length=32, default="binance")
+
+    class Meta:
+        ordering = ["timestamp"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "symbol", "interval", "timestamp"],
+                name="unique_market_candle",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["symbol", "interval", "-timestamp"],
+                name="trade_marke_symbol_eb9c9d_idx",
+            )
+        ]
+
+
 class TradeCategory(TimeStampedModel):
     name = models.CharField(max_length=20, unique=True)
 

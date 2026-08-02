@@ -1,0 +1,48 @@
+from unittest.mock import Mock, patch
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from trade.models import MarketCandle
+
+
+class MarketHistoryTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email="market@example.com",
+            password="test-pass",
+            phone_number="+12025550124",
+        )
+        self.client = APIClient()
+
+    def test_market_history_requires_authentication(self):
+        response = self.client.get("/api/trades/market/history/", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("trade.market_data.requests.get")
+    def test_market_history_is_normalized_and_persisted(self, get):
+        provider_response = Mock()
+        provider_response.raise_for_status.return_value = None
+        provider_response.json.return_value = [
+            [1700000000000, "100", "110", "90", "105", "12.5"]
+        ]
+        get.return_value = provider_response
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=BTCUSDT&interval=1m&limit=10",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["close"], 105.0)
+        self.assertEqual(MarketCandle.objects.count(), 1)
+
+    def test_unsupported_market_is_rejected(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=NOTREAL", secure=True
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

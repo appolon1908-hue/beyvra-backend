@@ -1,14 +1,89 @@
 import json
 import asyncio
 import aiohttp
+from datetime import datetime, timezone
+from decimal import Decimal
+from urllib.parse import parse_qs
 from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Asset
 from .serializers import AssetSerializer
 from django.contrib.auth import get_user_model
+from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
+from trade.models import MarketCandle
 
 User = get_user_model()
+
+
+class LiveMarketDataConsumer(AsyncWebsocketConsumer):
+    """Authenticated server-side relay for normalized live crypto candles."""
+
+    async def connect(self):
+        if not self.scope["user"].is_authenticated:
+            await self.close(code=4401)
+            return
+        query = parse_qs(self.scope.get("query_string", b"").decode())
+        self.symbol = query.get("symbol", ["BTCUSDT"])[0].upper()
+        self.interval = query.get("interval", ["1m"])[0]
+        if self.symbol not in SUPPORTED_SYMBOLS or self.interval not in SUPPORTED_INTERVALS:
+            await self.close(code=4400)
+            return
+        await self.accept()
+        await self.send(text_data=json.dumps({"type": "status", "status": "connecting"}))
+        self.relay_task = asyncio.create_task(self.relay_market_data())
+
+    async def disconnect(self, close_code):
+        task = getattr(self, "relay_task", None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def relay_market_data(self):
+        url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{self.interval}"
+        delay = 1
+        while True:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.ws_connect(url, heartbeat=20, receive_timeout=60) as upstream:
+                        delay = 1
+                        await self.send(text_data=json.dumps({"type": "status", "status": "connected"}))
+                        async for message in upstream:
+                            if message.type != aiohttp.WSMsgType.TEXT:
+                                continue
+                            payload = json.loads(message.data)
+                            candle = payload.get("k")
+                            if not candle:
+                                continue
+                            normalized = {
+                                "type": "candle", "symbol": self.symbol,
+                                "interval": self.interval, "closed": bool(candle["x"]),
+                                "time": int(candle["t"] / 1000),
+                                "open": float(candle["o"]), "high": float(candle["h"]),
+                                "low": float(candle["l"]), "close": float(candle["c"]),
+                                "volume": float(candle["v"]),
+                            }
+                            if normalized["closed"]:
+                                await self.store_candle(normalized)
+                            await self.send(text_data=json.dumps(normalized))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                await self.send(text_data=json.dumps({"type": "status", "status": "disconnected", "retry_in": delay}))
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30)
+
+    @database_sync_to_async
+    def store_candle(self, candle):
+        MarketCandle.objects.update_or_create(
+            provider="binance", symbol=self.symbol, interval=self.interval,
+            timestamp=datetime.fromtimestamp(candle["time"], tz=timezone.utc),
+            defaults={
+                "open": Decimal(str(candle["open"])), "high": Decimal(str(candle["high"])),
+                "low": Decimal(str(candle["low"])), "close": Decimal(str(candle["close"])),
+                "volume": Decimal(str(candle["volume"])),
+            },
+        )
 
 
 class BaseDataConsumer(AsyncWebsocketConsumer):
