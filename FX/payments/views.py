@@ -1,5 +1,6 @@
 import stripe
 from django.conf import settings
+from django.db import transaction as db_transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
@@ -68,7 +69,7 @@ class StripeCheckoutView(APIView):
             response = {"detail": "You do not have permission to perform this action."}
             return Response(response, status=status.HTTP_403_FORBIDDEN)
 
-        currency = wallet.account_type.symbol
+        currency = wallet.currency.symbol.lower()
 
         # TODO:
         # Based on wallet curreny, convert amount to unit amount
@@ -79,9 +80,8 @@ class StripeCheckoutView(APIView):
             wallet=wallet,
             type="D",
             amount=amount,
-            currency=currency,
             status="P",
-            gateway_ref="",
+            reference="",
         )
 
         try:
@@ -109,8 +109,8 @@ class StripeCheckoutView(APIView):
         except Exception as e:
             return Response({"error": str(e)})
 
-        transaction.gateway_ref = checkout_session_id
-        transaction.save()
+        transaction.reference = checkout_session_id
+        transaction.save(update_fields=["reference", "updated_at"])
         return Response({"checkout_url": checkout_url})
 
 
@@ -144,19 +144,22 @@ class StripeWebhook(APIView):
             checkout_session_id = session.get("id")
 
             try:
-                transaction = Transaction.objects.get(
-                    reference=checkout_session_id,
-                )
-                transaction.status = "S"
-                transaction.save()
-
-                wallet = transaction.wallet
-                if transaction.type == "D":
-                    wallet.balance = wallet.balance + transaction.amount
-                elif transaction.type == "W":
-                    wallet.balance = wallet.balance - transaction.amount
-                    
-                wallet.save()
+                with db_transaction.atomic():
+                    transaction = Transaction.objects.select_for_update().get(reference=checkout_session_id)
+                    # Stripe retries webhooks. Only a pending transaction may
+                    # mutate a wallet, making completion idempotent.
+                    if transaction.status != "P":
+                        return Response(status=status.HTTP_200_OK)
+                    wallet = Wallet.objects.select_for_update().get(pk=transaction.wallet_id)
+                    if transaction.type == "D":
+                        wallet.balance += transaction.amount
+                    elif transaction.type == "W":
+                        if wallet.balance < transaction.amount:
+                            return Response(status=status.HTTP_409_CONFLICT)
+                        wallet.balance -= transaction.amount
+                    wallet.save(update_fields=["balance", "updated_at"])
+                    transaction.status = "S"
+                    transaction.save(update_fields=["status", "updated_at"])
             except Transaction.DoesNotExist:
                 response = {"detail": "Transation not found"}
                 return Response(response, status=status.HTTP_404_NOT_FOUND)
@@ -214,10 +217,10 @@ class PaymentView(APIView):
     def post(self, request):
         try:
             data = request.data
-            serializer = PaymentSerializer(data=data)
+            serializer = PaymentSerializer(data=data, context={'request': request})
             if not serializer.is_valid():
                 return Response({"data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-            serializer.save()
+            serializer.save(user=request.user)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"data": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -232,8 +235,10 @@ class PaymentView(APIView):
             payment_id = request.data.get('payment_id', None)
             if not payment_id:
                 return Response({"Error": "Please give a payment id"}, status=status.HTTP_400_BAD_REQUEST)
-            payment_instance = get_object_or_404(Payment, payment_id=payment_id)
-            serializer = PaymentSerializer(payment_instance, data=request.data, partial=True)
+            payment_instance = get_object_or_404(Payment, payment_id=payment_id, user=request.user)
+            serializer = PaymentSerializer(
+                payment_instance, data=request.data, partial=True, context={'request': request}
+            )
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from django.db import transaction as db_transaction
 from rest_framework import serializers
 from wallet.models import Transaction
 
@@ -46,6 +47,9 @@ class TradeSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
+        request = self.context.get("request")
+        if request is None or data["wallet"].user_id != request.user.id:
+            raise serializers.ValidationError("Wallet does not belong to the authenticated user.")
         if data["quantity"] <= 0:
             raise serializers.ValidationError("Quantity must be greater than zero.")
         if data["price_per_unit"] <= 0:
@@ -53,26 +57,26 @@ class TradeSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        wallet = validated_data["wallet"]
-        amount = validated_data["price_per_unit"] * validated_data["quantity"]
-        duration = validated_data.get("duration", 0)
-        # update result time
-        validated_data["result_time"] = datetime.now() + timedelta(seconds=duration)
-        # Make sure the wallet has enough balance
-        if wallet.balance < amount:
-            raise serializers.ValidationError("Insufficient balance. please recharge your wallet first.")
-        # Create transaction
-        transaction = Transaction.objects.create(
-            wallet=wallet,
-            type="TD",
-            amount=(0 - amount),
-            status="S",
-        )
-        # Deduct amount from wallet balance
-        wallet.balance -= amount
-        wallet.save()
-        validated_data["transaction"] = transaction
-        return super().create(validated_data)
+        with db_transaction.atomic():
+            wallet = validated_data["wallet"].__class__.objects.select_for_update().get(
+                pk=validated_data["wallet"].pk
+            )
+            amount = validated_data["price_per_unit"] * validated_data["quantity"]
+            duration = validated_data.get("duration", 0)
+            validated_data["result_time"] = datetime.now() + timedelta(seconds=duration)
+            if wallet.balance < amount:
+                raise serializers.ValidationError("Insufficient balance. please recharge your wallet first.")
+            transaction = Transaction.objects.create(
+                wallet=wallet,
+                type="TD",
+                amount=(0 - amount),
+                status="S",
+            )
+            wallet.balance -= amount
+            wallet.save(update_fields=["balance", "updated_at"])
+            validated_data["wallet"] = wallet
+            validated_data["transaction"] = transaction
+            return super().create(validated_data)
 
 
 class TradeDetailSerializer(serializers.ModelSerializer):

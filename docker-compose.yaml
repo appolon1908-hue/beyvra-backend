@@ -50,8 +50,8 @@ services:
   redis:
     image: redis:7.2.3-alpine
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT}:6379"
+    expose:
+      - 6379
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
@@ -95,7 +95,7 @@ services:
       bash -c
       "celery -A FX flower --basic_auth=$FLOWER_USERNAME:$FLOWER_PASSWORD"
     ports:
-      - "5555:5555"
+      - "127.0.0.1:5555:5555"
     networks:
       - fx-network
     depends_on:
@@ -140,8 +140,8 @@ services:
     container_name: statsd-exporter
     restart: unless-stopped
     ports:
-      - "9125:9125"
-      - "9102:9102"
+      - "127.0.0.1:9125:9125/udp"
+      - "127.0.0.1:9102:9102"
     volumes:
       - ./statsd-exporter/statsd.conf:/statsd/statsd.conf
     command:

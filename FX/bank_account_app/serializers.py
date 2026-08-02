@@ -82,6 +82,10 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = WithdrawalRequest
         fields = '__all__'
+        read_only_fields = (
+            'user', 'status', 'approved_by', 'approval_date', 'denial_date',
+            'txid', 'request_date', 'network_fee', 'estimated_completion_time',
+        )
 
     def get_user(self, obj):
         return {

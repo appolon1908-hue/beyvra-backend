@@ -17,12 +17,10 @@ from pathlib import Path
 
 from celery.schedules import crontab
 from dotenv import load_dotenv
-from celery.schedules import crontab
-from dotenv import load_dotenv
 
 load_dotenv()
 
-API_ENV = os.getenv("API_ENV")
+API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -38,8 +36,9 @@ DEBUG = int(os.getenv("DEBUG"))
 ALLOWED_HOSTS = json.loads(os.getenv("ALLOWED_HOSTS"))
 CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
 
-CORS_ORIGIN_ALLOW_ALL = True
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
+CORS_ALLOWED_ORIGINS = json.loads(os.getenv("CORS_ALLOWED_ORIGINS", "[]"))
+CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"
 
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -238,16 +237,15 @@ STATIC_ROOT = "/app/static"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-permission_type = "AllowAny" if API_ENV == "local" else "IsAuthenticated"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
-    "DEFAULT_PERMISSION_CLASSES": (f"rest_framework.permissions.{permission_type}",),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
 }
 
-if os.environ.get("RATE_LIMIT", False):
+if os.getenv("RATE_LIMIT", "false").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -274,8 +272,6 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 API_KEY_ALPACA = os.getenv("API_KEY_ALPACA")
 SECRET_KEY_ALPACA = os.getenv("API_SECRET_ALPACA")
-CORS_ALLOW_ALL_ORIGINS = True
-
 # Stripe Settings
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
@@ -360,4 +356,4 @@ if not DEBUG:
     PROMETHEUS_METRICS_EXPORT_PORT_RANGE = range(7001, 7100)
 
 
-NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "pub_5104020b15ee44b2ef4f00b0d7b0835337c8a")
+NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")

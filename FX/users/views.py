@@ -517,7 +517,7 @@ class KYCUpdateView(generics.UpdateAPIView):
     },
 )
 class FetchUserView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = UserSerializer
 
     def get_queryset(self):
@@ -572,7 +572,7 @@ class FetchUserView(generics.ListAPIView):
 
 
 class FetchUserDetailView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request, user_id):
         if not request.user.is_staff:
