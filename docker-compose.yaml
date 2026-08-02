@@ -12,7 +12,6 @@ services:
     volumes:
       - static_files:/app/static
       - ./media:/app/media
-      - logs:/var/log
     depends_on:
       postgres:
         condition: service_healthy
@@ -178,7 +177,6 @@ volumes:
   static_files:
   postgres_data:
   redis_data:
-  logs:
 
 networks:
   fx-network:

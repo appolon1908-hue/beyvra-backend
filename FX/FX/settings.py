@@ -31,7 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = int(os.getenv("DEBUG"))
+DEBUG = os.getenv("DEBUG", "0").lower() in {"1", "true", "yes"}
 
 ALLOWED_HOSTS = json.loads(os.getenv("ALLOWED_HOSTS"))
 CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
@@ -245,7 +245,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
 }
 
-if os.getenv("RATE_LIMIT", "false").lower() in {"1", "true", "yes"}:
+if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -314,11 +314,6 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
         },
-        "file": {
-            "level": LOG_LEVEL,
-            "class": "logging.FileHandler",
-            "filename": "/var/log/django.log",
-        },
         "mail_admins": {
             "level": "ERROR",
             "class": "fx_utils.email.CustomAdminEmailHandler",
@@ -331,7 +326,7 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": LOG_LEVEL,
             "propagate": True,
         },
@@ -357,3 +352,17 @@ if not DEBUG:
 
 
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
+POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
