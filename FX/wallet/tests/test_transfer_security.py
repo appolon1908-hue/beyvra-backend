@@ -34,6 +34,7 @@ class WalletTransferSecurityTests(TestCase):
             f"/api/wallet/wallets/{self.source.id}/transfer/",
             {"recipient_id": self.target.id, "amount": "10.00"},
             format="json",
+            secure=True,
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -48,6 +49,7 @@ class WalletTransferSecurityTests(TestCase):
             f"/api/wallet/wallets/{self.source.id}/transfer/",
             {"recipient_id": self.target.id, "amount": "10.00"},
             format="json",
+            secure=True,
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)

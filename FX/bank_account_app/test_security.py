@@ -27,6 +27,7 @@ class BankAccountSecurityTests(TestCase):
             "/api/bank_account/",
             {"bank_name": account.bank_name, "account_number": account.account_number},
             format="json",
+            secure=True,
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
