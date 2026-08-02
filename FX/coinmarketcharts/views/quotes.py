@@ -79,54 +79,7 @@ class CryptocurrencyQuotesLatestView(APIView):
                 default=False,
             ),
         ],
-        responses={
-            200: {
-                "description": "Successfully retrieved the latest cryptocurrency quotes.",
-                "content": {
-                    "application/json": {
-                        "example": {
-                            "status": {
-                                "timestamp": "2024-11-27T12:00:00.000Z",
-                                "error_code": 0,
-                                "error_message": None,
-                                "elapsed": 10,
-                                "credit_count": 1
-                            },
-                            "data": {
-                                "BTC": {
-                                    "id": 1,
-                                    "name": "Bitcoin",
-                                    "symbol": "BTC",
-                                    "quote": {
-                                        "USD": {
-                                            "price": 54300.45,
-                                            "volume_24h": 35673820000,
-                                            "market_cap": 1065312000000,
-                                            "percent_change_1h": 0.12,
-                                            "percent_change_24h": 1.56,
-                                            "percent_change_7d": -2.34,
-                                            "last_updated": "2024-11-27T12:00:00.000Z"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            400: {
-                "description": "Bad Request. Invalid parameter value or missing required parameters.",
-                "content": {
-                    "application/json": {"example": {"detail": "Invalid request parameters."}}
-                }
-            },
-            500: {
-                "description": "Internal Server Error.",
-                "content": {
-                    "application/json": {"example": {"detail": "An unexpected error occurred while processing the request."}}
-                }
-            },
-        }
+        responses={200: OpenApiTypes.OBJECT, 400: OpenApiTypes.OBJECT, 500: OpenApiTypes.OBJECT}
     )
     def get(self, request):
         api_url = os.getenv('COINMARKETCAP_URL', '')
@@ -167,7 +120,6 @@ class CryptocurrencyQuotesLatestView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             return Response(response_data, status=response.status_code)
-
 
 
 

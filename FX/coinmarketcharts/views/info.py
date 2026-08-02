@@ -72,20 +72,7 @@ class CryptocurrencyInfoView(APIView):
             required=False,
         ),
     ],
-    responses={
-        200: {
-            'description': 'Successfully retrieved cryptocurrency information.',
-            'content': {'application/json': {'example': {}}}
-        },
-        400: {
-            'description': 'Bad request. Invalid parameters or missing required values.',
-            'content': {'application/json': {'example': {"error": "Invalid request. At least one of 'id', 'slug', or 'symbol' is required."}}}
-        },
-        500: {
-            'description': 'Internal server error.',
-            'content': {'application/json': {'example': {"error": "An unexpected error occurred while processing the request."}}}
-        }
-    }
+    responses={200: OpenApiTypes.OBJECT, 400: OpenApiTypes.OBJECT, 500: OpenApiTypes.OBJECT}
 )
     def get(self, request):
         # Endpoint and base API URL
