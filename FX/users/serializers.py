@@ -155,8 +155,12 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    new_password = serializers.CharField(max_length=20, validators=[MinLengthValidator(5)])
-    new_password_confirm = serializers.CharField(max_length=20, validators=[MinLengthValidator(5)])
+    new_password = serializers.CharField(
+        max_length=20,
+        write_only=True,
+        validators=[MinLengthValidator(8), password_check_policy],
+    )
+    new_password_confirm = serializers.CharField(max_length=20, write_only=True)
 
     def validate(self, data):
         if data["new_password"] != data["new_password_confirm"]:

@@ -1,3 +1,5 @@
+import smtplib
+
 from celery import shared_task
 from users.models import PhoneVerificationCode, User, UserDeviceInfo
 
@@ -22,7 +24,11 @@ def async_send_email_verification_email(user_id):
     send_email_verification_email(user)
 
 
-@shared_task
+@shared_task(
+    autoretry_for=(smtplib.SMTPException,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+)
 def async_send_password_reset_link_email(user_id):
     user = User.objects.get(id=user_id)
     send_password_reset_link_email(user)

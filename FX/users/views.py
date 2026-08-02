@@ -31,6 +31,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from trade.models import Trade, Transaction
 from trade.serializers import TradeDetailSerializer, TradeHistorySerializer, TransactionSerializer
 from users import messages
@@ -239,19 +240,12 @@ class PasswordResetRequestView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = request.data["email"]
-
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"detail": "This email is not associated with any account. Please try again with valid email."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        async_send_password_reset_link_email.delay(user.id)
+        email = serializer.validated_data["email"].strip()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user:
+            async_send_password_reset_link_email.delay(user.id)
         return Response(
-            {"detail": "Password reset instructions sent on email."},
+            {"detail": "If an active account matches that email, password reset instructions will be sent."},
             status=status.HTTP_200_OK,
         )
 
@@ -265,7 +259,7 @@ def password_reset_confirm(request, uidb64, token):
     serializer = PasswordResetConfirmSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
-    new_password = serializer.data["new_password"]
+    new_password = serializer.validated_data["new_password"]
 
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -275,9 +269,16 @@ def password_reset_confirm(request, uidb64, token):
 
     if (user is not None) and default_token_generator.check_token(user, token):
         user.set_password(new_password)
+        user._password_changed = True
         user.save()
 
-        return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
+        for outstanding_token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=outstanding_token)
+
+        return Response(
+            {"detail": "Password updated successfully. You can now sign in."},
+            status=status.HTTP_200_OK,
+        )
     else:
         return Response(
             {"detail": "Password reset link is not valid."},
