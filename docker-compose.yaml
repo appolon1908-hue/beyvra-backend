@@ -1,4 +1,11 @@
 services:
+  static-init:
+    image: alpine:3.23
+    command: ["sh", "-c", "chown -R 999:999 /app/static"]
+    volumes:
+      - static_files:/app/static
+    restart: "no"
+
   web:
     image: ${BACKEND_IMAGE:-backend-app:local}
     build: ./FX
@@ -12,6 +19,8 @@ services:
       - static_files:/app/static
       - ./media:/app/media
     depends_on:
+      static-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -67,7 +76,7 @@ services:
       - fx-network
     command: redis-server --requirepass ${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 10

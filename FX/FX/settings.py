@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
+PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -69,6 +70,7 @@ INSTALLED_APPS = [
     "rangefilter",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "channels",
     "users",
     "api_trade",
