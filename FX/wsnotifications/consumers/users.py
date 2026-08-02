@@ -30,12 +30,13 @@ class UserConsumer(BaseConsumer):
 
     async def disconnect(self, close_code):
         user =self.scope['user']
+        if not user.is_authenticated:
+            return
         await self.channel_layer.group_discard(f"user_{user.id}", self.channel_name)
-        await self.channel_layer.group_add(f"users", self.channel_name)
+        await self.channel_layer.group_discard("users", self.channel_name)
         await super().disconnect(close_code)
 
     async def send_message(self, event):
         await user_handlers.dispatch_message(self, event)
-
 
 

@@ -40,38 +40,41 @@ class LiveMarketDataConsumer(AsyncWebsocketConsumer):
             await asyncio.gather(task, return_exceptions=True)
 
     async def relay_market_data(self):
-        url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{self.interval}"
         delay = 1
         while True:
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.ws_connect(url, heartbeat=20, receive_timeout=60) as upstream:
-                        delay = 1
-                        await self.send(text_data=json.dumps({"type": "status", "status": "connected"}))
-                        async for message in upstream:
-                            if message.type != aiohttp.WSMsgType.TEXT:
-                                continue
-                            payload = json.loads(message.data)
-                            candle = payload.get("k")
-                            if not candle:
-                                continue
-                            normalized = {
-                                "type": "candle", "symbol": self.symbol,
-                                "interval": self.interval, "closed": bool(candle["x"]),
-                                "time": int(candle["t"] / 1000),
-                                "open": float(candle["o"]), "high": float(candle["h"]),
-                                "low": float(candle["l"]), "close": float(candle["c"]),
-                                "volume": float(candle["v"]),
-                            }
-                            if normalized["closed"]:
-                                await self.store_candle(normalized)
-                            await self.send(text_data=json.dumps(normalized))
+                await self.stream_once()
+                delay = 1
             except asyncio.CancelledError:
                 raise
             except Exception:
                 await self.send(text_data=json.dumps({"type": "status", "status": "disconnected", "retry_in": delay}))
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30)
+
+    async def stream_once(self):
+        url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{self.interval}"
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(url, heartbeat=20, receive_timeout=60) as upstream:
+                await self.send(text_data=json.dumps({"type": "status", "status": "connected"}))
+                async for message in upstream:
+                    if message.type != aiohttp.WSMsgType.TEXT:
+                        continue
+                    payload = json.loads(message.data)
+                    candle = payload.get("k")
+                    if not candle:
+                        continue
+                    normalized = {
+                        "type": "candle", "symbol": self.symbol,
+                        "interval": self.interval, "closed": bool(candle["x"]),
+                        "time": int(candle["t"] / 1000),
+                        "open": float(candle["o"]), "high": float(candle["h"]),
+                        "low": float(candle["l"]), "close": float(candle["c"]),
+                        "volume": float(candle["v"]),
+                    }
+                    if normalized["closed"]:
+                        await self.store_candle(normalized)
+                    await self.send(text_data=json.dumps(normalized))
 
     @database_sync_to_async
     def store_candle(self, candle):
@@ -98,11 +101,17 @@ class BaseDataConsumer(AsyncWebsocketConsumer):
         await self.accept()
         self.keep_sending = True
         self.session = aiohttp.ClientSession()
-        await self.send_data()
+        self.send_task = asyncio.create_task(self.send_data())
 
     async def disconnect(self, close_code):
         self.keep_sending = False
-        await self.session.close()
+        task = getattr(self, "send_task", None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        session = getattr(self, "session", None)
+        if session and not session.closed:
+            await session.close()
 
     async def receive(self, text_data):
         pass

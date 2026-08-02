@@ -17,9 +17,11 @@ class TradeConsumer(BaseConsumer):
 
     async def disconnect(self, close_code):
         user =self.scope['user']
-        if user.is_admin:
-            await self.channel_layer.group_discard("admin_notifications", self.channel_name)
-        await self.channel_layer.group_discard("trade_updates", self.channel_name)
+        if not user.is_authenticated:
+            return
+        if user.is_staff:
+            await self.channel_layer.group_discard("admin_notification", self.channel_name)
+        await self.channel_layer.group_discard(f"trades_updates{user.id}", self.channel_name)
         await super().disconnect(close_code)
 
     async def send_price_update(self, event):
@@ -28,6 +30,5 @@ class TradeConsumer(BaseConsumer):
             "type": "price_update",
             "data": message
         }))
-
 
 
