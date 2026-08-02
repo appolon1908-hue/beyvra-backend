@@ -19,7 +19,7 @@ flower==2.0.1
 geoip2==4.8.0
 gunicorn==21.2.0
 hiredis==2.3.2
-pillow==10.2.0
+pillow==12.3.0
 pre-commit==3.6.0
 psycopg2-binary==2.9.9
 pycountry==24.6.1
