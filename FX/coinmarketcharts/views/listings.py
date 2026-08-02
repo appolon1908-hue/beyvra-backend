@@ -175,65 +175,7 @@ class CryptocurrencyListingHistoricalView(APIView):
                 required=False,
             ),
         ],
-        responses={
-            200: {
-                "description": "Successfully retrieved historical cryptocurrency listings.",
-                "content": {
-                    "application/json": {
-                        "example": {
-                            "status": {
-                                "timestamp": "2024-11-27T00:00:00.000Z",
-                                "error_code": 0,
-                                "error_message": None,
-                                "elapsed": 10,
-                                "credit_count": 1
-                            },
-                            "data": [
-                                {
-                                    "id": 1,
-                                    "name": "Bitcoin",
-                                    "symbol": "BTC",
-                                    "slug": "bitcoin",
-                                    "cmc_rank": 1,
-                                    "num_market_pairs": 8000,
-                                    "circulating_supply": 18927562,
-                                    "total_supply": 21000000,
-                                    "max_supply": 21000000,
-                                    "last_updated": "2024-11-26T23:59:59.000Z",
-                                    "quote": {
-                                        "USD": {
-                                            "price": 56300.12,
-                                            "volume_24h": 35673820000,
-                                            "percent_change_1h": 0.12,
-                                            "percent_change_24h": 1.56,
-                                            "percent_change_7d": -2.34,
-                                            "market_cap": 1065312000000,
-                                            "last_updated": "2024-11-26T23:59:59.000Z"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            400: {
-                "description": "Bad Request. Invalid parameter value.",
-                "content": {
-                    "application/json": {
-                        "example": {"detail": "Invalid 'date' parameter value."}
-                    }
-                }
-            },
-            500: {
-                "description": "Internal Server Error.",
-                "content": {
-                    "application/json": {
-                        "example": {"detail": "An unexpected error occurred while processing the request."}
-                    }
-                }
-            }
-        }
+        responses={200: OpenApiTypes.OBJECT, 400: OpenApiTypes.OBJECT, 500: OpenApiTypes.OBJECT}
     )
     def get(self, request):
         api_url = os.getenv('COINMARKETCAP_URL', '')
