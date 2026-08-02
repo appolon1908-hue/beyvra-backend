@@ -34,7 +34,7 @@ jobs:
       - name: Build application image
         run: docker build -t backend-review:${{ github.sha }} FX
       - name: Scan application image
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: backend-review:${{ github.sha }}
           severity: CRITICAL,HIGH
