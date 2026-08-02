@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.core.validators import MinLengthValidator
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -73,6 +74,13 @@ class UserSerializer(BaseUserSerializer):
         }
         read_only_fields = USER_READ_ONLY
 
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return email
+
+    @transaction.atomic
     def create(self, validated_data):
         user = get_user_model().objects.create_user(**validated_data)
 
@@ -187,7 +195,7 @@ class LoginSerializer(serializers.Serializer):
         email = data.get("email")
         password = data.get("password")
         if email and password:
-            user = get_user_model().objects.filter(email=email).first()
+            user = get_user_model().objects.filter(email__iexact=email.strip()).first()
             if user is not None:
                 # check for user anomalies
                 detector = AnomalyDetector(user)
@@ -204,7 +212,7 @@ class LoginSerializer(serializers.Serializer):
                 if not user.is_active:
                     raise serializers.ValidationError(messages.USER_BANNED_CONTACT_SUPPORT)
             else:
-                raise serializers.ValidationError("User doesn't exist.", code="authorization")
+                raise serializers.ValidationError("Invalid credentials.", code="authorization")
         else:
             raise serializers.ValidationError(
                 'Must include "email" and "password".',

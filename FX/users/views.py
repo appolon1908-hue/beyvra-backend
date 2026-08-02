@@ -425,7 +425,7 @@ class LoginView(generics.CreateAPIView):
     @csrf_exempt
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid(raise_exception=True):
+        if serializer.is_valid():
             user = serializer.validated_data["user"]
             user_logged_in.send(sender=user.__class__, request=request, user=user)
             # check if user is not active
@@ -452,11 +452,13 @@ class LoginView(generics.CreateAPIView):
                     "access": str(refresh.access_token),
                     "user": UserSerializer(user).data,
                 },
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_200_OK,
             )
+        non_field_errors = serializer.errors.get("non_field_errors", [])
+        invalid_credentials = any(getattr(error, "code", None) == "authorization" for error in non_field_errors)
         return Response(
-            {"detail": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED,
+            serializer.errors,
+            status=status.HTTP_401_UNAUTHORIZED if invalid_credentials else status.HTTP_400_BAD_REQUEST,
         )
 
 
