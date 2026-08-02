@@ -113,7 +113,7 @@ class WithdrawalRequestView(APIView):
             if not bank_account:
                 return Response({"Error": "Bank account not found for account number {} in {} bank".format(request.data['account_number'], request.data['bank_name'])}, status=status.HTTP_404_NOT_FOUND)
             data['bank_account'] = bank_account.id
-            serializer = WithdrawalRequestSerializer(data=data)
+            serializer = WithdrawalRequestSerializer(data=data, context={'request': request})
             if not serializer.is_valid():
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save(user=request.user, bank_account=bank_account)
@@ -133,7 +133,9 @@ class WithdrawalRequestView(APIView):
             withdrawal_instance = get_object_or_404(
                 WithdrawalRequest, withdrawal_id=withdrawal_id, user=request.user
             )
-            serializer = WithdrawalRequestSerializer(withdrawal_instance, data=request.data, partial=True)
+            serializer = WithdrawalRequestSerializer(
+                withdrawal_instance, data=request.data, partial=True, context={'request': request}
+            )
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()

@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 from .models import BankAccount, WithdrawalRequest
 from wallet.serializers import CurrencySerializer
 from users.serializers import UserSerializer
-from wallet.models import Transaction
+from wallet.models import Currency, Wallet
 
 
 class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
@@ -76,7 +76,8 @@ class BankAccountSerializer(serializers.ModelSerializer):
 
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
     bank_account = BankAccountSerializer(read_only=True)
-    currency = CurrencySerializer(read_only=True)
+    currency = serializers.PrimaryKeyRelatedField(queryset=Currency.objects.all())
+    wallet = serializers.PrimaryKeyRelatedField(queryset=Wallet.objects.all(), required=False, allow_null=True)
     user = serializers.SerializerMethodField()
 
     class Meta:
@@ -95,3 +96,15 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
             'email': obj.user.email,
             'phone_number': obj.user.phone_number
         }
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request is None:
+            raise ValidationError('Request context is required.')
+        wallet = attrs.get('wallet')
+        if wallet is not None and wallet.user_id != request.user.id:
+            raise ValidationError({'wallet': 'The wallet does not belong to the authenticated user.'})
+        amount = attrs.get('amount')
+        if amount is not None and amount <= 0:
+            raise ValidationError({'amount': 'The withdrawal amount must be greater than zero.'})
+        return attrs
