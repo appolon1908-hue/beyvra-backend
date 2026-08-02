@@ -14,7 +14,7 @@ RUN apt-get update \
     libpq-dev \
     postgresql-client \
     redis-tools \
-    netcat \
+    netcat-openbsd \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
