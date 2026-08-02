@@ -112,7 +112,7 @@ def generate_hashed_key(prefix: str, params: dict) -> str:
     for key, value in params.items():
         result += f'&{key}={value}'
     
-    return hashlib.md5(result.encode()).hexdigest()
+    return hashlib.sha256(result.encode()).hexdigest()
 
 def validate_filters_for_categories(value: str):
     prepared_data = json.loads(value)
