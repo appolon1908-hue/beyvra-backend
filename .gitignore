@@ -27,6 +27,7 @@ env/
 *.pyo
 __pycache__/
 db.sqlite3
+test.sqlite3
 media
 static
 local_settings.py

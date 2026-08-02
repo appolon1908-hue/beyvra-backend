@@ -98,15 +98,14 @@ def send_reset_password_notification(sender, **kwargs):
 
 @receiver(user_logged_in)
 def login_alert(sender, request, user, **kwargs):
-    user_agent = request.META.get("HTTP_USER_AGENT")[0:255]
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "unknown")[0:255]
     ip_address = request.META.get("REMOTE_ADDR")
     message = {
             "title": "Login_activity",
             "body": f"New Login Activity Detected from another device",
         }
     exists = UserDeviceInfo.objects.filter(ip_address=ip_address, user_agent=user_agent, user=user).exists()
-    logger.info(exists)
-    if exists==False:
+    if not exists:
         UserNotificationService.handle_login_activity(user.id, message)
         
         

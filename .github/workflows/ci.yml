@@ -36,7 +36,7 @@ jobs:
           REDIS_DATABASE: "0"
         run: |
           python manage.py check --deploy
-          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security trade.test_security
+          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security trade.test_security users.tests.test_mfa_security
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies

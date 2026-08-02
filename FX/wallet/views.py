@@ -338,7 +338,6 @@ class WithdrawFromWalletView(APIView):
             )
             transaction = Transaction.objects.create(
                 reference=withdrawal_request.withdrawal_id,
-                user=request.user,
                 wallet=wallet,
                 amount=amount,
                 type="W",

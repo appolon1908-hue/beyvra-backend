@@ -353,6 +353,7 @@ if not DEBUG:
 
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
 POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+FIXER_API_KEY: str = os.getenv("FIXER_API_KEY", "")
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

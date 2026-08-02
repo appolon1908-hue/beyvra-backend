@@ -66,7 +66,7 @@ class BankAccountView(APIView):
                 account_number=account_number, user=request.user, bank_name=bank_name
             ).first()
             if not bank_account:
-                return Response({"Error": "Bank account not found for account number {}, user {}, in {} bank".format(account_number, user, bank_name)}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"Error": "Bank account not found."}, status=status.HTTP_404_NOT_FOUND)
             bank_account.delete()
             return Response({"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)
         
