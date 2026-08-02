@@ -22,6 +22,21 @@ jobs:
         run: pip install -r FX/requirements.txt pip-audit bandit
       - name: Compile Python sources
         run: python -m compileall -q FX
+      - name: Run Django checks and security regression tests
+        working-directory: FX
+        env:
+          DJANGO_SETTINGS_MODULE: FX.test_settings
+          SECRET_KEY: ci-only-secret
+          DEBUG: "0"
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+          CSRF_TRUSTED_ORIGINS: '[]'
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          REDIS_PASSWORD: ci-only-password
+          REDIS_DATABASE: "0"
+        run: |
+          python manage.py check --deploy
+          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security trade.test_security
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies
