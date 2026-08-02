@@ -165,10 +165,6 @@ services:
       timeout: 5s
       retries: 5
 
-networks:
-  default:
-    name: trading-network
-
   statsd-exporter:
     image: prom/statsd-exporter:v0.26.0
     container_name: statsd-exporter
@@ -192,4 +188,5 @@ volumes:
 
 networks:
   fx-network:
+    name: trading-network
     driver: bridge
