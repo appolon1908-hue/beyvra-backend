@@ -30,10 +30,12 @@ class StripeWebhookSecurityTests(TestCase):
 
         with patch("payments.views.stripe.Webhook.construct_event", return_value=event):
             first = client.post(
-                "/api/payment/stripe_webhook/", b"{}", content_type="application/json", HTTP_STRIPE_SIGNATURE="test"
+                "/api/payment/stripe_webhook/", b"{}", content_type="application/json",
+                HTTP_STRIPE_SIGNATURE="test", secure=True,
             )
             second = client.post(
-                "/api/payment/stripe_webhook/", b"{}", content_type="application/json", HTTP_STRIPE_SIGNATURE="test"
+                "/api/payment/stripe_webhook/", b"{}", content_type="application/json",
+                HTTP_STRIPE_SIGNATURE="test", secure=True,
             )
 
         self.assertEqual(first.status_code, 200)

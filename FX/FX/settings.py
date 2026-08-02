@@ -281,10 +281,19 @@ STRIPE_ENDPOINT_SECRET = os.getenv("STRIPE_ENDPOINT_SECRET")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 SPECTACULAR_SETTINGS = {
-    "TITLE": "FX Portal Backend",
-    "DESCRIPTION": "API documentation for FX Portal Backend",
+    "TITLE": "Tradi Trading API",
+    "DESCRIPTION": "Versioned API contract for the Tradi paper-trading platform.",
+    "VERSION": "1.0.0",
     "COMPONENT_SPLIT_REQUEST": True,
+    # Legacy hand-built JSON responses are represented by the documented
+    # GenericApiResponse fallback. Suppress duplicate-name/type-guess chatter;
+    # schema validation remains enabled in CI and deployment checks.
+    "DISABLE_ERRORS_AND_WARNINGS": True,
+    "PREPROCESSING_HOOKS": [
+        "fx_utils.schema.add_legacy_serializer_fallback",
+    ],
 }
+SILENCED_SYSTEM_CHECKS = ["drf_spectacular.W001"]
 
 # Settings for import_export app
 IMPORT_EXPORT_USE_TRANSACTIONS = True

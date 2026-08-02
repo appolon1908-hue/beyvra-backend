@@ -18,9 +18,11 @@ class TradeSecurityTests(TestCase):
         wallet = Wallet.objects.create(
             user=user, name="real-wallet", currency=currency, balance=Decimal("100.00"), is_real=True
         )
-        asset_type = AssetType.objects.create(name="Forex")
-        asset = Asset.objects.create(name="Euro Dollar", symbol="EURUSD", asset_type=asset_type)
-        category = TradeCategory.objects.create(name="market")
+        asset_type, _ = AssetType.objects.get_or_create(name="Forex")
+        asset, _ = Asset.objects.get_or_create(
+            symbol="EURUSD", defaults={"name": "Euro Dollar", "asset_type": asset_type}
+        )
+        category, _ = TradeCategory.objects.get_or_create(name="market")
         client = APIClient()
         client.force_authenticate(user)
 
@@ -55,9 +57,9 @@ class TradeSecurityTests(TestCase):
         wallet = Wallet.objects.create(
             user=owner, name="owner-wallet", currency=currency, balance=Decimal("100.00")
         )
-        asset_type = AssetType.objects.create(name="Stock")
+        asset_type, _ = AssetType.objects.get_or_create(name="Stock")
         asset = Asset.objects.create(name="Example", symbol="EX", asset_type=asset_type)
-        category = TradeCategory.objects.create(name="market")
+        category, _ = TradeCategory.objects.get_or_create(name="market")
         client = APIClient()
         client.force_authenticate(attacker)
 

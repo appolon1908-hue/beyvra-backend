@@ -63,6 +63,27 @@ services:
       timeout: 5s
       retries: 10
 
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGDATABASE=${DB_NAME}
+      - PGUSER=${DB_USER}
+      - PGPASSWORD=${DB_PASSWORD}
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup-loop.sh:/usr/local/bin/backup-loop.sh:ro
+    command: ["/bin/sh", "/usr/local/bin/backup-loop.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fx-network
+
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped

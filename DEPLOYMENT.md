@@ -20,6 +20,13 @@ The production web entrypoint waits for PostgreSQL and Redis, applies migrations
 
 Before directing traffic to a new release, back up PostgreSQL and run migrations as a distinct deployment step if your platform can execute more than one web replica concurrently.
 
+The `db-backup` service writes a PostgreSQL custom-format dump immediately on
+startup and then every `BACKUP_INTERVAL_SECONDS` (daily by default), retaining
+`BACKUP_RETENTION_DAYS` days locally. Verify a new file exists in `backups/`
+after every deployment and copy it to encrypted off-host storage. A guarded
+restore helper is available at `scripts/restore-backup.sh`; always restore into
+a separate staging database first.
+
 ## Host and network preparation
 
 1. Install Docker Engine and the Compose plugin from Docker's Ubuntu repository.
