@@ -31,7 +31,10 @@ RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir --requirement /app/requirements.txt \
     && pip uninstall --yes setuptools msgpack \
     && pip uninstall --yes setuptools msgpack || true \
-    && pip install --no-cache-dir setuptools==83.0.0 msgpack==1.2.1
+    && pip install --no-cache-dir setuptools==83.0.0 msgpack==1.2.1 \
+    && rm -rf \
+      /usr/local/lib/python3.11/site-packages/msgpack-1.1.2.dist-info \
+      /usr/local/lib/python3.11/site-packages/setuptools-70.3.0.dist-info
 
 # Copy the source code
 COPY . /app/
