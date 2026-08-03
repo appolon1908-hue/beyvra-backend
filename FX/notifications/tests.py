@@ -3,10 +3,14 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.test import override_settings
+from django.utils import timezone
 from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookSubscription
 from notifications.services import emit_notification
+from notifications.tasks import purge_expired_notifications
 
 
 class NotificationInboxTests(TestCase):
@@ -87,3 +91,21 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertNotIn("secret", response.data)
         self.assertEqual(WebhookSubscription.objects.filter(user=self.user).count(), 1)
+
+    @override_settings(NOTIFICATION_RETENTION_DAYS=30)
+    def test_retention_task_removes_only_expired_events(self):
+        expired = NotificationEvent.objects.create(
+            user=self.user, title="Expired", message="Old event"
+        )
+        NotificationEvent.objects.filter(pk=expired.pk).update(
+            created_at=timezone.now() - timedelta(days=31)
+        )
+        current = NotificationEvent.objects.create(
+            user=self.user, title="Current", message="Keep event"
+        )
+
+        deleted = purge_expired_notifications()
+
+        self.assertGreaterEqual(deleted, 1)
+        self.assertFalse(NotificationEvent.objects.filter(pk=expired.pk).exists())
+        self.assertTrue(NotificationEvent.objects.filter(pk=current.pk).exists())
