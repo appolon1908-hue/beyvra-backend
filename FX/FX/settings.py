@@ -254,8 +254,8 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
         "rest_framework.throttling.UserRateThrottle",
     ]
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
-        "anon": "30/minute",
-        "user": "60/minute",
+        "anon": os.getenv("ANON_RATE_LIMIT", "30/minute"),
+        "user": os.getenv("USER_RATE_LIMIT", "300/minute"),
     }
 
 # Simple-jwt
