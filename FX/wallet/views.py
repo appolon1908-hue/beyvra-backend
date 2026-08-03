@@ -68,6 +68,9 @@ class WalletDetailView(generics.RetrieveUpdateAPIView):
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
 
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(

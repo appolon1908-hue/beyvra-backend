@@ -91,7 +91,10 @@ class UserSerializer(BaseUserSerializer):
         # send verification email on register
         # async_send_email_verification_email.delay(user.id)
         # create a demo account with DEMO_BALANCE as initial balance
-        demo_currency = Currency.objects.get(name="Đ")
+        demo_currency, _ = Currency.objects.get_or_create(
+            name="Đ",
+            defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"},
+        )
         Wallet.objects.create(
             name=DEMO_WALLET_NAME,
             currency=demo_currency,

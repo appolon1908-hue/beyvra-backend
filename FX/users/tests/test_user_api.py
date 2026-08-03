@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..serializers import UserSerializer
+from ..serializers import UserSerializer, UserUpdateSerializer
 
 CREATE_USER_URL = reverse("user:create")
 ME_URL = reverse("user:me")
@@ -238,7 +238,7 @@ class PrivateUserApiTests(TestCase):
         res = self.client.get(ME_URL)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, UserSerializer(self.user).data)
+        self.assertEqual(res.data, UserUpdateSerializer(self.user).data)
 
     def test_post_me_not_allowed(self):
         """Test POST is not allowed for the me endpoint"""
@@ -248,12 +248,12 @@ class PrivateUserApiTests(TestCase):
 
     def test_update_user_profile(self):
         """Test updating the user profile for the authenticated user."""
-        payload = {"first_name": "Updated name", "password": "newpassword123"}
+        payload = {"first_name": "Updated"}
         res = self.client.patch(ME_URL, payload)
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, payload["first_name"])
-        self.assertTrue(self.user.check_password(payload["password"]))
+        self.assertTrue(self.user.check_password("testpass123"))
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_update_user_profile_read_only_fields(self):

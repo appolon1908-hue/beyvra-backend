@@ -1,132 +1,66 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..models import Transaction, Wallet
-from ..serializers import TransactionSerializer
+from wallet.models import Currency, Transaction, Wallet
 
 TRANSACTIONS_URL = "/api/wallet/transactions/"
 
 
-def create_user(email="user@example.come", password="testpass123"):
-    """Create and return user."""
-    return get_user_model().objects.create_user(email=email, password=password)
-
-
-def create_transaction(
-    wallet,
-    type="DEPOSIT",
-    amount=100,
-    currency="USD",
-    status="PENDING",
-    gateway_ref="traking-id-1234",
-):
-    """Create and return transaction."""
-    return Transaction.objects.create(
-        wallet=wallet,
-        type=type,
-        amount=amount,
-        currency=currency,
-        status=status,
-        gateway_ref=gateway_ref,
-    )
-
-
-def detail_url(id):
-    return f"{TRANSACTIONS_URL}{id}/"
-
-
-class PublicTransactionsApiTests(TestCase):
-    """Test unauthenticated API requests."""
-
+class TransactionApiTests(TestCase):
     def setUp(self):
-        self.client = APIClient()
-
-    def test_auth_required(self):
-        """Test auth is requited for retrieving transactions."""
-        res = self.client.get(TRANSACTIONS_URL)
-        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
-
-
-class PrivateTransactionsApiTests(TestCase):
-    """Test unauthenticated API requests."""
-
-    def setUp(self):
-        self.user = create_user()
-        self.wallet = Wallet.objects.create(user=self.user)
+        self.user = get_user_model().objects.create_user(
+            email="transactions@example.com", password="testpass123", phone_number="+12025550211"
+        )
+        self.other = get_user_model().objects.create_user(
+            email="other-transactions@example.com", password="testpass123", phone_number="+12025550212"
+        )
+        currency = Currency.objects.create(name="EUR", symbol="EUR", longer_name="Euro")
+        self.wallet = Wallet.objects.create(
+            user=self.user, name="Demo", currency=currency, is_real=False
+        )
+        self.other_wallet = Wallet.objects.create(
+            user=self.other, name="Other", currency=currency, is_real=False
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
-    def test_retrieve_transactions(self):
-        """Test retrieving a list of transactions."""
-        create_transaction(self.wallet)
-        res = self.client.get(TRANSACTIONS_URL)
+    def create_transaction(self, wallet=None):
+        return Transaction.objects.create(
+            wallet=wallet or self.wallet,
+            type="D",
+            amount=Decimal("100.00"),
+            status="S",
+            gateway="demo",
+        )
 
-        transactions = Transaction.objects.all().order_by("-created_at")
-        serializer = TransactionSerializer(transactions, many=True)
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, serializer.data)
+    def test_auth_required(self):
+        response = APIClient().get(TRANSACTIONS_URL)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_transactions_limited_to_user(self):
-        """Test list of transactions is limited to authenticated user."""
-        user2 = create_user(email="user2@example.com")
-        user2_wallet = Wallet.objects.create(user=user2, account_type=self.account_type)
+    def test_transactions_are_user_scoped(self):
+        own = self.create_transaction()
+        self.create_transaction(self.other_wallet)
+        response = self.client.get(TRANSACTIONS_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["transaction_id"], str(own.transaction_id))
 
-        transaction_1 = create_transaction(self.wallet)
-        create_transaction(user2_wallet)
+    def test_retrieve_own_transaction_and_hide_other_users_transaction(self):
+        own = self.create_transaction()
+        hidden = self.create_transaction(self.other_wallet)
+        own_response = self.client.get(f"{TRANSACTIONS_URL}{own.id}/")
+        hidden_response = self.client.get(f"{TRANSACTIONS_URL}{hidden.id}/")
+        self.assertEqual(own_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
 
-        res = self.client.get(TRANSACTIONS_URL)
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)
-        self.assertEqual(str(res.data[0]["wallet"]), str(self.wallet.id))
-        self.assertEqual(str(res.data[0]["id"]), str(transaction_1.id))
-
-    def test_get_transaction_details(self):
-        """Test retrieving a transaction details."""
-        transaction = create_transaction(self.wallet)
-
-        url = detail_url(transaction.id)
-        res = self.client.get(url)
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(str(res.data["wallet"]), str(self.wallet.id))
-        self.assertEqual(str(res.data["id"]), str(transaction.id))
-
-    def test_get_other_users_transaction_details_fails(self):
-        """Test retrieving a wallet details."""
-        user2 = create_user(email="user2@example.com")
-        user2_wallet = Wallet.objects.create(user=user2, account_type=self.account_type)
-        transaction2 = create_transaction(user2_wallet)
-
-        url = detail_url(transaction2.id)
-        res = self.client.get(url)
-
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_create_transaction_not_permitetd(self):
-        """Test creating a transaction is not allowed."""
-        payload = {}
-        res = self.client.post(TRANSACTIONS_URL, payload)
-
-        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def test_update_transaction_not_permitetd(self):
-        """Test updating an transaction is not allowed."""
-        transaction = create_transaction(self.wallet)
-        payload = {}
-        url = detail_url(str(transaction.id))
-        res = self.client.patch(url, payload)
-        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-        res = self.client.put(url, payload)
-        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def test_delete_transaction_not_permitted(self):
-        """Test deleting a transaction is not allowed."""
-        transaction = create_transaction(self.wallet)
-        url = detail_url(str(transaction.id))
-        res = self.client.delete(url)
-
-        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+    def test_transactions_are_read_only(self):
+        transaction = self.create_transaction()
+        self.assertEqual(self.client.post(TRANSACTIONS_URL, {}).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        url = f"{TRANSACTIONS_URL}{transaction.id}/"
+        self.assertEqual(self.client.patch(url, {}).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(self.client.put(url, {}).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

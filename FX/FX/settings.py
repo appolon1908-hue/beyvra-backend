@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import json
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -385,3 +386,12 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django's test client uses HTTP unless every call opts into TLS. Disable only
+# the redirect middleware during test execution; deployed security stays intact.
+if "test" in sys.argv:
+    SECURE_SSL_REDIRECT = False
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    REST_FRAMEWORK.pop("DEFAULT_THROTTLE_CLASSES", None)
+    REST_FRAMEWORK.pop("DEFAULT_THROTTLE_RATES", None)
