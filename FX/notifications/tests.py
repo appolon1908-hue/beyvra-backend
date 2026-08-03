@@ -4,6 +4,9 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from datetime import timedelta
+import hashlib
+import hmac
+import json
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -132,6 +135,29 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(updated.status_code, status.HTTP_200_OK)
         self.assertEqual(updated.data["categories"], ["DEPOSIT"])
         self.assertEqual(WebhookSubscription.objects.get(pk=webhook_id).secret, "a-secure-test-secret")
+
+    @override_settings(STAGING_WEBHOOK_RECEIVER_ENABLED=True, STAGING_WEBHOOK_RECEIVER_SECRET="receiver-secret")
+    def test_staging_receiver_verifies_signature_and_supports_controlled_failure(self):
+        body = json.dumps({"id": "event-1", "type": "TRADE"}, separators=(",", ":")).encode()
+        signature = "sha256=" + hmac.new(b"receiver-secret", body, hashlib.sha256).hexdigest()
+        accepted = self.client.post(
+            "/api/notification/staging-receiver/", body,
+            content_type="application/json", HTTP_X_CODESTRA_SIGNATURE_256=signature,
+            secure=True,
+        )
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        rejected = self.client.post(
+            "/api/notification/staging-receiver/", body,
+            content_type="application/json", HTTP_X_CODESTRA_SIGNATURE_256="sha256=bad",
+            secure=True,
+        )
+        self.assertEqual(rejected.status_code, status.HTTP_401_UNAUTHORIZED)
+        failed = self.client.post(
+            "/api/notification/staging-receiver/?status=500", body,
+            content_type="application/json", HTTP_X_CODESTRA_SIGNATURE_256=signature,
+            secure=True,
+        )
+        self.assertEqual(failed.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @override_settings(NOTIFICATION_RETENTION_DAYS=30)
     def test_retention_task_removes_only_expired_events(self):

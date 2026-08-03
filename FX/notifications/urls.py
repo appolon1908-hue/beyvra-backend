@@ -15,4 +15,5 @@ urlpatterns = [
     path("inbox/", views.NotificationInbox.as_view(), name="notification_inbox"),
     path("inbox/<uuid:event_id>/read/", views.NotificationEventRead.as_view(), name="notification_read"),
     path("inbox/read-all/", views.NotificationReadAll.as_view(), name="notification_read_all"),
+    path("staging-receiver/", views.StagingWebhookReceiver.as_view(), name="staging_webhook_receiver"),
 ]

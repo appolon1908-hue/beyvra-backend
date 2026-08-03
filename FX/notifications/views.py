@@ -1,7 +1,11 @@
+import hashlib
+import hmac
+import json
+from django.conf import settings
 from django.http import Http404
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import *
@@ -135,6 +139,29 @@ class NotificationReadAll(generics.GenericAPIView):
     def post(self, request):
         updated = NotificationEvent.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({"updated": updated})
+
+
+class StagingWebhookReceiver(generics.GenericAPIView):
+    """Controlled staging sink for verifying Codestra webhook signatures."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if not settings.STAGING_WEBHOOK_RECEIVER_ENABLED:
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        signature = request.headers.get("X-Codestra-Signature-256", "")
+        expected = "sha256=" + hmac.new(
+            settings.STAGING_WEBHOOK_RECEIVER_SECRET.encode(), request.body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return Response({"detail": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return Response({"detail": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
+        if request.query_params.get("status") == "500":
+            return Response({"detail": "Controlled receiver failure"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"received": True, "event_id": payload.get("id")}, status=status.HTTP_200_OK)
 
 
 class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
