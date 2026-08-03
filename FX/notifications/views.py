@@ -200,7 +200,6 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], throttle_classes=[WebhookTestThrottle])
     def test(self, request, pk=None):
-        self.check_throttles()
         from django.db import transaction
         from .services import _queue_webhook, emit_notification
         subscription = self.get_object()
@@ -212,7 +211,6 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], throttle_classes=[WebhookRetryThrottle])
     def retry(self, request, pk=None):
         """Retry only a failed/dead-letter delivery owned by this user."""
-        self.check_throttles()
         delivery = WebhookDelivery.objects.filter(subscription=self.get_object(), id=request.data.get("delivery_id"), status__in=["F", "D"]).first()
         if not delivery:
             return Response({"detail": "failed delivery not found"}, status=status.HTTP_404_NOT_FOUND)
