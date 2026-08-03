@@ -22,7 +22,7 @@ def deliver_webhook(self, delivery_id):
         "created_at": event.created_at.isoformat(),
     }, separators=(",", ":")).encode()
     signature = hmac.new(delivery.subscription.secret.encode(), body, hashlib.sha256).hexdigest()
-    delivery.attempts += 1
+    delivery.attempts = min(delivery.attempts + 1, 32767)
     try:
         response = requests.post(
             delivery.subscription.url, data=body,

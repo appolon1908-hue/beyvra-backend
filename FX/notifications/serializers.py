@@ -44,12 +44,22 @@ class NotificationEventSerializer(serializers.ModelSerializer):
 
 
 class WebhookSubscriptionSerializer(serializers.ModelSerializer):
-    secret = serializers.CharField(write_only=True, min_length=16)
+    secret = serializers.CharField(write_only=True, min_length=16, required=False)
 
     class Meta:
         model = WebhookSubscription
         fields = ["id", "url", "secret", "categories", "is_active", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get("secret"):
+            raise serializers.ValidationError({"secret": "This field is required when creating a webhook."})
+        return attrs
+
+    def update(self, instance, validated_data):
+        # Secrets are write-only; omitting one keeps the current signing key.
+        validated_data.pop("secret", None)
+        return super().update(instance, validated_data)
 
     def validate_url(self, value):
         parsed = urlparse(value)

@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 from django.test import override_settings
 from django.utils import timezone
-from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookSubscription
+from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
 from notifications.services import emit_notification
-from notifications.tasks import purge_expired_notifications
+from notifications.tasks import deliver_webhook, purge_expired_notifications
 
 
 class NotificationInboxTests(TestCase):
@@ -91,6 +91,47 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertNotIn("secret", response.data)
         self.assertEqual(WebhookSubscription.objects.filter(user=self.user).count(), 1)
+
+    @patch("notifications.tasks.requests.post")
+    def test_webhook_delivery_posts_signed_json_and_records_success(self, post):
+        response = post.return_value
+        response.status_code = 202
+        response.raise_for_status.return_value = None
+        subscription = WebhookSubscription.objects.create(
+            user=self.user, url="https://example.com/events", secret="a-secure-test-secret"
+        )
+        event = NotificationEvent.objects.create(
+            user=self.user, title="Deposit approved", message="Funds are ready", category="DEPOSIT",
+            payload={"amount": "10.00"},
+        )
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=event)
+
+        deliver_webhook.run(str(delivery.id))
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, "S")
+        self.assertEqual(delivery.attempts, 1)
+        self.assertEqual(delivery.response_code, 202)
+        headers = post.call_args.kwargs["headers"]
+        self.assertTrue(headers["X-Codestra-Signature-256"].startswith("sha256="))
+        self.assertEqual(post.call_args.kwargs["json"] if "json" in post.call_args.kwargs else None, None)
+        self.assertIn(b'"type":"DEPOSIT"', post.call_args.kwargs["data"])
+
+    def test_webhook_update_keeps_secret_when_omitted(self):
+        with patch("notifications.serializers.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
+            created = self.client.post(
+                "/api/notification/webhooks/",
+                {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
+                format="json", secure=True,
+            )
+            webhook_id = created.data["id"]
+            updated = self.client.patch(
+                f"/api/notification/webhooks/{webhook_id}/",
+                {"categories": ["DEPOSIT"]}, format="json", secure=True,
+            )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        self.assertEqual(updated.data["categories"], ["DEPOSIT"])
+        self.assertEqual(WebhookSubscription.objects.get(pk=webhook_id).secret, "a-secure-test-secret")
 
     @override_settings(NOTIFICATION_RETENTION_DAYS=30)
     def test_retention_task_removes_only_expired_events(self):

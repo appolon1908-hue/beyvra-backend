@@ -160,7 +160,9 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def test(self, request, pk=None):
-        from .services import emit_notification
+        from django.db import transaction
+        from .services import _queue_webhook, emit_notification
+        subscription = self.get_object()
         event = emit_notification(
             user_id=request.user.id,
             title="Webhook test",
@@ -169,4 +171,8 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
             payload={"subscription_id": str(self.get_object().id)},
             force=True,
         )
+        # Manual tests target this subscription even when its category filter
+        # excludes WEBHOOK_TEST events.
+        delivery, _ = WebhookDelivery.objects.get_or_create(subscription=subscription, event=event)
+        transaction.on_commit(lambda delivery_id=delivery.id: _queue_webhook(delivery_id))
         return Response(NotificationEventSerializer(event).data, status=status.HTTP_202_ACCEPTED)
