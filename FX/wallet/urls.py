@@ -12,6 +12,7 @@ app_name = "wallet"
 urlpatterns = [
     path("", include(router.urls)),
     path("wallets/<int:wallet_id>/deposite/", views.DepositToWalletView.as_view()),
+    path("wallets/<int:wallet_id>/deposit/", views.DepositToWalletView.as_view()),
     path("wallets/<int:wallet_id>/withdraw/", views.WithdrawFromWalletView.as_view()),
     path("wallets/<int:wallet_id>/transfer/", views.TransferFromWalletView.as_view()),
     path("<int:pk>/archive/", views.WalletArchiveView.as_view(), name="archive_wallet"),

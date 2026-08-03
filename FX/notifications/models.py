@@ -74,3 +74,25 @@ class AdminNotifications(models.Model):
 
     def __str__(self):
         return f"Notification for {self.admin_id}"
+
+
+class NotificationEvent(models.Model):
+    """Persistent inbox entry paired with the user's real-time notification."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notification_events")
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    category = models.CharField(max_length=64, default="GENERAL")
+    payload = models.JSONField(default=dict, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["user", "is_read", "-created_at"],
+                name="notificatio_user_id_c2cdbc_idx",
+            )
+        ]

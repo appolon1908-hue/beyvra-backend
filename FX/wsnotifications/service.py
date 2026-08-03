@@ -73,10 +73,30 @@ class AdminNotificationService:
 
 
 class UserNotificationService:
-    
+
     @staticmethod
     def _send_user_notification(user_id, message, type):
         """Internal method to send notifications to user groups"""
+        from notifications.models import NotificationEvent
+
+        if isinstance(message, dict):
+            title = str(message.get("title") or type)
+            body = str(message.get("message") or message.get("detail") or title)
+            payload = message
+        else:
+            title = str(type)
+            body = str(message)
+            payload = {"message": body}
+        # Some legacy pre-save signals fire before a new user has a primary key.
+        # The socket remains best-effort in that case; persist only addressable inbox events.
+        if user_id and User.objects.filter(pk=user_id).exists():
+            NotificationEvent.objects.create(
+                user_id=user_id,
+                title=title,
+                message=body,
+                category=str(type).upper().replace(" ", "_"),
+                payload=payload,
+            )
         # Prepare notification payload
         channel_layer = get_channel_layer()
         if channel_layer:
@@ -286,8 +306,3 @@ class UserNotificationService:
                 pass
         else:
             logger.error(f"General Channel layer is not configured")
-            
-    
-            
-    
-    

@@ -1,5 +1,5 @@
 import json
-from django.db import transaction
+from django.db import transaction as db_transaction
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.views import APIView
@@ -33,6 +33,7 @@ from .pagination import PaginationMeta
 from decimal import Decimal
 import pycountry
 import logging
+from django.conf import settings
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -239,6 +240,25 @@ class DepositToWalletView(APIView):
         paymentMethodTagName = validated_data.get('paymentMethodTagName', '')
         token = validated_data.get('token', '')
 
+        if settings.PAPER_TRADING_ONLY:
+            if wallet.is_real:
+                return Response(
+                    {"detail": "Real-money deposits are disabled in staging."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            with db_transaction.atomic():
+                locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
+                simulated = Transaction.objects.create(
+                    amount=amount, type="D", status="S", wallet=locked_wallet,
+                    gateway="demo", description="Staging demo deposit",
+                )
+                locked_wallet.balance += amount
+                locked_wallet.save(update_fields=["balance", "updated_at"])
+            return Response(
+                {"detail": "Demo deposit completed.", "transaction_id": simulated.transaction_id},
+                status=status.HTTP_200_OK,
+            )
+
         try:
             # Create a pending transaction
             transaction = Transaction.objects.create(
@@ -317,6 +337,28 @@ class WithdrawFromWalletView(APIView):
             return Response({
                 "detail": "You do not have permission to perform this action."},
                 status=status.HTTP_403_FORBIDDEN)
+
+        if settings.PAPER_TRADING_ONLY:
+            if wallet.is_real:
+                return Response(
+                    {"detail": "Real-money withdrawals are disabled in staging."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            amount = Decimal(str(serializer.validated_data['amount']))
+            with db_transaction.atomic():
+                locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
+                if locked_wallet.balance < amount:
+                    return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+                simulated = Transaction.objects.create(
+                    amount=amount, type="W", status="S", wallet=locked_wallet,
+                    gateway="demo", description="Staging demo withdrawal",
+                )
+                locked_wallet.balance -= amount
+                locked_wallet.save(update_fields=["balance", "updated_at"])
+            return Response(
+                {"detail": "Demo withdrawal completed.", "transaction_id": simulated.transaction_id},
+                status=status.HTTP_200_OK,
+            )
 
         amount = serializer.validated_data['amount']
         gateway = serializer.validated_data['gateway']
@@ -408,7 +450,7 @@ class TransferFromWalletView(APIView):
             # Lock both rows in a stable order so concurrent transfers cannot
             # spend the same balance. The source wallet must belong to the
             # authenticated user; returning 404 avoids disclosing its owner.
-            with transaction.atomic():
+            with db_transaction.atomic():
                 wallets = {
                     wallet.id: wallet
                     for wallet in Wallet.objects.select_for_update()

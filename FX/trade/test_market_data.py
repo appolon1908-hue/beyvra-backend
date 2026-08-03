@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -46,3 +46,35 @@ class MarketHistoryTests(TestCase):
             "/api/trades/market/history/?symbol=NOTREAL", secure=True
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(TWELVE_DATA_API_KEY="test-key")
+    @patch("trade.market_data.requests.get")
+    def test_stock_history_uses_twelve_data_and_is_normalized(self, get):
+        provider_response = Mock()
+        provider_response.raise_for_status.return_value = None
+        provider_response.json.return_value = {
+            "status": "ok",
+            "values": [
+                {
+                    "datetime": "2026-08-01 15:59:00",
+                    "open": "210",
+                    "high": "212",
+                    "low": "209",
+                    "close": "211",
+                    "volume": "1234",
+                }
+            ],
+        }
+        get.return_value = provider_response
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=AAPL&interval=1m&limit=10",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["close"], 211.0)
+        candle = MarketCandle.objects.get()
+        self.assertEqual(candle.provider, "twelve_data")
+        self.assertEqual(get.call_args.kwargs["headers"], {"Authorization": "apikey test-key"})

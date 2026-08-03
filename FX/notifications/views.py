@@ -1,5 +1,6 @@
 from django.http import Http404
 from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import *
@@ -7,6 +8,7 @@ from .serializers import *
 
 
 class NotificationListing(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
     def get_queryset(self):
         return Notifications.objects.all()
 
@@ -27,6 +29,7 @@ class NotificationListing(generics.GenericAPIView):
 
 
 class UpdateNotifications(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
 
     serializer_class = UserNotificationSerializer
 
@@ -58,6 +61,7 @@ class UserAlertsListing(generics.GenericAPIView):
     """Get all alerts for the authenticated user"""
 
     serializer_class = PriceAlertSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return UserAlerts.objects.filter(user=self.request.user)
@@ -81,6 +85,7 @@ class UserAlertDetail(generics.GenericAPIView):
     """Get a particular alert by ID"""
 
     serializer_class = PriceAlertSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return UserAlerts.objects.filter(user=self.request.user)
@@ -101,3 +106,29 @@ class UserAlertDetail(generics.GenericAPIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Http404:
             return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class NotificationInbox(generics.ListAPIView):
+    serializer_class = NotificationEventSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return NotificationEvent.objects.filter(user=self.request.user)
+
+
+class NotificationEventRead(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, event_id):
+        event = generics.get_object_or_404(NotificationEvent, id=event_id, user=request.user)
+        event.is_read = True
+        event.save(update_fields=["is_read"])
+        return Response(NotificationEventSerializer(event).data)
+
+
+class NotificationReadAll(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        updated = NotificationEvent.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"updated": updated})

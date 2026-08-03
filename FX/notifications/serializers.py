@@ -29,3 +29,10 @@ class PriceAlertSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAlerts
         exclude = ("user",)
+
+
+class NotificationEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationEvent
+        fields = ["id", "title", "message", "category", "payload", "is_read", "created_at"]
+        read_only_fields = fields

@@ -364,6 +364,13 @@ if not DEBUG:
 
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
 POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+TWELVE_DATA_REST_URL: str = os.getenv(
+    "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"
+)
+TWELVE_DATA_WEBSOCKET_URL: str = os.getenv(
+    "TWELVE_DATA_WEBSOCKET_URL", "wss://ws.twelvedata.com/v1/quotes/price"
+)
 FIXER_API_KEY: str = os.getenv("FIXER_API_KEY", "")
 
 SESSION_COOKIE_SECURE = not DEBUG
