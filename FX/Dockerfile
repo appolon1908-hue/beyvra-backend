@@ -41,4 +41,12 @@ COPY beat-entrypoint.sh /app/beat-entrypoint.sh
 RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh \
     && chown -R app:app /app
 
+ARG VCS_REF=unknown
+ARG BUILD_VERSION=unreleased
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.source="https://github.com/appolon1908-hue/trading-backend" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
+      org.opencontainers.image.created="$BUILD_DATE"
+
 USER app
