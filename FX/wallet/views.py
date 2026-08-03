@@ -34,6 +34,7 @@ from decimal import Decimal
 import pycountry
 import logging
 from django.conf import settings
+from notifications.services import emit_notification
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -245,6 +246,11 @@ class DepositToWalletView(APIView):
 
         if settings.PAPER_TRADING_ONLY:
             if wallet.is_real:
+                emit_notification(
+                    user_id=request.user.id, title="Deposit rejected",
+                    message="Real-money deposits are disabled in staging.", category="DEPOSIT",
+                    payload={"wallet_id": wallet.id, "status": "rejected"},
+                )
                 return Response(
                     {"detail": "Real-money deposits are disabled in staging."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -295,12 +301,16 @@ class DepositToWalletView(APIView):
                 result = binance_service.get_deposit_address(currency, amount)
 
             else:
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({
                     "detail": f"Unsupported payment gateway: {gateway}"},
                     status=status.HTTP_400_BAD_REQUEST)
 
             if "error" in result:
                 logger.error(f"Payment gateway error: {result['error']}")
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({
                     "detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -343,6 +353,11 @@ class WithdrawFromWalletView(APIView):
 
         if settings.PAPER_TRADING_ONLY:
             if wallet.is_real:
+                emit_notification(
+                    user_id=request.user.id, title="Withdrawal rejected",
+                    message="Real-money withdrawals are disabled in staging.", category="WITHDRAWAL",
+                    payload={"wallet_id": wallet.id, "status": "rejected"},
+                )
                 return Response(
                     {"detail": "Real-money withdrawals are disabled in staging."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -351,6 +366,11 @@ class WithdrawFromWalletView(APIView):
             with db_transaction.atomic():
                 locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
                 if locked_wallet.balance < amount:
+                    emit_notification(
+                        user_id=request.user.id, title="Withdrawal rejected",
+                        message="Your withdrawal was rejected because the balance is insufficient.",
+                        category="WITHDRAWAL", payload={"wallet_id": wallet.id, "status": "rejected"},
+                    )
                     return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
                 simulated = Transaction.objects.create(
                     amount=amount, type="W", status="S", wallet=locked_wallet,
@@ -417,10 +437,14 @@ class WithdrawFromWalletView(APIView):
                     wallet.currency, amount, address)
 
             else:
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({"detail": f"Unsupported payment gateway: {gateway}"}, status=status.HTTP_400_BAD_REQUEST)
 
             if "error" in result:
                 logger.error(f"Withdrawal error: {result['error']}")
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({"detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
             # Success

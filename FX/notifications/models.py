@@ -29,7 +29,7 @@ class UserNotifications(models.Model):
     )
     notification = models.ForeignKey(Notifications, on_delete=models.RESTRICT)
     user = models.ForeignKey(User, on_delete=models.RESTRICT)
-    is_enabled = models.BooleanField(default=False)
+    is_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -95,4 +95,44 @@ class NotificationEvent(models.Model):
                 fields=["user", "is_read", "-created_at"],
                 name="notificatio_user_id_c2cdbc_idx",
             )
+        ]
+
+
+class WebhookSubscription(models.Model):
+    """User-owned endpoint for signed notification event delivery."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notification_webhooks")
+    url = models.URLField(max_length=500)
+    secret = models.CharField(max_length=255)
+    categories = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "url"], name="unique_user_webhook_url")
+        ]
+
+
+class WebhookDelivery(models.Model):
+    STATUS_CHOICES = (("P", "Pending"), ("S", "Successful"), ("F", "Failed"))
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subscription = models.ForeignKey(WebhookSubscription, on_delete=models.CASCADE, related_name="deliveries")
+    event = models.ForeignKey(NotificationEvent, on_delete=models.CASCADE, related_name="webhook_deliveries")
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default="P")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    response_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    last_error = models.CharField(max_length=500, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["subscription", "event"], name="unique_webhook_event_delivery")
         ]

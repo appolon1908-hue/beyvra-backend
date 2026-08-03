@@ -1,5 +1,6 @@
 from django.http import Http404
-from rest_framework import generics, status
+from rest_framework import generics, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -20,7 +21,7 @@ class NotificationListing(generics.GenericAPIView):
 
         notifications_data = []
         for notification in notifications:
-            is_enabled = user_notification_dict.get(notification.id, False)
+            is_enabled = user_notification_dict.get(notification.id, True)
             notification_data = NotificationSerializer(notification).data
             notification_data["is_enabled"] = is_enabled
             notifications_data.append(notification_data)
@@ -50,7 +51,9 @@ class UpdateNotifications(generics.GenericAPIView):
             user_notification.save()
         except UserNotifications.DoesNotExist:
             user_notification = UserNotifications.objects.create(
-                user=request.user, notification=notification, is_enabled=True
+                user=request.user,
+                notification=notification,
+                is_enabled=request.data.get("is_enabled", True),
             )
 
         serializer = self.get_serializer(user_notification)
@@ -132,3 +135,38 @@ class NotificationReadAll(generics.GenericAPIView):
     def post(self, request):
         updated = NotificationEvent.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({"updated": updated})
+
+
+class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
+    serializer_class = WebhookSubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return WebhookSubscription.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=["get"])
+    def deliveries(self, request, pk=None):
+        subscription = self.get_object()
+        queryset = subscription.deliveries.select_related("event")
+        page = self.paginate_queryset(queryset)
+        serializer = WebhookDeliverySerializer(page or queryset, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def test(self, request, pk=None):
+        from .services import emit_notification
+        event = emit_notification(
+            user_id=request.user.id,
+            title="Webhook test",
+            message="Codestra webhook delivery test.",
+            category="WEBHOOK_TEST",
+            payload={"subscription_id": str(self.get_object().id)},
+            force=True,
+        )
+        return Response(NotificationEventSerializer(event).data, status=status.HTTP_202_ACCEPTED)

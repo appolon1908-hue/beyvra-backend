@@ -184,8 +184,15 @@ CELERY_BEAT_SCHEDULE = {
     'send_email_verification_reminder': {
         'task': 'wsnotifications.tasks.send_email_verification_reminder',
         'schedule': crontab(minute="*/1")
-    }
+    },
+    'purge_expired_notifications': {
+        'task': 'notifications.tasks.purge_expired_notifications',
+        'schedule': crontab(hour=3, minute=15),
+    },
 }
+
+NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90"))
+WEBHOOK_TIMEOUT_SECONDS = int(os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"))
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -366,6 +373,8 @@ if not DEBUG:
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
 POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
 TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+COINGECKO_API_KEY: str = os.getenv("COINGECKO_API_KEY", "")
+SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
 TWELVE_DATA_REST_URL: str = os.getenv(
     "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"
 )

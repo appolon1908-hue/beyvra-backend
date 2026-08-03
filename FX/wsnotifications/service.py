@@ -10,6 +10,7 @@ import asyncio
 
 
 import logging
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +78,11 @@ class UserNotificationService:
     @staticmethod
     def _send_user_notification(user_id, message, type):
         """Internal method to send notifications to user groups"""
-        from notifications.models import NotificationEvent
+        from notifications.services import emit_notification
 
         if isinstance(message, dict):
             title = str(message.get("title") or type)
-            body = str(message.get("message") or message.get("detail") or title)
+            body = str(message.get("message") or message.get("body") or message.get("detail") or title)
             payload = message
         else:
             title = str(type)
@@ -90,38 +91,17 @@ class UserNotificationService:
         # Some legacy pre-save signals fire before a new user has a primary key.
         # The socket remains best-effort in that case; persist only addressable inbox events.
         if user_id and User.objects.filter(pk=user_id).exists():
-            NotificationEvent.objects.create(
-                user_id=user_id,
-                title=title,
-                message=body,
-                category=str(type).upper().replace(" ", "_"),
-                payload=payload,
+            return emit_notification(
+                user_id=user_id, title=title, message=body, category=type, payload=payload
             )
-        # Prepare notification payload
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            try:
-                # Send a message to the user's group
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{user_id}",  # Group name
-                    {
-                        "type": "send_message",  # Type corresponds to a consumer method
-                        "message": message,     # Actual message payload
-                    }
-                )
-                logger.info(f"{type} message sent to user_{user_id}")
-            except Exception as e:
-                logger.error(f"Failed to send message to user_{user_id}: {e}")
-        else:
-            logger.error(f"{type}Channel layer is not configured")
+        return None
 
     
     @staticmethod
     def make_request(url):
-        headers = {
-            "accept": "application/json",
-            "x-cg-demo-api-key": "CG-NgaLHLy457wk81jkXajMRGdx"
-        }
+        headers = {"accept": "application/json"}
+        if settings.COINGECKO_API_KEY:
+            headers["x-cg-demo-api-key"] = settings.COINGECKO_API_KEY
         response = requests.get(url, headers=headers)
         return response
 
@@ -186,14 +166,7 @@ class UserNotificationService:
     
     @staticmethod
     def send_account_created(user_id, message):
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"user_{user_id}",
-            {
-                "type": "send_message",
-                "message": message
-            }
-        )
+        return UserNotificationService._send_user_notification(user_id, message, type="ACCOUNT_CHANGE")
     ##Used to send verify message once a user is connected
     @staticmethod
     def email_verification_reminder(user):

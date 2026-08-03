@@ -1,8 +1,13 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from . import views
 
+router = DefaultRouter()
+router.register("webhooks", views.WebhookSubscriptionViewSet, basename="notification-webhook")
+
 urlpatterns = [
+    path("", include(router.urls)),
     path("notifications/", views.NotificationListing.as_view(), name="notification_list"),
     path("toggle_notification/", views.UpdateNotifications.as_view(), name="toggle_notification"),
     path("alerts/", views.UserAlertsListing.as_view(), name="user_alerts"),

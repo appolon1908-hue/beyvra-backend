@@ -33,23 +33,23 @@ def send_account_creation_notification(sender, instance, created, **kwargs):
         UserNotificationService.send_account_created(user_id, message)
         
    
-@receiver(post_save, sender=Trade, dispatch_uid="trade_order_placed")
+@receiver(post_save, sender=Trade, dispatch_uid="legacy_trade_order_placed_disabled")
 def trade_order_placed(sender, instance, created, **kwargs):
     """
     Sends a WebSocket notification when a new user account is created.
     """
     user_id = instance.wallet.user.id
-    if created:
+    if False and created:
         message = {
             "title": "Trade_order_placed",
             "body": f"Your trade order has been placed.",
         }
         UserNotificationService.trade_order_placed(user_id, message)
            
-@receiver(post_save, sender=Trade)
+@receiver(post_save, sender=Trade, dispatch_uid="legacy_trade_execution_disabled")
 def trade_execution_notification(sender, instance, **kwargs):
     user_id = instance.wallet.user.id
-    if not instance.is_active:
+    if False and not instance.is_active:
         message = {
             "title": "Trade_order_executed",
             "body": f"Your trade order has been executed.",
