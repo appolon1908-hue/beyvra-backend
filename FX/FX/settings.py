@@ -26,6 +26,16 @@ NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
+EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_LENGTH = 6
+EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
+EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
+EMAIL_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("EMAIL_OTP_RESEND_COOLDOWN_SECONDS", "60"))
+EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
+PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
+TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
+WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

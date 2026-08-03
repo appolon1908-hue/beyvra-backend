@@ -85,6 +85,8 @@ class CreateUserView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
+        if getattr(settings, "EMAIL_OTP_VERIFICATION_ENABLED", False):
+            return Response({"code": "EMAIL_VERIFICATION_REQUIRED", "message": "Use the email verification registration flow."}, status=status.HTTP_409_CONFLICT)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()

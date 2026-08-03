@@ -112,6 +112,7 @@ class User(AbstractUser, TimeStampedModel):
     mfa_secret = models.CharField(max_length=100, blank=True, null=True)
     is_mfa_enabled = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     # Retained for compatibility with the staging schema's verification flow.
     email_verification_source = models.CharField(max_length=32, blank=True, default="")
     # Short-lived server-issued paper-trading identity. These users never
@@ -155,6 +156,61 @@ class User(AbstractUser, TimeStampedModel):
         self.blured_phone_number = blur_phone_number(self.phone_number)
 
         super(User, self).save(*args, **kwargs)
+
+
+class PendingRegistration(models.Model):
+    STATUS_CHOICES = (("pending_email_verification", "Pending email verification"), ("completed", "Completed"), ("expired", "Expired"))
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email_normalized = models.EmailField()
+    display_name = models.CharField(max_length=120, blank=True)
+    password_hash = models.CharField(max_length=128)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending_email_verification")
+    locale = models.CharField(max_length=16, default="en")
+    legal_confirmation = models.BooleanField(default=False)
+    legal_document_versions = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(null=True, blank=True)
+    activated_user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="pending_registrations")
+    request_ip = models.GenericIPAddressField(null=True, blank=True)
+    request_user_agent = models.TextField(blank=True)
+
+
+class EmailVerificationChallenge(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    registration = models.ForeignKey(PendingRegistration, null=True, blank=True, on_delete=models.CASCADE, related_name="challenges")
+    email_normalized = models.EmailField()
+    purpose = models.CharField(max_length=32, default="registration")
+    otp_hash = models.CharField(max_length=255)
+    status = models.CharField(max_length=16, default="active")
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
+    send_count = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    invalidated_at = models.DateTimeField(null=True, blank=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_sent_at = models.DateTimeField(auto_now_add=True)
+
+
+class TransactionalEmailOutbox(models.Model):
+    STATUS_CHOICES = (("pending", "Pending"), ("processing", "Processing"), ("sent", "Sent"), ("failed", "Failed"), ("dead_letter", "Dead letter"))
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_type = models.CharField(max_length=64)
+    recipient_email = models.EmailField()
+    template_key = models.CharField(max_length=64)
+    template_version = models.CharField(max_length=32, default="1")
+    locale = models.CharField(max_length=16, default="en")
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="pending")
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    provider_message_id = models.CharField(max_length=255, blank=True)
+    last_error_code = models.CharField(max_length=64, blank=True)
+    idempotency_key = models.CharField(max_length=255, unique=True)
 
 
 class PhoneVerificationCode(models.Model):
