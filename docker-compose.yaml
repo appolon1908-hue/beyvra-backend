@@ -18,6 +18,7 @@ services:
     volumes:
       - static_files:/app/static
       - ./media:/app/media
+      - ./secrets:/run/secrets/codestra:ro
     depends_on:
       static-init:
         condition: service_completed_successfully
@@ -37,6 +38,8 @@ services:
       - 8001
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     depends_on:
       - web
     extra_hosts:
@@ -109,6 +112,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:
@@ -122,6 +127,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:
@@ -154,6 +161,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:

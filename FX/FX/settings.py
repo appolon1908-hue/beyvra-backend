@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
+NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -107,6 +108,7 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
 ]
+MIDDLEWARE.insert(0, "middleware.correlation.CorrelationIdMiddleware")
 
 ROOT_URLCONF = "FX.urls"
 
@@ -196,6 +198,13 @@ NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90")
 WEBHOOK_TIMEOUT_SECONDS = int(os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"))
 STAGING_WEBHOOK_RECEIVER_SECRET = os.getenv("STAGING_WEBHOOK_RECEIVER_SECRET", "")
 STAGING_WEBHOOK_RECEIVER_ENABLED = API_ENV == "staging" and bool(STAGING_WEBHOOK_RECEIVER_SECRET)
+DATA_ENCRYPTION_KEY_FILE = os.getenv("DATA_ENCRYPTION_KEY_FILE", "")
+API_TOKEN_PEPPER_FILE = os.getenv("API_TOKEN_PEPPER_FILE", "")
+WEBHOOK_MASTER_KEY_FILE = os.getenv("WEBHOOK_MASTER_KEY_FILE", "")
+PASSWORD_RESET_SIGNING_KEY_FILE = os.getenv("PASSWORD_RESET_SIGNING_KEY_FILE", "")
+DATA_ENCRYPTION_KEY = os.getenv("DATA_ENCRYPTION_KEY", "")
+API_TOKEN_PEPPER = os.getenv("API_TOKEN_PEPPER", "")
+WEBHOOK_MASTER_KEY = os.getenv("WEBHOOK_MASTER_KEY", "")
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -266,6 +275,13 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "anon": os.getenv("ANON_RATE_LIMIT", "30/minute"),
         "user": os.getenv("USER_RATE_LIMIT", "300/minute"),
+        "integration": "300/minute",
+        "user_create": "30/minute",
+        "import_upload": "5/hour",
+        "import_action": "10/hour",
+        "crm_inbound": "120/minute",
+        "webhook_test": "5/minute",
+        "webhook_retry": "10/hour",
     }
 
 # Simple-jwt

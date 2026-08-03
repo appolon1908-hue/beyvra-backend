@@ -41,12 +41,20 @@ class ServiceToken(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    environment = models.CharField(max_length=32, default="staging")
+    fingerprint = models.CharField(max_length=16, default="")
+    last_four = models.CharField(max_length=4, default="")
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="issued_service_tokens")
 
     @classmethod
     def issue(cls, organization, name, scopes):
+        from .crypto import fingerprint, token_digest
         raw = "cs_" + secrets.token_urlsafe(32)
         return cls.objects.create(organization=organization, name=name, scopes=scopes,
-                                  token_hash=hashlib.sha256(raw.encode()).hexdigest()), raw
+                                  token_hash=token_digest(raw), fingerprint=fingerprint(raw), last_four=raw[-4:],
+                                  environment=getattr(settings, "API_ENV", "staging")), raw
 
 
 class DemoAccount(models.Model):
@@ -86,7 +94,15 @@ class CRMConnection(models.Model):
     name = models.CharField(max_length=120)
     provider = models.CharField(max_length=32, choices=PROVIDERS, default="generic_webhook")
     endpoint = models.URLField(max_length=500)
-    secret_encrypted = models.TextField()
+    # Deprecated compatibility column; values are nulled after encryption migration.
+    secret_encrypted = models.TextField(null=True, blank=True)
+    secret_ciphertext = models.TextField(null=True, blank=True)
+    secret_nonce = models.CharField(max_length=64, null=True, blank=True)
+    secret_key_version = models.CharField(max_length=32, default="v1")
+    secret_fingerprint = models.CharField(max_length=16, default="")
+    secret_created_at = models.DateTimeField(null=True, blank=True)
+    secret_rotated_at = models.DateTimeField(null=True, blank=True)
+    secret_revoked_at = models.DateTimeField(null=True, blank=True)
     field_mapping = models.JSONField(default=dict, blank=True)
     event_categories = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=False)

@@ -1,4 +1,5 @@
 import logging
+from django.utils import timezone
 import re
 
 from asgiref.sync import async_to_sync
@@ -6,6 +7,7 @@ from channels.layers import get_channel_layer
 from django.db import transaction
 
 from .models import NotificationEvent, Notifications, UserNotifications, WebhookDelivery, WebhookSubscription
+from integrations.crypto import encrypt_secret, fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +74,10 @@ def _queue_webhook(delivery_id):
         deliver_webhook.delay(str(delivery_id))
     except Exception:
         logger.exception("Unable to queue webhook delivery %s", delivery_id)
+
+
+def encrypted_webhook_fields(secret):
+    ciphertext, nonce, version = encrypt_secret(secret)
+    return {"secret": None, "secret_ciphertext": ciphertext, "secret_nonce": nonce,
+            "secret_key_version": version, "secret_fingerprint": fingerprint(secret),
+            "secret_created_at": timezone.now()}

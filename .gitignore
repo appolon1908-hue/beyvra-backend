@@ -140,6 +140,7 @@ Thumbs.db
 # Environment file
 *.env
 .env.staging
+secrets/
 backups/*.dump
 backups/*.tmp
 venv/

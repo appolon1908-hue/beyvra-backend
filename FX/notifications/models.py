@@ -104,7 +104,16 @@ class WebhookSubscription(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notification_webhooks")
     url = models.URLField(max_length=500)
-    secret = models.CharField(max_length=255)
+    # Legacy field is retained only for expand/contract migration compatibility;
+    # new writes use authenticated encryption fields below.
+    secret = models.CharField(max_length=255, null=True, blank=True)
+    secret_ciphertext = models.TextField(null=True, blank=True)
+    secret_nonce = models.CharField(max_length=64, null=True, blank=True)
+    secret_key_version = models.CharField(max_length=32, default="v1")
+    secret_fingerprint = models.CharField(max_length=16, default="")
+    secret_created_at = models.DateTimeField(null=True, blank=True)
+    secret_rotated_at = models.DateTimeField(null=True, blank=True)
+    secret_revoked_at = models.DateTimeField(null=True, blank=True)
     categories = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -118,7 +127,7 @@ class WebhookSubscription(models.Model):
 
 
 class WebhookDelivery(models.Model):
-    STATUS_CHOICES = (("P", "Pending"), ("S", "Successful"), ("F", "Failed"))
+    STATUS_CHOICES = (("P", "Pending"), ("S", "Successful"), ("F", "Failed"), ("D", "Dead letter"))
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subscription = models.ForeignKey(WebhookSubscription, on_delete=models.CASCADE, related_name="deliveries")

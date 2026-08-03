@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from rest_framework import serializers
 
 from users.models import User
-from .models import CRMConnection, DemoAccount, DemoLedgerEntry, UserImport, UserImportRow
+from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ServiceToken, UserImport, UserImportRow
 
 
 class UserCreateSerializer(serializers.Serializer):
@@ -66,3 +66,10 @@ class ImportSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserImport
         fields = ("id", "status", "file_name", "row_count", "valid_count", "invalid_count", "created_at", "updated_at")
+
+
+class ServiceTokenMetadataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceToken
+        fields = ("id", "name", "scopes", "environment", "fingerprint", "last_four", "expires_at", "last_used_at", "revoked_at", "created_at")
+        read_only_fields = fields

@@ -7,6 +7,7 @@ from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from integrations.throttles import WebhookRetryThrottle, WebhookTestThrottle
 
 from .models import *
 from .serializers import *
@@ -173,7 +174,19 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         return WebhookSubscription.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        secret = serializer.validated_data.pop("secret", None)
+        if not secret:
+            raise ValueError("secret required")
+        from .services import encrypted_webhook_fields
+        serializer.save(user=self.request.user, **encrypted_webhook_fields(secret))
+
+    def perform_update(self, serializer):
+        secret = serializer.validated_data.pop("secret", None)
+        if secret:
+            from .services import encrypted_webhook_fields
+            serializer.save(**encrypted_webhook_fields(secret))
+        else:
+            serializer.save()
 
     @action(detail=True, methods=["get"])
     def deliveries(self, request, pk=None):
@@ -185,21 +198,25 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], throttle_classes=[WebhookTestThrottle])
     def test(self, request, pk=None):
+        self.check_throttles()
         from django.db import transaction
         from .services import _queue_webhook, emit_notification
         subscription = self.get_object()
-        event = emit_notification(
-            user_id=request.user.id,
-            title="Webhook test",
-            message="Codestra webhook delivery test.",
-            category="WEBHOOK_TEST",
-            payload={"subscription_id": str(self.get_object().id)},
-            force=True,
-        )
-        # Manual tests target this subscription even when its category filter
-        # excludes WEBHOOK_TEST events.
+        event = emit_notification(user_id=request.user.id, title="Webhook test", message="Codestra webhook delivery test.", category="WEBHOOK_TEST", payload={"subscription_id": str(subscription.id)}, force=True)
         delivery, _ = WebhookDelivery.objects.get_or_create(subscription=subscription, event=event)
         transaction.on_commit(lambda delivery_id=delivery.id: _queue_webhook(delivery_id))
         return Response(NotificationEventSerializer(event).data, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=["post"], throttle_classes=[WebhookRetryThrottle])
+    def retry(self, request, pk=None):
+        """Retry only a failed/dead-letter delivery owned by this user."""
+        self.check_throttles()
+        delivery = WebhookDelivery.objects.filter(subscription=self.get_object(), id=request.data.get("delivery_id"), status__in=["F", "D"]).first()
+        if not delivery:
+            return Response({"detail": "failed delivery not found"}, status=status.HTTP_404_NOT_FOUND)
+        delivery.status = "P"; delivery.last_error = ""; delivery.save(update_fields=["status", "last_error", "updated_at"])
+        from .services import _queue_webhook
+        _queue_webhook(delivery.id)
+        return Response({"delivery_id": str(delivery.id), "status": delivery.status}, status=status.HTTP_202_ACCEPTED)

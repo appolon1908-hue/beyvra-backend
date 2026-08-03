@@ -4,6 +4,7 @@ import hmac
 import io
 import uuid
 
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -13,11 +14,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from users.models import User
-from .crypto import decrypt_secret, encrypt_secret
-from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, UserImport, UserImportRow
+from .crypto import decrypt_secret, encrypt_secret, fingerprint
+from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, ServiceToken, UserImport, UserImportRow
 from .permissions import HasScope, ScopedBearerAuthentication, organization_for_request
-from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, UserCreateSerializer
+from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, ServiceTokenMetadataSerializer, UserCreateSerializer
 from .tasks import process_user_import
+from .throttles import CRMInboundThrottle, ImportActionThrottle, ImportThrottle, UserCreateThrottle
+from .observability import IMPORT_ROWS_TOTAL, INVALID_SIGNATURE_TOTAL, USER_CREATE_TOTAL, count
 from notifications.models import WebhookSubscription
 from .services import emit_crm_event
 
@@ -49,7 +52,7 @@ class UserCreateView(APIView):
     authentication_classes = [ScopedBearerAuthentication]
     permission_classes = [HasScope]
     required_scope = "users:write"
-    throttle_classes = [throttling.UserRateThrottle]
+    throttle_classes = [UserCreateThrottle]
 
     def post(self, request):
         serializer = UserCreateSerializer(data=request.data); serializer.is_valid(raise_exception=True)
@@ -61,6 +64,7 @@ class UserCreateView(APIView):
         except PermissionError as exc: return Response({"detail": str(exc)}, status=403)
         except (ValueError, IntegrityError) as exc: return Response({"detail": str(exc)}, status=409)
         result = _result(user, account)
+        count(USER_CREATE_TOTAL)
         emit_crm_event(organization=org, event_type="user.created", data={"user_id": str(user.id), "demo_account_id": str(account.id)}, correlation_id=user.id)
         IntegrationAuditEvent.objects.create(organization=org, action="user.create", metadata={"idempotency_key": key, "result": result})
         return Response(result, status=201)
@@ -70,16 +74,24 @@ class CRMInboundUserView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
     parser_classes = [JSONParser]
+    throttle_classes = [CRMInboundThrottle]
 
     def post(self, request, connection_id):
+        if int(request.META.get("CONTENT_LENGTH") or 0) > 1024 * 1024:
+            return Response({"detail": "payload too large"}, status=413)
         connection = CRMConnection.objects.filter(id=connection_id, is_active=True).first()
         if not connection: return Response({"detail": "connection not found"}, status=404)
         timestamp = request.headers.get("X-Codestra-Timestamp", ""); event_id = request.headers.get("X-Codestra-Event-Id") or request.headers.get("Idempotency-Key"); signature = request.headers.get("X-Codestra-Signature-256", "")
         try: signed_at = int(timestamp)
         except ValueError: return Response({"detail": "invalid timestamp"}, status=401)
         if abs(int(timezone.now().timestamp()) - signed_at) > 300 or not event_id: return Response({"detail": "expired or missing event"}, status=401)
-        expected = hmac.new(decrypt_secret(connection.secret_encrypted).encode(), f"{timestamp}.".encode() + request.body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature.removeprefix("sha256="), expected): return Response({"detail": "invalid signature"}, status=401)
+        connection_secret = decrypt_secret(connection.secret_ciphertext, connection.secret_nonce, connection.secret_key_version) if connection.secret_ciphertext else decrypt_secret(connection.secret_encrypted)
+        expected = hmac.new(connection_secret.encode(), f"{timestamp}.".encode() + request.body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature.removeprefix("sha256="), expected):
+            count(INVALID_SIGNATURE_TOTAL, "crm")
+            return Response({"detail": "invalid signature"}, status=401)
+        replay_key = f"crm-replay:{connection.id}:{event_id}"
+        if not cache.add(replay_key, "seen", timeout=900): return Response({"detail": "replay"}, status=409)
         if IntegrationAuditEvent.objects.filter(organization=connection.organization, action="crm.inbound", metadata__event_id=event_id).exists(): return Response({"detail": "replay"}, status=409)
         serializer = UserCreateSerializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; data["organization_id"] = connection.organization.id
         try: user, account = _create_user(data, connection.organization, f"crm:{connection.id}:{event_id}")
@@ -97,6 +109,7 @@ class CSVTemplateView(APIView):
 class UserImportView(APIView):
     parser_classes = [MultiPartParser]
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ImportThrottle]
     def post(self, request):
         if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
         upload = request.FILES.get("file")
@@ -116,7 +129,9 @@ class UserImportView(APIView):
                 try:
                     UserCreateSerializer(data={**row, "consent": {"terms_accepted": str(row.get("terms_accepted", "")).lower() == "true"}}).is_valid(raise_exception=True)
                 except Exception: errors.append("invalid field")
-                UserImportRow.objects.create(import_job=job, row_number=number, data=row, errors=errors, status="INVALID" if errors else "VALID")
+                row_status = "INVALID" if errors else "VALID"
+                UserImportRow.objects.create(import_job=job, row_number=number, data=row, errors=errors, status=row_status)
+                count(IMPORT_ROWS_TOTAL, row_status.lower())
             job.row_count = job.rows.count(); job.valid_count = job.rows.filter(status="VALID").count(); job.invalid_count = job.rows.filter(status="INVALID").count(); job.save()
         except (UnicodeDecodeError, csv.Error, ValueError) as exc:
             job.status = "FAILED"; job.save(update_fields=["status", "updated_at"]); return Response({"detail": str(exc)}, status=400)
@@ -135,9 +150,15 @@ class ImportRowsView(ImportDetailView):
 
 class ImportActionView(ImportDetailView):
     action = None
+    throttle_classes = [ImportActionThrottle]
     def post(self, request, import_id):
         job = self.get_job(request, import_id)
-        if self.action == "commit" and job.status == "UPLOADED": job.status = "COMMITTED"; job.save(update_fields=["status", "updated_at"]); process_user_import.delay(str(job.id))
+        if self.action == "commit" and job.status == "UPLOADED":
+            if UserImport.objects.filter(organization=job.organization, status__in=["COMMITTED", "PROCESSING"]).exclude(id=job.id).exists():
+                return Response({"detail": "organization import concurrency limit reached"}, status=429)
+            lock_key = f"import-commit:{job.id}"
+            if not cache.add(lock_key, "queued", timeout=3600): return Response({"detail": "import already queued"}, status=409)
+            job.status = "COMMITTED"; job.save(update_fields=["status", "updated_at"]); process_user_import.delay(str(job.id))
         elif self.action == "cancel" and job.status in {"UPLOADED", "COMMITTED"}: job.status = "CANCELLED"; job.save(update_fields=["status", "updated_at"])
         else: return Response({"detail": "invalid import state"}, status=409)
         return Response(ImportSerializer(job).data)
@@ -152,8 +173,8 @@ class CRMConnectionListView(APIView):
     def get(self, request): return Response(CRMConnectionSerializer(organization_for_request(request).crm_connections.all(), many=True).data)
     def post(self, request):
         if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
-        serializer = CRMConnectionSerializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; secret = data.pop("secret"); connection = CRMConnection.objects.create(organization=organization_for_request(request), owner=request.user, secret_encrypted=encrypt_secret(secret), **data)
-        WebhookSubscription.objects.create(user=request.user, url=connection.endpoint, secret="enc:" + connection.secret_encrypted, categories=connection.event_categories, is_active=connection.is_active)
+        serializer = CRMConnectionSerializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; secret = data.pop("secret"); ciphertext, nonce, version = encrypt_secret(secret); connection = CRMConnection.objects.create(organization=organization_for_request(request), owner=request.user, secret_encrypted="", secret_ciphertext=ciphertext, secret_nonce=nonce, secret_key_version=version, secret_fingerprint=fingerprint(secret), secret_created_at=timezone.now(), **data)
+        WebhookSubscription.objects.create(user=request.user, url=connection.endpoint, categories=connection.event_categories, is_active=connection.is_active, **__import__("notifications.services", fromlist=["encrypted_webhook_fields"]).encrypted_webhook_fields(secret))
         return Response(CRMConnectionSerializer(connection).data, status=201)
 
 
@@ -163,6 +184,40 @@ class CRMConnectionDetailView(APIView):
     def get(self, request, connection_id): return Response(CRMConnectionSerializer(self.get_object(request, connection_id)).data)
     def patch(self, request, connection_id):
         obj = self.get_object(request, connection_id); data = request.data.copy(); secret = data.pop("secret", None); serializer = CRMConnectionSerializer(obj, data=data, partial=True); serializer.is_valid(raise_exception=True); obj = serializer.save()
-        if secret: obj.secret_encrypted = encrypt_secret(secret); obj.save(update_fields=["secret_encrypted", "updated_at"])
-        WebhookSubscription.objects.filter(user=obj.owner, url=obj.endpoint).update(categories=obj.event_categories, is_active=obj.is_active, secret="enc:" + obj.secret_encrypted)
+        if secret:
+            ciphertext, nonce, version = encrypt_secret(secret); obj.secret_encrypted = ""; obj.secret_ciphertext = ciphertext; obj.secret_nonce = nonce; obj.secret_key_version = version; obj.secret_fingerprint = fingerprint(secret); obj.secret_rotated_at = timezone.now(); obj.save(update_fields=["secret_encrypted", "secret_ciphertext", "secret_nonce", "secret_key_version", "secret_fingerprint", "secret_rotated_at", "updated_at"])
+            from notifications.services import encrypted_webhook_fields
+            WebhookSubscription.objects.filter(user=obj.owner, url=obj.endpoint).update(**encrypted_webhook_fields(secret))
+        WebhookSubscription.objects.filter(user=obj.owner, url=obj.endpoint).update(categories=obj.event_categories, is_active=obj.is_active)
         return Response(CRMConnectionSerializer(obj).data)
+
+
+class ServiceTokenListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        org = organization_for_request(request)
+        return Response(ServiceTokenMetadataSerializer(org.service_tokens.order_by("-created_at"), many=True).data)
+    def post(self, request):
+        if not request.user.is_staff:
+            return Response({"detail": "organization administrator required"}, status=403)
+        scopes = request.data.get("scopes", [])
+        allowed = {"users:read", "users:write", "users:import", "demo_accounts:read", "crm_connections:read", "crm_connections:write", "crm_deliveries:read", "crm_deliveries:retry", "webhooks:read", "webhooks:write"}
+        if not isinstance(scopes, list) or not set(scopes).issubset(allowed):
+            return Response({"detail": "invalid scopes"}, status=400)
+        org = organization_for_request(request); token, raw = ServiceToken.issue(org, request.data.get("name", "integration"), scopes); token.owner = request.user; token.save(update_fields=["owner"])
+        IntegrationAuditEvent.objects.create(organization=org, actor=request.user, action="service_token.issue", metadata={"token_id": str(token.id), "fingerprint": token.fingerprint})
+        response = ServiceTokenMetadataSerializer(token).data; response["token"] = raw
+        return Response(response, status=201)
+
+
+class ServiceTokenActionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request, token_id):
+        token = ServiceToken.objects.get(id=token_id, organization=organization_for_request(request))
+        if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
+        action = request.data.get("action", "revoke")
+        if action == "revoke":
+            token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); return Response(ServiceTokenMetadataSerializer(token).data)
+        if action == "rotate":
+            replacement, raw = ServiceToken.issue(token.organization, token.name, token.scopes); replacement.owner = request.user; replacement.save(update_fields=["owner"]); token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); response = ServiceTokenMetadataSerializer(replacement).data; response["token"] = raw; return Response(response, status=201)
+        return Response({"detail": "unsupported action"}, status=400)

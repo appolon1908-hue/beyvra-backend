@@ -2,7 +2,7 @@ from django.utils import timezone
 from rest_framework import authentication, exceptions, permissions
 
 from .models import Organization, OrganizationMembership, ServiceToken
-import hashlib
+from .crypto import token_digest
 
 
 class ScopedBearerAuthentication(authentication.BaseAuthentication):
@@ -13,12 +13,16 @@ class ScopedBearerAuthentication(authentication.BaseAuthentication):
             return None
         raw = header.split(" ", 1)[1].strip()
         token = ServiceToken.objects.select_related("organization").filter(
-            token_hash=hashlib.sha256(raw.encode()).hexdigest(), is_active=True
+            token_hash=token_digest(raw), is_active=True, revoked_at__isnull=True
         ).first()
         if not token or (token.expires_at and token.expires_at <= timezone.now()):
             raise exceptions.AuthenticationFailed("Invalid service token")
         request.service_token = token
+        ServiceToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
         return (token.organization, token)
+
+    def authenticate_header(self, request):
+        return "Bearer"
 
 
 class HasScope(permissions.BasePermission):
@@ -28,7 +32,7 @@ class HasScope(permissions.BasePermission):
         if getattr(request, "service_token", None):
             return getattr(view, "required_scope", self.required_scope) in request.service_token.scopes
         if not request.user or not request.user.is_authenticated:
-            return False
+            raise exceptions.NotAuthenticated("Bearer authentication is required")
         org_id = request.headers.get("X-Organization-ID") or request.data.get("organization_id")
         if not org_id:
             return request.user.is_staff

@@ -1,0 +1,22 @@
+groups:
+  - name: codestra-integrations
+    rules:
+      - alert: CodestraApi5xxSpike
+        expr: sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m])) > 1
+        for: 10m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations: {runbook: https://github.com/appolon1908-hue/trading-backend/docs/PRODUCTION_READINESS_REMEDIATION.md, summary: API 5xx spike}
+      - alert: CodestraImportQueueTooOld
+        expr: codestra_import_queue_depth > 0
+        for: 30m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations: {runbook: https://github.com/appolon1908-hue/trading-backend/docs/PRODUCTION_READINESS_REMEDIATION.md, summary: import queue is not draining}
+      - alert: CodestraInvalidSignatureSpike
+        expr: sum(rate(codestra_invalid_signature_total[5m])) > 5
+        for: 10m
+        labels: {severity: warning, environment: staging, owner: security}
+        annotations: {runbook: https://github.com/appolon1908-hue/trading-backend/docs/PRODUCTION_READINESS_REMEDIATION.md, summary: invalid signature spike}
+      - alert: CodestraDemoLedgerReconciliationFailure
+        expr: increase(codestra_demo_ledger_reconciliation_failure_total[5m]) > 0
+        labels: {severity: critical, environment: staging, owner: finance-controls}
+        annotations: {runbook: https://github.com/appolon1908-hue/trading-backend/docs/PRODUCTION_READINESS_REMEDIATION.md, summary: demo ledger reconciliation failed}

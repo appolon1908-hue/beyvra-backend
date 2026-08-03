@@ -135,7 +135,9 @@ class NotificationInboxTests(TestCase):
             )
         self.assertEqual(updated.status_code, status.HTTP_200_OK)
         self.assertEqual(updated.data["categories"], ["DEPOSIT"])
-        self.assertEqual(WebhookSubscription.objects.get(pk=webhook_id).secret, "a-secure-test-secret")
+        stored = WebhookSubscription.objects.get(pk=webhook_id)
+        self.assertIsNone(stored.secret)
+        self.assertTrue(stored.secret_ciphertext)
 
     @override_settings(STAGING_WEBHOOK_RECEIVER_ENABLED=True, STAGING_WEBHOOK_RECEIVER_SECRET="receiver-secret")
     def test_staging_receiver_verifies_signature_and_supports_controlled_failure(self):

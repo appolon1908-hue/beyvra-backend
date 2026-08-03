@@ -13,6 +13,11 @@ from .models import NotificationEvent, WebhookDelivery
 @shared_task(bind=True, autoretry_for=(requests.RequestException,), retry_backoff=True, retry_kwargs={"max_retries": 5})
 def deliver_webhook(self, delivery_id):
     delivery = WebhookDelivery.objects.select_related("subscription", "event").get(id=delivery_id)
+    if delivery.status == "D" or delivery.attempts >= 5:
+        delivery.status = "D"
+        delivery.last_error = "maximum delivery attempts exceeded"
+        delivery.save(update_fields=["status", "last_error", "updated_at"])
+        return
     if not delivery.subscription.is_active:
         return
     event = delivery.event
@@ -21,10 +26,9 @@ def deliver_webhook(self, delivery_id):
         "message": event.message, "payload": event.payload,
         "created_at": event.created_at.isoformat(),
     }, separators=(",", ":")).encode()
-    secret = delivery.subscription.secret
-    if secret.startswith("enc:"):
-        from integrations.crypto import decrypt_secret
-        secret = decrypt_secret(secret[4:])
+    from integrations.crypto import decrypt_secret
+    subscription = delivery.subscription
+    secret = decrypt_secret(subscription.secret_ciphertext, subscription.secret_nonce, subscription.secret_key_version) if subscription.secret_ciphertext else decrypt_secret(subscription.secret or "")
     signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     delivery.attempts = min(delivery.attempts + 1, 32767)
     try:
@@ -40,7 +44,7 @@ def deliver_webhook(self, delivery_id):
         delivery.delivered_at = timezone.now()
         delivery.last_error = ""
     except requests.RequestException as exc:
-        delivery.status = "F"
+        delivery.status = "D" if delivery.attempts >= 5 else "F"
         delivery.last_error = str(exc)[:500]
         delivery.save()
         raise
