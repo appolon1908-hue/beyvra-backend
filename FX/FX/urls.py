@@ -41,6 +41,7 @@ urlpatterns = [
     # Portfolio
     path("api/portfolio/", include("portfolio.urls")),
     path("api/reporting/", include("reporting.urls")),
+    path("api/", include("integrations.urls")),
 ]
 
 if settings.DEBUG:

@@ -21,7 +21,11 @@ def deliver_webhook(self, delivery_id):
         "message": event.message, "payload": event.payload,
         "created_at": event.created_at.isoformat(),
     }, separators=(",", ":")).encode()
-    signature = hmac.new(delivery.subscription.secret.encode(), body, hashlib.sha256).hexdigest()
+    secret = delivery.subscription.secret
+    if secret.startswith("enc:"):
+        from integrations.crypto import decrypt_secret
+        secret = decrypt_secret(secret[4:])
+    signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     delivery.attempts = min(delivery.attempts + 1, 32767)
     try:
         response = requests.post(

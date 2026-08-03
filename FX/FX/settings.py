@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "wsnotifications",
     "reporting",
+    "integrations",
 ]
 
 MIDDLEWARE = [
