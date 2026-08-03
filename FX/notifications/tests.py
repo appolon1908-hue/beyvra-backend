@@ -7,6 +7,7 @@ from datetime import timedelta
 import hashlib
 import hmac
 import json
+import requests
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -158,6 +159,20 @@ class NotificationInboxTests(TestCase):
             secure=True,
         )
         self.assertEqual(failed.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @patch("notifications.tasks.requests.post", side_effect=requests.Timeout("receiver timeout"))
+    def test_webhook_delivery_records_failure_before_celery_retry(self, post):
+        subscription = WebhookSubscription.objects.create(
+            user=self.user, url="https://example.com/events", secret="a-secure-test-secret"
+        )
+        event = NotificationEvent.objects.create(user=self.user, title="Trade", message="Failed", category="TRADE")
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=event)
+        with self.assertRaises(requests.Timeout):
+            deliver_webhook.run(str(delivery.id))
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, "F")
+        self.assertEqual(delivery.attempts, 1)
+        self.assertIn("receiver timeout", delivery.last_error)
 
     @override_settings(NOTIFICATION_RETENTION_DAYS=30)
     def test_retention_task_removes_only_expired_events(self):
