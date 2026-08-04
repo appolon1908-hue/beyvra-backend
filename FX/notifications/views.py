@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from integrations.throttles import WebhookRetryThrottle, WebhookTestThrottle
+from integrations.permissions import organization_for_request
 
 from .models import *
 from .serializers import *
@@ -171,14 +172,21 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return WebhookSubscription.objects.filter(user=self.request.user)
+        return WebhookSubscription.objects.filter(
+            user=self.request.user,
+            organization=organization_for_request(self.request),
+        )
 
     def perform_create(self, serializer):
         secret = serializer.validated_data.pop("secret", None)
         if not secret:
             raise ValueError("secret required")
         from .services import encrypted_webhook_fields
-        serializer.save(user=self.request.user, **encrypted_webhook_fields(secret))
+        serializer.save(
+            user=self.request.user,
+            organization=organization_for_request(self.request),
+            **encrypted_webhook_fields(secret),
+        )
 
     def perform_update(self, serializer):
         secret = serializer.validated_data.pop("secret", None)

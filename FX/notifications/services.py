@@ -8,6 +8,7 @@ from django.db import transaction
 
 from .models import NotificationEvent, Notifications, UserNotifications, WebhookDelivery, WebhookSubscription
 from integrations.crypto import encrypt_secret, fingerprint
+from integrations.permissions import organization_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,10 @@ def emit_notification(*, user_id, title, message, category="GENERAL", payload=No
         return None
 
     normalized = normalize_category(category)
+    organization = organization_for_user(user_id)
     event = NotificationEvent.objects.create(
         user_id=user_id,
+        organization=organization,
         title=str(title),
         message=str(message),
         category=normalized,
@@ -59,7 +62,7 @@ def emit_notification(*, user_id, title, message, category="GENERAL", payload=No
         except Exception:
             logger.exception("Unable to broadcast notification %s", event.id)
 
-    subscriptions = WebhookSubscription.objects.filter(user_id=user_id, is_active=True)
+    subscriptions = WebhookSubscription.objects.filter(user_id=user_id, organization=organization, is_active=True)
     for subscription in subscriptions:
         allowed = [normalize_category(item) for item in subscription.categories]
         if not allowed or normalized in allowed:
