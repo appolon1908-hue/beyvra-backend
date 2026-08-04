@@ -6,8 +6,10 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import permissions, status
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from integrations.permissions import organization_for_request
 
 from wallet.constants import DEMO_WALLET_NAME
 from wallet.models import Wallet, Transaction
@@ -19,6 +21,23 @@ PAYOUT_RATE = Decimal("0.80")
 DEMO_MIN_AMOUNT = Decimal("1")
 DEMO_MAX_AMOUNT = Decimal("10000")
 DEMO_AMOUNT_STEP = Decimal("1")
+
+
+def _tenant_wallet(request, *, lock=False):
+    organization = organization_for_request(request)
+    queryset = Wallet.objects
+    if lock:
+        queryset = queryset.select_for_update()
+    try:
+        wallet = queryset.get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+    except Wallet.DoesNotExist as exc:
+        raise NotFound("Demo wallet not found") from exc
+    if wallet.organization_id is None:
+        wallet.organization = organization
+        wallet.save(update_fields=["organization", "updated_at"])
+    if wallet.organization_id != organization.id:
+        raise NotFound("Demo wallet not found")
+    return wallet, organization
 
 
 def quote(symbol):
@@ -90,7 +109,7 @@ class DemoOrderView(APIView):
         except (MarketDataError, ValueError) as exc:
             return Response({"code": "QUOTE_UNAVAILABLE", "message": "Market data is delayed. New demo trades are temporarily unavailable."}, status=409)
         with transaction.atomic():
-            wallet = Wallet.objects.select_for_update().get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+            wallet, organization = _tenant_wallet(request, lock=True)
             if wallet.balance < amount:
                 return Response({"code": "INSUFFICIENT_FUNDS", "message": "Your virtual balance is insufficient."}, status=409)
             asset_type, _ = AssetType.objects.get_or_create(name="Crypto")
@@ -99,7 +118,7 @@ class DemoOrderView(APIView):
             wallet.balance -= amount
             wallet.save(update_fields=["balance", "updated_at"])
             txn = Transaction.objects.create(wallet=wallet, type="TD", amount=-amount, status="S", gateway="demo", reference=f"demo:{request.user.pk}:{key}")
-            trade = Trade.objects.create(wallet=wallet, asset=asset, quantity=Decimal("1"), price_per_unit=amount, transaction=txn, trade_type=direction, category=category, duration=duration, result_time=opened_at + timedelta(seconds=duration), expires_at=opened_at + timedelta(seconds=duration), opening_price=opening, open=opening, idempotency_key=f"demo:{request.user.pk}:{key}", demo_state="OPEN")
+            trade = Trade.objects.create(organization=organization, wallet=wallet, asset=asset, quantity=Decimal("1"), price_per_unit=amount, transaction=txn, trade_type=direction, category=category, duration=duration, result_time=opened_at + timedelta(seconds=duration), expires_at=opened_at + timedelta(seconds=duration), opening_price=opening, open=opening, idempotency_key=f"demo:{request.user.pk}:{key}", demo_state="OPEN")
             DemoLedgerEntry.objects.create(wallet=wallet, trade=trade, entry_type="RESERVE", amount=Decimal("0"), idempotency_key=f"reserve:{trade.pk}", description="Virtual funds reserved")
         return Response(self._data(trade), status=201)
 
@@ -127,7 +146,8 @@ class DemoTradeListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         settle_due_orders()
-        trades = Trade.objects.filter(wallet__user=request.user, wallet__is_real=False).select_related("asset").order_by("-created_at")
+        organization = organization_for_request(request)
+        trades = Trade.objects.filter(wallet__user=request.user, organization=organization, wallet__is_real=False).select_related("asset").order_by("-created_at")
         return Response([DemoOrderView()._data(t) for t in trades])
 
 
@@ -143,7 +163,7 @@ class DemoWalletRefillView(APIView):
             wallet = existing.wallet
             return Response({"status": "refilled", "balance": str(wallet.balance), "idempotent": True})
         with transaction.atomic():
-            wallet = Wallet.objects.select_for_update().get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+            wallet, _ = _tenant_wallet(request, lock=True)
             reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
             target = Decimal("10000") - reserved
             delta = target - wallet.balance
@@ -157,7 +177,7 @@ class DemoWalletView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        wallet = Wallet.objects.get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+        wallet, _ = _tenant_wallet(request)
         reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
         return Response({
             "currency": "Virtual USD",

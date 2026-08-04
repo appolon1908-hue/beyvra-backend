@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from fx_utils.models import TimeStampedModel
 from wallet.models import Transaction, Wallet
+from integrations.models import Organization
 
 
 def validate_file_size(file_obj):
@@ -76,6 +77,7 @@ class TradeCategory(TimeStampedModel):
 
 class Trade(TimeStampedModel):
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="trades")
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE, related_name="trades")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="trades")
     quantity = models.DecimalField(max_digits=12, decimal_places=1)  # Quantity of the asset being traded
     price_per_unit = models.DecimalField(max_digits=12, decimal_places=4)  # Price per unit at the time of trade

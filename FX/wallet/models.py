@@ -5,6 +5,7 @@ from users.models import User
 from uuid import uuid4
 from decimal import Decimal
 from .utils import ExchangeRateService
+from integrations.models import Organization
 
 def validate_file_size(file_obj):
     filesize = file_obj.size
@@ -45,6 +46,7 @@ class Wallet(TimeStampedModel):
     name = models.CharField(max_length=25, null=False, blank=False)
     currency = models.ForeignKey(Currency, blank=False, null=False, on_delete=models.RESTRICT)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE, related_name="wallets")
     balance = models.DecimalField(blank=False, null=False, decimal_places=2, max_digits=12, default=0)
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
