@@ -30,6 +30,22 @@ MAX_UPLOAD = 5 * 1024 * 1024
 MAX_ROWS = 10000
 
 
+class TenantContextView(APIView):
+    """Returns the caller's authorized tenant context without exposing secrets."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        organization = organization_for_request(request)
+        membership = organization.memberships.filter(user=request.user).values("role").first()
+        return Response({
+            "tenantId": str(organization.id),
+            "name": organization.name,
+            "active": organization.is_active,
+            "role": membership["role"] if membership else "service",
+            "environment": "staging" if getattr(request, "service_token", None) is None else getattr(request.service_token, "environment", "staging"),
+        })
+
+
 def _create_user(attrs, organization, reference):
     if str(attrs["organization_id"]) != str(organization.id):
         raise PermissionError("organization mismatch")
