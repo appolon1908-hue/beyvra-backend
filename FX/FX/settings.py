@@ -115,6 +115,7 @@ INSTALLED_APPS = [
     "wsnotifications",
     "reporting",
     "integrations",
+    "real_wallet",
 ]
 
 MIDDLEWARE = [

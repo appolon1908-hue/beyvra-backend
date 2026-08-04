@@ -37,6 +37,9 @@ urlpatterns = [
     path("api/v1/demo/trades", DemoTradeListView.as_view(), name="demo_trades_v1"),
     path("api/v1/demo/wallet/refill", DemoWalletRefillView.as_view(), name="demo_wallet_refill_v1"),
     path("api/v1/demo/wallet", DemoWalletView.as_view(), name="demo_wallet_v1"),
+    # Separate real-wallet boundary. Every real-value feature is disabled by
+    # default and never falls back to the demo wallet.
+    path("api/v1/", include("real_wallet.urls")),
     path("api/", include("api_trade.urls")),
     path("api/wallet/", include("wallet.urls")),
     path("api/notification/", include("notifications.urls")),
