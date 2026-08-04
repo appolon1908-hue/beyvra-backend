@@ -208,6 +208,25 @@ class EmailVerificationStatusView(APIView):
         return Response({"status": pending.status, "maskedEmail": mask_email(pending.email_normalized), "expiresIn": max(0, int((pending.expires_at - timezone.now()).total_seconds())), "challengeExpiresIn": max(0, int((challenge.expires_at - timezone.now()).total_seconds())) if challenge else 0})
 
 
+class StagingTestOtpView(APIView):
+    """Test-only OTP retrieval; unreachable unless an explicit staging secret is configured."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        configured = getattr(settings, "STAGING_TEST_OTP_SECRET", "")
+        if not configured or not hmac.compare_digest(request.headers.get("X-Staging-Test-OTP", ""), configured):
+            return Response({"code": "NOT_FOUND"}, status=404)
+        pending_id = _pending_id(request.query_params.get("registrationId"))
+        if not pending_id:
+            return Response({"code": "NOT_FOUND"}, status=404)
+        item = TransactionalEmailOutbox.objects.filter(idempotency_key__startswith=f"otp:{pending_id}:").order_by("-created_at").first()
+        if not item or item.next_attempt_at and item.next_attempt_at < timezone.now() - timedelta(hours=24):
+            return Response({"code": "NOT_FOUND"}, status=404)
+        key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
+        code = Fernet(key).decrypt(item.payload["code_encrypted"].encode()).decode()
+        return Response({"code": code})
+
+
 def send_outbox_message(item):
     payload = item.payload or {}
     if item.template_key == "email_otp":

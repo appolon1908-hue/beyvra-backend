@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .email_verification import EmailRegistrationView, EmailVerificationResendView, EmailVerificationStatusView, EmailVerificationVerifyView
+from .email_verification import EmailRegistrationView, EmailVerificationResendView, EmailVerificationStatusView, EmailVerificationVerifyView, StagingTestOtpView
 from django.conf import settings
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -26,6 +26,7 @@ urlpatterns = [
     path("email-verification/verify", EmailVerificationVerifyView.as_view(), name="email_verification_verify"),
     path("email-verification/resend", EmailVerificationResendView.as_view(), name="email_verification_resend"),
     path("email-verification/status", EmailVerificationStatusView.as_view(), name="email_verification_status"),
+    path("test/otp", StagingTestOtpView.as_view(), name="staging_test_otp"),
     path("google/start", GoogleUnavailableView.as_view(), name="google_start"),
     path("google/callback", GoogleUnavailableView.as_view(), name="google_callback"),
     path("google/credential", GoogleUnavailableView.as_view(), name="google_credential"),
