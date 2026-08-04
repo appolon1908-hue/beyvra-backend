@@ -21,7 +21,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import GuestDemoSessionView
-from trade.demo_engine import DemoOrderView, DemoTradeListView
+from trade.demo_engine import DemoOrderView, DemoTradeListView, DemoWalletRefillView
 
 urlpatterns = [
     path("", include("django_prometheus.urls")),
@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/demo/orders", DemoOrderView.as_view(), name="demo_order_v1"),
     path("api/v1/demo/trades", DemoTradeListView.as_view(), name="demo_trades_v1"),
+    path("api/v1/demo/wallet/refill", DemoWalletRefillView.as_view(), name="demo_wallet_refill_v1"),
     path("api/", include("api_trade.urls")),
     path("api/wallet/", include("wallet.urls")),
     path("api/notification/", include("notifications.urls")),

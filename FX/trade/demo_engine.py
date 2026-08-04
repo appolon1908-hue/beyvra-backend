@@ -109,3 +109,25 @@ class DemoTradeListView(APIView):
         settle_due_orders()
         trades = Trade.objects.filter(wallet__user=request.user, wallet__is_real=False).select_related("asset").order_by("-created_at")
         return Response([DemoOrderView()._data(t) for t in trades])
+
+
+class DemoWalletRefillView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        key = request.headers.get("Idempotency-Key", "").strip()
+        if not key:
+            return Response({"code": "IDEMPOTENCY_KEY_REQUIRED"}, status=400)
+        entry_key = f"refill:{request.user.pk}:{key}"
+        existing = DemoLedgerEntry.objects.filter(idempotency_key=entry_key).first()
+        if existing:
+            wallet = existing.wallet
+            return Response({"status": "refilled", "balance": str(wallet.balance), "idempotent": True})
+        with transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+            reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=__import__("django.db.models", fromlist=["Sum"]).Sum("price_per_unit"))["total"] or Decimal("0")
+            target = Decimal("10000") - reserved
+            delta = target - wallet.balance
+            wallet.balance = target
+            wallet.save(update_fields=["balance", "updated_at"])
+            DemoLedgerEntry.objects.create(wallet=wallet, entry_type="REFILL", amount=delta, idempotency_key=entry_key, description="Reset available virtual demo funds")
+        return Response({"status": "refilled", "balance": str(target), "reserved": str(reserved), "idempotent": False})
