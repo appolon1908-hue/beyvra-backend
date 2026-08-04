@@ -503,6 +503,7 @@ class GuestDemoSessionView(APIView):
             if cached:
                 response = Response(cached, status=status.HTTP_201_CREATED)
                 response.set_cookie("codestra_guest_session", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+                response.set_cookie("access_token", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
                 return response
 
         expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
@@ -534,6 +535,7 @@ class GuestDemoSessionView(APIView):
             cache.set(cache_key, payload, timeout=settings.GUEST_DEMO_TTL_SECONDS)
         response = Response(payload, status=status.HTTP_201_CREATED)
         response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
         return response
 
 
