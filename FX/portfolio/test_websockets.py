@@ -12,6 +12,7 @@ from django.test import TransactionTestCase
 from FX.asgi import application
 from portfolio.consumers import LiveMarketDataConsumer
 from portfolio.models import Asset, AssetBalance, AssetProfitLoss, AssetType
+from integrations.models import Organization, OrganizationMembership
 
 
 class DashboardWebSocketTests(TransactionTestCase):
@@ -23,6 +24,8 @@ class DashboardWebSocketTests(TransactionTestCase):
             password="test-pass",
             phone_number="+12025550161",
         )
+        self.organization = Organization.objects.create(name="WebSocket test tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=self.organization, role="member")
 
     def ticket(self, value):
         cache.set(value, self.user.id, 120)
@@ -122,7 +125,7 @@ class DashboardWebSocketTests(TransactionTestCase):
             self.assertTrue(connected)
             await asyncio.sleep(0.05)
             await get_channel_layer().group_send(
-                f"trades_updates{self.user.id}",
+                f"trades_updates_{self.organization.id}_{self.user.id}",
                 {"type": "send_price_update", "message": {"trade_id": 42}},
             )
             message = await communicator.receive_json_from()
