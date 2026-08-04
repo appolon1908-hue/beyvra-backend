@@ -2,7 +2,7 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -108,18 +108,24 @@ class DemoOrderView(APIView):
             opening, opened_at = quote(symbol)
         except (MarketDataError, ValueError) as exc:
             return Response({"code": "QUOTE_UNAVAILABLE", "message": "Market data is delayed. New demo trades are temporarily unavailable."}, status=409)
-        with transaction.atomic():
-            wallet, organization = _tenant_wallet(request, lock=True)
-            if wallet.balance < amount:
-                return Response({"code": "INSUFFICIENT_FUNDS", "message": "Your virtual balance is insufficient."}, status=409)
-            asset_type, _ = AssetType.objects.get_or_create(name="Crypto")
-            asset, _ = Asset.objects.get_or_create(symbol=symbol, defaults={"name": symbol, "asset_type": asset_type})
-            category, _ = TradeCategory.objects.get_or_create(name="fixed")
-            wallet.balance -= amount
-            wallet.save(update_fields=["balance", "updated_at"])
-            txn = Transaction.objects.create(wallet=wallet, type="TD", amount=-amount, status="S", gateway="demo", reference=f"demo:{request.user.pk}:{key}")
-            trade = Trade.objects.create(organization=organization, wallet=wallet, asset=asset, quantity=Decimal("1"), price_per_unit=amount, transaction=txn, trade_type=direction, category=category, duration=duration, result_time=opened_at + timedelta(seconds=duration), expires_at=opened_at + timedelta(seconds=duration), opening_price=opening, open=opening, idempotency_key=f"demo:{request.user.pk}:{key}", demo_state="OPEN")
-            DemoLedgerEntry.objects.create(wallet=wallet, trade=trade, entry_type="RESERVE", amount=Decimal("0"), idempotency_key=f"reserve:{trade.pk}", description="Virtual funds reserved")
+        try:
+            with transaction.atomic():
+                wallet, organization = _tenant_wallet(request, lock=True)
+                if wallet.balance < amount:
+                    return Response({"code": "INSUFFICIENT_FUNDS", "message": "Your virtual balance is insufficient."}, status=409)
+                asset_type, _ = AssetType.objects.get_or_create(name="Crypto")
+                asset, _ = Asset.objects.get_or_create(symbol=symbol, defaults={"name": symbol, "asset_type": asset_type})
+                category, _ = TradeCategory.objects.get_or_create(name="fixed")
+                wallet.balance -= amount
+                wallet.save(update_fields=["balance", "updated_at"])
+                txn = Transaction.objects.create(wallet=wallet, type="TD", amount=-amount, status="S", gateway="demo", reference=f"demo:{request.user.pk}:{key}")
+                trade = Trade.objects.create(organization=organization, wallet=wallet, asset=asset, quantity=Decimal("1"), price_per_unit=amount, transaction=txn, trade_type=direction, category=category, duration=duration, result_time=opened_at + timedelta(seconds=duration), expires_at=opened_at + timedelta(seconds=duration), opening_price=opening, open=opening, idempotency_key=f"demo:{request.user.pk}:{key}", demo_state="OPEN")
+                DemoLedgerEntry.objects.create(wallet=wallet, trade=trade, entry_type="RESERVE", amount=Decimal("0"), idempotency_key=f"reserve:{trade.pk}", description="Virtual funds reserved")
+        except IntegrityError:
+            # A concurrent retry may win the unique idempotency constraint. Return
+            # that committed trade instead of leaking a 500 or double-debiting.
+            existing = Trade.objects.get(idempotency_key=f"demo:{request.user.pk}:{key}")
+            return Response(self._data(existing), status=200)
         return Response(self._data(trade), status=201)
 
     def _data(self, trade):
@@ -162,14 +168,18 @@ class DemoWalletRefillView(APIView):
         if existing:
             wallet = existing.wallet
             return Response({"status": "refilled", "balance": str(wallet.balance), "idempotent": True})
-        with transaction.atomic():
-            wallet, _ = _tenant_wallet(request, lock=True)
-            reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
-            target = Decimal("10000") - reserved
-            delta = target - wallet.balance
-            wallet.balance = target
-            wallet.save(update_fields=["balance", "updated_at"])
-            DemoLedgerEntry.objects.create(wallet=wallet, entry_type="REFILL", amount=delta, idempotency_key=entry_key, description="Reset available virtual demo funds")
+        try:
+            with transaction.atomic():
+                wallet, _ = _tenant_wallet(request, lock=True)
+                reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
+                target = Decimal("10000") - reserved
+                delta = target - wallet.balance
+                wallet.balance = target
+                wallet.save(update_fields=["balance", "updated_at"])
+                DemoLedgerEntry.objects.create(wallet=wallet, entry_type="REFILL", amount=delta, idempotency_key=entry_key, description="Reset available virtual demo funds")
+        except IntegrityError:
+            existing = DemoLedgerEntry.objects.get(idempotency_key=entry_key)
+            return Response({"status": "refilled", "balance": str(existing.wallet.balance), "idempotent": True})
         return Response({"status": "refilled", "balance": str(target), "reserved": str(reserved), "idempotent": False})
 
 
