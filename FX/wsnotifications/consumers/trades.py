@@ -2,11 +2,15 @@ from .base import BaseConsumer
 import json
 from channels.db import database_sync_to_async
 from integrations.models import OrganizationMembership
+from urllib.parse import parse_qs
 
 
 @database_sync_to_async
-def _default_tenant_id(user_id):
-    membership = OrganizationMembership.objects.filter(user_id=user_id).order_by("id").values_list("organization_id", flat=True).first()
+def _tenant_id_for_user(user_id, requested=None):
+    memberships = OrganizationMembership.objects.filter(user_id=user_id)
+    if requested and memberships.filter(organization_id=requested).exists():
+        return str(requested)
+    membership = memberships.order_by("id").values_list("organization_id", flat=True).first()
     return str(membership) if membership else "default"
 
 class TradeConsumer(BaseConsumer):
@@ -19,7 +23,9 @@ class TradeConsumer(BaseConsumer):
         await super().connect()
         user = self.scope['user']
         if user.is_authenticated:
-             self.tenant_id = await _default_tenant_id(user.id)
+             query = parse_qs(self.scope.get("query_string", b"").decode())
+             requested_tenant = query.get("organization_id", [None])[0]
+             self.tenant_id = await _tenant_id_for_user(user.id, requested_tenant)
              if user.is_staff:
                  await self.channel_layer.group_add('admin_notification', self.channel_name)
              await self.channel_layer.group_add(f"trades_updates_{self.tenant_id}_{user.id}", self.channel_name)

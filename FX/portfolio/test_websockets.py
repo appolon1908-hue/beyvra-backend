@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 from unittest.mock import AsyncMock, patch
 
 from asgiref.sync import async_to_sync
@@ -7,7 +8,7 @@ from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 
 from FX.asgi import application
 from portfolio.consumers import LiveMarketDataConsumer
@@ -15,10 +16,15 @@ from portfolio.models import Asset, AssetBalance, AssetProfitLoss, AssetType
 from integrations.models import Organization, OrganizationMembership
 
 
+@override_settings(
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+    CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+)
 class DashboardWebSocketTests(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        cache.clear()
         self.user = get_user_model().objects.create_user(
             email="dashboard-ws@example.com",
             password="test-pass",
@@ -28,8 +34,9 @@ class DashboardWebSocketTests(TransactionTestCase):
         OrganizationMembership.objects.create(user=self.user, organization=self.organization, role="member")
 
     def ticket(self, value):
-        cache.set(value, self.user.id, 120)
-        return value
+        token = f"{value}-{uuid.uuid4()}"
+        cache.set(token, self.user.id, 120)
+        return token
 
     def test_live_market_price_requires_authentication(self):
         async def scenario():
@@ -119,7 +126,7 @@ class DashboardWebSocketTests(TransactionTestCase):
 
     def test_trade_update_reaches_only_authenticated_user_group(self):
         async def scenario():
-            path = f"/ws/trades/?ws_ticket={self.ticket('trade-ticket')}"
+            path = f"/ws/trades/?ws_ticket={self.ticket('trade-ticket')}&organization_id={self.organization.id}"
             communicator = WebsocketCommunicator(application, path)
             connected, close_code = await communicator.connect()
             self.assertTrue(connected, f"websocket rejected with close code {close_code}")
