@@ -165,6 +165,11 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
+        "TEST": {
+            # Keep automated tests isolated from the staging database and
+            # allow CI to provide its own disposable database name.
+            "NAME": os.getenv("TEST_DB_NAME", "test_tradi_staging_ci"),
+        },
     }
 }
 
