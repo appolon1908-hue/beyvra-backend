@@ -4,7 +4,14 @@ from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
 from real_wallet.models import Asset, LedgerAccount, RealWallet
-from real_wallet.services import post_transaction
+from real_wallet.models import WebhookSubscription
+from real_wallet.services import (
+    IdempotencyConflict,
+    create_webhook_delivery,
+    enqueue_outbox,
+    post_transaction,
+    reserve_idempotency,
+)
 from users.models import User
 
 
@@ -70,3 +77,42 @@ class RealWalletBoundaryTests(TestCase):
         )
         self.assertEqual(tx.entries.count(), 2)
         self.assertEqual(tx.entries.first().amount_atomic.as_tuple().exponent, 0)
+
+    def test_idempotency_conflict_is_rejected_in_postgres_boundary(self):
+        first, created = reserve_idempotency(
+            tenant=self.org, actor=self.user, endpoint="/withdrawals", method="POST",
+            key="same-key", request_payload={"amount_atomic": "10"},
+        )
+        self.assertTrue(created)
+        replay, created = reserve_idempotency(
+            tenant=self.org, actor=self.user, endpoint="/withdrawals", method="POST",
+            key="same-key", request_payload={"amount_atomic": "10"},
+        )
+        self.assertFalse(created)
+        self.assertEqual(first.pk, replay.pk)
+        with self.assertRaises(IdempotencyConflict):
+            reserve_idempotency(
+                tenant=self.org, actor=self.user, endpoint="/withdrawals", method="POST",
+                key="same-key", request_payload={"amount_atomic": "11"},
+            )
+
+    def test_outbox_and_webhook_delivery_are_deduplicated(self):
+        event = enqueue_outbox(
+            tenant=self.org, aggregate_type="wallet", aggregate_id=self.org.id,
+            event_type="wallet.created", payload={"synthetic": True},
+        )
+        self.assertIsNone(event.published_at)
+        subscription = WebhookSubscription.objects.create(
+            tenant=self.org, endpoint="https://example.com/webhooks", status="DISABLED"
+        )
+        first, first_created = create_webhook_delivery(
+            tenant=self.org, subscription=subscription, event_id="evt-1",
+            event_type="wallet.created", payload={"synthetic": True},
+        )
+        replay, replay_created = create_webhook_delivery(
+            tenant=self.org, subscription=subscription, event_id="evt-1",
+            event_type="wallet.created", payload={"synthetic": True},
+        )
+        self.assertTrue(first_created)
+        self.assertFalse(replay_created)
+        self.assertEqual(first.pk, replay.pk)

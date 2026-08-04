@@ -25,6 +25,11 @@ HTTPS-only with checks against private, loopback, link-local, reserved, and
 unspecified addresses. Inbound event receipts are tenant-scoped and
 deduplicated by event ID.
 
+`reserve_idempotency`, `enqueue_outbox`, and `create_webhook_delivery` provide
+database-backed request reservation, transactional outbox persistence, and
+at-least-once delivery deduplication primitives. They do not call brokers,
+custody systems, blockchain nodes, or customer endpoints synchronously.
+
 The initial API boundary is intentionally disabled. Custody, chain, compliance,
 MFA, provider webhook, reconciliation, and production activation require
 separate reviewed implementations and credentials. No private-key handling is

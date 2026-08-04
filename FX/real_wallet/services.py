@@ -1,11 +1,22 @@
 import hashlib
 import json
 from decimal import Decimal
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
 
-from .models import AssetBalance, BalanceHold, FeatureFlag, LedgerEntry, LedgerTransaction
+from .models import (
+    AssetBalance,
+    BalanceHold,
+    FeatureFlag,
+    IdempotencyRecord,
+    LedgerEntry,
+    LedgerTransaction,
+    OutboxEvent,
+    WebhookDelivery,
+    WebhookEvent,
+)
 
 REAL_FEATURE_FLAGS = (
     "real_wallet_read_enabled",
@@ -22,6 +33,10 @@ class RealWalletFeatureDisabled(Exception):
     code = "FEATURE_DISABLED"
 
 
+class IdempotencyConflict(Exception):
+    code = "IDEMPOTENCY_CONFLICT"
+
+
 def is_feature_enabled(key: str) -> bool:
     return FeatureFlag.objects.filter(key=key, enabled=True).exists()
 
@@ -29,6 +44,58 @@ def is_feature_enabled(key: str) -> bool:
 def canonical_request_hash(payload: object) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+@transaction.atomic
+def reserve_idempotency(*, tenant, actor, endpoint, method, key, request_payload, ttl_seconds=86400):
+    """Reserve a value-changing request in PostgreSQL before side effects."""
+    request_hash = canonical_request_hash(request_payload)
+    record = IdempotencyRecord.objects.select_for_update().filter(
+        tenant=tenant, actor=actor, endpoint=endpoint, method=method, key=key
+    ).first()
+    if record:
+        if record.request_hash != request_hash:
+            raise IdempotencyConflict("idempotency key was reused with a different request")
+        return record, False
+    return IdempotencyRecord.objects.create(
+        tenant=tenant, actor=actor, endpoint=endpoint, method=method, key=key,
+        request_hash=request_hash, expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
+    ), True
+
+
+def complete_idempotency(record, *, resource_type, resource_id, response_status, response_body):
+    record.resource_type = resource_type
+    record.resource_id = resource_id
+    record.response_status = response_status
+    record.response_body = response_body
+    record.save(update_fields=["resource_type", "resource_id", "response_status", "response_body", "updated_at"])
+    return record
+
+
+def enqueue_outbox(*, tenant, aggregate_type, aggregate_id, event_type, payload, occurred_at=None,
+                   correlation_id=None, causation_id=None):
+    """Persist an event in the caller's transaction; no broker call is made here."""
+    return OutboxEvent.objects.create(
+        tenant=tenant,
+        aggregate_type=aggregate_type,
+        aggregate_id=aggregate_id,
+        event_type=event_type,
+        payload=payload,
+        occurred_at=occurred_at or timezone.now(),
+        correlation_id=correlation_id,
+        causation_id=causation_id,
+    )
+
+
+@transaction.atomic
+def create_webhook_delivery(*, tenant, subscription, event_id, event_type, payload, occurred_at=None):
+    event, _ = WebhookEvent.objects.get_or_create(
+        tenant=tenant,
+        event_id=event_id,
+        defaults={"event_type": event_type, "payload": payload, "occurred_at": occurred_at or timezone.now()},
+    )
+    delivery, created = WebhookDelivery.objects.get_or_create(subscription=subscription, event=event)
+    return delivery, created
 
 
 def post_transaction(*, tenant, transaction_type, idempotency_key, entries, metadata=None, correlation_id=None):
