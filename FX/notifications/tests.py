@@ -118,6 +118,8 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(delivery.response_code, 202)
         headers = post.call_args.kwargs["headers"]
         self.assertTrue(headers["X-Codestra-Signature-256"].startswith("sha256="))
+        self.assertEqual(headers["X-Codestra-Signature-Version"], "HMAC-SHA256")
+        self.assertEqual(headers["X-Codestra-Event-Id"], str(event.id))
         self.assertEqual(post.call_args.kwargs["json"] if "json" in post.call_args.kwargs else None, None)
         self.assertIn(b'"type":"DEPOSIT"', post.call_args.kwargs["data"])
 

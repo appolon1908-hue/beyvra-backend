@@ -19,6 +19,9 @@ def deliver_webhook(self, delivery_id):
         delivery.save(update_fields=["status", "last_error", "updated_at"])
         return
     if not delivery.subscription.is_active:
+        delivery.status = "D"
+        delivery.last_error = "webhook subscription is inactive"
+        delivery.save(update_fields=["status", "last_error", "updated_at"])
         return
     event = delivery.event
     body = json.dumps({
@@ -35,6 +38,7 @@ def deliver_webhook(self, delivery_id):
         response = requests.post(
             delivery.subscription.url, data=body,
             headers={"Content-Type": "application/json", "X-Codestra-Event": event.category,
+                     "X-Codestra-Event-Id": str(event.id), "X-Codestra-Signature-Version": "HMAC-SHA256",
                      "X-Codestra-Signature-256": f"sha256={signature}"},
             timeout=getattr(settings, "WEBHOOK_TIMEOUT_SECONDS", 10), allow_redirects=False,
         )

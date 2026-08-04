@@ -46,7 +46,14 @@ class TradeListCreateView(generics.ListCreateAPIView):
         cache_key = f"trade-idempotency:v2:{request.user.id}:{idempotency_key}"
         cached = cache.get(cache_key)
         if cached and cached != "processing":
-            return response.Response(cached["data"], status=cached["status"])
+            # Cache entries can outlive a test database reset or a failed
+            # transaction. Only replay a response when the referenced trade
+            # still exists and belongs to the authenticated user; otherwise
+            # discard the stale entry and process the request normally.
+            cached_id = (cached.get("data") or {}).get("id")
+            if cached_id and Trade.objects.filter(pk=cached_id, wallet__user=request.user).exists():
+                return response.Response(cached["data"], status=cached["status"])
+            cache.delete(cache_key)
         if not cache.add(cache_key, "processing", timeout=300):
             return response.Response(
                 {"detail": "This trade request is already being processed."},

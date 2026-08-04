@@ -197,9 +197,11 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         wallet_id = self.request.query_params.get("wallet_id")
 
         queryset = self.queryset
+        organization = organization_for_request(self.request)
+        Wallet.objects.filter(user=self.request.user, organization__isnull=True).update(organization=organization)
         queryset = queryset.filter(
             wallet__user=self.request.user,
-            wallet__organization=organization_for_request(self.request),
+            wallet__organization=organization,
         )
 
         if date_from:

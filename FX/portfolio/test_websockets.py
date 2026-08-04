@@ -64,8 +64,8 @@ class DashboardWebSocketTests(TransactionTestCase):
             path = f"/ws/market-data/?ws_ticket={self.ticket('market-ticket')}&symbol=BTCUSDT&interval=1m"
             with patch.object(LiveMarketDataConsumer, "relay_market_data", fake_relay):
                 communicator = WebsocketCommunicator(application, path)
-                connected, _ = await communicator.connect()
-                self.assertTrue(connected)
+                connected, close_code = await communicator.connect()
+                self.assertTrue(connected, f"websocket rejected with close code {close_code}")
                 self.assertEqual((await communicator.receive_json_from())["status"], "connecting")
                 candle = await communicator.receive_json_from()
                 self.assertEqual(candle["type"], "candle")
@@ -109,8 +109,8 @@ class DashboardWebSocketTests(TransactionTestCase):
         async def scenario():
             path = f"/ws/current-balance/{self.user.id}/?ws_ticket={self.ticket('balance-ticket')}"
             communicator = WebsocketCommunicator(application, path)
-            connected, _ = await communicator.connect()
-            self.assertTrue(connected)
+            connected, close_code = await communicator.connect()
+            self.assertTrue(connected, f"websocket rejected with close code {close_code}")
             message = await communicator.receive_json_from()
             self.assertEqual(message["current_balance"], 125)
             await communicator.disconnect()
@@ -121,8 +121,8 @@ class DashboardWebSocketTests(TransactionTestCase):
         async def scenario():
             path = f"/ws/trades/?ws_ticket={self.ticket('trade-ticket')}"
             communicator = WebsocketCommunicator(application, path)
-            connected, _ = await communicator.connect()
-            self.assertTrue(connected)
+            connected, close_code = await communicator.connect()
+            self.assertTrue(connected, f"websocket rejected with close code {close_code}")
             await asyncio.sleep(0.05)
             await get_channel_layer().group_send(
                 f"trades_updates_{self.organization.id}_{self.user.id}",

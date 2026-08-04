@@ -182,7 +182,8 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         secret = serializer.validated_data.pop("secret", None)
         if not secret:
-            raise ValueError("secret required")
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"secret": "This field is required when creating a webhook."})
         from .services import encrypted_webhook_fields
         serializer.save(
             user=self.request.user,
