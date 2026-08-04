@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -124,10 +125,25 @@ class DemoWalletRefillView(APIView):
             return Response({"status": "refilled", "balance": str(wallet.balance), "idempotent": True})
         with transaction.atomic():
             wallet = Wallet.objects.select_for_update().get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
-            reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=__import__("django.db.models", fromlist=["Sum"]).Sum("price_per_unit"))["total"] or Decimal("0")
+            reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
             target = Decimal("10000") - reserved
             delta = target - wallet.balance
             wallet.balance = target
             wallet.save(update_fields=["balance", "updated_at"])
             DemoLedgerEntry.objects.create(wallet=wallet, entry_type="REFILL", amount=delta, idempotency_key=entry_key, description="Reset available virtual demo funds")
         return Response({"status": "refilled", "balance": str(target), "reserved": str(reserved), "idempotent": False})
+
+
+class DemoWalletView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        wallet = Wallet.objects.get(user=request.user, name=DEMO_WALLET_NAME, is_real=False, is_archived=False)
+        reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
+        return Response({
+            "currency": "Virtual USD",
+            "available": str(wallet.balance),
+            "reserved": str(reserved),
+            "total": str(wallet.balance + reserved),
+            "refillTarget": "10000.00",
+        })
