@@ -19,6 +19,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
+from trade.models import DemoLedgerEntry
 
 from .models import DemoLegalAcceptance, EmailVerificationChallenge, PendingRegistration, TransactionalEmailOutbox, User
 
@@ -77,7 +78,9 @@ def queue_email(*, event_type, email, template_key, payload, idempotency_key, lo
 
 def _wallet(user):
     currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
-    Wallet.objects.get_or_create(name=DEMO_WALLET_NAME, user=user, is_real=False, defaults={"currency": currency, "balance": DEMO_BALANCE})
+    wallet, created = Wallet.objects.get_or_create(name=DEMO_WALLET_NAME, user=user, is_real=False, defaults={"currency": currency, "balance": DEMO_BALANCE})
+    if created:
+        DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=DEMO_BALANCE, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
 
 
 def _activate_registration(pending, request):

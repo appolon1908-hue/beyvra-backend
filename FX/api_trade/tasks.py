@@ -5,6 +5,7 @@ from celery import shared_task
 from channels.layers import get_channel_layer
 from fx_utils.constants import DATE_FORMAT
 from trade.models import Trade
+from trade.demo_engine import settle_due_orders
 
 channel_layer = get_channel_layer()
 
@@ -13,6 +14,11 @@ channel_layer = get_channel_layer()
 def print_ok():
     """A simple task that returns 'ok'. Used for testing purposes."""
     return "ok"
+
+
+@shared_task
+def settle_demo_orders():
+    return settle_due_orders()
 
 
 @shared_task

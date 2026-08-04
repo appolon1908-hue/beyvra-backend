@@ -91,6 +91,13 @@ class Trade(TimeStampedModel):
     net = models.DecimalField(default=0, max_digits=12, decimal_places=4)
     open = models.DecimalField(default=0, max_digits=12, decimal_places=4)
     close = models.DecimalField(default=0, max_digits=12, decimal_places=4)
+    demo_state = models.CharField(max_length=16, default="OPEN")
+    demo_result = models.CharField(max_length=8, blank=True, default="")
+    opening_price = models.DecimalField(max_digits=24, decimal_places=10, null=True, blank=True)
+    closing_price = models.DecimalField(max_digits=24, decimal_places=10, null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    payout = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    idempotency_key = models.CharField(max_length=255, null=True, blank=True, unique=True)
 
     def __str__(self):
         return f"{self.asset.symbol} {self.trade_type.capitalize()}"
@@ -139,3 +146,13 @@ class Trade(TimeStampedModel):
         self.clean()
         # Proceed with saving the object
         super(Trade, self).save(*args, **kwargs)
+
+
+class DemoLedgerEntry(TimeStampedModel):
+    ENTRY_TYPES = (("INITIAL", "Initial demo credit"), ("RESERVE", "Trade reservation"), ("SETTLEMENT", "Trade settlement"), ("REFILL", "Demo refill"))
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="demo_ledger")
+    trade = models.ForeignKey(Trade, null=True, blank=True, on_delete=models.SET_NULL, related_name="ledger_entries")
+    entry_type = models.CharField(max_length=16, choices=ENTRY_TYPES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    idempotency_key = models.CharField(max_length=255, unique=True)
+    description = models.CharField(max_length=255, blank=True)

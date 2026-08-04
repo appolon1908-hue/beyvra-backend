@@ -35,6 +35,7 @@ from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from trade.models import Trade, Transaction
+from trade.models import DemoLedgerEntry
 from trade.serializers import TradeDetailSerializer, TradeHistorySerializer, TransactionSerializer
 from users import messages
 from users.models import User
@@ -522,7 +523,8 @@ class GuestDemoSessionView(APIView):
                 guest_demo_expires_at=expires_at,
             )
             demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
-            Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=10000, is_real=False)
+            wallet = Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=10000, is_real=False)
+            DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=10000, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
 
         refresh = AuthTokenObtainPairSerializer.get_token(guest)
         access = refresh.access_token
