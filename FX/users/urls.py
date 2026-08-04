@@ -19,6 +19,7 @@ urlpatterns = [
     path("token/", views.LoginView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/logout/", views.LogoutView.as_view(), name="token_logout"),
+    path("guest-demo/", views.GuestDemoSessionView.as_view(), name="guest_demo_session"),
     path(
         "disable_walkthrough/",
         views.DisableWalkthroughView.as_view(),

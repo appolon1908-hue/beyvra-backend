@@ -1,13 +1,14 @@
 import base64
 import io
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pandas as pd
 import pyotp
 import qrcode
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
@@ -19,6 +20,7 @@ from django.db.models import Case, CharField, Q, Sum, Value, When
 from django.db.models.signals import post_save
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -475,6 +477,48 @@ class LoginView(generics.CreateAPIView):
             serializer.errors,
             status=status.HTTP_401_UNAUTHORIZED if invalid_credentials else status.HTTP_400_BAD_REQUEST,
         )
+
+
+class GuestDemoSessionView(APIView):
+    """Issue a short-lived, anonymous paper-trading access token.
+
+    No PII is accepted or returned, no refresh token is issued, and the
+    identity is explicitly marked as demo-only. This endpoint is enabled only
+    while the server is in paper-trading mode.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "guest_demo"
+
+    def post(self, request):
+        if not getattr(settings, "GUEST_DEMO_ENABLED", False) or not getattr(settings, "PAPER_TRADING_ONLY", True):
+            return Response({"code": "GUEST_DEMO_DISABLED", "message": "Demo access is unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
+        with transaction.atomic():
+            guest = User.objects.create_user(
+                email=f"guest-{uuid4().hex}@guest.invalid",
+                password=uuid4().hex,
+                first_name="Guest",
+                last_name="Demo",
+                phone_number=f"+999{uuid4().int % 10**12:012d}",
+                is_active=True,
+                is_walkthrough=True,
+                email_verified=False,
+                email_verification_source="guest_demo",
+                is_guest_demo=True,
+                guest_demo_expires_at=expires_at,
+            )
+            demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
+            Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=DEMO_BALANCE, is_real=False)
+
+        refresh = AuthTokenObtainPairSerializer.get_token(guest)
+        access = refresh.access_token
+        access["guest_demo"] = True
+        access["demo_only"] = True
+        access["guest_expires_at"] = int(expires_at.timestamp())
+        access.set_exp(lifetime=timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS))
+        return Response({"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}, status=status.HTTP_201_CREATED)
 
 
 class LogoutView(generics.GenericAPIView):

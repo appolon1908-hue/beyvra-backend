@@ -112,6 +112,12 @@ class User(AbstractUser, TimeStampedModel):
     mfa_secret = models.CharField(max_length=100, blank=True, null=True)
     is_mfa_enabled = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
+    # Retained for compatibility with the staging schema's verification flow.
+    email_verification_source = models.CharField(max_length=32, blank=True, default="")
+    # Short-lived server-issued paper-trading identity. These users never
+    # represent a customer or a real-money account.
+    is_guest_demo = models.BooleanField(default=False)
+    guest_demo_expires_at = models.DateTimeField(null=True, blank=True)
     phone_verified = models.BooleanField(default=False)
     trader_id = models.BigIntegerField(null=True, blank=True, unique=True, default=generate_trader_id, editable=False)
     is_walkthrough = models.BooleanField(default=False)

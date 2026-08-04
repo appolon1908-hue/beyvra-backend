@@ -24,6 +24,8 @@ load_dotenv()
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
+GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
+GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -288,6 +290,7 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
         "crm_inbound": "120/minute",
         "webhook_test": "5/minute",
         "webhook_retry": "10/hour",
+        "guest_demo": "5/hour",
     }
 
 # Simple-jwt
