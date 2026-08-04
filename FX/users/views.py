@@ -494,6 +494,15 @@ class GuestDemoSessionView(APIView):
         if not getattr(settings, "GUEST_DEMO_ENABLED", False) or not getattr(settings, "PAPER_TRADING_ONLY", True):
             return Response({"code": "GUEST_DEMO_DISABLED", "message": "Demo access is unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+        idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+        cache_key = f"guest-demo-session:{idempotency_key}" if idempotency_key else ""
+        if cache_key:
+            cached = cache.get(cache_key)
+            if cached:
+                response = Response(cached, status=status.HTTP_201_CREATED)
+                response.set_cookie("codestra_guest_session", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+                return response
+
         expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
         with transaction.atomic():
             guest = User.objects.create_user(
@@ -510,7 +519,7 @@ class GuestDemoSessionView(APIView):
                 guest_demo_expires_at=expires_at,
             )
             demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
-            Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=DEMO_BALANCE, is_real=False)
+            Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=10000, is_real=False)
 
         refresh = AuthTokenObtainPairSerializer.get_token(guest)
         access = refresh.access_token
@@ -518,7 +527,12 @@ class GuestDemoSessionView(APIView):
         access["demo_only"] = True
         access["guest_expires_at"] = int(expires_at.timestamp())
         access.set_exp(lifetime=timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS))
-        return Response({"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}, status=status.HTTP_201_CREATED)
+        payload = {"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}
+        if cache_key:
+            cache.set(cache_key, payload, timeout=settings.GUEST_DEMO_TTL_SECONDS)
+        response = Response(payload, status=status.HTTP_201_CREATED)
+        response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        return response
 
 
 class LogoutView(generics.GenericAPIView):
