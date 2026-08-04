@@ -48,10 +48,10 @@ def organization_for_request(request):
     membership = OrganizationMembership.objects.filter(user=request.user).select_related("organization").first()
     if membership:
         return membership.organization
-    if request.user.is_staff:
+    if request.user.is_staff or getattr(request.user, "is_guest_demo", False):
         organization = Organization.objects.filter(name="Codestra staging").first()
         if not organization:
             organization = Organization.objects.create(name="Codestra staging")
-        OrganizationMembership.objects.get_or_create(user=request.user, organization=organization, defaults={"role": "owner"})
+        OrganizationMembership.objects.get_or_create(user=request.user, organization=organization, defaults={"role": "owner" if request.user.is_staff else "member"})
         return organization
     raise exceptions.PermissionDenied("organization context required")
