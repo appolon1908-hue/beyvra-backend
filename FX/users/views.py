@@ -541,6 +541,22 @@ class GuestDemoSessionView(APIView):
         return response
 
 
+class SessionResolveView(APIView):
+    """Bounded, server-authoritative session bootstrap contract for the SPA."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        guest = bool(getattr(user, "is_guest_demo", False))
+        return Response({
+            "state": "guest.ready" if guest else "user.ready",
+            "principal": "guest" if guest else "user",
+            "guestDemo": guest,
+            "demoOnly": True,
+            "user": {"id": user.pk, "email": None if guest else user.email, "displayName": user.get_full_name() or "Guest Demo"},
+        })
+
+
 class LogoutView(generics.GenericAPIView):
     serializer_class = LogoutSerializer
     permission_classes = [IsAuthenticated]
