@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/frontendadmin/90210/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
     path("api/user/", include("users.urls")),
+    path("api/v1/auth/", include("users.google_urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/", include("api_trade.urls")),
     path("api/wallet/", include("wallet.urls")),

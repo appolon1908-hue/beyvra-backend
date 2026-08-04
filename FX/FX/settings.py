@@ -26,16 +26,6 @@ NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
-EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
-EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
-EMAIL_OTP_LENGTH = 6
-EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
-EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
-EMAIL_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("EMAIL_OTP_RESEND_COOLDOWN_SECONDS", "60"))
-EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
-PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
-TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
-WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,6 +35,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
+EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_LENGTH = 6
+EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
+EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
+EMAIL_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("EMAIL_OTP_RESEND_COOLDOWN_SECONDS", "60"))
+EMAIL_OTP_MAX_SENDS_PER_HOUR = int(os.getenv("EMAIL_OTP_MAX_SENDS_PER_HOUR", "5"))
+EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
+PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
+TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
+WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
+GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
+GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
+GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
+GOOGLE_OIDC_REDIRECT_URI = os.getenv("GOOGLE_OIDC_REDIRECT_URI", "")
+GOOGLE_OIDC_SCOPES = os.getenv("GOOGLE_OIDC_SCOPES", "openid email profile")
+GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
+AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
+LEGAL_SERVICE_AGREEMENT_VERSION = os.getenv("LEGAL_SERVICE_AGREEMENT_VERSION", "demo-v1")
+LEGAL_PRIVACY_POLICY_VERSION = os.getenv("LEGAL_PRIVACY_POLICY_VERSION", "demo-v1")
+LEGAL_RISK_DISCLOSURE_VERSION = os.getenv("LEGAL_RISK_DISCLOSURE_VERSION", "demo-v1")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "0").lower() in {"1", "true", "yes"}
 

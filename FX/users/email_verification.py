@@ -2,6 +2,8 @@ import hashlib
 import hmac
 import secrets
 import uuid
+import base64
+from cryptography.fernet import Fernet
 from datetime import timedelta
 
 from django.conf import settings
@@ -18,8 +20,22 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 
-from .google_auth import _active_legal_versions, _audit
-from .models import EmailVerificationChallenge, LegalDocument, PendingRegistration, TransactionalEmailOutbox, User, UserLegalAcceptance
+from .models import DemoLegalAcceptance, EmailVerificationChallenge, PendingRegistration, TransactionalEmailOutbox, User
+
+
+def _active_legal_versions():
+    return {
+        "service-agreement": getattr(settings, "LEGAL_SERVICE_AGREEMENT_VERSION", "demo-v1"),
+        "privacy-policy": getattr(settings, "LEGAL_PRIVACY_POLICY_VERSION", "demo-v1"),
+        "risk-disclosure": getattr(settings, "LEGAL_RISK_DISCLOSURE_VERSION", "demo-v1"),
+    }
+
+
+def _audit(event_type, **kwargs):
+    # The legacy branch has no audit model; retain an application log event
+    # until the shared security-event model is migrated.
+    import logging
+    logging.getLogger("codestra.auth").info("%s %s", event_type, {k: v for k, v in kwargs.items() if k not in {"request"}})
 
 
 def mask_email(email: str) -> str:
@@ -51,8 +67,8 @@ def verify_otp(code: str, encoded: str) -> bool:
 
 
 def _encrypted_code(code: str) -> str:
-    from .google_auth import _encrypt
-    return _encrypt(code)
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
+    return Fernet(key).encrypt(code.encode()).decode("ascii")
 
 
 def queue_email(*, event_type, email, template_key, payload, idempotency_key, locale="en"):
@@ -69,11 +85,10 @@ def _activate_registration(pending, request):
     first, _, last = pending.display_name.partition(" ")
     with transaction.atomic():
         pending = PendingRegistration.objects.select_for_update().get(pk=pending.pk)
-        user = User(email=pending.email_normalized, first_name=(first or "Customer")[:20], last_name=(last or "User")[:20], phone_number=None, password=pending.password_hash, email_verified=True, email_verified_at=now, email_verification_source="otp", is_walkthrough=True, is_active=True)
+        user = User(email=pending.email_normalized, first_name=(first or "Customer")[:20], last_name=(last or "User")[:20], phone_number=f"+999{uuid.uuid4().int % 10**12:012d}", password=pending.password_hash, email_verified=True, email_verified_at=now, email_verification_source="otp", is_walkthrough=True, is_active=True)
         user.save()
         for doc_type, version in pending.legal_document_versions.items():
-            document, _ = LegalDocument.objects.get_or_create(document_type=doc_type, version=version, locale=pending.locale, defaults={"is_active": True})
-            UserLegalAcceptance.objects.create(user=user, document=document, accepted_at=now, acceptance_source="email-registration", authentication_transaction_id=str(pending.id), locale=pending.locale, ip_address=request.META.get("REMOTE_ADDR"), user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000])
+            DemoLegalAcceptance.objects.create(user=user, document_type=doc_type, document_version=version, accepted_at=now, acceptance_source="email-registration", registration_id=pending.id, locale=pending.locale, ip_address=request.META.get("REMOTE_ADDR"), user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000])
         _wallet(user)
         pending.status = "completed"
         pending.verified_at = now
@@ -144,7 +159,10 @@ class EmailVerificationVerifyView(APIView):
                 challenge.status = "consumed"; challenge.consumed_at = timezone.now(); challenge.save(update_fields=["status", "consumed_at", "attempt_count", "last_attempt_at"])
                 user = _activate_registration(pending, request)
             refresh = TokenObtainPairSerializer.get_token(user)
-            return Response({"status": "verified", "accountStatus": "active", "welcomeEmailQueued": True, "nextPath": "/platform", "access": str(refresh.access_token), "refresh": str(refresh), "user": {"id": user.pk, "email": user.email, "is_walkthrough": user.is_walkthrough}})
+            response = Response({"status": "verified", "accountStatus": "active", "welcomeEmailQueued": True, "nextPath": "/platform", "user": {"id": user.pk, "email": user.email, "is_walkthrough": user.is_walkthrough}})
+            response.set_cookie("access_token", str(refresh.access_token), max_age=3600, secure=True, httponly=True, samesite="Lax", path="/")
+            response.set_cookie("refresh_token", str(refresh), max_age=604800, secure=True, httponly=True, samesite="Lax", path="/")
+            return response
         except PendingRegistration.DoesNotExist:
             return Response({"code": "OTP_INVALID", "message": "The verification code is invalid or expired."}, status=400)
 
@@ -188,10 +206,10 @@ class EmailVerificationStatusView(APIView):
 
 
 def send_outbox_message(item):
-    from .google_auth import _decrypt
     payload = item.payload or {}
     if item.template_key == "email_otp":
-        code = _decrypt(payload["code_encrypted"])
+        key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
+        code = Fernet(key).decrypt(payload["code_encrypted"].encode()).decode()
         subject = "Your Codestra verification code"
         body = f"Your verification code is {code}.\n\nThis code expires in {payload.get('expires_minutes', 10)} minutes. Do not share it. Codestra support will never ask for it.\n\nIgnore this message if you did not start registration."
     else:

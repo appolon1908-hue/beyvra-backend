@@ -1,4 +1,5 @@
 from enum import Enum
+import uuid
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -211,6 +212,19 @@ class TransactionalEmailOutbox(models.Model):
     provider_message_id = models.CharField(max_length=255, blank=True)
     last_error_code = models.CharField(max_length=64, blank=True)
     idempotency_key = models.CharField(max_length=255, unique=True)
+
+
+class DemoLegalAcceptance(models.Model):
+    """Immutable record of the demo agreements accepted at activation."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="demo_legal_acceptances")
+    document_type = models.CharField(max_length=64)
+    document_version = models.CharField(max_length=64)
+    locale = models.CharField(max_length=16, default="en")
+    accepted_at = models.DateTimeField()
+    acceptance_source = models.CharField(max_length=64)
+    registration_id = models.UUIDField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
 
 
 class PhoneVerificationCode(models.Model):
