@@ -271,3 +271,79 @@ class AuditEvent(UUIDModel):
 
     class Meta:
         db_table = "real_wallet_audit_events"
+
+
+class ProviderConnection(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_provider_connections")
+    provider = models.CharField(max_length=64)
+    connection_type = models.CharField(max_length=64)
+    encrypted_config = models.BinaryField()
+    status = models.CharField(max_length=24, default="DISABLED")
+    environment = models.CharField(max_length=24, default="sandbox")
+
+    class Meta:
+        db_table = "real_integration_provider_connections"
+
+
+class WebhookSubscription(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_webhook_subscriptions")
+    endpoint = models.URLField(max_length=500)
+    status = models.CharField(max_length=24, default="DISABLED")
+    description = models.CharField(max_length=160, blank=True)
+
+    class Meta:
+        db_table = "real_integration_webhook_subscriptions"
+
+
+class WebhookSecretVersion(UUIDModel):
+    subscription = models.ForeignKey(WebhookSubscription, on_delete=models.PROTECT, related_name="secret_versions")
+    key_id = models.CharField(max_length=64)
+    ciphertext = models.BinaryField()
+    nonce = models.BinaryField()
+    key_version = models.PositiveIntegerField(default=1)
+    activated_at = models.DateTimeField()
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    fingerprint = models.CharField(max_length=64)
+
+    class Meta:
+        db_table = "real_integration_webhook_secret_versions"
+        constraints = [
+            models.UniqueConstraint(fields=("subscription", "key_id"), name="real_webhook_secret_key_unique")
+        ]
+
+
+class WebhookEvent(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_webhook_events")
+    event_id = models.CharField(max_length=128)
+    event_type = models.CharField(max_length=128)
+    payload = models.JSONField()
+    occurred_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "real_integration_webhook_events"
+        constraints = [
+            models.UniqueConstraint(fields=("tenant", "event_id"), name="real_webhook_event_unique")
+        ]
+
+
+class WebhookDelivery(UUIDModel):
+    subscription = models.ForeignKey(WebhookSubscription, on_delete=models.PROTECT, related_name="deliveries")
+    event = models.ForeignKey(WebhookEvent, on_delete=models.PROTECT, related_name="deliveries")
+    status = models.CharField(max_length=24, default="PENDING")
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "real_integration_webhook_deliveries"
+        constraints = [
+            models.UniqueConstraint(fields=("subscription", "event"), name="real_webhook_delivery_unique")
+        ]
+
+
+class WebhookAttempt(UUIDModel):
+    delivery = models.ForeignKey(WebhookDelivery, on_delete=models.PROTECT, related_name="attempts")
+    response_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=24)
+    error_code = models.CharField(max_length=64, blank=True)
+    latency_ms = models.PositiveIntegerField(null=True, blank=True)

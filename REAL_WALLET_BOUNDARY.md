@@ -18,6 +18,13 @@ and audit tables. Atomic amounts use `NUMERIC(78,0)` through Django
 single-asset balance and PostgreSQL installs a guard against mutating posted
 entries.
 
+Provider-neutral custody and chain protocols are defined in
+`FX/real_wallet/providers.py`; default adapters fail closed. Webhook secrets
+use AES-256-GCM with a protected 32-byte key file, and webhook destinations are
+HTTPS-only with checks against private, loopback, link-local, reserved, and
+unspecified addresses. Inbound event receipts are tenant-scoped and
+deduplicated by event ID.
+
 The initial API boundary is intentionally disabled. Custody, chain, compliance,
 MFA, provider webhook, reconciliation, and production activation require
 separate reviewed implementations and credentials. No private-key handling is
