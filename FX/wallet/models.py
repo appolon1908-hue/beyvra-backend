@@ -53,7 +53,7 @@ class Wallet(TimeStampedModel):
     is_real = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ["user", "name"]
+        unique_together = ["user", "organization", "name"]
 
     def __str__(self):
         return f"{self.user}-{self.name}"
