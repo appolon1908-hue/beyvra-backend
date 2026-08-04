@@ -16,6 +16,9 @@ from .models import Asset, AssetType, DemoLedgerEntry, Trade, TradeCategory
 
 ALLOWED_DURATIONS = {5, 15, 30, 60}
 PAYOUT_RATE = Decimal("0.80")
+DEMO_MIN_AMOUNT = Decimal("1")
+DEMO_MAX_AMOUNT = Decimal("10000")
+DEMO_AMOUNT_STEP = Decimal("1")
 
 
 def quote(symbol):
@@ -77,7 +80,7 @@ class DemoOrderView(APIView):
             duration = int(request.data.get("duration"))
         except (TypeError, ValueError, ArithmeticError):
             return Response({"code": "ORDER_INVALID", "message": "Amount and duration are invalid."}, status=400)
-        if direction not in {"up", "down"} or amount <= 0 or duration not in ALLOWED_DURATIONS:
+        if direction not in {"up", "down"} or amount < DEMO_MIN_AMOUNT or amount > DEMO_MAX_AMOUNT or duration not in ALLOWED_DURATIONS or (amount % DEMO_AMOUNT_STEP):
             return Response({"code": "ORDER_INVALID", "message": "This demo order is not permitted."}, status=400)
         existing = Trade.objects.filter(idempotency_key=f"demo:{request.user.pk}:{key}").first()
         if existing:
@@ -102,6 +105,22 @@ class DemoOrderView(APIView):
 
     def _data(self, trade):
         return {"id": trade.pk, "state": trade.demo_state, "result": trade.demo_result or None, "symbol": trade.asset.symbol, "direction": trade.trade_type, "amount": str(trade.price_per_unit), "openingPrice": str(trade.opening_price), "closingPrice": str(trade.closing_price) if trade.closing_price else None, "openedAt": trade.created_at.isoformat(), "expiresAt": trade.expires_at.isoformat()}
+
+
+class DemoConfigView(APIView):
+    """Vendor-neutral, server-authoritative limits for the practice terminal."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        symbols = list(Asset.objects.values_list("symbol", flat=True)[:100])
+        return Response({
+            "durations": sorted(ALLOWED_DURATIONS),
+            "minAmount": int(DEMO_MIN_AMOUNT),
+            "maxAmount": int(DEMO_MAX_AMOUNT),
+            "amountStep": int(DEMO_AMOUNT_STEP),
+            "payoutRate": str(PAYOUT_RATE),
+            "assets": symbols or ["BTCUSDT"],
+        })
 
 
 class DemoTradeListView(APIView):
