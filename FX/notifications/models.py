@@ -30,6 +30,7 @@ class UserNotifications(models.Model):
     )
     notification = models.ForeignKey(Notifications, on_delete=models.RESTRICT)
     user = models.ForeignKey(User, on_delete=models.RESTRICT)
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE, related_name="user_notifications")
     is_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -46,6 +47,7 @@ class UserAlerts(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.RESTRICT)
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE, related_name="user_alerts")
     asset_id = models.CharField(max_length=255)
     price_threshold = models.DecimalField(
         max_digits=10,

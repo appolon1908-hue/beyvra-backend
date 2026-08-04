@@ -35,9 +35,16 @@ import pycountry
 import logging
 from django.conf import settings
 from notifications.services import emit_notification
+from integrations.permissions import organization_for_request
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def _tenant_wallet_queryset(request, queryset):
+    organization = organization_for_request(request)
+    queryset.filter(user=request.user, organization__isnull=True).update(organization=organization)
+    return queryset.filter(user=request.user, organization=organization)
 
 
 class CurrencyList(generics.ListAPIView):
@@ -59,7 +66,7 @@ class WalletListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         """Fiter queryset to authenticated user."""
         queryset = self.queryset
-        queryset = queryset.filter(user=self.request.user)
+        queryset = _tenant_wallet_queryset(self.request, queryset)
         return queryset
 
 
@@ -70,7 +77,7 @@ class WalletDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated, IsOwner]
 
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
+        return _tenant_wallet_queryset(self.request, self.queryset)
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -89,6 +96,9 @@ class WalletRefillView(generics.RetrieveAPIView):
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
 
+    def get_queryset(self):
+        return _tenant_wallet_queryset(self.request, self.queryset)
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         # check if account is not real and update price to initial
@@ -104,6 +114,9 @@ class WalletArchiveView(generics.GenericAPIView):
     serializer_class = WalletArchivedSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return _tenant_wallet_queryset(self.request, self.queryset)
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -184,7 +197,10 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         wallet_id = self.request.query_params.get("wallet_id")
 
         queryset = self.queryset
-        queryset = queryset.filter(wallet__user=self.request.user)
+        queryset = queryset.filter(
+            wallet__user=self.request.user,
+            wallet__organization=organization_for_request(self.request),
+        )
 
         if date_from:
             queryset = queryset.filter(created_at__date__gte=date_from)

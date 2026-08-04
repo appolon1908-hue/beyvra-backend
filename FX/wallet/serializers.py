@@ -32,7 +32,7 @@ class WalletListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Wallet
-        fields = "__all__"
+        exclude = ("organization",)
         read_only_fields = [*WALLET_BASE_READ_ONLY]
 
     def create(self, validated_data):

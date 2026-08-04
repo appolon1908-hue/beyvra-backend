@@ -22,7 +22,8 @@ class NotificationListing(generics.GenericAPIView):
     def get(self, request):
         user = request.user
         notifications = self.get_queryset()
-        user_notifications = UserNotifications.objects.filter(user=user)
+        organization = organization_for_request(request)
+        user_notifications = UserNotifications.objects.filter(user=user, organization=organization)
         user_notification_dict = {data.notification_id: data.is_enabled for data in user_notifications}
 
         notifications_data = []
@@ -52,12 +53,13 @@ class UpdateNotifications(generics.GenericAPIView):
             return Response({"error": "Notification does not exist"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            user_notification = UserNotifications.objects.get(user=request.user, notification=notification)
+            user_notification = UserNotifications.objects.get(user=request.user, notification=notification, organization=organization_for_request(request))
             user_notification.is_enabled = request.data.get("is_enabled", False)
             user_notification.save()
         except UserNotifications.DoesNotExist:
             user_notification = UserNotifications.objects.create(
                 user=request.user,
+                organization=organization_for_request(request),
                 notification=notification,
                 is_enabled=request.data.get("is_enabled", True),
             )
@@ -73,7 +75,7 @@ class UserAlertsListing(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserAlerts.objects.filter(user=self.request.user)
+        return UserAlerts.objects.filter(user=self.request.user, organization=organization_for_request(self.request))
 
     def get(self, request):
         # Get all alerts for the authenticated user
@@ -85,7 +87,7 @@ class UserAlertsListing(generics.GenericAPIView):
         # Create a new alert for the user
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)  # Assign the authenticated user to the alert
+            serializer.save(user=request.user, organization=organization_for_request(request))
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

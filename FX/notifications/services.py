@@ -20,7 +20,8 @@ def normalize_category(value):
 def preference_enabled(user_id, category):
     """Missing preferences opt in; an explicit disabled preference opts out."""
     normalized = normalize_category(category)
-    preferences = UserNotifications.objects.filter(user_id=user_id).select_related("notification")
+    organization = organization_for_user(user_id)
+    preferences = UserNotifications.objects.filter(user_id=user_id, organization=organization).select_related("notification")
     category_preference = next(
         (item for item in preferences if normalize_category(item.notification.name) == normalized), None
     )
@@ -57,7 +58,7 @@ def emit_notification(*, user_id, title, message, category="GENERAL", payload=No
     if channel_layer:
         try:
             async_to_sync(channel_layer.group_send)(
-                f"user_{user_id}", {"type": "send_message", "message": wire_event}
+                f"user_{organization.id if organization else 'default'}_{user_id}", {"type": "send_message", "message": wire_event}
             )
         except Exception:
             logger.exception("Unable to broadcast notification %s", event.id)
