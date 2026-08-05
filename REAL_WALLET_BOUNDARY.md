@@ -39,6 +39,10 @@ Read-only wallet and balance routes are implemented with authenticated,
 tenant-scoped queries. They return data only when `real_wallet_read_enabled` is
 explicitly enabled; all value-changing routes remain disabled.
 
+Reference configuration endpoints expose only enabled assets, networks, and
+asset/network pairs. Feature-state output contains booleans only and never
+includes provider credentials or infrastructure details.
+
 The withdrawal domain service now validates an active, cleared, non-cooling
 withdrawal address, reserves funds with a database hold, persists a
 `REQUESTED` withdrawal, records an outbox event, and completes idempotency in a

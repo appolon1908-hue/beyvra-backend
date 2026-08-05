@@ -3,12 +3,12 @@ from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import OrganizationMembership
-from .models import RealWallet, WebhookSubscription
+from .models import Asset, AssetNetwork, FeatureFlag, Network, RealWallet, WebhookSubscription
 from .serializers import RealWalletBalanceSerializer, RealWalletSerializer
 from .services import is_feature_enabled
 from .webhooks import WebhookSecurityError, create_secret_version, validate_webhook_destination
@@ -52,6 +52,47 @@ class RealWalletStatusView(APIView):
 
     def get(self, request):
         return Response({"enabled": False, "mode": "disabled", "demo_isolation": True})
+
+
+class RealWalletFeaturesView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        flags = FeatureFlag.objects.order_by("key")
+        return Response({"features": {flag.key: flag.enabled for flag in flags}})
+
+
+class RealWalletAssetsView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        return Response({"results": [
+            {"id": str(asset.id), "symbol": asset.symbol, "name": asset.name, "decimals": asset.decimals}
+            for asset in Asset.objects.filter(enabled=True).order_by("symbol")
+        ]})
+
+
+class RealWalletNetworksView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        return Response({"results": [
+            {"id": str(network.id), "code": network.code, "name": network.name}
+            for network in Network.objects.filter(enabled=True).order_by("code")
+        ]})
+
+
+class RealWalletAssetNetworksView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        pairs = AssetNetwork.objects.filter(enabled=True, asset__enabled=True, network__enabled=True).select_related("asset", "network")
+        return Response({"results": [
+            {"id": str(pair.id), "asset_id": str(pair.asset_id), "network_id": str(pair.network_id),
+             "symbol": pair.asset.symbol, "network": pair.network.code,
+             "confirmations_required": pair.confirmations_required}
+            for pair in pairs.order_by("asset__symbol", "network__code")
+        ]})
 
 
 class RealWalletListView(APIView):

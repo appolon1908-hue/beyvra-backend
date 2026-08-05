@@ -9,6 +9,26 @@ info:
 servers:
   - url: /api/v1
 paths:
+  /features/:
+    get:
+      operationId: realWalletFeatures
+      responses:
+        '200': {description: Feature states; real-value flags default false}
+  /assets/:
+    get:
+      operationId: listEnabledAssets
+      responses:
+        '200': {description: Enabled assets only}
+  /networks/:
+    get:
+      operationId: listEnabledNetworks
+      responses:
+        '200': {description: Enabled networks only}
+  /asset-networks/:
+    get:
+      operationId: listEnabledAssetNetworks
+      responses:
+        '200': {description: Enabled asset/network pairs only}
   /status/:
     get:
       operationId: realWalletStatus

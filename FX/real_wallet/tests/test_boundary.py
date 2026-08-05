@@ -50,6 +50,21 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
 
+    def test_public_configuration_exposes_only_enabled_reference_data(self):
+        Network.objects.create(code="hidden", name="Hidden", enabled=False)
+        visible = Network.objects.create(code="visible", name="Visible", enabled=True)
+        self.asset.enabled = True
+        self.asset.save(update_fields=["enabled"])
+        AssetNetwork.objects.create(asset=self.asset, network=visible, enabled=True)
+        client = APIClient()
+        assets = client.get("/api/v1/assets/")
+        networks = client.get("/api/v1/networks/")
+        pairs = client.get("/api/v1/asset-networks/")
+        self.assertEqual(assets.status_code, 200)
+        self.assertEqual([item["symbol"] for item in assets.data["results"]], ["TST"])
+        self.assertEqual([item["code"] for item in networks.data["results"]], ["visible"])
+        self.assertEqual(len(pairs.data["results"]), 1)
+
     def test_enabled_read_is_tenant_scoped(self):
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
         with patch("users.signals.async_send_welcome_email.delay"):

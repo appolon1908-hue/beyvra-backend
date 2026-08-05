@@ -2,9 +2,13 @@ from django.urls import path
 
 from .views import (
     RealWalletBalanceListView,
+    RealWalletAssetNetworksView,
+    RealWalletAssetsView,
     RealWalletDetailView,
     RealWalletDisabledView,
     RealWalletListView,
+    RealWalletFeaturesView,
+    RealWalletNetworksView,
     RealWalletStatusView,
     WebhookSubscriptionListCreateView,
     WebhookSubscriptionRotateSecretView,
@@ -15,6 +19,10 @@ disabled = RealWalletDisabledView.as_view()
 
 urlpatterns = [
     path("status/", RealWalletStatusView.as_view(), name="status"),
+    path("features/", RealWalletFeaturesView.as_view(), name="features"),
+    path("assets/", RealWalletAssetsView.as_view(), name="assets"),
+    path("networks/", RealWalletNetworksView.as_view(), name="networks"),
+    path("asset-networks/", RealWalletAssetNetworksView.as_view(), name="asset-networks"),
     path("wallets/", RealWalletListView.as_view(), name="wallets"),
     path("wallets/<uuid:wallet_id>/", RealWalletDetailView.as_view(), name="wallet-detail"),
     path("wallets/<uuid:wallet_id>/balances/", RealWalletBalanceListView.as_view(), name="wallet-balances"),
