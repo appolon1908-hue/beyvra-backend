@@ -377,6 +377,24 @@ class ProviderConnection(UUIDModel):
         db_table = "real_integration_provider_connections"
 
 
+class ProviderWebhookReceipt(UUIDModel):
+    connection = models.ForeignKey(ProviderConnection, on_delete=models.PROTECT, related_name="webhook_receipts")
+    provider_event_id = models.CharField(max_length=255)
+    event_type = models.CharField(max_length=128)
+    payload_hash = models.CharField(max_length=64)
+    raw_payload = models.JSONField()
+    status = models.CharField(max_length=24, default="RECEIVED")
+    received_at = models.DateTimeField()
+    processed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "real_integration_provider_webhook_receipts"
+        constraints = [
+            models.UniqueConstraint(fields=("connection", "provider_event_id"), name="real_provider_event_unique")
+        ]
+
+
 class WebhookSubscription(UUIDModel):
     tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_webhook_subscriptions")
     endpoint = models.URLField(max_length=500)

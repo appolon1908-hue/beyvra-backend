@@ -15,6 +15,9 @@ from .views import (
     RealWalletStatusView,
     WebhookSubscriptionListCreateView,
     WebhookSubscriptionRotateSecretView,
+    AdminWithdrawalApprovalView,
+    AdminWithdrawalRejectView,
+    AdminReconciliationView,
 )
 
 app_name = "real_wallet"
@@ -39,4 +42,7 @@ urlpatterns = [
     path("transfers/<uuid:transfer_id>/", disabled, name="transfer-detail"),
     path("webhook-subscriptions/", WebhookSubscriptionListCreateView.as_view(), name="webhook-subscriptions"),
     path("webhook-subscriptions/<uuid:subscription_id>/rotate-secret/", WebhookSubscriptionRotateSecretView.as_view(), name="webhook-subscription-rotate-secret"),
+    path("admin/withdrawals/<uuid:withdrawal_id>/approve/", AdminWithdrawalApprovalView.as_view(), name="admin-withdrawal-approve"),
+    path("admin/withdrawals/<uuid:withdrawal_id>/reject/", AdminWithdrawalRejectView.as_view(), name="admin-withdrawal-reject"),
+    path("admin/reconciliations/", AdminReconciliationView.as_view(), name="admin-reconciliations"),
 ]

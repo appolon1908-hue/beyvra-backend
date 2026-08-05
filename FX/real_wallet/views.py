@@ -8,9 +8,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import OrganizationMembership
-from .models import Asset, AssetNetwork, Deposit, FeatureFlag, Network, RealWallet, Withdrawal, WithdrawalAddress, WebhookSubscription
+from .models import Asset, AssetNetwork, Deposit, FeatureFlag, Network, RealWallet, Withdrawal, WithdrawalAddress, WebhookSubscription, ReconciliationRun
 from .serializers import RealWalletBalanceSerializer, RealWalletSerializer
-from .services import is_feature_enabled
+from .services import is_feature_enabled, approve_withdrawal
+from .reconciliation import run_balance_reconciliation
 from .webhooks import WebhookSecurityError, create_secret_version, validate_webhook_destination
 
 def disabled_response(request, feature):
@@ -207,6 +208,69 @@ def _request_tenant(request):
         user=request.user, organization__is_active=True
     ).order_by("organization_id").first()
     return membership.organization if membership else None
+
+
+def _admin_tenant(request):
+    membership = OrganizationMembership.objects.select_related("organization").filter(
+        user=request.user, organization__is_active=True, role__in=("owner", "admin")
+    ).order_by("organization_id").first()
+    return membership.organization if membership else None
+
+
+class AdminWithdrawalApprovalView(APIView):
+    """Organization-admin approval boundary; real withdrawals remain feature-gated."""
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, withdrawal_id):
+        tenant = _admin_tenant(request)
+        if tenant is None:
+            return Response({"code": "AUTHORIZATION_DENIED", "detail": "Organization administrator required."}, status=403)
+        withdrawal = Withdrawal.objects.filter(id=withdrawal_id, wallet__tenant=tenant).first()
+        if withdrawal is None:
+            return Response({"code": "RESOURCE_NOT_FOUND", "detail": "Withdrawal not found."}, status=404)
+        try:
+            result = approve_withdrawal(withdrawal_id=withdrawal.id, approver=request.user, decision="APPROVED")
+        except ValueError as exc:
+            return Response({"code": "VALIDATION_FAILED", "detail": str(exc)}, status=409)
+        return Response({"id": str(result.id), "status": result.state})
+
+
+class AdminWithdrawalRejectView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request, withdrawal_id):
+        tenant = _admin_tenant(request)
+        if tenant is None:
+            return Response({"code": "AUTHORIZATION_DENIED", "detail": "Organization administrator required."}, status=403)
+        withdrawal = Withdrawal.objects.filter(id=withdrawal_id, wallet__tenant=tenant).first()
+        if withdrawal is None:
+            return Response({"code": "RESOURCE_NOT_FOUND", "detail": "Withdrawal not found."}, status=404)
+        try:
+            result = approve_withdrawal(withdrawal_id=withdrawal.id, approver=request.user, decision="REJECTED", reason=str(request.data.get("reason", "")))
+        except ValueError as exc:
+            return Response({"code": "VALIDATION_FAILED", "detail": str(exc)}, status=409)
+        return Response({"id": str(result.id), "status": result.state})
+
+
+class AdminReconciliationView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        tenant = _admin_tenant(request)
+        if tenant is None:
+            return Response({"code": "AUTHORIZATION_DENIED", "detail": "Organization administrator required."}, status=403)
+        runs = ReconciliationRun.objects.filter(tenant=tenant).order_by("-created_at")[:50]
+        return Response({"results": [{"id": str(run.id), "scope": run.scope, "status": run.status, "summary": run.summary} for run in runs]})
+
+    def post(self, request):
+        tenant = _admin_tenant(request)
+        if tenant is None:
+            return Response({"code": "AUTHORIZATION_DENIED", "detail": "Organization administrator required."}, status=403)
+        snapshot = request.data.get("external_balances", {})
+        if not isinstance(snapshot, dict):
+            return Response({"code": "VALIDATION_FAILED", "detail": "external_balances must be an object."}, status=400)
+        run = run_balance_reconciliation(tenant=tenant, external_balances=snapshot)
+        return Response({"id": str(run.id), "status": run.status, "summary": run.summary}, status=201)
 
 
 class WebhookSubscriptionListCreateView(APIView):
