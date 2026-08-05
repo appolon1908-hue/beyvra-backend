@@ -56,6 +56,12 @@ transaction hash, and output index; crediting requires the configured
 confirmation threshold, posts a balanced ledger transaction, updates the
 balance projection, and emits an outbox event in one transaction.
 
+Withdrawal cancellation, failure recovery, and completion are implemented as
+idempotent lifecycle services. Cancellation/failure releases an active hold;
+completion captures it, posts the customer-to-platform ledger transaction,
+records the blockchain reference, and emits the corresponding event. Custody
+signing and broadcast remain outside the application and disabled.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

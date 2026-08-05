@@ -13,6 +13,9 @@ from real_wallet.services import (
     request_withdrawal,
     create_internal_transfer,
     credit_deposit,
+    cancel_withdrawal,
+    complete_withdrawal,
+    fail_withdrawal,
     record_detected_deposit,
     reserve_idempotency,
 )
@@ -94,6 +97,38 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(withdrawal.state, "REQUESTED")
         self.assertEqual(balance.held_atomic, 250)
         self.assertEqual(withdrawal.hold.state, "ACTIVE")
+
+    def test_withdrawal_failure_releases_hold_and_completion_captures_once(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="withdrawal-lifecycle", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        balance = AssetBalance.objects.create(wallet=wallet, asset_network=pair, posted_atomic="1000")
+        address = WithdrawalAddress.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, address="synthetic-lifecycle",
+            status="ACTIVE", risk_state="CLEARED",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_withdrawals_enabled").update(enabled=True)
+        withdrawal = request_withdrawal(
+            tenant=self.org, actor=self.user, wallet=wallet, withdrawal_address=address.id,
+            amount_atomic="200", idempotency_key="withdrawal-failure", request_payload={"amount_atomic": "200"},
+        )
+        failed = fail_withdrawal(withdrawal_id=withdrawal.id, reason="synthetic provider timeout")
+        balance.refresh_from_db()
+        self.assertEqual(failed.state, "FAILED")
+        self.assertEqual(balance.held_atomic, 0)
+
+        withdrawal = request_withdrawal(
+            tenant=self.org, actor=self.user, wallet=wallet, withdrawal_address=address.id,
+            amount_atomic="200", idempotency_key="withdrawal-complete", request_payload={"amount_atomic": "200"},
+        )
+        withdrawal.state = "BROADCAST"
+        withdrawal.save(update_fields=["state"])
+        completed = complete_withdrawal(withdrawal_id=withdrawal.id, blockchain_transaction="chain-tx-1")
+        balance.refresh_from_db()
+        self.assertEqual(completed.state, "COMPLETED")
+        self.assertEqual(balance.posted_atomic, 800)
+        self.assertEqual(balance.held_atomic, 0)
+        self.assertEqual(complete_withdrawal(withdrawal_id=withdrawal.id, blockchain_transaction="chain-tx-1").id, withdrawal.id)
 
     def test_internal_transfer_is_double_entry_and_tenant_scoped(self):
         source = RealWallet.objects.create(tenant=self.org, owner=self.user)

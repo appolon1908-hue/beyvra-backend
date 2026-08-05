@@ -345,3 +345,74 @@ def credit_deposit(*, deposit_id, required_confirmations):
         event_type="wallet.deposit.credited", payload={"deposit_id": str(deposit.id)},
     )
     return deposit
+
+
+@transaction.atomic
+def cancel_withdrawal(*, withdrawal_id, actor):
+    withdrawal = Withdrawal.objects.select_for_update().select_related("hold", "wallet").get(pk=withdrawal_id)
+    if withdrawal.wallet.owner_id != actor.id:
+        raise ValueError("withdrawal is not owned by actor")
+    if withdrawal.state not in {"REQUESTED", "USER_CONFIRMATION_REQUIRED", "COMPLIANCE_REVIEW", "RISK_REVIEW", "MANUAL_REVIEW"}:
+        raise ValueError("withdrawal is not cancellable")
+    if withdrawal.hold_id:
+        release_hold(withdrawal.hold_id)
+    withdrawal.state = "CANCELLED"
+    withdrawal.save(update_fields=["state", "updated_at"])
+    enqueue_outbox(
+        tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
+        event_type="wallet.withdrawal.cancelled", payload={"withdrawal_id": str(withdrawal.id)},
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def fail_withdrawal(*, withdrawal_id, reason):
+    withdrawal = Withdrawal.objects.select_for_update().select_related("hold", "asset_network__asset").get(pk=withdrawal_id)
+    if withdrawal.state in {"COMPLETED", "CANCELLED"}:
+        raise ValueError("withdrawal cannot be failed")
+    if withdrawal.state == "FAILED":
+        return withdrawal
+    if withdrawal.hold_id and withdrawal.hold.state == "ACTIVE":
+        release_hold(withdrawal.hold_id)
+    withdrawal.state = "FAILED"
+    withdrawal.save(update_fields=["state", "updated_at"])
+    enqueue_outbox(
+        tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
+        event_type="wallet.withdrawal.failed", payload={"withdrawal_id": str(withdrawal.id), "reason": reason},
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def complete_withdrawal(*, withdrawal_id, blockchain_transaction):
+    withdrawal = Withdrawal.objects.select_for_update().select_related("hold", "wallet", "asset_network__asset").get(pk=withdrawal_id)
+    if withdrawal.state == "COMPLETED":
+        return withdrawal
+    if withdrawal.state not in {"SIGNED", "BROADCAST", "CONFIRMING"}:
+        raise ValueError("withdrawal is not ready for completion")
+    platform_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=withdrawal.tenant, owner_type="PLATFORM", owner_id=None, asset=withdrawal.asset_network.asset,
+        account_code="PLATFORM_HOT_WALLET", defaults={"account_type": "ASSET", "normal_side": "DEBIT"},
+    )
+    customer_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=withdrawal.tenant, owner_type="WALLET", owner_id=withdrawal.wallet_id, asset=withdrawal.asset_network.asset,
+        account_code="CUSTOMER_AVAILABLE", defaults={"account_type": "LIABILITY", "normal_side": "CREDIT"},
+    )
+    post_transaction(
+        tenant=withdrawal.tenant, transaction_type="WITHDRAWAL_CAPTURE",
+        idempotency_key=f"withdrawal-capture:{withdrawal.id}",
+        entries=[
+            {"account": customer_account, "asset": withdrawal.asset_network.asset, "direction": "DEBIT", "amount_atomic": withdrawal.amount_atomic},
+            {"account": platform_account, "asset": withdrawal.asset_network.asset, "direction": "CREDIT", "amount_atomic": withdrawal.amount_atomic},
+        ], metadata={"withdrawal_id": str(withdrawal.id), "blockchain_transaction": blockchain_transaction},
+    )
+    if withdrawal.hold_id and withdrawal.hold.state == "ACTIVE":
+        capture_hold(withdrawal.hold_id)
+    withdrawal.state = "COMPLETED"
+    withdrawal.blockchain_transaction = blockchain_transaction
+    withdrawal.save(update_fields=["state", "blockchain_transaction", "updated_at"])
+    enqueue_outbox(
+        tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
+        event_type="wallet.withdrawal.completed", payload={"withdrawal_id": str(withdrawal.id)},
+    )
+    return withdrawal
