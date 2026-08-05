@@ -27,6 +27,11 @@ then subscribed each socket to `market.status`, `notification`, and
 | 250 | 250 | 0 | 3,992 ms | 4,545 ms |
 | 500 | 80 | 420 | 9,823 ms | 11,098 ms |
 
+At 50 concurrent connections, fan-out with 1, 5, and 10 valid subscriptions
+per connection completed with 0 failures. Ack P95 was 983 ms, 826 ms, and
+1,013 ms respectively. Ten subscriptions was the maximum tested valid fan-out
+for this gateway harness.
+
 The 500-connection failures were HTTP 502 upstream resets after Daphne
 saturation. Before the file-descriptor fix, the same test also produced
 `EMFILE` errors while opening Redis connections.
@@ -36,6 +41,8 @@ saturation. Before the file-descriptor fix, the same test also produced
 - Gateway authentication, forbidden-channel, duplicate-subscription, and
   account/tenant authorization tests pass.
 - One-time websocket ticket replay: first connection `101`, replay `403`.
+- Redis restart: new authenticated websocket connection succeeded.
+- Daphne restart: new authenticated websocket connection succeeded.
 - Frontend typecheck and lint pass.
 - No dropped or duplicate business events were counted in this read-only load
   run; an event-publisher load test is still required before making that claim.
