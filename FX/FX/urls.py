@@ -21,7 +21,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import GuestDemoSessionView, SessionResolveView
-from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView
+from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
 
 urlpatterns = [
     path("", include("django_prometheus.urls")),
@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/v1/auth/", include("users.google_urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
+    path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
     path("api/v1/demo/orders", DemoOrderView.as_view(), name="demo_order_v1"),
     path("api/v1/demo/config", DemoConfigView.as_view(), name="demo_config_v1"),
     path("api/v1/demo/trades", DemoTradeListView.as_view(), name="demo_trades_v1"),

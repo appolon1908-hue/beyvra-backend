@@ -148,6 +148,34 @@ class DemoConfigView(APIView):
         })
 
 
+class WorkspaceBootstrapView(APIView):
+    """Single bounded read used to hydrate the demo trading workspace.
+
+    Candles are intentionally excluded; the chart loads its snapshot separately
+    so a slow feed cannot block account/session chrome.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        wallet, organization = _tenant_wallet(request)
+        reserved = Trade.objects.filter(wallet=wallet, demo_state="OPEN").aggregate(total=Sum("price_per_unit"))["total"] or Decimal("0")
+        symbols = list(Asset.objects.values_list("symbol", flat=True)[:100]) or ["BTCUSDT"]
+        guest = bool(getattr(request.user, "is_guest_demo", False))
+        return Response({
+            "state": "guest.ready" if guest else "user.ready",
+            "tenant": {"id": str(organization.id)},
+            "account": {"id": str(wallet.id), "kind": "DEMO", "demoOnly": True},
+            "wallet": {"currency": "Virtual USD", "available": str(wallet.balance), "reserved": str(reserved), "total": str(wallet.balance + reserved)},
+            "notifications": {"unreadCount": 0},
+            "features": {"inZone": False, "payments": False, "realWallets": False, "realTrading": False},
+            "instrument": {"symbol": symbols[0], "marketStatus": "OPEN"},
+            "instruments": symbols,
+            "tradingRules": {"durations": sorted(ALLOWED_DURATIONS), "minAmount": str(DEMO_MIN_AMOUNT), "maxAmount": str(DEMO_MAX_AMOUNT), "amountStep": str(DEMO_AMOUNT_STEP), "payoutRate": str(PAYOUT_RATE)},
+            "savedAssetTabs": symbols[:5],
+            "chartPreferences": {"interval": "1m", "chartType": "candlesticks"},
+        })
+
+
 class DemoTradeListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
