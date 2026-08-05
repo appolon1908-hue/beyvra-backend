@@ -17,6 +17,7 @@
 * V2 contract tests (`ws.test_v2`): 2 passed.
 * Centrifugo health and Prometheus endpoints: PASS.
 * JetStream health: PASS; eight bounded file-backed streams and nine durable consumers survive NATS restart.
+* NATS client traffic is currently private Docker-network traffic; internal TLS/mTLS is not yet enabled and remains a promotion blocker.
 * Allowed market subscription: PASS.
 * Cross-account private subscription: denied with `403 forbidden`.
 * V1/V2 reverse-proxy paths are separate; no production services or flags changed.
