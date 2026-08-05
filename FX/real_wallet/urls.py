@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import RealWalletDetailView, RealWalletDisabledView, RealWalletListView, RealWalletStatusView
+from .views import RealWalletBalanceListView, RealWalletDetailView, RealWalletDisabledView, RealWalletListView, RealWalletStatusView
 
 app_name = "real_wallet"
 disabled = RealWalletDisabledView.as_view()
@@ -9,7 +9,7 @@ urlpatterns = [
     path("status/", RealWalletStatusView.as_view(), name="status"),
     path("wallets/", RealWalletListView.as_view(), name="wallets"),
     path("wallets/<uuid:wallet_id>/", RealWalletDetailView.as_view(), name="wallet-detail"),
-    path("wallets/<uuid:wallet_id>/balances/", disabled, name="wallet-balances"),
+    path("wallets/<uuid:wallet_id>/balances/", RealWalletBalanceListView.as_view(), name="wallet-balances"),
     path("wallets/<uuid:wallet_id>/addresses/", disabled, name="wallet-addresses"),
     path("deposits/", disabled, name="deposits"),
     path("deposits/<uuid:deposit_id>/", disabled, name="deposit-detail"),

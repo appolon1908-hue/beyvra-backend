@@ -31,6 +31,28 @@ paths:
       security: [{bearerAuth: []}]
       responses:
         '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /wallets/{wallet_id}/balances/:
+    get:
+      operationId: listRealWalletBalances
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: wallet_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Tenant-scoped balance projection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/Balance'}
+        '404': {description: Wallet not found in caller tenant}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
   /deposits/:
     get:
       operationId: listRealDeposits
@@ -68,6 +90,27 @@ components:
         code: {type: string, example: FEATURE_DISABLED}
         request_id: {type: string}
         errors: {type: array, items: {type: object}}
+    Balance:
+      type: object
+      required: [id, asset, network, posted_atomic, pending_credit_atomic, held_atomic, reserved_atomic, available_atomic]
+      properties:
+        id: {type: string, format: uuid}
+        asset:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            symbol: {type: string}
+            decimals: {type: integer}
+        network:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            code: {type: string}
+        posted_atomic: {type: string, pattern: '^[0-9]+$'}
+        pending_credit_atomic: {type: string, pattern: '^[0-9]+$'}
+        held_atomic: {type: string, pattern: '^[0-9]+$'}
+        reserved_atomic: {type: string, pattern: '^[0-9]+$'}
+        available_atomic: {type: string, pattern: '^[0-9]+$'}
   responses:
     FeatureDisabled:
       description: Real-value feature is disabled

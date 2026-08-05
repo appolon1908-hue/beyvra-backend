@@ -35,6 +35,10 @@ MFA, provider webhook, reconciliation, and production activation require
 separate reviewed implementations and credentials. No private-key handling is
 implemented or permitted.
 
+Read-only wallet and balance routes are implemented with authenticated,
+tenant-scoped queries. They return data only when `real_wallet_read_enabled` is
+explicitly enabled; all value-changing routes remain disabled.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

@@ -3,7 +3,7 @@ from unittest.mock import patch
 from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
-from real_wallet.models import Asset, FeatureFlag, LedgerAccount, RealWallet
+from real_wallet.models import Asset, AssetBalance, AssetNetwork, FeatureFlag, LedgerAccount, Network, RealWallet
 from real_wallet.models import WebhookSubscription
 from real_wallet.services import (
     IdempotencyConflict,
@@ -55,6 +55,22 @@ class RealWalletBoundaryTests(TestCase):
         response = client.get("/api/v1/wallets/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data["results"]], [str(wallet.id)])
+
+    def test_balance_read_exposes_atomic_strings_and_available_projection(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        AssetBalance.objects.create(
+            wallet=wallet, asset_network=pair, posted_atomic="1000000",
+            pending_credit_atomic="200000", held_atomic="100000", reserved_atomic="50000",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        response = client.get(f"/api/v1/wallets/{wallet.id}/balances/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["available_atomic"], "850000")
+        self.assertIsInstance(response.data["results"][0]["posted_atomic"], str)
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

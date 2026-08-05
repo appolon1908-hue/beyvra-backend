@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import RealWallet
-from .serializers import RealWalletSerializer
+from .serializers import RealWalletBalanceSerializer, RealWalletSerializer
 from .services import is_feature_enabled
 
 def disabled_response(request, feature):
@@ -76,3 +76,21 @@ class RealWalletDetailView(APIView):
         if wallet is None:
             return Response({"detail": "Not found."}, status=404)
         return Response(RealWalletSerializer(wallet).data)
+
+
+class RealWalletBalanceListView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, wallet_id):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        wallet = RealWallet.objects.filter(
+            id=wallet_id,
+            owner=request.user,
+            tenant__memberships__user=request.user,
+            tenant__memberships__organization__is_active=True,
+        ).first()
+        if wallet is None:
+            return Response({"detail": "Not found."}, status=404)
+        balances = wallet.balances.select_related("asset_network__asset", "asset_network__network").order_by("created_at")
+        return Response({"results": RealWalletBalanceSerializer(balances, many=True).data})
