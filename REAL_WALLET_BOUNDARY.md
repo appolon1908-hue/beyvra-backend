@@ -99,6 +99,23 @@ Withdrawal requests enforce MFA by default through `REAL_WALLET_REQUIRE_MFA`.
 Reconciliation runs compare local projections with external snapshots and
 record matched or exception items without mutating balances.
 
+Provider webhook receipts are persisted only after signature verification and
+deduplicated by provider connection and provider event ID. Receipts support
+explicit processed/retry states for an asynchronous worker. Organization-admin
+approval and reconciliation endpoints are present but remain subject to the
+same disabled feature policy and do not perform external writes.
+
+The stream module defines versioned private-channel envelopes and deterministic
+resume decisions (`REPLAY_AVAILABLE`, `UP_TO_DATE`, `SNAPSHOT_REQUIRED`) for an
+ASGI adapter. It does not put access tokens in WebSocket URLs.
+
+The remaining production boundary work is intentionally not enabled: complete
+provider workers, deployment-specific ASGI wiring, generated frontend client,
+load/endurance evidence, and production-database validation require the target
+deployment and approved provider credentials. No real deposits, withdrawals,
+trading, custody, blockchain, or webhook delivery can occur with the seeded
+flags disabled.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables
