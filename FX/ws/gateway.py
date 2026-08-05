@@ -29,6 +29,16 @@ def _tenant_for_user(user_id: int, requested: str | None = None) -> str:
 class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
     """Multiplex market and demo events over one authenticated connection."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Channels may call disconnect after a rejected handshake.  Keep the
+        # teardown path safe even when connect() returned before initializing
+        # per-connection state (for example an expired ticket under load).
+        self.tenant_id = "default"
+        self.subscriptions: set[str] = set()
+        self.market_tasks: dict[str, asyncio.Task] = {}
+        self.sequence = defaultdict(int)
+
     async def connect(self):
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
@@ -36,9 +46,6 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return
         query = parse_qs(self.scope.get("query_string", b"").decode())
         self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
-        self.subscriptions: set[str] = set()
-        self.market_tasks: dict[str, asyncio.Task] = {}
-        self.sequence = defaultdict(int)
         await self.accept()
         await self.send_json({"type": "gateway.ready", "version": 1, "tenant": self.tenant_id})
 
