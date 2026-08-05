@@ -8,6 +8,7 @@ from users.models import User
 
 
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,11 @@ class CustomTokenAuthMiddleware(BaseMiddleware):
         else:
             user_id = "None"
         if user_id == "None":
+            logger.warning("websocket ticket rejected: cache miss ticket_hash=%s", hashlib.sha256(ws_ticket.encode()).hexdigest()[:12] if tickets else "missing")
             scope["user"] = AnonymousUser()
         else:
             scope["user"] = await get_user(user_id)
+            if not scope["user"].is_authenticated:
+                logger.warning("websocket ticket rejected: user lookup failed ticket_hash=%s", hashlib.sha256(ws_ticket.encode()).hexdigest()[:12])
 
         return await super().__call__(scope, receive, send)

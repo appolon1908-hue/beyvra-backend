@@ -34,6 +34,10 @@ services:
     build: ./FX
     command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     expose:
       - 8001
     env_file:
@@ -90,6 +94,10 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     expose:
       - 6379
     environment:
@@ -176,6 +184,10 @@ services:
       args:
         CONFIG_FILE: nginx.prod.conf.template
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "127.0.0.1:${PORT}:80"
     volumes:
