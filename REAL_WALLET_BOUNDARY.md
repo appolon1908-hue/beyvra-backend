@@ -45,6 +45,12 @@ withdrawal address, reserves funds with a database hold, persists a
 single transaction when `real_wallet_withdrawals_enabled` is explicitly
 enabled. It never signs, broadcasts, or calls a custody provider.
 
+Webhook subscriptions can be listed or created for the caller's first active
+organization membership. Creation validates HTTPS destinations against SSRF
+targets, stores only encrypted secret material, and returns the generated
+secret once. Subscription delivery remains disabled until an independently
+reviewed delivery worker and activation policy exist.
+
 Internal transfers are implemented as a gated service with deterministic
 balance locking, same-tenant wallet checks, a balanced ledger transaction,
 projection updates, idempotency, and an outbox event. They do not create a

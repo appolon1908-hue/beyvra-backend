@@ -1,6 +1,13 @@
 from django.urls import path
 
-from .views import RealWalletBalanceListView, RealWalletDetailView, RealWalletDisabledView, RealWalletListView, RealWalletStatusView
+from .views import (
+    RealWalletBalanceListView,
+    RealWalletDetailView,
+    RealWalletDisabledView,
+    RealWalletListView,
+    RealWalletStatusView,
+    WebhookSubscriptionListCreateView,
+)
 
 app_name = "real_wallet"
 disabled = RealWalletDisabledView.as_view()
@@ -18,5 +25,5 @@ urlpatterns = [
     path("withdrawals/<uuid:withdrawal_id>/", disabled, name="withdrawal-detail"),
     path("transfers/", disabled, name="transfers"),
     path("transfers/<uuid:transfer_id>/", disabled, name="transfer-detail"),
-    path("webhook-subscriptions/", disabled, name="webhook-subscriptions"),
+    path("webhook-subscriptions/", WebhookSubscriptionListCreateView.as_view(), name="webhook-subscriptions"),
 ]

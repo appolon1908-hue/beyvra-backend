@@ -1,4 +1,7 @@
-from django.test import TestCase
+import tempfile
+from pathlib import Path
+
+from django.test import TestCase, override_settings
 from unittest.mock import patch
 from rest_framework.test import APIClient
 
@@ -178,6 +181,26 @@ class RealWalletBoundaryTests(TestCase):
         credited = credit_deposit(deposit_id=deposit.id, required_confirmations=2)
         self.assertEqual(credited.state, "CREDITED")
         self.assertEqual(credited.wallet.balances.get(asset_network=pair).posted_atomic, 500)
+
+    def test_webhook_subscription_returns_secret_once_and_stores_ciphertext(self):
+        with tempfile.TemporaryDirectory() as directory:
+            key_file = Path(directory) / "webhook-master.key"
+            key_file.write_bytes(b"w" * 32)
+            with override_settings(REAL_WALLET_WEBHOOK_MASTER_KEY_FILE=str(key_file)):
+                client = APIClient()
+                client.force_authenticate(self.user)
+                response = client.post(
+                    "/api/v1/webhook-subscriptions/",
+                    {"endpoint": "https://example.com/codestra", "description": "Synthetic receiver"},
+                    format="json",
+                )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["secret_displayed_once"])
+        secret = response.data["secret"]
+        self.assertTrue(secret.startswith("whsec_"))
+        from real_wallet.models import WebhookSecretVersion
+        stored = WebhookSecretVersion.objects.get(subscription_id=response.data["id"])
+        self.assertNotIn(secret.encode(), stored.ciphertext)
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {
