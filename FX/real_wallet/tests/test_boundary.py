@@ -3,7 +3,7 @@ from unittest.mock import patch
 from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
-from real_wallet.models import Asset, LedgerAccount, RealWallet
+from real_wallet.models import Asset, FeatureFlag, LedgerAccount, RealWallet
 from real_wallet.models import WebhookSubscription
 from real_wallet.services import (
     IdempotencyConflict,
@@ -39,6 +39,22 @@ class RealWalletBoundaryTests(TestCase):
         response = client.get("/api/v1/wallets/")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
+
+    def test_enabled_read_is_tenant_scoped(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        with patch("users.signals.async_send_welcome_email.delay"):
+            other_user = User.objects.create_user(
+                email="other-real-wallet@example.com", password="pass12345", phone_number="+12025550998"
+            )
+        other_org = Organization.objects.create(name="Other tenant")
+        OrganizationMembership.objects.create(user=other_user, organization=other_org)
+        RealWallet.objects.create(tenant=other_org, owner=other_user)
+        FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        response = client.get("/api/v1/wallets/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data["results"]], [str(wallet.id)])
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

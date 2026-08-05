@@ -2,6 +2,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .models import RealWallet
+from .serializers import RealWalletSerializer
+from .services import is_feature_enabled
 
 def disabled_response(request, feature):
     return Response(
@@ -42,3 +45,34 @@ class RealWalletStatusView(APIView):
 
     def get(self, request):
         return Response({"enabled": False, "mode": "disabled", "demo_isolation": True})
+
+
+class RealWalletListView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        wallets = RealWallet.objects.filter(
+            owner=request.user,
+            tenant__memberships__user=request.user,
+            tenant__memberships__organization__is_active=True,
+        ).distinct().order_by("created_at")
+        return Response({"results": RealWalletSerializer(wallets, many=True).data})
+
+
+class RealWalletDetailView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, wallet_id):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        wallet = RealWallet.objects.filter(
+            id=wallet_id,
+            owner=request.user,
+            tenant__memberships__user=request.user,
+            tenant__memberships__organization__is_active=True,
+        ).first()
+        if wallet is None:
+            return Response({"detail": "Not found."}, status=404)
+        return Response(RealWalletSerializer(wallet).data)

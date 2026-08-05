@@ -1,14 +1,14 @@
 from django.urls import path
 
-from .views import RealWalletDisabledView, RealWalletStatusView
+from .views import RealWalletDetailView, RealWalletDisabledView, RealWalletListView, RealWalletStatusView
 
 app_name = "real_wallet"
 disabled = RealWalletDisabledView.as_view()
 
 urlpatterns = [
     path("status/", RealWalletStatusView.as_view(), name="status"),
-    path("wallets/", disabled, name="wallets"),
-    path("wallets/<uuid:wallet_id>/", disabled, name="wallet-detail"),
+    path("wallets/", RealWalletListView.as_view(), name="wallets"),
+    path("wallets/<uuid:wallet_id>/", RealWalletDetailView.as_view(), name="wallet-detail"),
     path("wallets/<uuid:wallet_id>/balances/", disabled, name="wallet-balances"),
     path("wallets/<uuid:wallet_id>/addresses/", disabled, name="wallet-addresses"),
     path("deposits/", disabled, name="deposits"),
