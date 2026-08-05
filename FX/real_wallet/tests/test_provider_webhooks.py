@@ -9,6 +9,7 @@ from real_wallet.provider_webhooks import (
     mark_provider_webhook_processed,
     receive_provider_webhook,
 )
+from real_wallet.tasks import process_provider_webhook_receipt
 from users.models import User
 
 
@@ -45,6 +46,22 @@ class ProviderWebhookReceiptTests(TestCase):
             receive_provider_webhook(
                 connection=connection, provider_event_id="bad", event_type="x", payload={}, signature_verified=False,
             )
+
+    def test_worker_keeps_inactive_provider_receipt_for_retry(self):
+        with patch("users.signals.async_send_welcome_email.delay"):
+            user = User.objects.create(email="provider-worker@example.com", phone_number="+12025550005")
+        tenant = Organization.objects.create(name="Worker tenant")
+        connection = ProviderConnection.objects.create(
+            tenant=tenant, provider="sandbox", connection_type="custody", encrypted_config=b"sandbox", status="DISABLED"
+        )
+        receipt, _ = receive_provider_webhook(
+            connection=connection, provider_event_id="worker-event", event_type="transaction.completed",
+            payload={"synthetic": True}, signature_verified=True,
+        )
+        with self.assertRaises(Exception):
+            process_provider_webhook_receipt.run(str(receipt.id))
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, "RETRY")
 
     def test_replayed_event_with_changed_payload_is_rejected(self):
         with patch("users.signals.async_send_welcome_email.delay"):
