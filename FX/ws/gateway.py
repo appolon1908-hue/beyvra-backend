@@ -105,9 +105,13 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "error", "code": "UNKNOWN_ACTION"})
 
     def _valid_channel(self, channel: str) -> bool:
-        if channel in {"demo.order", "demo.execution", "demo.position", "notification", "market.status"}:
+        if channel in {"demo.order", "demo.execution", "demo.position", "notification", "market.status", "market.compat.crypto", "market.compat.stocks"}:
             return True
         parts = channel.split(":")
+        if len(parts) == 2 and parts[0] in {"portfolio.balance", "portfolio.profit_loss"}:
+            return parts[1] == str(self.scope["user"].id)
+        if channel.startswith("compat."):
+            return channel in {"compat.market-data", "compat.news", "compat.account", "compat.platform"}
         if len(parts) == 2 and parts[0] == "market.quote":
             return parts[1] in SUPPORTED_SYMBOLS
         if len(parts) == 3 and parts[0] == "market.candle":

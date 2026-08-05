@@ -43,6 +43,13 @@ class CanonicalGatewayTests(TransactionTestCase):
             await communicator.send_json_to({"action": "subscribe", "channels": ["wallet.deposit"]})
             denied = await communicator.receive_json_from()
             self.assertEqual(denied["code"], "FORBIDDEN_CHANNEL")
+            await communicator.receive_json_from()
+            await communicator.send_json_to({"action": "subscribe", "channels": [f"portfolio.balance:{self.user.id}"]})
+            self.assertEqual((await communicator.receive_json_from())["added"], [f"portfolio.balance:{self.user.id}"])
+            await communicator.send_json_to({"action": "subscribe", "channels": ["portfolio.balance:999999"]})
+            denied_account = await communicator.receive_json_from()
+            self.assertEqual(denied_account["code"], "FORBIDDEN_CHANNEL")
+            await communicator.receive_json_from()
             await communicator.disconnect()
 
         with patch("ws.gateway.CanonicalGatewayConsumer._stream_market", new=AsyncMock()):
