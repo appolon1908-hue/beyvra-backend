@@ -50,6 +50,12 @@ balance locking, same-tenant wallet checks, a balanced ledger transaction,
 projection updates, idempotency, and an outbox event. They do not create a
 blockchain transaction.
 
+Deposit detection and crediting are also implemented behind
+`real_wallet_deposits_enabled`. Chain events are deduplicated by asset-network,
+transaction hash, and output index; crediting requires the configured
+confirmation threshold, posts a balanced ledger transaction, updates the
+balance projection, and emits an outbox event in one transaction.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

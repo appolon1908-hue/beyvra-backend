@@ -3,7 +3,7 @@ from unittest.mock import patch
 from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
-from real_wallet.models import Asset, AssetBalance, AssetNetwork, FeatureFlag, LedgerAccount, Network, RealWallet, WithdrawalAddress
+from real_wallet.models import Asset, AssetBalance, AssetNetwork, Deposit, FeatureFlag, LedgerAccount, Network, RealWallet, WithdrawalAddress
 from real_wallet.models import WebhookSubscription
 from real_wallet.services import (
     IdempotencyConflict,
@@ -12,6 +12,8 @@ from real_wallet.services import (
     post_transaction,
     request_withdrawal,
     create_internal_transfer,
+    credit_deposit,
+    record_detected_deposit,
     reserve_idempotency,
 )
 from users.models import User
@@ -119,6 +121,28 @@ class RealWalletBoundaryTests(TestCase):
             tenant=self.org, actor=self.user, source_wallet=source, destination_wallet=destination,
             asset_network=pair, amount_atomic="300", idempotency_key="transfer-1", request_payload={"amount_atomic": "300"},
         ).id)
+
+    def test_deposit_detection_is_idempotent_and_credit_requires_confirmations(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="deposit-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        FeatureFlag.objects.filter(key="real_wallet_deposits_enabled").update(enabled=True)
+        deposit = record_detected_deposit(
+            tenant=self.org, wallet=wallet, asset_network=pair, transaction_hash="tx-1",
+            output_index=0, amount_atomic="500", confirmations=1,
+        )
+        replay = record_detected_deposit(
+            tenant=self.org, wallet=wallet, asset_network=pair, transaction_hash="tx-1",
+            output_index=0, amount_atomic="500", confirmations=1,
+        )
+        self.assertEqual(deposit.id, replay.id)
+        with self.assertRaises(ValueError):
+            credit_deposit(deposit_id=deposit.id, required_confirmations=2)
+        deposit.confirmations = 2
+        deposit.save(update_fields=["confirmations"])
+        credited = credit_deposit(deposit_id=deposit.id, required_confirmations=2)
+        self.assertEqual(credited.state, "CREDITED")
+        self.assertEqual(credited.wallet.balances.get(asset_network=pair).posted_atomic, 500)
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

@@ -9,6 +9,7 @@ from django.utils import timezone
 from .models import (
     AssetBalance,
     BalanceHold,
+    Deposit,
     FeatureFlag,
     IdempotencyRecord,
     InternalTransfer,
@@ -278,3 +279,69 @@ def create_internal_transfer(*, tenant, actor, source_wallet, destination_wallet
         response_status=201, response_body={"transfer_id": str(transfer.id)},
     )
     return transfer
+
+
+@transaction.atomic
+def record_detected_deposit(*, tenant, wallet, asset_network, transaction_hash, output_index,
+                            amount_atomic, confirmations=0):
+    if not is_feature_enabled("real_wallet_deposits_enabled"):
+        raise RealWalletFeatureDisabled("real_wallet_deposits_enabled")
+    amount = Decimal(str(amount_atomic))
+    if amount <= 0:
+        raise ValueError("deposit amount must be positive")
+    deposit, created = Deposit.objects.get_or_create(
+        asset_network=asset_network, transaction_hash=transaction_hash, output_index=output_index,
+        defaults={
+            "tenant": tenant, "wallet": wallet, "amount_atomic": amount,
+            "confirmations": confirmations, "state": "CONFIRMING" if confirmations else "DETECTED",
+        },
+    )
+    if created:
+        enqueue_outbox(
+            tenant=tenant, aggregate_type="deposit", aggregate_id=deposit.id,
+            event_type="wallet.deposit.detected", payload={"deposit_id": str(deposit.id)},
+        )
+    return deposit
+
+
+@transaction.atomic
+def credit_deposit(*, deposit_id, required_confirmations):
+    if not is_feature_enabled("real_wallet_deposits_enabled"):
+        raise RealWalletFeatureDisabled("real_wallet_deposits_enabled")
+    deposit = Deposit.objects.select_for_update().select_related("wallet", "asset_network__asset").get(pk=deposit_id)
+    if deposit.state == "CREDITED":
+        return deposit
+    if deposit.state in {"REJECTED", "REVERSED", "REORGED"}:
+        raise ValueError("deposit cannot be credited")
+    if deposit.confirmations < required_confirmations:
+        raise ValueError("deposit confirmations are insufficient")
+    balance, _ = AssetBalance.objects.select_for_update().get_or_create(
+        wallet=deposit.wallet, asset_network=deposit.asset_network,
+        defaults={"posted_atomic": 0},
+    )
+    platform_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=deposit.tenant, owner_type="PLATFORM", owner_id=None, asset=deposit.asset_network.asset,
+        account_code="PLATFORM_HOT_WALLET", defaults={"account_type": "ASSET", "normal_side": "DEBIT"},
+    )
+    customer_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=deposit.tenant, owner_type="WALLET", owner_id=deposit.wallet_id, asset=deposit.asset_network.asset,
+        account_code="CUSTOMER_AVAILABLE", defaults={"account_type": "LIABILITY", "normal_side": "CREDIT"},
+    )
+    ledger_tx = post_transaction(
+        tenant=deposit.tenant, transaction_type="DEPOSIT_CREDIT",
+        idempotency_key=f"deposit-credit:{deposit.id}",
+        entries=[
+            {"account": platform_account, "asset": deposit.asset_network.asset, "direction": "DEBIT", "amount_atomic": deposit.amount_atomic},
+            {"account": customer_account, "asset": deposit.asset_network.asset, "direction": "CREDIT", "amount_atomic": deposit.amount_atomic},
+        ], metadata={"deposit_id": str(deposit.id)},
+    )
+    balance.posted_atomic += deposit.amount_atomic
+    balance.save(update_fields=["posted_atomic", "updated_at"])
+    deposit.state = "CREDITED"
+    deposit.ledger_transaction = ledger_tx
+    deposit.save(update_fields=["state", "ledger_transaction", "updated_at"])
+    enqueue_outbox(
+        tenant=deposit.tenant, aggregate_type="deposit", aggregate_id=deposit.id,
+        event_type="wallet.deposit.credited", payload={"deposit_id": str(deposit.id)},
+    )
+    return deposit
