@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
 import aiohttp
@@ -74,7 +75,17 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                 added.append(channel)
                 if channel.startswith("demo."):
                     await self.channel_layer.group_add(f"trades_updates_{self.tenant_id}_{self.scope['user'].id}", self.channel_name)
-                if channel.startswith("market.candle:") or channel.startswith("market.quote:"):
+                # A candle stream also publishes its quote projection. Avoid a
+                # second provider socket when both channels are requested.
+                if channel.startswith("market.candle:") or (
+                    channel.startswith("market.quote:")
+                    and f"market.candle:{channel.split(':', 1)[1]}:1m" not in self.subscriptions
+                ):
+                    if channel.startswith("market.candle:"):
+                        symbol = channel.split(":")[1]
+                        quote_task = self.market_tasks.pop(f"market.quote:{symbol}", None)
+                        if quote_task:
+                            quote_task.cancel()
                     self.market_tasks.setdefault(channel, asyncio.create_task(self._stream_market(channel)))
             await self.send_json({"type": "subscription.ack", "added": added, "channels": sorted(self.subscriptions)})
             return
@@ -130,6 +141,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                                     continue
                                 data = {"type": "candle", "symbol": symbol, "interval": interval, "closed": bool(candle["x"]), "time": int(candle["t"] / 1000), "open": float(candle["o"]), "high": float(candle["h"]), "low": float(candle["l"]), "close": float(candle["c"]), "volume": float(candle["v"])}
                                 await self._emit(channel, data)
+                                await self._emit(f"market.quote:{symbol}", {"mid": data["close"], "time": data["time"]})
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -143,7 +155,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
     async def _emit(self, channel, data):
         self.sequence[channel] += 1
         event_type = "market.quote.updated" if channel.startswith("market.quote:") else "market.candle.updated" if channel.startswith("market.candle:") else "market.status.changed"
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "type": event_type, "version": 1, "channel": channel, "sequence": self.sequence[channel], "occurred_at": asyncio.get_running_loop().time(), "data": data})
+        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "type": event_type, "version": 1, "channel": channel, "sequence": self.sequence[channel], "occurred_at": datetime.now(timezone.utc).isoformat(), "data": data})
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))
