@@ -1,4 +1,5 @@
 import secrets
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -147,3 +148,24 @@ class WebhookSubscriptionListCreateView(APIView):
              "secret": secret, "secret_key_id": key_id, "secret_displayed_once": True},
             status=201,
         )
+
+
+class WebhookSubscriptionRotateSecretView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @transaction.atomic
+    def post(self, request, subscription_id):
+        tenant = _request_tenant(request)
+        subscription = WebhookSubscription.objects.select_for_update().filter(
+            id=subscription_id, tenant=tenant
+        ).first()
+        if subscription is None:
+            return Response({"detail": "Not found."}, status=404)
+        secret = "whsec_" + secrets.token_urlsafe(32)
+        now = timezone.now()
+        subscription.secret_versions.filter(revoked_at__isnull=True, expires_at__isnull=True).update(
+            expires_at=now + timedelta(hours=1)
+        )
+        key_id = "key_" + secrets.token_urlsafe(10)
+        create_secret_version(subscription=subscription, secret=secret, key_id=key_id)
+        return Response({"secret": secret, "secret_key_id": key_id, "secret_displayed_once": True})

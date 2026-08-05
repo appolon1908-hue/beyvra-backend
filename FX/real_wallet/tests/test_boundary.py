@@ -194,13 +194,20 @@ class RealWalletBoundaryTests(TestCase):
                     {"endpoint": "https://example.com/codestra", "description": "Synthetic receiver"},
                     format="json",
                 )
+                rotate = client.post(
+                    f"/api/v1/webhook-subscriptions/{response.data['id']}/rotate-secret/",
+                    {}, format="json",
+                )
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(rotate.status_code, 200)
         self.assertTrue(response.data["secret_displayed_once"])
         secret = response.data["secret"]
         self.assertTrue(secret.startswith("whsec_"))
         from real_wallet.models import WebhookSecretVersion
-        stored = WebhookSecretVersion.objects.get(subscription_id=response.data["id"])
-        self.assertNotIn(secret.encode(), stored.ciphertext)
+        stored = WebhookSecretVersion.objects.filter(subscription_id=response.data["id"])
+        self.assertEqual(stored.count(), 2)
+        self.assertNotIn(secret.encode(), stored.first().ciphertext)
+        self.assertTrue(stored.filter(expires_at__isnull=False).exists())
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

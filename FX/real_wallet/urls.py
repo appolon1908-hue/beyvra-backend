@@ -7,6 +7,7 @@ from .views import (
     RealWalletListView,
     RealWalletStatusView,
     WebhookSubscriptionListCreateView,
+    WebhookSubscriptionRotateSecretView,
 )
 
 app_name = "real_wallet"
@@ -26,4 +27,5 @@ urlpatterns = [
     path("transfers/", disabled, name="transfers"),
     path("transfers/<uuid:transfer_id>/", disabled, name="transfer-detail"),
     path("webhook-subscriptions/", WebhookSubscriptionListCreateView.as_view(), name="webhook-subscriptions"),
+    path("webhook-subscriptions/<uuid:subscription_id>/rotate-secret/", WebhookSubscriptionRotateSecretView.as_view(), name="webhook-subscription-rotate-secret"),
 ]

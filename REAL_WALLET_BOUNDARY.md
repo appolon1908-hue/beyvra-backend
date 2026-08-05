@@ -51,6 +51,10 @@ targets, stores only encrypted secret material, and returns the generated
 secret once. Subscription delivery remains disabled until an independently
 reviewed delivery worker and activation policy exist.
 
+Secret rotation creates a new encrypted key version and gives the prior
+version a one-hour overlap window before expiry. The replacement secret is
+returned once; plaintext secrets are never returned from read endpoints.
+
 Internal transfers are implemented as a gated service with deterministic
 balance locking, same-tenant wallet checks, a balanced ledger transaction,
 projection updates, idempotency, and an outbox event. They do not create a
