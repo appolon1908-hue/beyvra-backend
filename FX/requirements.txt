@@ -25,6 +25,7 @@ geoip2==4.8.0
 gunicorn==22.0.0
 hiredis==2.3.2
 msgpack==1.2.1
+nats-py==2.10.0
 pillow==12.3.0
 pandas==2.3.3
 pre-commit==3.6.0

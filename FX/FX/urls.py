@@ -22,6 +22,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import GuestDemoSessionView, SessionResolveView
 from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
+from ws import v2 as realtime_v2
 
 urlpatterns = [
     path("", include("django_prometheus.urls")),
@@ -38,6 +39,12 @@ urlpatterns = [
     path("api/v1/demo/trades", DemoTradeListView.as_view(), name="demo_trades_v1"),
     path("api/v1/demo/wallet/refill", DemoWalletRefillView.as_view(), name="demo_wallet_refill_v1"),
     path("api/v1/demo/wallet", DemoWalletView.as_view(), name="demo_wallet_v1"),
+    path("api/v1/realtime/v2/connection-token", realtime_v2.connection_token, name="realtime_v2_connection_token"),
+    path("api/v1/realtime/v2/subscription-token", realtime_v2.subscription_token, name="realtime_v2_subscription_token"),
+    path("api/v1/realtime/v2/authorize-subscription", realtime_v2.authorize_subscription, name="realtime_v2_authorize_subscription"),
+    path("api/v1/realtime/v2/revoke", realtime_v2.revoke, name="realtime_v2_revoke"),
+    path("api/v1/realtime/v2/channel-registry", realtime_v2.channel_registry, name="realtime_v2_channel_registry"),
+    path("api/v1/realtime/v2/health", realtime_v2.health, name="realtime_v2_health"),
     # Separate real-wallet boundary. Every real-value feature is disabled by
     # default and never falls back to the demo wallet.
     path("api/v1/", include("real_wallet.urls")),

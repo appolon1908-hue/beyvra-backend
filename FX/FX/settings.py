@@ -53,6 +53,15 @@ GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
 GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
 GOOGLE_OIDC_REDIRECT_URI = os.getenv("GOOGLE_OIDC_REDIRECT_URI", "")
 GOOGLE_OIDC_SCOPES = os.getenv("GOOGLE_OIDC_SCOPES", "openid email profile")
+REALTIME_V2_ENABLED = os.getenv("REALTIME_V2_ENABLED", "false").lower() == "true"
+REALTIME_V2_STAGING_ENABLED = os.getenv("REALTIME_V2_STAGING_ENABLED", "false").lower() == "true"
+REALTIME_V2_V1_FALLBACK_ENABLED = os.getenv("REALTIME_V2_V1_FALLBACK_ENABLED", "true").lower() == "true"
+CENTRIFUGO_ENABLED = os.getenv("CENTRIFUGO_ENABLED", "false").lower() == "true"
+NATS_JETSTREAM_ENABLED = os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() == "true"
+PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "false").lower() == "true"
+REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
+LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
 LEGAL_SERVICE_AGREEMENT_VERSION = os.getenv("LEGAL_SERVICE_AGREEMENT_VERSION", "demo-v1")
