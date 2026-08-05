@@ -95,6 +95,10 @@ the tenant profile is approved and no active restriction applies. Custody and
 chain protocols include explicit fail-closed adapters plus deterministic
 sandbox adapters; no production provider is configured.
 
+Withdrawal requests enforce MFA by default through `REAL_WALLET_REQUIRE_MFA`.
+Reconciliation runs compare local projections with external snapshots and
+record matched or exception items without mutating balances.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

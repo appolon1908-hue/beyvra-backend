@@ -20,6 +20,7 @@ from real_wallet.services import (
     complete_withdrawal,
     fail_withdrawal,
     approve_withdrawal,
+    WithdrawalMFARequired,
     record_detected_deposit,
     reserve_idempotency,
 )
@@ -118,6 +119,8 @@ class RealWalletBoundaryTests(TestCase):
         self.assertIsInstance(response.data["results"][0]["posted_atomic"], str)
 
     def test_withdrawal_request_holds_funds_and_writes_outbox_when_enabled(self):
+        self.user.is_mfa_enabled = True
+        self.user.save(update_fields=["is_mfa_enabled"])
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
         network = Network.objects.create(code="withdrawal-synthetic", name="Synthetic")
         pair = AssetNetwork.objects.create(asset=self.asset, network=network)
@@ -136,7 +139,25 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(balance.held_atomic, 250)
         self.assertEqual(withdrawal.hold.state, "ACTIVE")
 
+    def test_withdrawal_requires_mfa(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="mfa-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        AssetBalance.objects.create(wallet=wallet, asset_network=pair, posted_atomic="1000")
+        address = WithdrawalAddress.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, address="mfa-destination",
+            status="ACTIVE", risk_state="CLEARED",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_withdrawals_enabled").update(enabled=True)
+        with self.assertRaises(WithdrawalMFARequired):
+            request_withdrawal(
+                tenant=self.org, actor=self.user, wallet=wallet, withdrawal_address=address.id,
+                amount_atomic="10", idempotency_key="mfa-required", request_payload={"amount_atomic": "10"},
+            )
+
     def test_withdrawal_failure_releases_hold_and_completion_captures_once(self):
+        self.user.is_mfa_enabled = True
+        self.user.save(update_fields=["is_mfa_enabled"])
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
         network = Network.objects.create(code="withdrawal-lifecycle", name="Synthetic")
         pair = AssetNetwork.objects.create(asset=self.asset, network=network)
@@ -169,6 +190,8 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(complete_withdrawal(withdrawal_id=withdrawal.id, blockchain_transaction="chain-tx-1").id, withdrawal.id)
 
     def test_withdrawal_requires_two_distinct_approvers(self):
+        self.user.is_mfa_enabled = True
+        self.user.save(update_fields=["is_mfa_enabled"])
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
         network = Network.objects.create(code="approval-synthetic", name="Synthetic")
         pair = AssetNetwork.objects.create(asset=self.asset, network=network)

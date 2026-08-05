@@ -24,6 +24,7 @@ load_dotenv()
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
+REAL_WALLET_REQUIRE_MFA = os.getenv("REAL_WALLET_REQUIRE_MFA", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.

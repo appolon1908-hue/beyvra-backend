@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.db import transaction
+from django.conf import settings
 from django.utils import timezone
 
 from .models import (
@@ -42,6 +43,10 @@ class RealWalletFeatureDisabled(Exception):
 
 class IdempotencyConflict(Exception):
     code = "IDEMPOTENCY_CONFLICT"
+
+
+class WithdrawalMFARequired(Exception):
+    code = "WITHDRAWAL_REQUIRES_MFA"
 
 
 def is_feature_enabled(key: str) -> bool:
@@ -196,6 +201,10 @@ def request_withdrawal(*, tenant, actor, wallet, withdrawal_address, amount_atom
     """Create a withdrawal request and hold funds without calling custody."""
     if not is_feature_enabled("real_wallet_withdrawals_enabled"):
         raise RealWalletFeatureDisabled("real_wallet_withdrawals_enabled")
+    if getattr(settings, "REAL_WALLET_REQUIRE_MFA", True) and not (
+        getattr(actor, "is_mfa_enabled", False) or getattr(actor, "two_factor_authentication_enabled", False)
+    ):
+        raise WithdrawalMFARequired("withdrawal requires an enrolled MFA method")
     amount = Decimal(str(amount_atomic))
     if amount <= 0:
         raise ValueError("withdrawal amount must be positive")
