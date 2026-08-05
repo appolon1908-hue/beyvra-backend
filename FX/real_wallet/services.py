@@ -398,12 +398,15 @@ def cancel_withdrawal(*, withdrawal_id, actor):
 
 @transaction.atomic
 def fail_withdrawal(*, withdrawal_id, reason):
-    withdrawal = Withdrawal.objects.select_for_update().select_related("hold", "asset_network__asset").get(pk=withdrawal_id)
+    # PostgreSQL rejects FOR UPDATE on nullable outer-joined relations. Lock
+    # the withdrawal row first, then resolve optional hold data separately.
+    withdrawal = Withdrawal.objects.select_for_update().get(pk=withdrawal_id)
+    hold = withdrawal.hold if withdrawal.hold_id else None
     if withdrawal.state in {"COMPLETED", "CANCELLED"}:
         raise ValueError("withdrawal cannot be failed")
     if withdrawal.state == "FAILED":
         return withdrawal
-    if withdrawal.hold_id and withdrawal.hold.state == "ACTIVE":
+    if hold and hold.state == "ACTIVE":
         release_hold(withdrawal.hold_id)
     withdrawal.state = "FAILED"
     withdrawal.save(update_fields=["state", "updated_at"])
