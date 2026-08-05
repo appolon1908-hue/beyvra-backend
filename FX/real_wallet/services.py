@@ -16,6 +16,8 @@ from .models import (
     OutboxEvent,
     WebhookDelivery,
     WebhookEvent,
+    Withdrawal,
+    WithdrawalAddress,
 )
 
 REAL_FEATURE_FLAGS = (
@@ -173,3 +175,43 @@ def capture_hold(hold_id):
 
 def release_hold(hold_id):
     return _transition_hold(hold_id, "RELEASED")
+
+
+@transaction.atomic
+def request_withdrawal(*, tenant, actor, wallet, withdrawal_address, amount_atomic, idempotency_key, request_payload):
+    """Create a withdrawal request and hold funds without calling custody."""
+    if not is_feature_enabled("real_wallet_withdrawals_enabled"):
+        raise RealWalletFeatureDisabled("real_wallet_withdrawals_enabled")
+    amount = Decimal(str(amount_atomic))
+    if amount <= 0:
+        raise ValueError("withdrawal amount must be positive")
+    record, created = reserve_idempotency(
+        tenant=tenant, actor=actor, endpoint="/api/v1/withdrawals", method="POST",
+        key=idempotency_key, request_payload=request_payload,
+    )
+    if not created and record.resource_id:
+        return Withdrawal.objects.get(pk=record.resource_id)
+    address = WithdrawalAddress.objects.select_for_update().filter(
+        id=withdrawal_address, tenant=tenant, wallet=wallet, status="ACTIVE", risk_state="CLEARED"
+    ).first()
+    if address is None:
+        raise ValueError("withdrawal address is not active")
+    if address.cooling_until and address.cooling_until > timezone.now():
+        raise ValueError("withdrawal address is in a cooling period")
+    hold = create_hold(
+        tenant=tenant, wallet=wallet, asset_network=address.asset_network, amount_atomic=amount,
+        reason="WITHDRAWAL", idempotency_key=f"withdrawal:{idempotency_key}",
+    )
+    withdrawal = Withdrawal.objects.create(
+        tenant=tenant, wallet=wallet, asset_network=address.asset_network, destination=address.address,
+        amount_atomic=amount, state="REQUESTED", hold=hold, idempotency_key=idempotency_key,
+    )
+    enqueue_outbox(
+        tenant=tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
+        event_type="wallet.withdrawal.requested", payload={"withdrawal_id": str(withdrawal.id)},
+    )
+    complete_idempotency(
+        record, resource_type="withdrawal", resource_id=withdrawal.id,
+        response_status=202, response_body={"withdrawal_id": str(withdrawal.id)},
+    )
+    return withdrawal

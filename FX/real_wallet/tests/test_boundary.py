@@ -3,13 +3,14 @@ from unittest.mock import patch
 from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
-from real_wallet.models import Asset, AssetBalance, AssetNetwork, FeatureFlag, LedgerAccount, Network, RealWallet
+from real_wallet.models import Asset, AssetBalance, AssetNetwork, FeatureFlag, LedgerAccount, Network, RealWallet, WithdrawalAddress
 from real_wallet.models import WebhookSubscription
 from real_wallet.services import (
     IdempotencyConflict,
     create_webhook_delivery,
     enqueue_outbox,
     post_transaction,
+    request_withdrawal,
     reserve_idempotency,
 )
 from users.models import User
@@ -71,6 +72,25 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["available_atomic"], "850000")
         self.assertIsInstance(response.data["results"][0]["posted_atomic"], str)
+
+    def test_withdrawal_request_holds_funds_and_writes_outbox_when_enabled(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="withdrawal-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        AssetBalance.objects.create(wallet=wallet, asset_network=pair, posted_atomic="1000")
+        address = WithdrawalAddress.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, address="synthetic-destination",
+            status="ACTIVE", risk_state="CLEARED",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_withdrawals_enabled").update(enabled=True)
+        withdrawal = request_withdrawal(
+            tenant=self.org, actor=self.user, wallet=wallet, withdrawal_address=address.id,
+            amount_atomic="250", idempotency_key="withdrawal-1", request_payload={"amount_atomic": "250"},
+        )
+        balance = wallet.balances.get(asset_network=pair)
+        self.assertEqual(withdrawal.state, "REQUESTED")
+        self.assertEqual(balance.held_atomic, 250)
+        self.assertEqual(withdrawal.hold.state, "ACTIVE")
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

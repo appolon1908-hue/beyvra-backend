@@ -231,6 +231,23 @@ class Withdrawal(UUIDModel):
         ]
 
 
+class WithdrawalAddress(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_withdrawal_addresses")
+    wallet = models.ForeignKey(RealWallet, on_delete=models.PROTECT, related_name="withdrawal_addresses")
+    asset_network = models.ForeignKey(AssetNetwork, on_delete=models.PROTECT)
+    address = models.CharField(max_length=255)
+    status = models.CharField(max_length=24, default="PENDING")
+    risk_state = models.CharField(max_length=24, default="UNSCREENED")
+    cooling_until = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "real_wallet_withdrawal_addresses"
+        constraints = [
+            models.UniqueConstraint(fields=("wallet", "asset_network", "address"), name="real_withdrawal_address_unique")
+        ]
+
+
 class InternalTransfer(UUIDModel):
     tenant = models.ForeignKey(Organization, on_delete=models.PROTECT)
     source_wallet = models.ForeignKey(RealWallet, on_delete=models.PROTECT, related_name="outgoing_transfers")

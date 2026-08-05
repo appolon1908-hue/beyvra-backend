@@ -39,6 +39,12 @@ Read-only wallet and balance routes are implemented with authenticated,
 tenant-scoped queries. They return data only when `real_wallet_read_enabled` is
 explicitly enabled; all value-changing routes remain disabled.
 
+The withdrawal domain service now validates an active, cleared, non-cooling
+withdrawal address, reserves funds with a database hold, persists a
+`REQUESTED` withdrawal, records an outbox event, and completes idempotency in a
+single transaction when `real_wallet_withdrawals_enabled` is explicitly
+enabled. It never signs, broadcasts, or calls a custody provider.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables
