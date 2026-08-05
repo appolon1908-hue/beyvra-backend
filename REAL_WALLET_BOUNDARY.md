@@ -45,6 +45,11 @@ withdrawal address, reserves funds with a database hold, persists a
 single transaction when `real_wallet_withdrawals_enabled` is explicitly
 enabled. It never signs, broadcasts, or calls a custody provider.
 
+Internal transfers are implemented as a gated service with deterministic
+balance locking, same-tenant wallet checks, a balanced ledger transaction,
+projection updates, idempotency, and an outbox event. They do not create a
+blockchain transaction.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

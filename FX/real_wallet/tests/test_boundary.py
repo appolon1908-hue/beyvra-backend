@@ -11,6 +11,7 @@ from real_wallet.services import (
     enqueue_outbox,
     post_transaction,
     request_withdrawal,
+    create_internal_transfer,
     reserve_idempotency,
 )
 from users.models import User
@@ -91,6 +92,33 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(withdrawal.state, "REQUESTED")
         self.assertEqual(balance.held_atomic, 250)
         self.assertEqual(withdrawal.hold.state, "ACTIVE")
+
+    def test_internal_transfer_is_double_entry_and_tenant_scoped(self):
+        source = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        with patch("users.signals.async_send_welcome_email.delay"):
+            destination_user = User.objects.create_user(
+                email="destination-real-wallet@example.com", password="pass12345", phone_number="+12025550997"
+            )
+        OrganizationMembership.objects.create(user=destination_user, organization=self.org)
+        destination = RealWallet.objects.create(tenant=self.org, owner=destination_user)
+        network = Network.objects.create(code="transfer-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        source_balance = AssetBalance.objects.create(wallet=source, asset_network=pair, posted_atomic="900")
+        destination_balance = AssetBalance.objects.create(wallet=destination, asset_network=pair, posted_atomic="100")
+        FeatureFlag.objects.filter(key="real_wallet_internal_transfers_enabled").update(enabled=True)
+        transfer = create_internal_transfer(
+            tenant=self.org, actor=self.user, source_wallet=source, destination_wallet=destination,
+            asset_network=pair, amount_atomic="300", idempotency_key="transfer-1", request_payload={"amount_atomic": "300"},
+        )
+        source_balance.refresh_from_db()
+        destination_balance.refresh_from_db()
+        self.assertEqual(transfer.state, "COMPLETED")
+        self.assertEqual(source_balance.posted_atomic, 600)
+        self.assertEqual(destination_balance.posted_atomic, 400)
+        self.assertEqual(transfer.id, create_internal_transfer(
+            tenant=self.org, actor=self.user, source_wallet=source, destination_wallet=destination,
+            asset_network=pair, amount_atomic="300", idempotency_key="transfer-1", request_payload={"amount_atomic": "300"},
+        ).id)
 
     def test_balanced_ledger_is_idempotent(self):
         kwargs = {

@@ -11,6 +11,8 @@ from .models import (
     BalanceHold,
     FeatureFlag,
     IdempotencyRecord,
+    InternalTransfer,
+    LedgerAccount,
     LedgerEntry,
     LedgerTransaction,
     OutboxEvent,
@@ -215,3 +217,64 @@ def request_withdrawal(*, tenant, actor, wallet, withdrawal_address, amount_atom
         response_status=202, response_body={"withdrawal_id": str(withdrawal.id)},
     )
     return withdrawal
+
+
+@transaction.atomic
+def create_internal_transfer(*, tenant, actor, source_wallet, destination_wallet, asset_network,
+                             amount_atomic, idempotency_key, request_payload):
+    if not is_feature_enabled("real_wallet_internal_transfers_enabled"):
+        raise RealWalletFeatureDisabled("real_wallet_internal_transfers_enabled")
+    if source_wallet.id == destination_wallet.id or source_wallet.tenant_id != tenant.id or destination_wallet.tenant_id != tenant.id:
+        raise ValueError("invalid transfer wallets")
+    amount = Decimal(str(amount_atomic))
+    if amount <= 0:
+        raise ValueError("transfer amount must be positive")
+    record, created = reserve_idempotency(
+        tenant=tenant, actor=actor, endpoint="/api/v1/transfers", method="POST",
+        key=idempotency_key, request_payload=request_payload,
+    )
+    if not created and record.resource_id:
+        return InternalTransfer.objects.get(pk=record.resource_id)
+    first, second = sorted((source_wallet.id, destination_wallet.id), key=str)
+    balances = {
+        balance.wallet_id: balance
+        for balance in AssetBalance.objects.select_for_update().filter(
+            wallet_id__in=(first, second), asset_network=asset_network
+        )
+    }
+    source_balance = balances.get(source_wallet.id)
+    destination_balance = balances.get(destination_wallet.id)
+    if source_balance is None or destination_balance is None or source_balance.available_atomic < amount:
+        raise ValueError("insufficient available balance")
+    source_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=tenant, owner_type="WALLET", owner_id=source_wallet.id, asset=asset_network.asset,
+        account_code="CUSTOMER_AVAILABLE", defaults={"account_type": "LIABILITY", "normal_side": "CREDIT"},
+    )
+    destination_account, _ = LedgerAccount.objects.get_or_create(
+        tenant=tenant, owner_type="WALLET", owner_id=destination_wallet.id, asset=asset_network.asset,
+        account_code="CUSTOMER_AVAILABLE", defaults={"account_type": "LIABILITY", "normal_side": "CREDIT"},
+    )
+    transfer = InternalTransfer.objects.create(
+        tenant=tenant, source_wallet=source_wallet, destination_wallet=destination_wallet,
+        asset_network=asset_network, amount_atomic=amount, state="COMPLETED", idempotency_key=idempotency_key,
+    )
+    post_transaction(
+        tenant=tenant, transaction_type="INTERNAL_TRANSFER", idempotency_key=f"transfer-ledger:{idempotency_key}",
+        entries=[
+            {"account": source_account, "asset": asset_network.asset, "direction": "DEBIT", "amount_atomic": amount},
+            {"account": destination_account, "asset": asset_network.asset, "direction": "CREDIT", "amount_atomic": amount},
+        ], metadata={"transfer_id": str(transfer.id)},
+    )
+    source_balance.posted_atomic -= amount
+    destination_balance.posted_atomic += amount
+    source_balance.save(update_fields=["posted_atomic", "updated_at"])
+    destination_balance.save(update_fields=["posted_atomic", "updated_at"])
+    enqueue_outbox(
+        tenant=tenant, aggregate_type="transfer", aggregate_id=transfer.id,
+        event_type="wallet.transfer.completed", payload={"transfer_id": str(transfer.id)},
+    )
+    complete_idempotency(
+        record, resource_type="internal_transfer", resource_id=transfer.id,
+        response_status=201, response_body={"transfer_id": str(transfer.id)},
+    )
+    return transfer
