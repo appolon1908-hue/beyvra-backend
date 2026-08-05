@@ -45,3 +45,34 @@ class ProviderWebhookReceiptTests(TestCase):
             receive_provider_webhook(
                 connection=connection, provider_event_id="bad", event_type="x", payload={}, signature_verified=False,
             )
+
+    def test_replayed_event_with_changed_payload_is_rejected(self):
+        with patch("users.signals.async_send_welcome_email.delay"):
+            user = User.objects.create(email="provider-replay@example.com", phone_number="+12025550005")
+        tenant = Organization.objects.create(name="Replay provider tenant")
+        connection = ProviderConnection.objects.create(
+            tenant=tenant, provider="sandbox", connection_type="custody", encrypted_config=b"sandbox", status="DISABLED"
+        )
+        receive_provider_webhook(
+            connection=connection, provider_event_id="provider-event-replay", event_type="transaction.completed",
+            payload={"amount": "10"}, signature_verified=True,
+        )
+        with self.assertRaises(ProviderWebhookRejected):
+            receive_provider_webhook(
+                connection=connection, provider_event_id="provider-event-replay", event_type="transaction.completed",
+                payload={"amount": "11"}, signature_verified=True,
+            )
+
+    def test_processed_receipt_is_exactly_once(self):
+        with patch("users.signals.async_send_welcome_email.delay"):
+            user = User.objects.create(email="provider-once@example.com", phone_number="+12025550006")
+        tenant = Organization.objects.create(name="Exactly once tenant")
+        connection = ProviderConnection.objects.create(
+            tenant=tenant, provider="sandbox", connection_type="custody", encrypted_config=b"sandbox", status="DISABLED"
+        )
+        receipt, _ = receive_provider_webhook(
+            connection=connection, provider_event_id="provider-event-once", event_type="transaction.completed",
+            payload={"ok": True}, signature_verified=True,
+        )
+        self.assertEqual(mark_provider_webhook_processed(receipt.id).status, "PROCESSED")
+        self.assertEqual(mark_provider_webhook_processed(receipt.id).status, "PROCESSED")
