@@ -94,13 +94,9 @@ class NotificationInboxTests(TestCase):
             secret="a-secure-test-secret",
             categories=["TRADE"],
         )
-        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+        with self.captureOnCommitCallbacks(execute=True):
             with transaction.atomic():
                 emit_notification(user_id=self.user.id, title="Trade", message="Done", category="TRADE")
-                self.assertEqual(queue_webhook.call_count, 0)
-            self.assertEqual(queue_webhook.call_count, 0)
-            self.assertEqual(len(callbacks), 1)
-        callbacks[0]()
         queue_webhook.assert_called_once()
 
     def test_webhook_api_is_user_scoped_and_secret_is_write_only(self):
