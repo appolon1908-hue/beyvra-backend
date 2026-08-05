@@ -1,0 +1,44 @@
+{
+  "version": "1.0.0",
+  "base_path": "/api/v1",
+  "feature_policy": "All value-changing and real-trading operations return FEATURE_DISABLED until explicitly activated.",
+  "implemented": [
+    {"method": "GET", "path": "/features/", "operation": "realWalletFeatures", "auth": "public"},
+    {"method": "GET", "path": "/status/", "operation": "realWalletStatus", "auth": "bearer"},
+    {"method": "GET", "path": "/assets/", "operation": "listEnabledAssets", "auth": "public"},
+    {"method": "GET", "path": "/networks/", "operation": "listEnabledNetworks", "auth": "public"},
+    {"method": "GET", "path": "/asset-networks/", "operation": "listEnabledAssetNetworks", "auth": "public"},
+    {"method": "GET", "path": "/wallets/", "operation": "listRealWallets", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/wallets/{wallet_id}/", "operation": "getRealWallet", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/wallets/{wallet_id}/balances/", "operation": "listBalances", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/wallets/{wallet_id}/addresses/", "operation": "listWithdrawalAddresses", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/deposits/", "operation": "listDeposits", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/withdrawals/", "operation": "listWithdrawals", "auth": "bearer", "gate": "real_wallet_read_enabled"},
+    {"method": "GET", "path": "/webhook-subscriptions/", "operation": "listWebhookSubscriptions", "auth": "bearer"},
+    {"method": "POST", "path": "/webhook-subscriptions/", "operation": "createWebhookSubscription", "auth": "bearer", "idempotency": true},
+    {"method": "POST", "path": "/webhook-subscriptions/{subscription_id}/rotate-secret/", "operation": "rotateWebhookSecret", "auth": "bearer"},
+    {"method": "POST", "path": "/admin/withdrawals/{withdrawal_id}/approve/", "operation": "approveWithdrawal", "auth": "organization_admin"},
+    {"method": "POST", "path": "/admin/withdrawals/{withdrawal_id}/reject/", "operation": "rejectWithdrawal", "auth": "organization_admin"},
+    {"method": "GET", "path": "/admin/reconciliations/", "operation": "listReconciliations", "auth": "organization_admin"},
+    {"method": "POST", "path": "/admin/reconciliations/", "operation": "runReconciliation", "auth": "organization_admin"}
+  ],
+  "contract_only_disabled": [
+    "/wallets/{wallet_id}/addresses (POST)", "/deposits/{deposit_id}/support-review (POST)",
+    "/withdrawals/quote (POST)", "/withdrawals/preview (POST)", "/withdrawals (POST)",
+    "/withdrawals/{withdrawal_id}/confirm (POST)", "/withdrawals/{withdrawal_id}/cancel (POST)",
+    "/transfers/preview (POST)", "/transfers (POST)", "/wallet-statements (GET,POST)",
+    "/compliance/profile (GET)", "/compliance/kyc/sessions (POST)", "/beneficiaries (GET,POST)",
+    "/api-keys (GET,POST)", "/trading/orders (POST)", "/webhook-subscriptions/{id}/test (POST)",
+    "/webhook-deliveries/{id}/redeliver (POST)", "/notifications (GET)", "/reports (GET,POST)",
+    "/admin/assets (GET,POST,PATCH)", "/admin/feature-flags (GET,PATCH)",
+    "/integrations/webhooks/{provider}/{connection_id} (POST)", "/internal/metrics (GET)",
+    "/internal/health/live (GET)", "/internal/health/ready (GET)"
+  ],
+  "invariants": [
+    "Real wallet records never reference demo wallet tables.",
+    "Every value-changing request requires a PostgreSQL idempotency record.",
+    "Every posted ledger transaction is balanced and immutable.",
+    "All customer-owned queries are tenant-scoped.",
+    "No private key is accepted or stored by the application."
+  ]
+}
