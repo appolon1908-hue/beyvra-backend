@@ -56,3 +56,74 @@ class DisabledChainAdapter:
     get_latest_block = _disabled
     estimate_network_fee = _disabled
     detect_reorganization = _disabled
+
+
+@dataclass
+class SandboxCustodyAdapter:
+    """Deterministic test adapter; never valid for production settings."""
+    environment: str = "sandbox"
+
+    def _check(self):
+        if self.environment != "sandbox":
+            raise ProviderUnavailable("sandbox adapter cannot run outside sandbox")
+
+    def create_address(self, *, connection_id, asset_network_id):
+        self._check()
+        return {"provider_address_id": f"sandbox-address:{connection_id}:{asset_network_id}"}
+
+    def create_transaction(self, *, connection_id, amount_atomic, destination):
+        self._check()
+        return {"provider_transaction_id": f"sandbox-tx:{connection_id}:{destination}:{amount_atomic}"}
+
+    def sign_transaction(self, *, provider_transaction_id):
+        self._check()
+        return {"signed_transaction": f"sandbox-signed:{provider_transaction_id}"}
+
+    def broadcast_transaction(self, *, signed_transaction):
+        self._check()
+        return {"transaction_hash": f"sandbox-broadcast:{signed_transaction}"}
+
+    def get_transaction(self, *, provider_transaction_id):
+        self._check()
+        return {"provider_transaction_id": provider_transaction_id, "status": "PENDING"}
+
+    def get_balances(self, *, connection_id):
+        self._check()
+        return []
+
+    def verify_webhook(self, *, body, headers):
+        self._check()
+        return False
+
+
+@dataclass
+class SandboxChainAdapter:
+    environment: str = "sandbox"
+
+    def _check(self):
+        if self.environment != "sandbox":
+            raise ProviderUnavailable("sandbox adapter cannot run outside sandbox")
+
+    def validate_address(self, *, network_code, address):
+        self._check()
+        return bool(address.startswith("sandbox_"))
+
+    def get_transaction(self, *, network_code, transaction_hash):
+        self._check()
+        return {"transaction_hash": transaction_hash, "confirmations": 0}
+
+    def get_confirmations(self, *, network_code, transaction_hash):
+        self._check()
+        return 0
+
+    def get_latest_block(self, *, network_code):
+        self._check()
+        return {"height": 0, "hash": "sandbox-genesis"}
+
+    def estimate_network_fee(self, *, network_code, transaction):
+        self._check()
+        return "0"
+
+    def detect_reorganization(self, *, network_code, transaction_hash):
+        self._check()
+        return False

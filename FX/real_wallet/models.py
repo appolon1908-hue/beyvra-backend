@@ -303,6 +303,68 @@ class AuditEvent(UUIDModel):
         db_table = "real_wallet_audit_events"
 
 
+class ComplianceProfile(UUIDModel):
+    tenant = models.OneToOneField(Organization, on_delete=models.PROTECT, related_name="real_compliance_profile")
+    status = models.CharField(max_length=24, default="PENDING")
+    risk_level = models.CharField(max_length=16, default="UNKNOWN")
+    provider_case_reference = models.CharField(max_length=255, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "real_compliance_profiles"
+
+
+class Restriction(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_restrictions")
+    wallet = models.ForeignKey(RealWallet, null=True, blank=True, on_delete=models.PROTECT, related_name="restrictions")
+    kind = models.CharField(max_length=32)
+    reason_code = models.CharField(max_length=64)
+    active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "real_compliance_restrictions"
+
+
+class TransactionScreening(UUIDModel):
+    tenant = models.ForeignKey(Organization, on_delete=models.PROTECT)
+    asset_network = models.ForeignKey(AssetNetwork, on_delete=models.PROTECT)
+    direction = models.CharField(max_length=16)
+    amount_atomic = models.DecimalField(max_digits=78, decimal_places=0)
+    destination = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=24, default="PENDING")
+    provider_case_reference = models.CharField(max_length=255, blank=True)
+    decision_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "real_compliance_transaction_screenings"
+
+
+class ReconciliationRun(UUIDModel):
+    tenant = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.PROTECT)
+    scope = models.CharField(max_length=32)
+    status = models.CharField(max_length=24, default="RUNNING")
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    summary = models.JSONField(default=dict)
+
+    class Meta:
+        db_table = "real_reconciliation_runs"
+
+
+class ReconciliationItem(UUIDModel):
+    run = models.ForeignKey(ReconciliationRun, on_delete=models.PROTECT, related_name="items")
+    resource_type = models.CharField(max_length=64)
+    resource_id = models.UUIDField(null=True, blank=True)
+    result = models.CharField(max_length=32)
+    internal_amount_atomic = models.DecimalField(max_digits=78, decimal_places=0, null=True, blank=True)
+    external_amount_atomic = models.DecimalField(max_digits=78, decimal_places=0, null=True, blank=True)
+    reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "real_reconciliation_items"
+
+
 class ProviderConnection(UUIDModel):
     tenant = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="real_provider_connections")
     provider = models.CharField(max_length=64)

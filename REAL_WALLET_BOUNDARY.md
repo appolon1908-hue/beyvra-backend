@@ -89,6 +89,12 @@ Withdrawal approval records and a dual-approver service are implemented. An
 initiator cannot approve their own withdrawal; rejection is terminal, and the
 withdrawal reaches `APPROVED` only after two distinct tenant members approve.
 
+Compliance profiles, wallet restrictions, transaction-screening records, and
+approval/rejection services are implemented. Wallet actions fail closed unless
+the tenant profile is approved and no active restriction applies. Custody and
+chain protocols include explicit fail-closed adapters plus deterministic
+sandbox adapters; no production provider is configured.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables
