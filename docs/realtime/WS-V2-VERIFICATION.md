@@ -2,7 +2,7 @@
 
 ## Deployment
 
-* Backend commit: `7bb3cd3b9aaffbe7aec8bf83cbacab476a688840`
+* Backend commit: `ab8837f` (TLS baseline); mTLS certification changes are staged in the working tree.
 * Frontend commit: `61684fcb987c32e52328c2eeaec0e117514dfd5a`
 * Backend image: `codestra-backend:staging-ws-v2-20260805`
   (`sha256:56d01f3c87d99baf791b98fce199c18ef2e10990c9583e76c1f4557835a92835`)
@@ -17,12 +17,13 @@
 * V2 contract tests (`ws.test_v2`): 2 passed.
 * Centrifugo health and Prometheus endpoints: PASS.
 * JetStream health: PASS; eight bounded file-backed streams and nine durable consumers survive NATS restart.
-* NATS client traffic is private Docker-network traffic with staging TLS enabled. The CA is mounted read-only to Centrifugo and the bridge; private NATS and monitoring ports remain unpublished.
+* NATS client traffic is private Docker-network traffic with staging mTLS enabled. NATS requires client certificates; separate staging identities are used by Centrifugo and the bridge. Private NATS and monitoring ports remain unpublished.
 * Allowed market subscription: PASS.
 * Cross-account private subscription: denied with `403 forbidden`.
 * V1/V2 reverse-proxy paths are separate; no production services or flags changed.
 * A synthetic event published through the private Centrifugo API was received by a `/ws/v2/` subscriber.
 * A synthetic envelope published through a TLS NATS client was accepted while the bridge remained healthy.
+* A client without a certificate was rejected with `tls: certificate required`; authorized client-certificate publish passed.
 
 ## Capacity observations
 

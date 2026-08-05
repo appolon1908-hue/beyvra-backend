@@ -139,7 +139,7 @@ services:
   centrifugo:
     image: centrifugo/centrifugo:v6.2.0
     restart: unless-stopped
-    command: ["sh", "-c", "export CENTRIFUGO_BROKER_NATS_TLS_SERVER_CA_PEM=\"$$(cat /etc/centrifugo/tls/ca.crt)\"; exec centrifugo -c /etc/centrifugo/config.json"]
+    command: ["sh", "-c", "export CENTRIFUGO_BROKER_NATS_TLS_SERVER_CA_PEM=\"$$(cat /etc/centrifugo/tls/ca.crt)\"; export CENTRIFUGO_BROKER_NATS_TLS_CERT_PEM=\"$$(cat /etc/centrifugo/tls/client.crt)\"; export CENTRIFUGO_BROKER_NATS_TLS_KEY_PEM=\"$$(cat /etc/centrifugo/tls/client.key)\"; exec centrifugo -c /etc/centrifugo/config.json"]
     expose:
       - "8000"
     ulimits:
@@ -156,11 +156,14 @@ services:
       CENTRIFUGO_BROKER_TYPE: nats
       CENTRIFUGO_BROKER_NATS_URL: nats://nats:4222
       CENTRIFUGO_BROKER_NATS_TLS_ENABLED: "true"
+      CENTRIFUGO_BROKER_NATS_TLS_SERVER_NAME: nats
       CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:?CENTRIFUGO_PROXY_SECRET is required}
       CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Codestra-Proxy-Secret":"${CENTRIFUGO_PROXY_SECRET}","X-Forwarded-Proto":"https","Host":"staging.codestra.cloud"}'
     volumes:
       - ./infra/realtime-v2/centrifugo.json:/etc/centrifugo/config.json:ro
       - ./infra/realtime-v2/tls/ca.crt:/etc/centrifugo/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.crt:/etc/centrifugo/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.key:/etc/centrifugo/tls/client.key:ro
     networks:
       - fx-network
     depends_on:
@@ -181,6 +184,8 @@ services:
     environment:
       NATS_URL: tls://nats:4222
       NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
       CENTRIFUGO_PUBLISH_URL: http://centrifugo:8000/api/publish
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
     depends_on:
@@ -192,6 +197,8 @@ services:
         condition: service_started
     volumes:
       - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
     networks:
       - fx-network
 

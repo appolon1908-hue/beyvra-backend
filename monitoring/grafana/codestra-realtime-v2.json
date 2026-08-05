@@ -1,0 +1,13 @@
+{
+  "title": "Codestra Realtime V2 Certification",
+  "schemaVersion": 39,
+  "tags": ["codestra", "staging", "realtime-v2"],
+  "timezone": "UTC",
+  "panels": [
+    {"type":"timeseries","title":"Centrifugo connections","targets":[{"expr":"centrifugo_client_connections"}]},
+    {"type":"timeseries","title":"Publish errors","targets":[{"expr":"rate(centrifugo_broker_publish_errors_total[5m])"}]},
+    {"type":"timeseries","title":"NATS consumer pending","targets":[{"expr":"nats_jetstream_consumer_num_pending"}]},
+    {"type":"timeseries","title":"Sequence-gap recovery","targets":[{"expr":"rate(codestra_realtime_sequence_gap_total[5m])"}],"fieldConfig":{"defaults":{"unit":"ops"}}},
+    {"type":"timeseries","title":"Process memory","targets":[{"expr":"process_resident_memory_bytes{job=~\"centrifugo|codestra-backend\"}"}]}
+  ]
+}

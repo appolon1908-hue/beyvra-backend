@@ -1,0 +1,36 @@
+groups:
+  - name: codestra-realtime-v2
+    rules:
+      - alert: CodestraRealtimeV2Down
+        expr: up{job=~"centrifugo|codestra-backend"} == 0
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: realtime V2 service is unavailable
+          runbook: docs/realtime/RUNBOOK.md
+      - alert: CodestraRealtimeV2ReconnectSpike
+        expr: rate(centrifugo_client_connections_total[5m]) > 100
+        for: 5m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations:
+          summary: realtime reconnect/connection churn is elevated
+          runbook: docs/realtime/RUNBOOK.md
+      - alert: CodestraRealtimeV2PublishFailures
+        expr: increase(centrifugo_broker_publish_errors_total[5m]) > 0
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: realtime publish failures detected
+          runbook: docs/realtime/RUNBOOK.md
+      - alert: CodestraRealtimeV2NatsConsumerLag
+        expr: nats_jetstream_consumer_num_pending > 1000
+        for: 10m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations:
+          summary: NATS JetStream consumer lag is elevated
+          runbook: docs/realtime/RUNBOOK.md
+      - alert: CodestraRealtimeV2SequenceRecovery
+        expr: increase(codestra_realtime_sequence_gap_total[10m]) > 0
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations:
+          summary: realtime sequence gaps require snapshot recovery
+          runbook: docs/realtime/RUNBOOK.md

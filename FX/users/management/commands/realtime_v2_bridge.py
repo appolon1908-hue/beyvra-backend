@@ -51,6 +51,10 @@ async def _run():
     ca_file = os.getenv("NATS_TLS_CA_FILE")
     if ca_file:
         tls_context = ssl.create_default_context(cafile=ca_file)
+        cert_file = os.getenv("NATS_TLS_CERT_FILE")
+        key_file = os.getenv("NATS_TLS_KEY_FILE")
+        if cert_file and key_file:
+            tls_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
     await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context)
     js = nc.jetstream()
     api_url = os.getenv("CENTRIFUGO_PUBLISH_URL", "http://centrifugo:8000/api/publish")
