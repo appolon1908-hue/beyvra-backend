@@ -22,6 +22,7 @@ from .models import (
     WebhookEvent,
     Withdrawal,
     WithdrawalAddress,
+    WithdrawalApproval,
 )
 
 REAL_FEATURE_FLAGS = (
@@ -452,5 +453,32 @@ def complete_withdrawal(*, withdrawal_id, blockchain_transaction):
     record_audit(
         tenant=withdrawal.tenant, actor=None, action="withdrawal.completed", resource_type="withdrawal",
         resource_id=withdrawal.id, outcome="completed",
+    )
+    return withdrawal
+
+
+@transaction.atomic
+def approve_withdrawal(*, withdrawal_id, approver, decision, reason=""):
+    withdrawal = Withdrawal.objects.select_for_update().select_related("wallet", "tenant").get(pk=withdrawal_id)
+    if not withdrawal.tenant.memberships.filter(user=approver).exists():
+        raise ValueError("approver is not a tenant member")
+    if withdrawal.wallet.owner_id == approver.id:
+        raise ValueError("initiator cannot approve own withdrawal")
+    if decision not in {"APPROVED", "REJECTED"}:
+        raise ValueError("invalid approval decision")
+    approval, created = WithdrawalApproval.objects.get_or_create(
+        withdrawal=withdrawal, approver=approver,
+        defaults={"decision": decision, "reason": reason[:2000]},
+    )
+    if not created:
+        return withdrawal
+    if decision == "REJECTED":
+        withdrawal.state = "REJECTED"
+    elif withdrawal.approvals.filter(decision="APPROVED").count() >= 2:
+        withdrawal.state = "APPROVED"
+    withdrawal.save(update_fields=["state", "updated_at"])
+    record_audit(
+        tenant=withdrawal.tenant, actor=approver, action="withdrawal.approval_recorded",
+        resource_type="withdrawal", resource_id=withdrawal.id, outcome=decision.lower(),
     )
     return withdrawal

@@ -248,6 +248,19 @@ class WithdrawalAddress(UUIDModel):
         ]
 
 
+class WithdrawalApproval(UUIDModel):
+    withdrawal = models.ForeignKey("Withdrawal", on_delete=models.PROTECT, related_name="approvals")
+    approver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    decision = models.CharField(max_length=16, choices=(("APPROVED", "Approved"), ("REJECTED", "Rejected")))
+    reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "real_wallet_withdrawal_approvals"
+        constraints = [
+            models.UniqueConstraint(fields=("withdrawal", "approver"), name="real_withdrawal_approval_unique")
+        ]
+
+
 class InternalTransfer(UUIDModel):
     tenant = models.ForeignKey(Organization, on_delete=models.PROTECT)
     source_wallet = models.ForeignKey(RealWallet, on_delete=models.PROTECT, related_name="outgoing_transfers")

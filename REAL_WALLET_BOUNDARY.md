@@ -85,6 +85,10 @@ completion captures it, posts the customer-to-platform ledger transaction,
 records the blockchain reference, and emits the corresponding event. Custody
 signing and broadcast remain outside the application and disabled.
 
+Withdrawal approval records and a dual-approver service are implemented. An
+initiator cannot approve their own withdrawal; rejection is terminal, and the
+withdrawal reaches `APPROVED` only after two distinct tenant members approve.
+
 ## Migration
 
 Run `python manage.py migrate real_wallet`. The migration creates only tables

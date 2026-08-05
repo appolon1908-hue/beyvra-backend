@@ -19,6 +19,7 @@ from real_wallet.services import (
     cancel_withdrawal,
     complete_withdrawal,
     fail_withdrawal,
+    approve_withdrawal,
     record_detected_deposit,
     reserve_idempotency,
 )
@@ -166,6 +167,30 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(balance.posted_atomic, 800)
         self.assertEqual(balance.held_atomic, 0)
         self.assertEqual(complete_withdrawal(withdrawal_id=withdrawal.id, blockchain_transaction="chain-tx-1").id, withdrawal.id)
+
+    def test_withdrawal_requires_two_distinct_approvers(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="approval-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        AssetBalance.objects.create(wallet=wallet, asset_network=pair, posted_atomic="1000")
+        address = WithdrawalAddress.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, address="approval-destination",
+            status="ACTIVE", risk_state="CLEARED",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_withdrawals_enabled").update(enabled=True)
+        withdrawal = request_withdrawal(
+            tenant=self.org, actor=self.user, wallet=wallet, withdrawal_address=address.id,
+            amount_atomic="100", idempotency_key="approval-withdrawal", request_payload={"amount_atomic": "100"},
+        )
+        withdrawal.state = "MANUAL_REVIEW"
+        withdrawal.save(update_fields=["state"])
+        with patch("users.signals.async_send_welcome_email.delay"):
+            approver_one = User.objects.create_user(email="approver1@example.com", password="pass12345", phone_number="+12025550996")
+            approver_two = User.objects.create_user(email="approver2@example.com", password="pass12345", phone_number="+12025550995")
+        OrganizationMembership.objects.create(user=approver_one, organization=self.org)
+        OrganizationMembership.objects.create(user=approver_two, organization=self.org)
+        self.assertEqual(approve_withdrawal(withdrawal_id=withdrawal.id, approver=approver_one, decision="APPROVED").state, "MANUAL_REVIEW")
+        self.assertEqual(approve_withdrawal(withdrawal_id=withdrawal.id, approver=approver_two, decision="APPROVED").state, "APPROVED")
 
     def test_internal_transfer_is_double_entry_and_tenant_scoped(self):
         source = RealWallet.objects.create(tenant=self.org, owner=self.user)
