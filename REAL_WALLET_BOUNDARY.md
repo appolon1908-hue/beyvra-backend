@@ -70,6 +70,11 @@ transaction hash, and output index; crediting requires the configured
 confirmation threshold, posts a balanced ledger transaction, updates the
 balance projection, and emits an outbox event in one transaction.
 
+Read-only deposit, withdrawal, and saved-address history endpoints are now
+available behind `real_wallet_read_enabled` with tenant-scoped ownership
+filters. Address creation and all other mutations remain disabled until the
+custody/compliance activation plan is approved.
+
 Withdrawal cancellation, failure recovery, and completion are implemented as
 idempotent lifecycle services. Cancellation/failure releases an active hold;
 completion captures it, posts the customer-to-platform ledger transaction,

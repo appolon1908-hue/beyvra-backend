@@ -65,6 +65,25 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual([item["code"] for item in networks.data["results"]], ["visible"])
         self.assertEqual(len(pairs.data["results"]), 1)
 
+    def test_read_history_and_addresses_are_tenant_scoped(self):
+        wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
+        network = Network.objects.create(code="history-synthetic", name="Synthetic")
+        pair = AssetNetwork.objects.create(asset=self.asset, network=network)
+        WithdrawalAddress.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, address="history-destination",
+            status="ACTIVE", risk_state="CLEARED",
+        )
+        Deposit.objects.create(
+            tenant=self.org, wallet=wallet, asset_network=pair, transaction_hash="history-tx",
+            output_index=0, amount_atomic="55", state="CONFIRMING",
+        )
+        FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
+        client = APIClient()
+        client.force_authenticate(self.user)
+        self.assertEqual(client.get(f"/api/v1/wallets/{wallet.id}/addresses/").status_code, 200)
+        self.assertEqual(client.get("/api/v1/deposits/").data["results"][0]["amount_atomic"], "55")
+        self.assertEqual(client.get("/api/v1/withdrawals/").status_code, 200)
+
     def test_enabled_read_is_tenant_scoped(self):
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
         with patch("users.signals.async_send_welcome_email.delay"):

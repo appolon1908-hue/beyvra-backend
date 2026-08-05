@@ -73,6 +73,30 @@ paths:
                     items: {$ref: '#/components/schemas/Balance'}
         '404': {description: Wallet not found in caller tenant}
         '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /wallets/{wallet_id}/addresses/:
+    get:
+      operationId: listWithdrawalAddresses
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: wallet_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Tenant-scoped saved addresses}
+        '404': {description: Wallet not found in caller tenant}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /deposits/:
+    get:
+      operationId: listDeposits
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tenant-scoped deposits}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /withdrawals/:
+    get:
+      operationId: listWithdrawals
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tenant-scoped withdrawals}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
   /deposits/:
     get:
       operationId: listRealDeposits

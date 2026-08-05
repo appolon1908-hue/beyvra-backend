@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import OrganizationMembership
-from .models import Asset, AssetNetwork, FeatureFlag, Network, RealWallet, WebhookSubscription
+from .models import Asset, AssetNetwork, Deposit, FeatureFlag, Network, RealWallet, Withdrawal, WithdrawalAddress, WebhookSubscription
 from .serializers import RealWalletBalanceSerializer, RealWalletSerializer
 from .services import is_feature_enabled
 from .webhooks import WebhookSecurityError, create_secret_version, validate_webhook_destination
@@ -142,6 +142,64 @@ class RealWalletBalanceListView(APIView):
             return Response({"detail": "Not found."}, status=404)
         balances = wallet.balances.select_related("asset_network__asset", "asset_network__network").order_by("created_at")
         return Response({"results": RealWalletBalanceSerializer(balances, many=True).data})
+
+
+def _owned_wallet(request, wallet_id):
+    return RealWallet.objects.filter(
+        id=wallet_id, owner=request.user,
+        tenant__memberships__user=request.user,
+        tenant__memberships__organization__is_active=True,
+    ).first()
+
+
+class WalletAddressesView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, wallet_id):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        wallet = _owned_wallet(request, wallet_id)
+        if wallet is None:
+            return Response({"detail": "Not found."}, status=404)
+        addresses = WithdrawalAddress.objects.filter(wallet=wallet).select_related("asset_network__asset", "asset_network__network")
+        return Response({"results": [
+            {"id": str(item.id), "address": item.address, "status": item.status,
+             "risk_state": item.risk_state, "cooling_until": item.cooling_until,
+             "asset": item.asset_network.asset.symbol, "network": item.asset_network.network.code}
+            for item in addresses.order_by("created_at")
+        ]})
+
+
+class DepositListView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        deposits = Deposit.objects.filter(wallet__owner=request.user, wallet__tenant__memberships__user=request.user).select_related("asset_network__asset", "asset_network__network")
+        return Response({"results": [
+            {"id": str(item.id), "wallet_id": str(item.wallet_id), "state": item.state,
+             "amount_atomic": str(item.amount_atomic), "confirmations": item.confirmations,
+             "transaction_hash": item.transaction_hash, "asset": item.asset_network.asset.symbol,
+             "network": item.asset_network.network.code}
+            for item in deposits.order_by("-created_at")
+        ]})
+
+
+class WithdrawalListView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        if not is_feature_enabled("real_wallet_read_enabled"):
+            return disabled_response(request, "real_wallet_read_enabled")
+        withdrawals = Withdrawal.objects.filter(wallet__owner=request.user, wallet__tenant__memberships__user=request.user).select_related("asset_network__asset", "asset_network__network")
+        return Response({"results": [
+            {"id": str(item.id), "wallet_id": str(item.wallet_id), "state": item.state,
+             "amount_atomic": str(item.amount_atomic), "fee_atomic": str(item.fee_atomic),
+             "destination": item.destination, "blockchain_transaction": item.blockchain_transaction,
+             "asset": item.asset_network.asset.symbol, "network": item.asset_network.network.code}
+            for item in withdrawals.order_by("-created_at")
+        ]})
 
 
 def _request_tenant(request):
