@@ -6,7 +6,8 @@ Generated from the Django URL resolver on 2026-08-04.
 
 - 200 registered API route patterns (including DRF format variants).
 - 197 logical URL templates after format-variant normalization.
-- 17 core Demo/tenant/integration/webhook URLs in the product inventory.
+- 18 core Demo/tenant/integration/webhook URLs in the product inventory,
+  including `/api/v1/workspace/bootstrap`.
 - 8 logical webhook-capable URLs, including the legacy Stripe receiver.
 - 3 supported legacy WebSocket routes: `/ws/trades/`, `/ws/users/`, and
   `/ws/market-data/`.
@@ -19,6 +20,7 @@ OpenAPI document is `contracts/openapi/codestra-demo-v1.yaml`.
 The current frontend still references contracts not present in the backend
 route tree: `platform/config`, `v1/market/snapshot`, `v1/market/candles`,
 `v1/economic-calendar`, `v1/realtime/health`, and `ws/v1/*` realtime channels.
+Workspace bootstrap is now implemented at `/api/v1/workspace/bootstrap`.
 These must be implemented behind a versioned service or removed; they must not
 silently fall back to mock data.
 

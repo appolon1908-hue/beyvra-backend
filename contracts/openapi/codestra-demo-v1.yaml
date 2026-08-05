@@ -4,6 +4,25 @@ info:
   version: 1.0.0
   description: Versioned API contract for the Codestra virtual-funds Demo platform. Real-money trading, funding and custody are not enabled.
 paths:
+  /api/v1/workspace/bootstrap:
+    get:
+      operationId: v1_workspace_bootstrap_retrieve
+      description: Bounded tenant-scoped Demo workspace bootstrap. Candle history is intentionally excluded.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Demo workspace state, wallet summary, feature flags and trading rules.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+        '401':
+          description: Authentication required.
+        '404':
+          description: Demo wallet is not available in the active tenant.
   /api/admin/dashboard/over_views:
     get:
       operationId: admin_dashboard_over_views_retrieve
