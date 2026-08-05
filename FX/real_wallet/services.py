@@ -423,28 +423,31 @@ def fail_withdrawal(*, withdrawal_id, reason):
 
 @transaction.atomic
 def complete_withdrawal(*, withdrawal_id, blockchain_transaction):
-    withdrawal = Withdrawal.objects.select_for_update().select_related("hold", "wallet", "asset_network__asset").get(pk=withdrawal_id)
+    withdrawal = Withdrawal.objects.select_for_update().get(pk=withdrawal_id)
+    hold = withdrawal.hold if withdrawal.hold_id else None
+    wallet = withdrawal.wallet
+    asset = withdrawal.asset_network.asset
     if withdrawal.state == "COMPLETED":
         return withdrawal
     if withdrawal.state not in {"SIGNED", "BROADCAST", "CONFIRMING"}:
         raise ValueError("withdrawal is not ready for completion")
     platform_account, _ = LedgerAccount.objects.get_or_create(
-        tenant=withdrawal.tenant, owner_type="PLATFORM", owner_id=None, asset=withdrawal.asset_network.asset,
+        tenant=withdrawal.tenant, owner_type="PLATFORM", owner_id=None, asset=asset,
         account_code="PLATFORM_HOT_WALLET", defaults={"account_type": "ASSET", "normal_side": "DEBIT"},
     )
     customer_account, _ = LedgerAccount.objects.get_or_create(
-        tenant=withdrawal.tenant, owner_type="WALLET", owner_id=withdrawal.wallet_id, asset=withdrawal.asset_network.asset,
+        tenant=withdrawal.tenant, owner_type="WALLET", owner_id=withdrawal.wallet_id, asset=asset,
         account_code="CUSTOMER_AVAILABLE", defaults={"account_type": "LIABILITY", "normal_side": "CREDIT"},
     )
     post_transaction(
         tenant=withdrawal.tenant, transaction_type="WITHDRAWAL_CAPTURE",
         idempotency_key=f"withdrawal-capture:{withdrawal.id}",
         entries=[
-            {"account": customer_account, "asset": withdrawal.asset_network.asset, "direction": "DEBIT", "amount_atomic": withdrawal.amount_atomic},
-            {"account": platform_account, "asset": withdrawal.asset_network.asset, "direction": "CREDIT", "amount_atomic": withdrawal.amount_atomic},
+            {"account": customer_account, "asset": asset, "direction": "DEBIT", "amount_atomic": withdrawal.amount_atomic},
+            {"account": platform_account, "asset": asset, "direction": "CREDIT", "amount_atomic": withdrawal.amount_atomic},
         ], metadata={"withdrawal_id": str(withdrawal.id), "blockchain_transaction": blockchain_transaction},
     )
-    if withdrawal.hold_id and withdrawal.hold.state == "ACTIVE":
+    if hold and hold.state == "ACTIVE":
         capture_hold(withdrawal.hold_id)
     withdrawal.state = "COMPLETED"
     withdrawal.blockchain_transaction = blockchain_transaction
