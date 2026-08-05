@@ -13,6 +13,7 @@ payments, live trading, or real-money flags are changed.
 - Centrifugo and bridge restart successfully after NATS recovery.
 - Nginx restart completed and the container returned healthy.
 - Backend system checks and V2 contract tests pass.
+- Full `ws` test module passes (5 tests); gateway/security tests pass (3 tests).
 - Prometheus alert rules and a Grafana dashboard definition are checked into `monitoring/`.
 
 ## Open gates
