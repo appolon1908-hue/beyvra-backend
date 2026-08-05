@@ -64,6 +64,10 @@ balance locking, same-tenant wallet checks, a balanced ledger transaction,
 projection updates, idempotency, and an outbox event. They do not create a
 blockchain transaction.
 
+Mutation services also write tenant-scoped audit events for accepted,
+completed, failed, and cancelled transitions. Audit metadata is caller-supplied
+safe metadata only; secrets and signing material are not recorded.
+
 Deposit detection and crediting are also implemented behind
 `real_wallet_deposits_enabled`. Chain events are deduplicated by asset-network,
 transaction hash, and output index; crediting requires the configured

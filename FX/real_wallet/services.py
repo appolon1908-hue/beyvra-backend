@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .models import (
     AssetBalance,
+    AuditEvent,
     BalanceHold,
     Deposit,
     FeatureFlag,
@@ -89,6 +90,15 @@ def enqueue_outbox(*, tenant, aggregate_type, aggregate_id, event_type, payload,
         occurred_at=occurred_at or timezone.now(),
         correlation_id=correlation_id,
         causation_id=causation_id,
+    )
+
+
+def record_audit(*, tenant, actor, action, resource_type, resource_id, outcome, reason="", request_id="", correlation_id=None, metadata=None):
+    """Record an audit event with caller-supplied safe metadata only."""
+    return AuditEvent.objects.create(
+        tenant=tenant, actor=actor, action=action, resource_type=resource_type,
+        resource_id=resource_id, outcome=outcome, reason=reason[:2000],
+        request_id=request_id[:128], correlation_id=correlation_id, metadata=metadata or {},
     )
 
 
@@ -217,6 +227,10 @@ def request_withdrawal(*, tenant, actor, wallet, withdrawal_address, amount_atom
         record, resource_type="withdrawal", resource_id=withdrawal.id,
         response_status=202, response_body={"withdrawal_id": str(withdrawal.id)},
     )
+    record_audit(
+        tenant=tenant, actor=actor, action="withdrawal.requested", resource_type="withdrawal",
+        resource_id=withdrawal.id, outcome="accepted",
+    )
     return withdrawal
 
 
@@ -278,6 +292,10 @@ def create_internal_transfer(*, tenant, actor, source_wallet, destination_wallet
         record, resource_type="internal_transfer", resource_id=transfer.id,
         response_status=201, response_body={"transfer_id": str(transfer.id)},
     )
+    record_audit(
+        tenant=tenant, actor=actor, action="transfer.completed", resource_type="internal_transfer",
+        resource_id=transfer.id, outcome="completed",
+    )
     return transfer
 
 
@@ -300,6 +318,10 @@ def record_detected_deposit(*, tenant, wallet, asset_network, transaction_hash, 
         enqueue_outbox(
             tenant=tenant, aggregate_type="deposit", aggregate_id=deposit.id,
             event_type="wallet.deposit.detected", payload={"deposit_id": str(deposit.id)},
+        )
+        record_audit(
+            tenant=tenant, actor=None, action="deposit.detected", resource_type="deposit",
+            resource_id=deposit.id, outcome="accepted",
         )
     return deposit
 
@@ -344,6 +366,10 @@ def credit_deposit(*, deposit_id, required_confirmations):
         tenant=deposit.tenant, aggregate_type="deposit", aggregate_id=deposit.id,
         event_type="wallet.deposit.credited", payload={"deposit_id": str(deposit.id)},
     )
+    record_audit(
+        tenant=deposit.tenant, actor=None, action="deposit.credited", resource_type="deposit",
+        resource_id=deposit.id, outcome="completed",
+    )
     return deposit
 
 
@@ -362,6 +388,10 @@ def cancel_withdrawal(*, withdrawal_id, actor):
         tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
         event_type="wallet.withdrawal.cancelled", payload={"withdrawal_id": str(withdrawal.id)},
     )
+    record_audit(
+        tenant=withdrawal.tenant, actor=actor, action="withdrawal.cancelled", resource_type="withdrawal",
+        resource_id=withdrawal.id, outcome="accepted",
+    )
     return withdrawal
 
 
@@ -379,6 +409,10 @@ def fail_withdrawal(*, withdrawal_id, reason):
     enqueue_outbox(
         tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
         event_type="wallet.withdrawal.failed", payload={"withdrawal_id": str(withdrawal.id), "reason": reason},
+    )
+    record_audit(
+        tenant=withdrawal.tenant, actor=None, action="withdrawal.failed", resource_type="withdrawal",
+        resource_id=withdrawal.id, outcome="failed", reason=reason,
     )
     return withdrawal
 
@@ -414,5 +448,9 @@ def complete_withdrawal(*, withdrawal_id, blockchain_transaction):
     enqueue_outbox(
         tenant=withdrawal.tenant, aggregate_type="withdrawal", aggregate_id=withdrawal.id,
         event_type="wallet.withdrawal.completed", payload={"withdrawal_id": str(withdrawal.id)},
+    )
+    record_audit(
+        tenant=withdrawal.tenant, actor=None, action="withdrawal.completed", resource_type="withdrawal",
+        resource_id=withdrawal.id, outcome="completed",
     )
     return withdrawal
