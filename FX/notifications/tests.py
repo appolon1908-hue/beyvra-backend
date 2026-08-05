@@ -11,6 +11,7 @@ import requests
 from unittest.mock import patch
 
 from django.test import override_settings
+from django.db import transaction
 from django.utils import timezone
 from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
 from notifications.services import emit_notification
@@ -83,6 +84,23 @@ class NotificationInboxTests(TestCase):
                 user_id=self.user.id, title="Trade completed", message="Done", category="TRADE"
             )
         self.assertTrue(subscription.deliveries.filter(event=event).exists())
+        queue_webhook.assert_called_once()
+
+    @patch("notifications.services._queue_webhook")
+    def test_webhook_queue_is_deferred_until_transaction_commit(self, queue_webhook):
+        WebhookSubscription.objects.create(
+            user=self.user,
+            url="https://example.com/commit-boundary",
+            secret="a-secure-test-secret",
+            categories=["TRADE"],
+        )
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            with transaction.atomic():
+                emit_notification(user_id=self.user.id, title="Trade", message="Done", category="TRADE")
+                self.assertEqual(queue_webhook.call_count, 0)
+            self.assertEqual(queue_webhook.call_count, 0)
+            self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
         queue_webhook.assert_called_once()
 
     def test_webhook_api_is_user_scoped_and_secret_is_write_only(self):
