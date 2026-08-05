@@ -141,6 +141,7 @@ Thumbs.db
 *.env
 .env.staging
 secrets/
+infra/realtime-v2/tls/
 backups/*.dump
 backups/*.tmp
 venv/

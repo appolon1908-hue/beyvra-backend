@@ -127,6 +127,7 @@ services:
     volumes:
       - nats_data:/data
       - ./infra/realtime-v2/nats.conf:/etc/nats/nats.conf:ro
+      - ./infra/realtime-v2/tls:/etc/nats/tls:ro
     networks:
       - fx-network
     healthcheck:
@@ -138,7 +139,7 @@ services:
   centrifugo:
     image: centrifugo/centrifugo:v6.2.0
     restart: unless-stopped
-    command: ["centrifugo", "-c", "/etc/centrifugo/config.json"]
+    command: ["sh", "-c", "export CENTRIFUGO_BROKER_NATS_TLS_SERVER_CA_PEM=\"$$(cat /etc/centrifugo/tls/ca.crt)\"; exec centrifugo -c /etc/centrifugo/config.json"]
     expose:
       - "8000"
     ulimits:
@@ -154,10 +155,12 @@ services:
       CENTRIFUGO_BROKER_ENABLED: "true"
       CENTRIFUGO_BROKER_TYPE: nats
       CENTRIFUGO_BROKER_NATS_URL: nats://nats:4222
+      CENTRIFUGO_BROKER_NATS_TLS_ENABLED: "true"
       CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:?CENTRIFUGO_PROXY_SECRET is required}
       CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Codestra-Proxy-Secret":"${CENTRIFUGO_PROXY_SECRET}","X-Forwarded-Proto":"https","Host":"staging.codestra.cloud"}'
     volumes:
       - ./infra/realtime-v2/centrifugo.json:/etc/centrifugo/config.json:ro
+      - ./infra/realtime-v2/tls/ca.crt:/etc/centrifugo/tls/ca.crt:ro
     networks:
       - fx-network
     depends_on:
@@ -176,7 +179,8 @@ services:
     env_file:
       - .env
     environment:
-      NATS_URL: nats://nats:4222
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
       CENTRIFUGO_PUBLISH_URL: http://centrifugo:8000/api/publish
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
     depends_on:
@@ -186,6 +190,8 @@ services:
         condition: service_healthy
       web:
         condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
     networks:
       - fx-network
 

@@ -7,6 +7,7 @@ Orders, balances and settlements remain owned by PostgreSQL services.
 import asyncio
 import json
 import os
+import ssl
 import urllib.request
 
 from django.core.management.base import BaseCommand
@@ -46,7 +47,11 @@ async def _run():
     from nats.aio.client import Client as NATS
 
     nc = NATS()
-    await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"))
+    tls_context = None
+    ca_file = os.getenv("NATS_TLS_CA_FILE")
+    if ca_file:
+        tls_context = ssl.create_default_context(cafile=ca_file)
+    await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context)
     js = nc.jetstream()
     api_url = os.getenv("CENTRIFUGO_PUBLISH_URL", "http://centrifugo:8000/api/publish")
     api_key = os.getenv("CENTRIFUGO_API_KEY", "")
