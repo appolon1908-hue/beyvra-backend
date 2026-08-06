@@ -8,6 +8,12 @@ from rest_framework.test import APIClient
 from trade.models import MarketCandle
 
 
+@override_settings(
+    REST_FRAMEWORK={
+        "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+        "UNAUTHENTICATED_USER": None,
+    }
+)
 class MarketHistoryTests(TestCase):
     def setUp(self):
         # Market-data tests must not require a live Celery broker. This patch

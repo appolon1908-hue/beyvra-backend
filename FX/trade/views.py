@@ -3,6 +3,7 @@ from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions, response, status, views
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from .market_data import MarketDataError, get_market_history
 from .models import Asset, Trade
 from .serializers import AssetSerializer, TradeDetailSerializer, TradeSerializer
@@ -109,6 +110,7 @@ class TradeCancelView(views.APIView):
 
 class MarketHistoryView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()

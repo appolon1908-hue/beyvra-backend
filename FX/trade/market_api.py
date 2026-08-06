@@ -1,6 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS, MarketDataError, get_market_history
 from .models import MarketCandle
@@ -8,6 +9,7 @@ from .models import MarketCandle
 
 class InstrumentRegistryView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol=None):
         symbols = [symbol.upper()] if symbol else sorted(SUPPORTED_SYMBOLS)
         return Response({"results": [{"symbol": item, "status": "ENABLED_FOR_DEMO", "source": "configured-provider"} for item in symbols if item in SUPPORTED_SYMBOLS]})
@@ -15,6 +17,7 @@ class InstrumentRegistryView(APIView):
 
 class MarketCandlesView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()
         timeframe = request.query_params.get("timeframe", request.query_params.get("interval", "1m"))
@@ -28,6 +31,7 @@ class MarketCandlesView(APIView):
 
 class MarketQuotesView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()
         candle = MarketCandle.objects.filter(symbol=symbol).order_by("-timestamp").first()
@@ -38,17 +42,20 @@ class MarketQuotesView(APIView):
 
 class MarketStatusView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
         return Response({"symbol": symbol.upper(), "status": "UNSUPPORTED", "delay_status": "UNKNOWN", "source": None})
 
 
 class MarketCapabilityUnsupportedView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
         return Response({"code": "CAPABILITY_UNSUPPORTED", "detail": "This provider does not expose the requested capability.", "symbol": symbol.upper()}, status=501)
 
 
 class FeedHealthView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     def get(self, request):
         return Response({"results": [], "status": "DISCONNECTED", "detail": "No live provider is configured in this environment."})
