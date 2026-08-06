@@ -1,0 +1,11 @@
+[Unit]
+Description=Continuously validate Codestra staging Nginx upstreams
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Persistent=true
+RandomizedDelaySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -313,6 +313,7 @@ services:
       - "--statsd.mapping-config=/statsd/statsd.conf"
     networks:
       - fx-network
+      - monitoring
     depends_on:
       - web
 
@@ -329,3 +330,6 @@ networks:
   financial-api:
     external: true
     name: codestra-financial-staging_financial-api
+  monitoring:
+    external: true
+    name: codestra-observability_monitoring

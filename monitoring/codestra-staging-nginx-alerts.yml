@@ -1,0 +1,45 @@
+groups:
+  - name: codestra-staging-nginx-upstreams
+    rules:
+      - alert: CodestraStagingAuthenticationEndpointUnavailable
+        expr: absent(codestra_staging_auth_endpoint_available) or codestra_staging_auth_endpoint_available != 1
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging authentication endpoint is unavailable or has an invalid response contract"
+      - alert: CodestraStagingWebSocketUpstreamUnavailable
+        expr: absent(codestra_staging_websocket_upstream_available) or codestra_staging_websocket_upstream_available != 1
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx cannot reach the Daphne WebSocket upstream"
+      - alert: CodestraStagingCentrifugoUnavailable
+        expr: absent(codestra_staging_centrifugo_available) or codestra_staging_centrifugo_available != 1
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx cannot reach Centrifugo"
+      - alert: CodestraStagingNginx502Detected
+        expr: codestra_staging_nginx_http_502_2m > 0
+        for: 2m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx returned HTTP 502 responses in the last two minutes"
+      - alert: CodestraStagingUpstreamConnectionRefused
+        expr: codestra_staging_nginx_connection_refused_2m > 0
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx upstream connection was refused"
+      - alert: CodestraStagingUpstreamDnsFailure
+        expr: codestra_staging_nginx_dns_failure_2m > 0
+        for: 2m
+        labels: {severity: critical, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx could not resolve a Docker upstream"
+      - alert: CodestraStagingNginxProbeStale
+        expr: absent(codestra_staging_nginx_upstream_probe_timestamp_seconds) or time() - codestra_staging_nginx_upstream_probe_timestamp_seconds > 180
+        for: 2m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations:
+          summary: "Staging Nginx upstream probe has not reported recently"
