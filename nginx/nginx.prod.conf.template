@@ -1,13 +1,18 @@
+resolver 127.0.0.11 valid=10s ipv6=off;
+
 upstream web {
-    server ${WEB_HOST};
+    zone web 64k;
+    server ${WEB_HOST} resolve;
 }
 
 upstream daphne {
-    server ${DAPHNE_HOST};
+    zone daphne 64k;
+    server ${DAPHNE_HOST} resolve;
 }
 
 upstream centrifugo {
-    server ${CENTRIFUGO_HOST};
+    zone centrifugo 64k;
+    server ${CENTRIFUGO_HOST} resolve;
 }
 
 server {
