@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -19,6 +19,7 @@ def create_user(**params):
     return get_user_model().objects.create_user(**params)
 
 
+@override_settings(EMAIL_OTP_VERIFICATION_ENABLED=False)
 class PublicTransactionsApiTests(TestCase):
     """Test unauthenticated API requests."""
 
