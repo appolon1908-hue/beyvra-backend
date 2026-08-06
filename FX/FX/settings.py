@@ -127,6 +127,7 @@ INSTALLED_APPS = [
     "integrations",
     "real_wallet",
     "provider_governance",
+    "financial_client",
 ]
 
 MIDDLEWARE = [
@@ -185,6 +186,13 @@ DATABASES = {
         },
     }
 }
+
+# Private service boundary only. Financial PostgreSQL is intentionally absent
+# from DATABASES and its credentials must never be supplied to this process.
+FINANCIAL_SERVICE_URL = os.getenv("FINANCIAL_SERVICE_URL", "https://financial-mtls:8443")
+FINANCIAL_SERVICE_CLIENT_CERT = os.getenv("FINANCIAL_SERVICE_CLIENT_CERT", "/run/secrets/financial/client.crt")
+FINANCIAL_SERVICE_CLIENT_KEY = os.getenv("FINANCIAL_SERVICE_CLIENT_KEY", "/run/secrets/financial/client.key")
+FINANCIAL_SERVICE_CA_CERT = os.getenv("FINANCIAL_SERVICE_CA_CERT", "/run/secrets/financial/ca.crt")
 
 # REDIS
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)

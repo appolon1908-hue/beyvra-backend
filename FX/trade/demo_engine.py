@@ -6,7 +6,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import permissions, status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from integrations.permissions import organization_for_request
@@ -24,6 +24,8 @@ DEMO_AMOUNT_STEP = Decimal("1")
 
 
 def _tenant_wallet(request, *, lock=False):
+    if request.headers.get("X-Financial-Wallet-ID"):
+        raise ValidationError({"code": "FINANCIAL_WALLET_ID_NOT_ACCEPTED", "detail": "Financial wallet identifiers are invalid for demo operations."})
     organization = organization_for_request(request)
     queryset = Wallet.objects
     if lock:

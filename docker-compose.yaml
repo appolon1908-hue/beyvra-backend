@@ -19,6 +19,7 @@ services:
       - static_files:/app/static
       - ./media:/app/media
       - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
     depends_on:
       static-init:
         condition: service_completed_successfully
@@ -28,6 +29,7 @@ services:
         condition: service_healthy
     networks:
       - fx-network
+      - financial-api
 
   daphne:
     image: ${BACKEND_IMAGE:-backend-app:local}
@@ -324,3 +326,6 @@ networks:
   fx-network:
     name: trading-network
     driver: bridge
+  financial-api:
+    external: true
+    name: codestra-financial-staging_financial-api
