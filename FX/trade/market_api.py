@@ -42,6 +42,12 @@ class MarketStatusView(APIView):
         return Response({"symbol": symbol.upper(), "status": "UNSUPPORTED", "delay_status": "UNKNOWN", "source": None})
 
 
+class MarketCapabilityUnsupportedView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, symbol):
+        return Response({"code": "CAPABILITY_UNSUPPORTED", "detail": "This provider does not expose the requested capability.", "symbol": symbol.upper()}, status=501)
+
+
 class FeedHealthView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):

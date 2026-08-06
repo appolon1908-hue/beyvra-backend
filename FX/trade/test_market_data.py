@@ -10,6 +10,11 @@ from trade.models import MarketCandle
 
 class MarketHistoryTests(TestCase):
     def setUp(self):
+        # Market-data tests must not require a live Celery broker. This patch
+        # is scoped to the test instance and never changes production signals.
+        self.welcome_email = patch("users.signals.async_send_welcome_email.delay")
+        self.welcome_email.start()
+        self.addCleanup(self.welcome_email.stop)
         self.user = get_user_model().objects.create_user(
             email="market@example.com",
             password="test-pass",

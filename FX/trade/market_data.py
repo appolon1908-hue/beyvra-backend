@@ -78,7 +78,7 @@ def get_twelve_data_history(*, symbol: str, interval: str, limit: int):
         raise MarketDataError("Stock and forex market data is not configured")
     try:
         provider_response = requests.get(
-            settings.TWELVE_DATA_REST_URL,
+            getattr(settings, "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"),
             params={
                 "symbol": symbol,
                 "interval": TWELVE_INTERVALS[interval],
