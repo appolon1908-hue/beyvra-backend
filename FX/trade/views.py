@@ -118,6 +118,10 @@ class MarketHistoryView(views.APIView):
         try:
             limit = min(max(int(request.query_params.get("limit", 500)), 1), 1000)
             candles = get_market_history(symbol=symbol, interval=interval, limit=limit)
-        except (ValueError, MarketDataError) as exc:
+        except ValueError as exc:
             return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except MarketDataError as exc:
+            return response.Response(
+                {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         return response.Response({"symbol": symbol, "interval": interval, "results": candles})

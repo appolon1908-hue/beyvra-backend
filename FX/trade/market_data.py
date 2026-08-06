@@ -38,6 +38,16 @@ def serialize_candle(candle: MarketCandle):
 
 def get_market_history(*, symbol: str, interval: str, limit: int):
     validate_market(symbol, interval)
+    approval_ready = all(
+        (
+            getattr(settings, "MARKET_PROVIDER_ENABLED", False),
+            getattr(settings, "MARKET_PROVIDER_APPROVAL_REFERENCE", ""),
+            getattr(settings, "MARKET_PROVIDER_LICENSE_REFERENCE", ""),
+            getattr(settings, "MARKET_PROVIDER_CREDENTIAL_REFERENCE", ""),
+        )
+    )
+    if not approval_ready:
+        raise MarketDataError("Market provider activation is pending approval")
     if symbol in TWELVE_DATA_SYMBOLS:
         return get_twelve_data_history(symbol=symbol, interval=interval, limit=limit)
     try:

@@ -33,6 +33,12 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("trade.market_data.requests.get")
+    @override_settings(
+        MARKET_PROVIDER_ENABLED=True,
+        MARKET_PROVIDER_APPROVAL_REFERENCE="approval:test",
+        MARKET_PROVIDER_LICENSE_REFERENCE="license:test",
+        MARKET_PROVIDER_CREDENTIAL_REFERENCE="credential:test",
+    )
     def test_market_history_is_normalized_and_persisted(self, get):
         provider_response = Mock()
         provider_response.raise_for_status.return_value = None
@@ -58,7 +64,23 @@ class MarketHistoryTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @override_settings(TWELVE_DATA_API_KEY="test-key")
+    @patch("trade.market_data.requests.get")
+    def test_market_provider_is_fail_closed_without_approval(self, get):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=BTCUSDT&interval=1m&limit=10",
+            secure=True,
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        get.assert_not_called()
+
+    @override_settings(
+        TWELVE_DATA_API_KEY="test-key",
+        MARKET_PROVIDER_ENABLED=True,
+        MARKET_PROVIDER_APPROVAL_REFERENCE="approval:test",
+        MARKET_PROVIDER_LICENSE_REFERENCE="license:test",
+        MARKET_PROVIDER_CREDENTIAL_REFERENCE="credential:test",
+    )
     @patch("trade.market_data.requests.get")
     def test_stock_history_uses_twelve_data_and_is_normalized(self, get):
         provider_response = Mock()
