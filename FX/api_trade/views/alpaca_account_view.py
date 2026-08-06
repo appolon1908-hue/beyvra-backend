@@ -4,6 +4,8 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework import status
+from provider_governance.service import ProviderNotAvailable
 
 from ..scripts.alpaca_integration import AlpacaIntegrationAccount
 
@@ -43,6 +45,9 @@ class GetCalendarViewSet(viewsets.ViewSet):
 
         Returns the market calendar.
         """
-        result = AlpacaIntegrationAccount().get_calendar(request)
+        try:
+            result = AlpacaIntegrationAccount().get_calendar(request)
+        except ProviderNotAvailable:
+            return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response(result)

@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .utils import get_newsdata_news,get_newsdata_news_by_id
+from provider_governance.service import ProviderNotAvailable
 
 
 @extend_schema(
@@ -37,6 +38,8 @@ def get_news_newsdata(request):
     """
     try:
         result = get_newsdata_news(request)
+    except ProviderNotAvailable:
+        return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except Exception as e:
         return Response(
             {"error": f"An error occurred: {e}"},
@@ -73,7 +76,9 @@ def get_news_by_id(request, article_id):
     - Attributes:
         * ```article_id``` (str): The article ID to search for.
     """
-    result = get_newsdata_news_by_id(request, article_id)
+    try:
+        result = get_newsdata_news_by_id(request, article_id)
+    except ProviderNotAvailable:
+        return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(result)
-
 

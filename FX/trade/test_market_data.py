@@ -7,32 +7,41 @@ from rest_framework.test import APIClient
 
 from trade.models import MarketCandle
 from provider_governance.models import ProviderApproval, ProviderDefinition, ProviderLicense
+from provider_governance.service import approval_payload_hash
+from django.utils import timezone
+import os
 
 
 def approve_provider(provider_id, provider_type="MARKET_DATA"):
     provider = ProviderDefinition.objects.create(
         provider_id=provider_id, provider_type=provider_type, enabled=True
     )
-    ProviderLicense.objects.create(
+    license_record = ProviderLicense.objects.create(
         provider=provider,
         environment="STAGING",
         status="APPROVED",
         license_reference=f"license:{provider_id}",
     )
-    ProviderApproval.objects.create(
+    approval = ProviderApproval(
         provider=provider,
         provider_type=provider_type,
         environment="STAGING",
+        version=1,
         status="APPROVED",
-        approved_by="test-suite",
-        approved_at="2026-08-06T00:00:00Z",
+        approved_by_principal_id="test-suite",
+        approved_at=timezone.now(),
         approval_reference=f"approval:{provider_id}",
-        license_reference=f"license:{provider_id}",
-        credential_reference=f"market/{provider_id}.key",
+        license=license_record,
+        credential_policy="REQUIRED",
+        credential_reference=f"market/{provider_id}/v1/credential.key",
         allowed_products=["HISTORICAL_CANDLES"],
         allowed_symbols=["*"],
         allowed_regions=["GLOBAL"],
+        approval_payload_hash="",
+        created_by="test-suite",
     )
+    approval.approval_payload_hash = approval_payload_hash(approval)
+    approval.save()
     return provider
 
 
@@ -61,10 +70,10 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("trade.market_data.requests.get")
-    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials")
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
     def test_market_history_is_normalized_and_persisted(self, get):
         approve_provider("binance")
-        self._credential("market/binance.key")
+        self._credential("market/binance/v1/credential.key")
         provider_response = Mock()
         provider_response.raise_for_status.return_value = None
         provider_response.json.return_value = [
@@ -99,11 +108,11 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         get.assert_not_called()
 
-    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials")
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
     @patch("trade.market_data.requests.get")
     def test_stock_history_uses_twelve_data_and_is_normalized(self, get):
         approve_provider("twelve_data")
-        self._credential("market/twelve_data.key")
+        self._credential("market/twelve_data/v1/credential.key")
         provider_response = Mock()
         provider_response.raise_for_status.return_value = None
         provider_response.json.return_value = {

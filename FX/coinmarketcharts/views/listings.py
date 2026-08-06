@@ -4,6 +4,7 @@ from rest_framework import status
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 from urllib.parse import urlencode
 
@@ -80,6 +81,7 @@ class CryptocurrencyListinglatestView(APIView):
 
         # Make the request to the external API
         try:
+            authorize_coinmarketcap(product="LISTINGS")
             response = requests.get(url, headers=headers)
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
             return Response(response.json(), status=response.status_code)
@@ -205,6 +207,7 @@ class CryptocurrencyListingHistoricalView(APIView):
         }
 
         try:
+            authorize_coinmarketcap(product="LISTINGS")
             response = requests.get(url, headers=headers, params=filtered_params)
             response.raise_for_status()
             response_data = response.json()

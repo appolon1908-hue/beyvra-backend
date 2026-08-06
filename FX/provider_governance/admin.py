@@ -10,8 +10,8 @@ admin.site.register(ProviderLicense)
 
 @admin.register(ProviderGovernanceAudit)
 class ProviderGovernanceAuditAdmin(admin.ModelAdmin):
-    list_display = ("provider", "decision", "reason_code", "occurred_at")
-    readonly_fields = ("provider", "decision", "reason_code", "occurred_at")
+    list_display = ("audit_event_id", "provider_id_evidence", "decision", "reason_code", "resolved_at")
+    readonly_fields = tuple(field.name for field in ProviderGovernanceAudit._meta.fields)
 
     def has_add_permission(self, request):
         return False

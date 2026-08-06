@@ -4,6 +4,7 @@ from rest_framework import status
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 from urllib.parse import urlencode
 
@@ -108,6 +109,7 @@ class CryptocurrencyQuotesLatestView(APIView):
         }
 
         try:
+            authorize_coinmarketcap(product="QUOTES", symbol=str(filtered_params.get("symbol", "*")))
             response = requests.get(url, headers=headers, params=filtered_params)
             response.raise_for_status()  # Raise HTTPError for bad responses
             response_data = response.json()
@@ -120,6 +122,5 @@ class CryptocurrencyQuotesLatestView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             return Response(response_data, status=response.status_code)
-
 
 

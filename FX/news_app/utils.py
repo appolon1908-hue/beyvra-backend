@@ -1,6 +1,22 @@
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from provider_governance.service import ProviderNotAvailable, resolve_provider
+
+
+def _governed_news_request(request, query, country):
+    resolved = resolve_provider(
+        provider_id="newsdata", provider_type="FINANCIAL_NEWS", product="HEADLINES",
+        symbol=query.upper(), region=country.upper(), request_id=request.headers.get("X-Request-ID", ""),
+        correlation_id=request.headers.get("X-Correlation-ID", ""), caller_service="news-api",
+    )
+    if not resolved.credential_path:
+        raise ProviderNotAvailable("PROVIDER_NOT_AVAILABLE")
+    with open(resolved.credential_path, encoding="utf-8") as credential_file:
+        credential = credential_file.read().strip()
+    if not credential:
+        raise ProviderNotAvailable("PROVIDER_NOT_AVAILABLE")
+    return credential
 
 
 def get_newsdata_news(request):
@@ -12,16 +28,17 @@ def get_newsdata_news(request):
     size = req.get("size", 10)
     country = req.get("country", "us")
 
-    # Construct the API URL
-    url = f"https://newsdata.io/api/1/latest?apikey={settings.NEWS_DATA_API_KEY}&q={query}&language=en&country={country}&size={size}"
+    credential = _governed_news_request(request, query, country)
+    url = f"https://newsdata.io/api/1/latest?q={query}&language=en&country={country}&size={size}"
+    cache_key = f"newsdata:{query}:{country}:{size}"
 
     # Check cache first
-    cached_response = cache.get(url)
+    cached_response = cache.get(cache_key)
     if cached_response:
         return cached_response
 
     # Make the API request
-    response = requests.get(url)
+    response = requests.get(url, headers={"X-ACCESS-KEY": credential}, timeout=10)
     response_data = response.json()
 
     # Remove the 'nextPage' key if it exists
@@ -45,7 +62,7 @@ def get_newsdata_news(request):
                 del article[key]
 
     # Cache the modified response
-    cache.set(url, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
+    cache.set(cache_key, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
 
     return response_data
 
@@ -61,20 +78,21 @@ def get_newsdata_news_by_id(request, article_id):
     size = req.get("size", 10)
     country = req.get("country", "us")
 
-    # Construct the API URL
-    url = f"https://newsdata.io/api/1/latest?apikey={settings.NEWS_DATA_API_KEY}&q={query}&language=en&country={country}&size={size}"
+    credential = _governed_news_request(request, query, country)
+    url = f"https://newsdata.io/api/1/latest?q={query}&language=en&country={country}&size={size}"
+    cache_key = f"newsdata:{query}:{country}:{size}"
 
     # Check cache first
-    cached_response = cache.get(url)
+    cached_response = cache.get(cache_key)
     if cached_response:
         response_data = cached_response
     else:
         # Make the API request
-        response = requests.get(url)
+        response = requests.get(url, headers={"X-ACCESS-KEY": credential}, timeout=10)
         response_data = response.json()
 
         # Cache the response data
-        cache.set(url, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
+        cache.set(cache_key, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
 
     # Filter for the specific article by article_id
     for article in response_data["results"]:
