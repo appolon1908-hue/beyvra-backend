@@ -126,6 +126,7 @@ INSTALLED_APPS = [
     "reporting",
     "integrations",
     "real_wallet",
+    "provider_governance",
 ]
 
 MIDDLEWARE = [
@@ -443,10 +444,7 @@ if not DEBUG:
 NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
 POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
 TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
-MARKET_PROVIDER_ENABLED = os.getenv("MARKET_PROVIDER_ENABLED", "false").lower() in {"1", "true", "yes"}
-MARKET_PROVIDER_APPROVAL_REFERENCE: str = os.getenv("MARKET_PROVIDER_APPROVAL_REFERENCE", "")
-MARKET_PROVIDER_LICENSE_REFERENCE: str = os.getenv("MARKET_PROVIDER_LICENSE_REFERENCE", "")
-MARKET_PROVIDER_CREDENTIAL_REFERENCE: str = os.getenv("MARKET_PROVIDER_CREDENTIAL_REFERENCE", "")
+PROVIDER_CREDENTIAL_ROOT: str = os.getenv("PROVIDER_CREDENTIAL_ROOT", "/etc/codestra/providers")
 COINGECKO_API_KEY: str = os.getenv("COINGECKO_API_KEY", "")
 SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
 TWELVE_DATA_REST_URL: str = os.getenv(

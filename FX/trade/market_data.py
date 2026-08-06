@@ -5,6 +5,7 @@ import requests
 from django.conf import settings
 
 from .models import MarketCandle
+from provider_governance.service import ProviderNotAvailable, resolve_provider
 
 BINANCE_REST_URL = "https://api.binance.com/api/v3/klines"
 CRYPTO_SYMBOLS = {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}
@@ -38,18 +39,24 @@ def serialize_candle(candle: MarketCandle):
 
 def get_market_history(*, symbol: str, interval: str, limit: int):
     validate_market(symbol, interval)
-    approval_ready = all(
-        (
-            getattr(settings, "MARKET_PROVIDER_ENABLED", False),
-            getattr(settings, "MARKET_PROVIDER_APPROVAL_REFERENCE", ""),
-            getattr(settings, "MARKET_PROVIDER_LICENSE_REFERENCE", ""),
-            getattr(settings, "MARKET_PROVIDER_CREDENTIAL_REFERENCE", ""),
+    provider_id = "twelve_data" if symbol in TWELVE_DATA_SYMBOLS else "binance"
+    try:
+        resolved_provider = resolve_provider(
+            provider_id=provider_id,
+            provider_type="MARKET_DATA",
+            product="HISTORICAL_CANDLES",
+            symbol=symbol,
+            region="GLOBAL",
         )
-    )
-    if not approval_ready:
-        raise MarketDataError("Market provider activation is pending approval")
+    except ProviderNotAvailable as exc:
+        raise MarketDataError("PROVIDER_NOT_AVAILABLE") from exc
     if symbol in TWELVE_DATA_SYMBOLS:
-        return get_twelve_data_history(symbol=symbol, interval=interval, limit=limit)
+        return get_twelve_data_history(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+            credential_path=resolved_provider.credential_path,
+        )
     try:
         provider_response = requests.get(
             BINANCE_REST_URL,
@@ -82,10 +89,14 @@ def get_market_history(*, symbol: str, interval: str, limit: int):
     return candles
 
 
-def get_twelve_data_history(*, symbol: str, interval: str, limit: int):
-    api_key = settings.TWELVE_DATA_API_KEY
+def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credential_path: str):
+    try:
+        with open(credential_path, encoding="utf-8") as credential_file:
+            api_key = credential_file.read().strip()
+    except OSError as exc:
+        raise MarketDataError("PROVIDER_NOT_AVAILABLE") from exc
     if not api_key:
-        raise MarketDataError("Stock and forex market data is not configured")
+        raise MarketDataError("PROVIDER_NOT_AVAILABLE")
     try:
         provider_response = requests.get(
             getattr(settings, "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"),

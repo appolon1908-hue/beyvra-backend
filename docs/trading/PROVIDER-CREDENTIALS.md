@@ -16,11 +16,13 @@ The directories were verified on 2026-08-06 as root-owned mode `0700` and
 empty. Runtime configuration refers to credentials by protected reference;
 secret values must never be placed in approval records or environment files.
 
-Market activation requires all of the following settings and defaults off:
+Provider activation is not controlled by environment switches. The only
+provider-related path setting is:
 
 ```text
-MARKET_PROVIDER_ENABLED=false
-MARKET_PROVIDER_APPROVAL_REFERENCE=
-MARKET_PROVIDER_LICENSE_REFERENCE=
-MARKET_PROVIDER_CREDENTIAL_REFERENCE=
+PROVIDER_CREDENTIAL_ROOT=/etc/codestra/providers
 ```
+
+The authoritative database approval and license records must reference a file
+below this root. The runtime verifies containment, regular-file type, mode
+`0600`, and readability before an adapter can run.
