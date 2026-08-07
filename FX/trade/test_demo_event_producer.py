@@ -132,7 +132,7 @@ class DemoEventProducerTests(TestCase):
     def test_v2_demo_channel_authorization_is_account_scoped(self):
         own = self.client.post(
             "/api/v1/realtime/v2/subscription-token",
-            {"channel": f"demo.order:{self.wallet.id}"}, format="json", **self.headers,
+            {"channel": f"demo.order.{self.wallet.id}"}, format="json", **self.headers,
         )
         self.assertEqual(own.status_code, 200)
         other_user = get_user_model().objects.create_user(
@@ -144,11 +144,11 @@ class DemoEventProducerTests(TestCase):
         )
         denied = self.client.post(
             "/api/v1/realtime/v2/subscription-token",
-            {"channel": f"demo.execution:{other_wallet.id}"}, format="json", **self.headers,
+            {"channel": f"demo.execution.{other_wallet.id}"}, format="json", **self.headers,
         )
         self.assertEqual(denied.status_code, 403)
 
 
 class DemoEventTenantIsolationTests(TestCase):
     def test_account_scoped_channels_do_not_collide(self):
-        self.assertNotEqual("demo.order:account-a", "demo.order:account-b")
+        self.assertNotEqual("demo.order.account-a", "demo.order.account-b")

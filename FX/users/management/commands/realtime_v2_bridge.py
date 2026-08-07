@@ -9,8 +9,12 @@ import json
 import os
 import ssl
 import urllib.request
+import logging
 
 from django.core.management.base import BaseCommand
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _bridge_stream(js, stream, subject, api_url, api_key):
@@ -37,9 +41,13 @@ async def _bridge_stream(js, stream, subject, api_url, api_key):
                     api_url, data=body, method="POST",
                     headers={"Content-Type": "application/json", "X-API-Key": api_key},
                 )
-                await asyncio.to_thread(urllib.request.urlopen, request, timeout=2)
+                response = await asyncio.to_thread(urllib.request.urlopen, request, timeout=2)
+                result = json.loads(response.read())
+                if result.get("error"):
+                    raise RuntimeError(f"CENTRIFUGO_PUBLISH_{result['error'].get('code', 'FAILED')}")
                 await msg.ack()
-            except Exception:
+            except Exception as exc:
+                logger.error("realtime bridge publish failed: %s", type(exc).__name__)
                 continue
 
 

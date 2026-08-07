@@ -4,8 +4,8 @@ Demo order state and `trade_demoeventoutbox` records commit in the same applicat
 
 Events are private and account scoped:
 
-- `demo.order:{wallet_id}` via `private.order.{wallet_id}`
-- `demo.execution:{wallet_id}` via `private.trade.{wallet_id}`
+- `demo.order.{wallet_id}` via `private.order.{wallet_id}`
+- `demo.execution.{wallet_id}` via `private.trade.{wallet_id}`
 
 The subscription authorization endpoints verify that the authenticated user owns the non-real wallet. Global demo channels are intentionally not published because they would disclose one account's trade state to other subscribers.
 

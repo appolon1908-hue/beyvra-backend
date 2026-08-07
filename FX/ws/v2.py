@@ -34,8 +34,8 @@ CHANNEL_REGISTRY = {
     "news.economic": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
     "trade.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
-    "demo.order:{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
-    "demo.execution:{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
+    "demo.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
+    "demo.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "portfolio.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "wallet.balance.{account_id}": {"visibility": "private", "required_permission": "demo.wallet.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
@@ -81,9 +81,9 @@ def _tenant(user):
 
 
 def _owns_demo_account(user_id, channel):
-    if not channel.startswith(("demo.order:", "demo.execution:")):
+    if not channel.startswith(("demo.order.", "demo.execution.")):
         return False
-    account_id = channel.rsplit(":", 1)[-1]
+    account_id = channel.rsplit(".", 1)[-1]
     try:
         return Wallet.objects.filter(pk=account_id, user_id=user_id, is_real=False, is_archived=False).exists()
     except (TypeError, ValueError):

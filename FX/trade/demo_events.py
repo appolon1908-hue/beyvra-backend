@@ -63,7 +63,7 @@ def envelope(event: DemoEventOutbox) -> dict:
         "event_id": f"evt_{event.event_id.hex}",
         "event_type": event.event_type,
         "event_version": event.event_version,
-        "channel": f"{event.channel}:{event.wallet_id}",
+        "channel": f"{event.channel}.{event.wallet_id}",
         "sequence": event.sequence,
         "account_id": str(event.wallet_id),
         "tenant_id": str(event.organization_id),
