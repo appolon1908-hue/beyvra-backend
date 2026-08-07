@@ -7,7 +7,8 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from provider_governance.service import ProviderNotAvailable
-from .models import EconomicCalendarEvent, NewsArticle
+from .events import ingest_economic_event, ingest_news
+from .models import EconomicCalendarEvent, NewsArticle, NewsCalendarEventOutbox
 
 
 class Phase5ContractTests(TestCase):
@@ -49,3 +50,26 @@ class Phase5ContractTests(TestCase):
     @patch("news_app.views.resolve_provider")
     def test_invalid_news_limit_is_rejected(self, _resolve):
         self.assertEqual(self.client.get("/api/v1/news", {"limit": 101}).status_code, 400)
+
+    @patch("news_app.events.resolve_provider")
+    def test_news_ingestion_deduplicates_and_writes_transactional_events(self, _resolve):
+        now = timezone.now()
+        base = {"article_id": "n1", "provider_id": "approved-test", "provider_article_id": "p1", "headline": "First", "canonical_url": "https://example.invalid/canonical", "published_at": now, "importance": "HIGH", "affected_instruments": ["BTC-USD"]}
+        first, published = ingest_news(base)
+        updated, changed = ingest_news({**base, "article_id": "ignored", "provider_article_id": "p2", "headline": "Updated", "status": "UPDATED", "updated_at": now})
+        self.assertEqual(first.article_id, updated.article_id)
+        self.assertEqual(NewsArticle.objects.count(), 1)
+        self.assertEqual([published.event_type, changed.event_type], ["news.article.published", "news.article.updated"])
+        self.assertEqual(NewsCalendarEventOutbox.objects.count(), 2)
+
+    @patch("news_app.events.resolve_provider")
+    def test_article_retraction_and_calendar_cancellation_are_events(self, _resolve):
+        now = timezone.now()
+        article = {"article_id": "n2", "provider_id": "approved-test", "provider_article_id": "p2", "headline": "Article", "published_at": now, "affected_instruments": ["BTC-USD"]}
+        ingest_news(article)
+        _, retracted = ingest_news({**article, "status": "RETRACTED", "retracted_at": now})
+        event = {"event_id": "e2", "provider_id": "approved-test", "provider_event_id": "pe2", "title": "Rate", "scheduled_at": now, "affected_instruments": ["EUR-USD"]}
+        ingest_economic_event(event)
+        _, cancelled = ingest_economic_event({**event, "status": "CANCELLED"})
+        self.assertEqual(retracted.event_type, "news.article.retracted")
+        self.assertEqual(cancelled.event_type, "economic.event.cancelled")
