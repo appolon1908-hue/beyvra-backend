@@ -1,4 +1,5 @@
 import os
+import uuid
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -94,7 +95,7 @@ class Trade(TimeStampedModel):
     open = models.DecimalField(default=0, max_digits=12, decimal_places=4)
     close = models.DecimalField(default=0, max_digits=12, decimal_places=4)
     demo_state = models.CharField(max_length=16, default="OPEN")
-    demo_result = models.CharField(max_length=8, blank=True, default="")
+    demo_result = models.CharField(max_length=16, blank=True, default="")
     opening_price = models.DecimalField(max_digits=24, decimal_places=10, null=True, blank=True)
     closing_price = models.DecimalField(max_digits=24, decimal_places=10, null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -158,3 +159,32 @@ class DemoLedgerEntry(TimeStampedModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     idempotency_key = models.CharField(max_length=255, unique=True)
     description = models.CharField(max_length=255, blank=True)
+
+
+class DemoEventOutbox(models.Model):
+    """Transactional, account-scoped demo event awaiting JetStream publish."""
+
+    sequence = models.BigAutoField(primary_key=True)
+    event_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    event_type = models.CharField(max_length=64)
+    event_version = models.PositiveSmallIntegerField(default=1)
+    channel = models.CharField(max_length=96)
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="demo_event_outbox")
+    wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="demo_event_outbox")
+    trade = models.ForeignKey(Trade, null=True, blank=True, on_delete=models.PROTECT, related_name="demo_events")
+    payload = models.JSONField(default=dict)
+    occurred_at = models.DateTimeField(default=models.functions.Now)
+    published_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_error_code = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=("next_attempt_at", "sequence"),
+                condition=models.Q(published_at__isnull=True),
+                name="demo_outbox_pending_idx",
+            ),
+            models.Index(fields=("wallet", "sequence"), name="demo_outbox_account_idx"),
+        ]

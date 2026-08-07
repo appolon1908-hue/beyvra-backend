@@ -47,7 +47,7 @@ class DemoTenantIsolationTests(TestCase):
             HTTP_X_ORGANIZATION_ID=str(self.tenant_b.id),
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json()["results"], [])
 
     def test_workspace_bootstrap_is_tenant_scoped_and_demo_only(self):
         response = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_a.id))

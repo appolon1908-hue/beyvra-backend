@@ -204,6 +204,29 @@ services:
     networks:
       - fx-network
 
+  demo-event-publisher:
+    image: ${BACKEND_IMAGE:-backend-app:local}
+    command: python manage.py publish_demo_events
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
+    depends_on:
+      nats:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
+    networks:
+      - fx-network
+
   celery_worker:
     image: ${BACKEND_IMAGE:-backend-app:local}
     build: ./FX
