@@ -23,6 +23,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import GuestDemoSessionView, SessionResolveView
 from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
 from ws import v2 as realtime_v2
+from news_app import views as news_views
 
 urlpatterns = [
     path("", include("django_prometheus.urls")),
@@ -49,6 +50,9 @@ urlpatterns = [
     # default and never falls back to the demo wallet.
     path("api/v1/", include("real_wallet.urls")),
     path("api/v1/", include("trade.market_urls")),
+    path("api/v1/news", news_views.news_list_v1, name="news_v1"),
+    path("api/v1/news/<str:article_id>", news_views.news_detail_v1, name="news_detail_v1"),
+    path("api/v1/economic-calendar", news_views.economic_calendar_v1, name="economic_calendar_v1"),
     path("api/", include("api_trade.urls")),
     path("api/wallet/", include("wallet.urls")),
     path("api/notification/", include("notifications.urls")),
