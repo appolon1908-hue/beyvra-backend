@@ -25,7 +25,7 @@ def settle_demo_orders():
 def update_active_trades(open: int, close: int, time: str) -> None:
     """Update active trades"""
     now = datetime.strptime(time, DATE_FORMAT)
-    trades = Trade.objects.filter(is_active=True, result_time__lte=now, category__name="fixed")
+    trades = Trade.objects.filter(is_active=True, result_time__lte=now, category__name="fixed", wallet__is_real=False)
     for t in trades:
         winner = False
         if t.trade_type == "up":

@@ -26,6 +26,7 @@ from ws import v2 as realtime_v2
 from news_app import views as news_views
 
 urlpatterns = [
+    path("health/", include("apps.foundation.health_urls")),
     path("", include("django_prometheus.urls")),
     path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -50,6 +51,8 @@ urlpatterns = [
     # default and never falls back to the demo wallet.
     path("api/v1/", include("real_wallet.urls")),
     path("api/v1/", include("trade.market_urls")),
+    path("api/v1/trading/", include("apps.trading.api.urls")),
+    path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
     path("api/v1/news/<str:article_id>", news_views.news_detail_v1, name="news_detail_v1"),
     path("api/v1/economic-calendar", news_views.economic_calendar_v1, name="economic_calendar_v1"),

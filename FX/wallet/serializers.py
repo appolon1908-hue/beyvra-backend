@@ -163,6 +163,8 @@ class ManualBalanceUpdateSerializer(serializers.ModelSerializer):
     def validate_wallet(self, value):
         if not Wallet.objects.filter(id=value.id).exists():
             raise serializers.ValidationError("Invalid wallet ID.")
+        if value.is_real:
+            raise serializers.ValidationError("FEATURE_DISABLED: real balances are Financial Service authoritative")
         return value
 
     def validate_new_balance(self, value):

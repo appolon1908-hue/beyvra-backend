@@ -18,17 +18,21 @@ class TradeConsumer(BaseConsumer):
     Handles real-time trade data updates including prices,
     volumes, and other trade indicators.
     """
-    
+
     async def connect(self):
-        await super().connect()
         user = self.scope['user']
-        if user.is_authenticated:
-             query = parse_qs(self.scope.get("query_string", b"").decode())
-             requested_tenant = query.get("organization_id", [None])[0]
-             self.tenant_id = await _tenant_id_for_user(user.id, requested_tenant)
-             if user.is_staff:
-                 await self.channel_layer.group_add('admin_notification', self.channel_name)
-             await self.channel_layer.group_add(f"trades_updates_{self.tenant_id}_{user.id}", self.channel_name)
+        if not user.is_authenticated:
+            await self.close(code=4401)
+            return
+        query = parse_qs(self.scope.get("query_string", b"").decode())
+        requested_tenant = query.get("organization_id", [None])[0]
+        self.tenant_id = await _tenant_id_for_user(user.id, requested_tenant)
+        if user.is_staff:
+            await self.channel_layer.group_add('admin_notification', self.channel_name)
+        await self.channel_layer.group_add(f"trades_updates_{self.tenant_id}_{user.id}", self.channel_name)
+        # Accept only after group membership is installed. Otherwise a caller can
+        # observe the accepted socket and publish before this consumer is ready.
+        await super().connect()
 
     async def disconnect(self, close_code):
         user =self.scope['user']

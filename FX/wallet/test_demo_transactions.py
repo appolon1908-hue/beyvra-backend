@@ -70,6 +70,7 @@ class DemoTransactionTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
         real_wallet.refresh_from_db()
         self.assertEqual(real_wallet.balance, Decimal("100.00"))

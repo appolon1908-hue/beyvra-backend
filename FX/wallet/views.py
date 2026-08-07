@@ -248,6 +248,8 @@ class DepositToWalletView(APIView):
             response = {
                 "detail": "You do not have permission to perform this action."}
             return Response(response, status=status.HTTP_403_FORBIDDEN)
+        if wallet.is_real:
+            return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
 
         # Validate input using the serializer
         serializer = DepositSerializer(data=request.data)
@@ -368,6 +370,8 @@ class WithdrawFromWalletView(APIView):
             return Response({
                 "detail": "You do not have permission to perform this action."},
                 status=status.HTTP_403_FORBIDDEN)
+        if wallet.is_real:
+            return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
 
         if settings.PAPER_TRADING_ONLY:
             if wallet.is_real:
@@ -508,6 +512,8 @@ class TransferFromWalletView(APIView):
                     return Response({"detail": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
                 if recipient_wallet is None:
                     return Response({"detail": "Recipient wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+                if wallet.is_real or recipient_wallet.is_real:
+                    return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
                 if wallet.balance < amount:
                     return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -544,7 +550,7 @@ class ManualBalanceUpdateListCreateView(generics.ListCreateAPIView):
     """
     
     permission_classes = [IsAdminUser]
-    queryset = ManualBalanceUpdate.objects.all()
+    queryset = ManualBalanceUpdate.objects.filter(wallet__is_real=False)
     serializer_class = ManualBalanceUpdateSerializer
 
 
@@ -556,5 +562,5 @@ class ManualBalanceUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     
     permission_classes = [IsAdminUser]
-    queryset = ManualBalanceUpdate.objects.all()
+    queryset = ManualBalanceUpdate.objects.filter(wallet__is_real=False)
     serializer_class = ManualBalanceUpdateSerializer

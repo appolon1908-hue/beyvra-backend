@@ -8,7 +8,8 @@ from rest_framework.test import APIClient
 
 from provider_governance.service import ProviderNotAvailable
 from .events import ingest_economic_event, ingest_news
-from .models import EconomicCalendarEvent, NewsArticle, NewsCalendarEventOutbox
+from apps.foundation.models import OutboxEvent
+from .models import EconomicCalendarEvent, NewsArticle
 
 
 class Phase5ContractTests(TestCase):
@@ -60,7 +61,7 @@ class Phase5ContractTests(TestCase):
         self.assertEqual(first.article_id, updated.article_id)
         self.assertEqual(NewsArticle.objects.count(), 1)
         self.assertEqual([published.event_type, changed.event_type], ["news.article.published", "news.article.updated"])
-        self.assertEqual(NewsCalendarEventOutbox.objects.count(), 2)
+        self.assertEqual(OutboxEvent.objects.count(), 2)
 
     @patch("news_app.events.resolve_provider")
     def test_article_retraction_and_calendar_cancellation_are_events(self, _resolve):

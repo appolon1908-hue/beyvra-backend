@@ -151,6 +151,8 @@ class StripeWebhook(APIView):
                     if transaction.status != "P":
                         return Response(status=status.HTTP_200_OK)
                     wallet = Wallet.objects.select_for_update().get(pk=transaction.wallet_id)
+                    if wallet.is_real:
+                        return Response({"code": "FEATURE_DISABLED"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                     if transaction.type == "D":
                         wallet.balance += transaction.amount
                     elif transaction.type == "W":
@@ -271,8 +273,8 @@ class WalletTransferView(APIView):
     Transfer funds between wallets.
     """
     def post(self, request):
-        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'))
-        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'))
+        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'), is_real=False)
+        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'), is_real=False)
         amount = Decimal(request.data.get('amount', 0))
 
         if source_wallet.balance < amount:

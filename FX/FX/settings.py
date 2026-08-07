@@ -61,6 +61,12 @@ NATS_JETSTREAM_ENABLED = os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() ==
 PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "false").lower() == "true"
 REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+REAL_TRADING_ENABLED = False
+EXTERNAL_EXECUTION_ENABLED = False
+REAL_WALLET_READ_ENABLED = False
+REAL_DEPOSITS_ENABLED = False
+REAL_WITHDRAWALS_ENABLED = False
+REAL_INTERNAL_TRANSFERS_ENABLED = False
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
@@ -128,6 +134,8 @@ INSTALLED_APPS = [
     "real_wallet",
     "provider_governance",
     "financial_client",
+    "apps.foundation",
+    "apps.trading",
 ]
 
 MIDDLEWARE = [
@@ -136,6 +144,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "middleware.deprecation.LegacyApiDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -411,6 +420,7 @@ LOGGING = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "json",
         },
         "mail_admins": {
             "level": "ERROR",
@@ -418,6 +428,7 @@ LOGGING = {
             "include_html": True,
         },
     },
+    "formatters": {"json": {"()": "fx_utils.json_logging.JsonFormatter"}},
     "root": {
         "handlers": ["console"],
         "level": LOG_LEVEL,

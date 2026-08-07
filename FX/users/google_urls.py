@@ -26,8 +26,10 @@ urlpatterns = [
     path("email-verification/verify", EmailVerificationVerifyView.as_view(), name="email_verification_verify"),
     path("email-verification/resend", EmailVerificationResendView.as_view(), name="email_verification_resend"),
     path("email-verification/status", EmailVerificationStatusView.as_view(), name="email_verification_status"),
-    path("test/otp", StagingTestOtpView.as_view(), name="staging_test_otp"),
     path("google/start", GoogleUnavailableView.as_view(), name="google_start"),
     path("google/callback", GoogleUnavailableView.as_view(), name="google_callback"),
     path("google/credential", GoogleUnavailableView.as_view(), name="google_credential"),
 ]
+
+if settings.API_ENV == "staging":
+    urlpatterns.append(path("test/otp", StagingTestOtpView.as_view(), name="staging_test_otp"))

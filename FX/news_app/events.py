@@ -5,7 +5,8 @@ from django.utils import timezone
 
 from provider_governance.service import resolve_provider
 
-from .models import EconomicCalendarEvent, NewsArticle, NewsCalendarEventOutbox
+from apps.foundation.services import enqueue_event
+from .models import EconomicCalendarEvent, NewsArticle
 from .views import _calendar, _news
 
 
@@ -18,8 +19,11 @@ def _authorize(provider_id, provider_type, product, symbol):
 
 def _enqueue(*, event_type, channel, source, data, occurred_at):
     data = {key: value.isoformat() if hasattr(value, "isoformat") else value for key, value in data.items()}
-    return NewsCalendarEventOutbox.objects.create(
-        event_type=event_type, channel=channel, source=source, data=data,
+    identifier = data.get("article_id") or data.get("event_id") or "unknown"
+    return enqueue_event(
+        aggregate_type="news_article" if event_type.startswith("news.") else "economic_event",
+        aggregate_id=identifier, event_type=event_type, tenant_ref="public",
+        payload={"channel": channel, "source": source, "data": data},
         occurred_at=occurred_at or timezone.now(),
     )
 
@@ -79,11 +83,12 @@ def _ingest_economic_event(payload, provider_id, instruments):
 def envelope(event):
     return {
         "event_id": f"evt_{event.event_id.hex}", "event_type": event.event_type,
-        "event_version": event.event_version, "channel": event.channel, "sequence": event.sequence,
+        "schema_version": event.schema_version,
         "occurred_at": event.occurred_at.isoformat(), "server_time": timezone.now().isoformat(),
-        "source": event.source, "data": event.data,
+        "correlation_id": str(event.correlation_id), "causation_id": str(event.causation_id) if event.causation_id else None,
+        "tenant_ref": event.tenant_ref, "payload": event.payload,
     }
 
 
 def jetstream_subject(event):
-    return f"public.{event.channel}"
+    return f"application.{event.event_type}"

@@ -1,0 +1,1 @@
+"""Canonical Codestra application domains."""

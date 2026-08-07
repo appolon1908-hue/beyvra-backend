@@ -90,6 +90,7 @@ class TradeCancelView(views.APIView):
                 Trade.objects.select_for_update().select_related("wallet", "transaction"),
                 pk=pk,
                 wallet__user=request.user,
+                wallet__is_real=False,
             )
             if not trade.is_active:
                 return response.Response(

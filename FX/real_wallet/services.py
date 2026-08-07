@@ -50,6 +50,16 @@ class WithdrawalMFARequired(Exception):
 
 
 def is_feature_enabled(key: str) -> bool:
+    settings_gate = {
+        "real_wallet_read_enabled": "REAL_WALLET_READ_ENABLED",
+        "real_wallet_deposits_enabled": "REAL_DEPOSITS_ENABLED",
+        "real_wallet_withdrawals_enabled": "REAL_WITHDRAWALS_ENABLED",
+        "real_wallet_internal_transfers_enabled": "REAL_INTERNAL_TRANSFERS_ENABLED",
+        "real_trading_enabled": "REAL_TRADING_ENABLED",
+        "external_execution_enabled": "EXTERNAL_EXECUTION_ENABLED",
+    }.get(key)
+    if settings_gate and not getattr(settings, settings_gate, False):
+        return False
     return FeatureFlag.objects.filter(key=key, enabled=True).exists()
 
 

@@ -50,7 +50,9 @@ class Wallet(TimeStampedModel):
     balance = models.DecimalField(blank=False, null=False, decimal_places=2, max_digits=12, default=0)
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
-    is_real = models.BooleanField(default=True)
+    # Application-created wallets are demo-only unless explicitly marked.
+    # Real balances remain Financial Service authoritative.
+    is_real = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ["user", "organization", "name"]
@@ -62,6 +64,8 @@ class Wallet(TimeStampedModel):
         """
         Add funds to the wallet. Converts amount to wallet's currency if needed.
         """
+        if self.is_real:
+            raise ValidationError("FEATURE_DISABLED: real balances are Financial Service authoritative")
         rate = ExchangeRateService().get_rate(currency, self.currency)
         if rate is None:
             # Handle the case where the exchange rate is not available
@@ -75,6 +79,8 @@ class Wallet(TimeStampedModel):
         """
         Subtract funds from the wallet. Converts amount to wallet's currency if needed.
         """
+        if self.is_real:
+            raise ValidationError("FEATURE_DISABLED: real balances are Financial Service authoritative")
         rate = ExchangeRateService().get_rate(currency, self.currency)
         if rate is None:
             # Handle the case where the exchange rate is not available

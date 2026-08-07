@@ -27,6 +27,12 @@ from real_wallet.services import (
 from users.models import User
 
 
+@override_settings(
+    REAL_WALLET_READ_ENABLED=True,
+    REAL_DEPOSITS_ENABLED=True,
+    REAL_WITHDRAWALS_ENABLED=True,
+    REAL_INTERNAL_TRANSFERS_ENABLED=True,
+)
 class RealWalletBoundaryTests(TestCase):
     def setUp(self):
         with patch("users.signals.async_send_welcome_email.delay"):
@@ -45,6 +51,7 @@ class RealWalletBoundaryTests(TestCase):
             account_code="CUSTOMER_AVAILABLE", account_type="LIABILITY", normal_side="CREDIT"
         )
 
+    @override_settings(REAL_WALLET_READ_ENABLED=False)
     def test_real_wallet_routes_are_disabled_without_demo_fallback(self):
         client = APIClient()
         client.force_authenticate(self.user)
