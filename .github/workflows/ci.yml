@@ -78,8 +78,10 @@ jobs:
     steps:
       - run: |
           observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+          base_ref=$(jq -r .base.ref <<<"$observed")
+          observed_base=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$base_ref" --jq .object.sha)
           test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
-          test "$(jq -r .base.sha <<<"$observed")" = "$EXPECTED_BASE_SHA"
+          test "$observed_base" = "$EXPECTED_BASE_SHA"
       - uses: actions/checkout@v5
         with: { ref: "${{ env.EXPECTED_HEAD_SHA }}", fetch-depth: 0 }
       - run: |
@@ -87,8 +89,10 @@ jobs:
           git fetch origin "$EXPECTED_BASE_SHA"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA"
           observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+          base_ref=$(jq -r .base.ref <<<"$observed")
+          observed_base=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$base_ref" --jq .object.sha)
           test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
-          test "$(jq -r .base.sha <<<"$observed")" = "$EXPECTED_BASE_SHA"
+          test "$observed_base" = "$EXPECTED_BASE_SHA"
 
   container:
     runs-on: ubuntu-latest
