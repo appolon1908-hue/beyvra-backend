@@ -1,5 +1,5 @@
 [Unit]
-Description=Continuously validate Codestra staging Nginx upstreams
+Description=Continuously validate Beyvra staging Nginx upstreams
 
 [Timer]
 OnBootSec=2min

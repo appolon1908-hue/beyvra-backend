@@ -1,4 +1,4 @@
-# Codestra API and webhook inventory
+# Beyvra API and webhook inventory
 
 This inventory reflects the staging Django route tree. All authenticated routes require the existing session/JWT authentication; organization-scoped routes additionally resolve `X-Organization-ID` or the caller's authorized membership.
 

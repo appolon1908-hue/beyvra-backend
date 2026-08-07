@@ -1,5 +1,5 @@
 [Unit]
-Description=Codestra staging Nginx upstream availability probe
+Description=Beyvra staging Nginx upstream availability probe
 After=docker.service network-online.target
 Wants=docker.service network-online.target
 
@@ -12,4 +12,3 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
-

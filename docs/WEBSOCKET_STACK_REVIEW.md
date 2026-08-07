@@ -4,7 +4,7 @@
 
 Keep Django Channels on ASGI and upgrade it explicitly to Channels 4.3.2,
 with Daphne 4.2.2 and `channels-redis` 4.2.0. This is the safest maintained
-option for Codestra because the existing authentication middleware, Django
+option for Beyvra because the existing authentication middleware, Django
 tenant queries, channel-layer group sends, legacy consumers and Daphne
 deployment already use the ASGI/Channels contract. Channels' current
 documentation describes it as Django's ASGI WebSocket integration and lists
