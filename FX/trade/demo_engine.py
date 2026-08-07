@@ -200,6 +200,10 @@ class WorkspaceBootstrapView(APIView):
             "state": "guest.ready" if guest else "user.ready",
             "tenant": {"id": str(organization.id)},
             "account": {"id": str(wallet.id), "kind": "DEMO", "demoOnly": True},
+            "realtime": {
+                "demo_order_channel": f"demo.order.{wallet.id}",
+                "demo_execution_channel": f"demo.execution.{wallet.id}",
+            },
             "wallet": {"currency": "Virtual USD", "available": str(wallet.balance), "reserved": str(reserved), "total": str(wallet.balance + reserved)},
             "notifications": {"unreadCount": 0},
             "features": {"inZone": False, "payments": False, "realWallets": False, "realTrading": False},

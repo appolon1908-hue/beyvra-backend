@@ -54,6 +54,10 @@ class DemoTenantIsolationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["account"]["kind"], "DEMO")
         self.assertTrue(response.data["account"]["demoOnly"])
+        self.assertEqual(response.data["realtime"], {
+            "demo_order_channel": f"demo.order.{self.wallet.id}",
+            "demo_execution_channel": f"demo.execution.{self.wallet.id}",
+        })
         self.assertFalse(response.data["features"]["realTrading"])
         denied = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_b.id))
         self.assertEqual(denied.status_code, 404)
