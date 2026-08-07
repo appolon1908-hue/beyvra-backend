@@ -14,6 +14,8 @@ The frontend `ChartDataController` owns HTTP cancellation, quote/candle subscrip
 
 ## Safety and current limitations
 
-Provider governance remains authoritative and fail-closed. With no approved provider, snapshot/candle requests return HTTP 503 and make no outbound provider request. Sub-minute intervals are part of the chart contract, but remain unavailable until an approved provider/runtime supplies them; the backend does not fabricate them. All trading rules report `real_trading_enabled: false`.
+Provider governance remains authoritative and fail-closed. With no approved provider, snapshot/candle requests return HTTP 503 and make no outbound provider request. Sub-minute intervals are part of the chart contract, but remain unavailable until an approved provider/runtime supplies them; the capability endpoint returns `GENUINE_5S_SOURCE_UNAVAILABLE` and rejects 5s before resolving or contacting a provider. All trading rules report `real_trading_enabled: false`.
 
-This phase does not modify the Financial Service, Financial PostgreSQL, provider approvals, financial flags, NATS, JetStream, or Centrifugo. Visual controls such as Heikin-Ashi, drawings, indicators, markers, countdowns, and payout/range overlays remain subsequent chart-engine work.
+Canonical candles use decimal strings, explicit open/close timestamps, completion state, and sequence metadata. Historical requests accept a `before` cursor and return `history_cursor`. Realtime envelopes contain event type/version, channel, instrument, sequence, occurrence/server timestamps, source, and data. The legacy WebSocket gateway also passes through provider governance before opening an outbound provider connection.
+
+This phase does not modify the Financial Service, Financial PostgreSQL, provider approvals, financial flags, NATS, JetStream, or Centrifugo. Indicators, drawing persistence, news markers, countdowns, and payout/range overlays remain subsequent chart-engine work.

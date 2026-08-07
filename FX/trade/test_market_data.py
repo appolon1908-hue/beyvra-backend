@@ -160,6 +160,9 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.data["sequence"], 1700000000)
         self.assertEqual(response.data["market_status"], "OPEN")
         self.assertEqual(len(response.data["candles"]), 1)
+        self.assertEqual(response.data["candles"][0]["close"], "105.0")
+        self.assertIn("open_time", response.data["candles"][0])
+        self.assertIn("close_time", response.data["candles"][0])
         history.assert_called_once_with(symbol="BTCUSDT", interval="1m", limit=500)
 
     @patch("trade.market_api.get_market_history")
@@ -169,6 +172,15 @@ class MarketHistoryTests(TestCase):
         response = self.client.get("/api/v1/market-data/candles?instrument_id=ETH-USD&interval=5m&limit=50", secure=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         history.assert_called_once_with(symbol="ETHUSDT", interval="5m", limit=50)
+
+    @patch("trade.market_api.get_market_history")
+    def test_chart_candles_cursor_requests_exactly_one_older_page(self, history):
+        history.return_value = [{"time": 1699999940, "open": 100, "high": 110, "low": 90, "close": 105, "volume": 1}]
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/market-data/candles?instrument_id=BTC-USD&interval=1m&before=2023-11-14T22:13:20Z&limit=500", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        history.assert_called_once_with(symbol="BTCUSDT", interval="1m", limit=500, before=1700000000)
+        self.assertEqual(response.data["history_cursor"], response.data["candles"][0]["open_time"])
 
     def test_chart_contract_fails_closed_before_outbound_provider_request(self):
         self.client.force_authenticate(self.user)
@@ -183,3 +195,27 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["real_trading_enabled"])
         self.assertIn("5s", response.data["supported_intervals"])
+
+    def test_market_capabilities_disable_uncertified_five_seconds(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/instruments/BTC-USD/market-data-capabilities", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entries = {item["interval"]: item for item in response.data["timeframes"]}
+        self.assertTrue(entries["1m"]["available"])
+        self.assertFalse(entries["5s"]["available"])
+        self.assertEqual(entries["5s"]["reason"], "GENUINE_5S_SOURCE_UNAVAILABLE")
+
+    @patch("trade.market_api.get_market_history")
+    def test_five_second_request_fails_without_provider_call(self, history):
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=5s", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["detail"], "GENUINE_5S_SOURCE_UNAVAILABLE")
+        history.assert_not_called()
+
+    @patch("trade.market_api.get_market_history")
+    def test_malformed_candle_is_rejected(self, history):
+        history.return_value = [{"time": 1700000000, "open": 100, "high": 90, "low": 80, "close": 105, "volume": 1}]
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=1m", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)

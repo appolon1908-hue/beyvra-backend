@@ -40,6 +40,9 @@ class CanonicalGatewayTests(TransactionTestCase):
             self.assertEqual(ack["added"], ["market.candle:BTCUSDT:1m"])
             await communicator.send_json_to({"action": "subscribe", "channels": ["market.candle:BTCUSDT:1m", "market.candle:BTCUSDT:1m"]})
             self.assertEqual((await communicator.receive_json_from())["added"], [])
+            await communicator.send_json_to({"action": "subscribe", "channels": ["market.candle:BTC-USD:1m", "market.quote:BTC-USD"]})
+            canonical = await communicator.receive_json_from()
+            self.assertEqual(canonical["added"], ["market.candle:BTC-USD:1m", "market.quote:BTC-USD"])
             await communicator.send_json_to({"action": "subscribe", "channels": ["wallet.deposit"]})
             denied = await communicator.receive_json_from()
             self.assertEqual(denied["code"], "FORBIDDEN_CHANNEL")
@@ -54,3 +57,19 @@ class CanonicalGatewayTests(TransactionTestCase):
 
         with patch("ws.gateway.CanonicalGatewayConsumer._stream_market", new=AsyncMock()):
             async_to_sync(scenario)()
+
+    def test_realtime_provider_gate_denies_before_outbound_connection(self):
+        async def scenario():
+            communicator = WebsocketCommunicator(application, f"/ws/v1/?ws_ticket={self.ticket()}")
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+            await communicator.receive_json_from()
+            await communicator.send_json_to({"action": "subscribe", "channels": ["market.candle:BTC-USD:1m"]})
+            self.assertEqual((await communicator.receive_json_from())["added"], ["market.candle:BTC-USD:1m"])
+            unavailable = await communicator.receive_json_from(timeout=2)
+            self.assertEqual(unavailable["data"]["reason"], "PROVIDER_NOT_AVAILABLE")
+            await communicator.disconnect()
+
+        with patch("ws.gateway.aiohttp.ClientSession.ws_connect") as outbound:
+            async_to_sync(scenario)()
+            outbound.assert_not_called()

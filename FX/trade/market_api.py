@@ -10,6 +10,7 @@ from .models import MarketCandle
 
 
 CHART_INTERVALS = ("5s", "10s", "15s", "30s", "1m", "5m", "15m", "1h", "4h", "1d")
+INTERVAL_SECONDS = {"5s": 5, "10s": 10, "15s": 15, "30s": 30, "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 INSTRUMENTS = {
     "BTC-USD": {"provider_symbol": "BTCUSDT", "asset_class": "CRYPTO", "price_decimals": 2, "quantity_decimals": 8},
     "ETH-USD": {"provider_symbol": "ETHUSDT", "asset_class": "CRYPTO", "price_decimals": 2, "quantity_decimals": 8},
@@ -42,6 +43,35 @@ def _chart_request(request):
     return instrument_id, definition, interval, limit
 
 
+def _require_available_interval(interval):
+    if interval not in SUPPORTED_INTERVALS:
+        raise MarketDataError("GENUINE_5S_SOURCE_UNAVAILABLE" if interval == "5s" else "TIMEFRAME_UNAVAILABLE")
+
+
+def _canonical_candles(candles, interval, before=None):
+    duration = INTERVAL_SECONDS[interval]
+    normalized = []
+    for candle in candles:
+        timestamp = int(candle["time"])
+        if before is not None and timestamp >= before:
+            continue
+        open_value = str(candle["open"])
+        high_value = str(candle["high"])
+        low_value = str(candle["low"])
+        close_value = str(candle["close"])
+        volume_value = str(candle.get("volume", 0))
+        if not (float(high_value) >= max(float(open_value), float(close_value)) and float(low_value) <= min(float(open_value), float(close_value)) and float(high_value) >= float(low_value)):
+            raise MarketDataError("MALFORMED_PROVIDER_CANDLE")
+        normalized.append({
+            "open_time": datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "close_time": datetime.fromtimestamp(timestamp + duration, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "open": open_value, "high": high_value, "low": low_value,
+            "close": close_value, "volume": volume_value,
+            "complete": True, "sequence": timestamp,
+        })
+    return normalized
+
+
 def _server_time():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -57,13 +87,15 @@ class MarketSnapshotV1View(APIView):
     def get(self, request):
         try:
             instrument_id, definition, interval, limit = _chart_request(request)
+            _require_available_interval(interval)
             candles = get_market_history(symbol=definition["provider_symbol"], interval=interval, limit=limit)
+            candles = _canonical_candles(candles, interval)
         except (ValueError, MarketDataError) as exc:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
         latest = candles[-1] if candles else None
         if latest is None:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": "No snapshot is currently available."}, status=503)
-        sequence = int(latest["time"])
+        sequence = int(latest["sequence"])
         price = str(latest["close"])
         return Response({
             "instrument_id": instrument_id,
@@ -71,7 +103,7 @@ class MarketSnapshotV1View(APIView):
             "sequence": sequence,
             "server_time": _server_time(),
             "market_status": _market_status(definition),
-            "quote": {"bid": price, "ask": price, "mid": price, "occurred_at": datetime.fromtimestamp(latest["time"], tz=timezone.utc).isoformat().replace("+00:00", "Z")},
+            "quote": {"bid": price, "ask": price, "mid": price, "occurred_at": latest["open_time"]},
             "candles": candles,
         })
 
@@ -83,11 +115,19 @@ class MarketCandlesV1View(APIView):
     def get(self, request):
         try:
             instrument_id, definition, interval, limit = _chart_request(request)
-            candles = get_market_history(symbol=definition["provider_symbol"], interval=interval, limit=limit)
+            _require_available_interval(interval)
+            before_value = request.query_params.get("before")
+            before = int(datetime.fromisoformat(before_value.replace("Z", "+00:00")).timestamp()) if before_value else None
+            history_kwargs = {"symbol": definition["provider_symbol"], "interval": interval, "limit": limit}
+            if before is not None:
+                history_kwargs["before"] = before
+            candles = get_market_history(**history_kwargs)
+            candles = _canonical_candles(candles, interval, before)
         except (ValueError, MarketDataError) as exc:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
-        sequence = int(candles[-1]["time"]) if candles else 0
-        return Response({"instrument_id": instrument_id, "interval": interval, "sequence": sequence, "server_time": _server_time(), "candles": candles})
+        sequence = int(candles[-1]["sequence"]) if candles else 0
+        cursor = candles[0]["open_time"] if candles else None
+        return Response({"instrument_id": instrument_id, "interval": interval, "sequence": sequence, "server_time": _server_time(), "history_cursor": cursor, "candles": candles})
 
 
 class MarketStatusV1View(APIView):
@@ -127,6 +167,22 @@ class InstrumentTradingRulesV1View(InstrumentV1View):
             "supported_chart_types": ("CANDLESTICK", "HEIKIN_ASHI", "BAR", "LINE", "AREA"),
             "real_trading_enabled": False,
         })
+
+
+class InstrumentMarketDataCapabilitiesV1View(InstrumentV1View):
+    def get(self, request, instrument_id):
+        try:
+            normalized, _definition = _instrument(instrument_id)
+        except ValueError as exc:
+            return Response({"code": str(exc)}, status=404)
+        timeframes = []
+        for interval in CHART_INTERVALS:
+            if interval in SUPPORTED_INTERVALS:
+                timeframes.append({"interval": interval, "available": True, "source": "provider", "mode": "native"})
+            else:
+                reason = "GENUINE_5S_SOURCE_UNAVAILABLE" if interval == "5s" else "TIMEFRAME_SOURCE_UNAVAILABLE"
+                timeframes.append({"interval": interval, "available": False, "reason": reason})
+        return Response({"instrument_id": normalized, "timeframes": timeframes})
 
 
 class InstrumentRegistryView(APIView):

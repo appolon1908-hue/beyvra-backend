@@ -21,6 +21,8 @@ from integrations.models import OrganizationMembership
 
 
 CHANNEL_REGISTRY = {
+    "market.quote:{symbol}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
+    "market.candle:{symbol}:{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.tick": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.quote": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.candle.{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},

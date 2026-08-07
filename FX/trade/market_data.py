@@ -37,7 +37,7 @@ def serialize_candle(candle: MarketCandle):
     }
 
 
-def get_market_history(*, symbol: str, interval: str, limit: int):
+def get_market_history(*, symbol: str, interval: str, limit: int, before: int | None = None):
     validate_market(symbol, interval)
     provider_id = "twelve_data" if symbol in TWELVE_DATA_SYMBOLS else "binance"
     try:
@@ -56,17 +56,21 @@ def get_market_history(*, symbol: str, interval: str, limit: int):
             interval=interval,
             limit=limit,
             credential_path=resolved_provider.credential_path,
+            before=before,
         )
     try:
         provider_response = requests.get(
             BINANCE_REST_URL,
-            params={"symbol": symbol, "interval": interval, "limit": limit},
+            params={"symbol": symbol, "interval": interval, "limit": limit, **({"endTime": before * 1000 - 1} if before else {})},
             timeout=10,
         )
         provider_response.raise_for_status()
         rows = provider_response.json()
     except (requests.RequestException, ValueError) as exc:
-        cached = list(MarketCandle.objects.filter(symbol=symbol, interval=interval).order_by("-timestamp")[:limit])
+        cached_query = MarketCandle.objects.filter(symbol=symbol, interval=interval)
+        if before:
+            cached_query = cached_query.filter(timestamp__lt=datetime.fromtimestamp(before, tz=timezone.utc))
+        cached = list(cached_query.order_by("-timestamp")[:limit])
         if not cached:
             raise MarketDataError("Market history is temporarily unavailable") from exc
         return [serialize_candle(candle) for candle in reversed(cached)]
@@ -89,7 +93,7 @@ def get_market_history(*, symbol: str, interval: str, limit: int):
     return candles
 
 
-def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credential_path: str):
+def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credential_path: str, before: int | None = None):
     try:
         with open(credential_path, encoding="utf-8") as credential_file:
             api_key = credential_file.read().strip()
@@ -105,6 +109,7 @@ def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credentia
                 "interval": TWELVE_INTERVALS[interval],
                 "outputsize": limit,
                 "timezone": "UTC",
+                **({"end_date": datetime.fromtimestamp(before, tz=timezone.utc).isoformat()} if before else {}),
             },
             headers={"Authorization": f"apikey {api_key}"},
             timeout=10,
@@ -115,10 +120,10 @@ def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credentia
             raise MarketDataError(payload.get("message", "Market provider rejected the request"))
         rows = payload.get("values", [])
     except (requests.RequestException, ValueError) as exc:
-        cached = list(
-            MarketCandle.objects.filter(provider="twelve_data", symbol=symbol, interval=interval)
-            .order_by("-timestamp")[:limit]
-        )
+        cached_query = MarketCandle.objects.filter(provider="twelve_data", symbol=symbol, interval=interval)
+        if before:
+            cached_query = cached_query.filter(timestamp__lt=datetime.fromtimestamp(before, tz=timezone.utc))
+        cached = list(cached_query.order_by("-timestamp")[:limit])
         if not cached:
             raise MarketDataError("Stock and forex history is temporarily unavailable") from exc
         return [serialize_candle(candle) for candle in reversed(cached)]

@@ -12,9 +12,11 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from integrations.models import OrganizationMembership
+from provider_governance.service import ProviderNotAvailable, resolve_provider
 from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
+CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
 
 
 @database_sync_to_async
@@ -24,6 +26,15 @@ def _tenant_for_user(user_id: int, requested: str | None = None) -> str:
         return str(requested)
     membership = memberships.order_by("id").values_list("organization_id", flat=True).first()
     return str(membership) if membership else "default"
+
+
+@database_sync_to_async
+def _market_provider_approved(symbol: str) -> bool:
+    try:
+        resolve_provider(provider_id="binance", provider_type="MARKET_DATA", product="REALTIME_CANDLES", symbol=symbol, region="GLOBAL")
+        return True
+    except ProviderNotAvailable:
+        return False
 
 
 class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
@@ -120,17 +131,21 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         if channel.startswith("compat."):
             return channel in {"compat.market-data", "compat.news", "compat.account", "compat.platform"}
         if len(parts) == 2 and parts[0] == "market.quote":
-            return parts[1] in SUPPORTED_SYMBOLS
+            return parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS
         if len(parts) == 3 and parts[0] == "market.candle":
-            return parts[1] in SUPPORTED_SYMBOLS and parts[2] in SUPPORTED_INTERVALS
+            return (parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS) and parts[2] in SUPPORTED_INTERVALS
         return False
 
     async def _stream_market(self, channel: str):
         parts = channel.split(":")
-        symbol = parts[1]
+        instrument_id = parts[1]
+        symbol = CANONICAL_SYMBOLS.get(instrument_id, instrument_id)
         interval = parts[2] if len(parts) == 3 else "1m"
         if symbol not in {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}:
             await self._emit("market.status", {"status": "unavailable", "symbol": symbol})
+            return
+        if not await _market_provider_approved(symbol):
+            await self._emit("market.status", {"status": "unavailable", "symbol": instrument_id, "reason": "PROVIDER_NOT_AVAILABLE"})
             return
         url = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@kline_{interval}"
         delay = 1
@@ -150,9 +165,9 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                                 candle = payload.get("k")
                                 if not candle:
                                     continue
-                                data = {"type": "candle", "symbol": symbol, "interval": interval, "closed": bool(candle["x"]), "time": int(candle["t"] / 1000), "open": float(candle["o"]), "high": float(candle["h"]), "low": float(candle["l"]), "close": float(candle["c"]), "volume": float(candle["v"])}
+                                data = {"type": "candle", "symbol": instrument_id, "interval": interval, "closed": bool(candle["x"]), "time": int(candle["t"] / 1000), "open": str(candle["o"]), "high": str(candle["h"]), "low": str(candle["l"]), "close": str(candle["c"]), "volume": str(candle["v"])}
                                 await self._emit(channel, data)
-                                await self._emit(f"market.quote:{symbol}", {"mid": data["close"], "time": data["time"]})
+                                await self._emit(f"market.quote:{instrument_id}", {"bid": data["close"], "ask": data["close"], "mid": data["close"], "time": data["time"]})
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -164,9 +179,14 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             self.market_tasks.pop(channel, None)
 
     async def _emit(self, channel, data):
-        self.sequence[channel] += 1
+        if self.sequence[channel] == 0 and isinstance(data, dict) and isinstance(data.get("time"), int):
+            self.sequence[channel] = data["time"]
+        else:
+            self.sequence[channel] += 1
         event_type = "market.quote.updated" if channel.startswith("market.quote:") else "market.candle.updated" if channel.startswith("market.candle:") else "market.status.changed"
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "type": event_type, "version": 1, "channel": channel, "sequence": self.sequence[channel], "occurred_at": datetime.now(timezone.utc).isoformat(), "data": data})
+        now = datetime.now(timezone.utc).isoformat()
+        instrument_id = channel.split(":")[1] if channel.startswith("market.") and ":" in channel else None
+        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_time": now, "source": "approved-provider", "data": data})
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))
