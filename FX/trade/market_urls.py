@@ -1,8 +1,18 @@
 from django.urls import path
 
-from .market_api import FeedHealthView, InstrumentRegistryView, MarketCandlesView, MarketQuotesView, MarketStatusView, MarketCapabilityUnsupportedView
+from .market_api import (
+    FeedHealthView, InstrumentRegistryView, InstrumentTradingRulesV1View,
+    InstrumentV1View, MarketCandlesV1View, MarketCandlesView,
+    MarketQuotesView, MarketSnapshotV1View, MarketStatusV1View,
+    MarketStatusView, MarketCapabilityUnsupportedView,
+)
 
 urlpatterns = [
+    path("market-data/snapshot", MarketSnapshotV1View.as_view()),
+    path("market-data/candles", MarketCandlesV1View.as_view()),
+    path("market-data/status", MarketStatusV1View.as_view()),
+    path("instruments/<str:instrument_id>/trading-rules", InstrumentTradingRulesV1View.as_view()),
+    path("instruments/<str:instrument_id>", InstrumentV1View.as_view()),
     path("market/instruments", InstrumentRegistryView.as_view()),
     path("market/instruments/<str:symbol>", InstrumentRegistryView.as_view()),
     path("market/candles", MarketCandlesView.as_view()),

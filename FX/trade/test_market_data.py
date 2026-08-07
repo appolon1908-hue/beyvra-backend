@@ -149,3 +149,37 @@ class MarketHistoryTests(TestCase):
         path.write_text("test-only")
         path.chmod(0o600)
         self.addCleanup(lambda: path.unlink(missing_ok=True))
+
+    @patch("trade.market_api.get_market_history")
+    def test_chart_snapshot_contract_is_normalized(self, history):
+        history.return_value = [{"time": 1700000000, "open": 100.0, "high": 110.0, "low": 90.0, "close": 105.0, "volume": 12.5}]
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=1m&limit=500", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["instrument_id"], "BTC-USD")
+        self.assertEqual(response.data["sequence"], 1700000000)
+        self.assertEqual(response.data["market_status"], "OPEN")
+        self.assertEqual(len(response.data["candles"]), 1)
+        history.assert_called_once_with(symbol="BTCUSDT", interval="1m", limit=500)
+
+    @patch("trade.market_api.get_market_history")
+    def test_chart_candles_contract_makes_one_history_resolution(self, history):
+        history.return_value = [{"time": 1700000000, "open": 100.0, "high": 110.0, "low": 90.0, "close": 105.0, "volume": 12.5}]
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/market-data/candles?instrument_id=ETH-USD&interval=5m&limit=50", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        history.assert_called_once_with(symbol="ETHUSDT", interval="5m", limit=50)
+
+    def test_chart_contract_fails_closed_before_outbound_provider_request(self):
+        self.client.force_authenticate(self.user)
+        with patch("trade.market_data.requests.get") as outbound:
+            response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=1m", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        outbound.assert_not_called()
+
+    def test_instrument_rules_keep_real_trading_disabled(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/instruments/BTC-USD/trading-rules", secure=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["real_trading_enabled"])
+        self.assertIn("5s", response.data["supported_intervals"])
