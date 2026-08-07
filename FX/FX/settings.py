@@ -51,7 +51,9 @@ WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "
 GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
 GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
-GOOGLE_OIDC_REDIRECT_URI = os.getenv("GOOGLE_OIDC_REDIRECT_URI", "")
+GOOGLE_OIDC_REDIRECT_URI = os.getenv(
+    "GOOGLE_OIDC_REDIRECT_URI", "https://api.beyvra.com/api/v1/auth/google/callback"
+)
 GOOGLE_OIDC_SCOPES = os.getenv("GOOGLE_OIDC_SCOPES", "openid email profile")
 REALTIME_V2_ENABLED = os.getenv("REALTIME_V2_ENABLED", "false").lower() == "true"
 REALTIME_V2_STAGING_ENABLED = os.getenv("REALTIME_V2_STAGING_ENABLED", "false").lower() == "true"
@@ -78,6 +80,11 @@ DEBUG = os.getenv("DEBUG", "0").lower() in {"1", "true", "yes"}
 
 ALLOWED_HOSTS = json.loads(os.getenv("ALLOWED_HOSTS"))
 CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
+PUBLIC_BRAND_NAME = os.getenv("PUBLIC_BRAND_NAME", "Beyvra")
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "https://beyvra.com").rstrip("/")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "https://api.beyvra.com").rstrip("/")
+PUBLIC_WS_URL = os.getenv("PUBLIC_WS_URL", "wss://ws.beyvra.com/ws/v2/")
+PUBLIC_STATUS_URL = os.getenv("PUBLIC_STATUS_URL", "https://status.beyvra.com").rstrip("/")
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
 CORS_ALLOWED_ORIGINS = json.loads(os.getenv("CORS_ALLOWED_ORIGINS", "[]"))
@@ -136,6 +143,7 @@ INSTALLED_APPS = [
     "financial_client",
     "apps.foundation",
     "apps.trading",
+    "apps.compliance",
 ]
 
 MIDDLEWARE = [
@@ -375,7 +383,9 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_ENDPOINT_SECRET = os.getenv("STRIPE_ENDPOINT_SECRET")
 
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL", PUBLIC_SITE_URL).rstrip("/")
+SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN") or None
+CSRF_COOKIE_DOMAIN = os.getenv("CSRF_COOKIE_DOMAIN") or None
 SPECTACULAR_SETTINGS = {
     "TITLE": "Tradi Trading API",
     "DESCRIPTION": "Versioned API contract for the Tradi paper-trading platform.",

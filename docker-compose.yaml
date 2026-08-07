@@ -160,7 +160,7 @@ services:
       CENTRIFUGO_BROKER_NATS_TLS_ENABLED: "true"
       CENTRIFUGO_BROKER_NATS_TLS_SERVER_NAME: nats
       CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:?CENTRIFUGO_PROXY_SECRET is required}
-      CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Codestra-Proxy-Secret":"${CENTRIFUGO_PROXY_SECRET}","X-Forwarded-Proto":"https","Host":"staging.codestra.cloud"}'
+      CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Codestra-Proxy-Secret":"${CENTRIFUGO_PROXY_SECRET}","X-Forwarded-Proto":"https","Host":"staging.beyvra.com"}'
     volumes:
       - ./infra/realtime-v2/centrifugo.json:/etc/centrifugo/config.json:ro
       - ./infra/realtime-v2/tls/ca.crt:/etc/centrifugo/tls/ca.crt:ro
@@ -311,6 +311,7 @@ services:
       - WEB_HOST=web:8000
       - DAPHNE_HOST=daphne:8001
       - CENTRIFUGO_HOST=centrifugo:8000
+      - PUBLIC_SERVER_NAME=${PUBLIC_SERVER_NAME:-staging.beyvra.com}
     networks:
       - fx-network
     depends_on:

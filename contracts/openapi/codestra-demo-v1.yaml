@@ -1,8 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Codestra Demo Platform API
+  title: Beyvra Demo Platform API
   version: 1.0.0
-  description: Versioned API contract for the Codestra virtual-funds Demo platform. Real-money trading, funding and custody are not enabled.
+  description: Versioned API contract for the Beyvra virtual-funds Demo platform. Real-money trading, funding and custody are not enabled.
+servers:
+- url: https://api.beyvra.com
+  description: Beyvra production API target; activation requires separate cutover approval.
 paths:
   /api/v1/workspace/bootstrap:
     get:
@@ -2392,7 +2395,7 @@ paths:
   /api/notification/staging-receiver/:
     post:
       operationId: notification_staging_receiver_create
-      description: Controlled staging sink for verifying Codestra webhook signatures.
+      description: Controlled staging sink for verifying Beyvra webhook signatures. Legacy X-Codestra-* header names remain a compatibility contract.
       tags:
       - notification
       requestBody:
@@ -7045,10 +7048,10 @@ components:
       properties:
         payment_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         qrcode_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         order_id:
           type: integer
           default: 1
@@ -7076,19 +7079,19 @@ components:
           type: string
         return_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         cancel_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
     BinancePaymentResponseRequest:
       type: object
       properties:
         payment_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         qrcode_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         order_id:
           type: integer
           default: 1
@@ -7116,10 +7119,10 @@ components:
           type: string
         return_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
         cancel_url:
           type: string
-          default: https://tradx.io/
+          default: https://beyvra.com/
     BlankEnum:
       enum:
       - ''

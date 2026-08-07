@@ -1,4 +1,4 @@
-# Codestra notification webhooks
+# Beyvra notification webhooks
 
 Webhook subscriptions are managed by the authenticated API under `/api/notification/webhooks/`.
 

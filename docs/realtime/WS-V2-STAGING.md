@@ -1,4 +1,4 @@
-# Codestra realtime V2 staging
+# Beyvra realtime V2 staging
 
 V2 is a staging-only migration path from `/ws/v1/` to `/ws/v2/`. The browser
 connects to the Centrifugo WebSocket endpoint behind the stable public prefix

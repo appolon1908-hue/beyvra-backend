@@ -1,4 +1,4 @@
-# Codestra Demo domain contract
+# Beyvra Demo domain contract
 
 ## Product boundary
 

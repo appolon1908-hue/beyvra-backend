@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Codestra Real Wallet Boundary
+  title: Beyvra Real Wallet Boundary
   version: 1.0.0
   description: >-
     Separate real-wallet and immutable-ledger boundary. All value-moving
     features are disabled by default and return FEATURE_DISABLED until an
     approved staging activation.
 servers:
-  - url: /api/v1
+  - url: https://api.beyvra.com/api/v1
+    description: Beyvra production API target; real-value features remain disabled.
 paths:
   /features/:
     get:

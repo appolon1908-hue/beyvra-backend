@@ -35,7 +35,7 @@ def send_account_creation_notification(sender, instance, created, **kwargs):
         emit_notification(
             user_id=user_id,
             title="Account created",
-            message="Your Codestra account has been created successfully.",
+            message="Your Beyvra account has been created successfully.",
             category="ACCOUNT_CHANGE",
         )
         

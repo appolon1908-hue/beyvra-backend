@@ -12,6 +12,8 @@ from rest_framework.test import APIClient
 
 from apps.foundation.models import ApplicationAuditEvent, OutboxEvent, ProcessedEvent, TradingControl
 from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, claim_outbox_batch, consume_once, enqueue_event, mark_publish_result
+from apps.compliance import ComplianceEligibility, KycStatus
+from apps.compliance.domain import ScreeningStatus
 from apps.trading.domain.orders import InvalidOrderTransition, OrderState, transition_order
 from apps.trading.models import TradingOrder
 from apps.trading.repositories import transition_persisted_order
@@ -24,6 +26,19 @@ from users.models import User
 
 
 class OrderAndRiskTests(TestCase):
+    def test_compliance_lifecycle_keeps_eligibility_dimensions_separate(self):
+        eligibility = ComplianceEligibility(
+            kyc_status=KycStatus.APPROVED,
+            aml_status=ScreeningStatus.CLEARED,
+            sanctions_status=ScreeningStatus.CLEARED,
+            trading_eligible=True,
+            deposit_eligible=False,
+            withdrawal_eligible=False,
+        )
+        self.assertTrue(eligibility.permits_trading())
+        self.assertFalse(eligibility.deposit_eligible)
+        self.assertFalse(eligibility.withdrawal_eligible)
+
     def test_transition_matrix_and_terminal_states(self):
         self.assertEqual(transition_order("PENDING", "ACCEPTED"), OrderState.ACCEPTED)
         self.assertEqual(transition_order("OPEN", "FILLED"), OrderState.FILLED)
@@ -107,6 +122,17 @@ class ControlAndCompatibilityTests(TestCase):
         self.assertEqual(response.headers["Deprecation"], "true")
         self.assertIn("successor-version", response.headers["Link"])
         self.assertIn("Sunset", response.headers)
+
+    def test_health_contracts(self):
+        self.assertEqual(self.client.get("/health/live").status_code, 200)
+        with override_settings(NATS_JETSTREAM_ENABLED=False):
+            ready = self.client.get("/health/ready")
+            self.assertEqual(ready.status_code, 200)
+            self.assertEqual(ready.json()["status"], "ready")
+        with override_settings(NATS_JETSTREAM_ENABLED=True):
+            unavailable = self.client.get("/health/ready")
+            self.assertEqual(unavailable.status_code, 503)
+            self.assertEqual(unavailable.json()["checks"]["nats"], "worker_unavailable")
 
 
 class OutboxInboxTests(TestCase):
@@ -214,6 +240,14 @@ class IdempotencyConcurrencyTests(TransactionTestCase):
 
 
 class SafetyBoundaryTests(TestCase):
+    def test_beyvra_public_identity_defaults_are_explicit(self):
+        self.assertEqual(settings.PUBLIC_BRAND_NAME, "Beyvra")
+        self.assertEqual(settings.PUBLIC_SITE_URL, "https://beyvra.com")
+        self.assertEqual(settings.PUBLIC_API_URL, "https://api.beyvra.com")
+        self.assertEqual(settings.PUBLIC_WS_URL, "wss://ws.beyvra.com/ws/v2/")
+        self.assertEqual(settings.PUBLIC_STATUS_URL, "https://status.beyvra.com")
+        self.assertNotIn("codestra.cloud", settings.GOOGLE_OIDC_REDIRECT_URI)
+
     def test_financial_database_alias_and_credentials_are_absent(self):
         self.assertEqual(set(settings.DATABASES), {"default"})
         forbidden = {"FINANCIAL_DB_HOST", "FINANCIAL_DB_NAME", "FINANCIAL_DB_PASSWORD", "FINANCIAL_DATABASE_URL"}

@@ -39,10 +39,9 @@ the future order pipeline without activating execution or settlement.
 
 - Route resolver inventory: 594 HTTP patterns; see
   `API-CONSOLIDATION-INVENTORY.md`.
-- Full Django suite: the final count and result are recorded in the release
-  report; intermediate runs are not release evidence.
-- Focused P0, compatibility, and repaired WebSocket regression suite: 19 tests
-  passed on the final source before the release report was prepared.
+- Full Django suite: 184 tests passed on the Beyvra identity candidate.
+- Focused P0 suite: 21 tests passed, including concurrency, compliance
+  eligibility separation, readiness behavior, and public-identity defaults.
 - Migration drift: none.
 - Fresh isolated PostgreSQL migration apply, rollback, data-preservation check,
   reapply, and database-enforced audit immutability: passed.
@@ -62,3 +61,7 @@ cutover evidence and is not performed opportunistically in P0.
 
 The legacy route surface is retained and classified rather than deleted. Usage
 metrics and deprecation headers provide the evidence required for later removal.
+
+Public identity/configuration migration evidence is recorded in
+`BEYVRA-PUBLIC-IDENTITY-INVENTORY.md`. It did not perform DNS, TLS, staging, or
+production cutover.

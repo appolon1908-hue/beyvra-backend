@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-base_url=${CODESTRA_STAGING_URL:-https://staging.codestra.cloud}
+base_url=${BEYVRA_STAGING_URL:-https://staging.beyvra.com}
 statsd_host=${STATSD_HOST:-127.0.0.1}
 statsd_port=${STATSD_PORT:-9125}
 nginx_container=${NGINX_CONTAINER:-backend-nginx-1}

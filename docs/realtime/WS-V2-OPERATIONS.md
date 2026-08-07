@@ -9,7 +9,7 @@ Health checks:
 Smoke checks:
 
 1. Create a Guest Demo and obtain a middleware connection token.
-2. Connect to `wss://staging.codestra.cloud/ws/v2/connection/websocket`.
+2. Connect to `wss://staging.beyvra.com/ws/v2/connection/websocket`.
 3. Subscribe to a permitted market channel; verify an unauthorized account
    channel receives a denial.
 4. Restart Centrifugo and reconnect; V1 remains the fallback while V2 is

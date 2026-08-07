@@ -29,13 +29,13 @@ ALPHABETS_REGEX_VALIDATOR = RegexValidator(
 
 
 def send_welcome_email(user_email, first_name, temp_password=None):
-    subject = "Welcome | Tradx.io"
+    subject = "Welcome | Beyvra"
     email_template = template.loader.get_template("welcome_email.html")
 
     context = {
         "email": user_email,
         "first_name": first_name,
-        "frontend_url": os.getenv("FRONTEND_URL"),
+        "frontend_url": settings.FRONTEND_URL,
         "temp_password": temp_password,
     }
 
@@ -48,7 +48,7 @@ def send_welcome_email(user_email, first_name, temp_password=None):
 
 
 def send_email_verification_email(user):
-    subject = "Email Verification required | Tradx.io"
+    subject = "Email verification required | Beyvra"
     email_template = template.loader.get_template("email_verify_email.html")
 
     context = {
@@ -56,7 +56,7 @@ def send_email_verification_email(user):
         "uid": urlsafe_base64_encode(force_bytes(user.pk)),
         "user": user,
         "token": default_token_generator.make_token(user),
-        "frontend_url": os.getenv("FRONTEND_URL"),
+        "frontend_url": settings.FRONTEND_URL,
     }
 
     html_content = email_template.render(context)
@@ -68,7 +68,7 @@ def send_email_verification_email(user):
 
 
 def send_password_reset_link_email(user):
-    subject = "Password Reset Requested | Tradx.io"
+    subject = "Password reset requested | Beyvra"
     email_template = template.loader.get_template("password_reset_email.html")
 
     context = {
@@ -76,7 +76,7 @@ def send_password_reset_link_email(user):
         "uid": urlsafe_base64_encode(force_bytes(user.pk)),
         "user": user,
         "token": default_token_generator.make_token(user),
-        "frontend_url": os.getenv("FRONTEND_URL"),
+        "frontend_url": settings.FRONTEND_URL,
     }
 
     html_content = email_template.render(context)
@@ -96,7 +96,7 @@ def generate_verification_code():
 def send_mobile_verification_code(user):
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
     code = generate_verification_code()
-    message_text = f"Your verification code for tradx.io is {code}."
+    message_text = f"Your verification code for Beyvra is {code}."
 
     client.messages.create(
         from_=settings.TWILIO_SEND_FROM_NUMBER,
@@ -246,13 +246,13 @@ def get_user_agent(request) -> dict:
 
 
 def send_user_device_info_alert(user, details):
-    subject = "New device detected | Tradx.io"
+    subject = "New device detected | Beyvra"
     email_template = template.loader.get_template("device_info_alert_email.html")
 
     context = {
         "user": user,
         "details": details,
-        "frontend_url": os.getenv("FRONTEND_URL"),
+        "frontend_url": settings.FRONTEND_URL,
         "twitter_url": os.getenv("TWITTER_URL"),
         "facebook_url": os.getenv("FACEBOOK_URL"),
         "linkedin_url": os.getenv("LINKEDIN_URL"),
@@ -267,12 +267,13 @@ def send_user_device_info_alert(user, details):
 
 
 def send_user_ban_email(user):
-    subject = "Account Banned | Tradx.io"
+    subject = "Account suspended | Beyvra"
     email_template = template.loader.get_template("user_ban_email.html")
 
     context = {
         "user": user,
         "ban_date": datetime.now(),
+        "frontend_url": settings.FRONTEND_URL,
     }
 
     html_content = email_template.render(context)

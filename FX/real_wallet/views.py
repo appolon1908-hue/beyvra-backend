@@ -17,7 +17,7 @@ from .webhooks import WebhookSecurityError, create_secret_version, validate_webh
 def disabled_response(request, feature):
     return Response(
         {
-            "type": "https://errors.codestra.example/wallet/feature-disabled",
+            "type": "https://api.beyvra.com/errors/wallet/feature-disabled",
             "title": "Real wallet feature disabled",
             "status": 503,
             "detail": "Real-value wallet operations are disabled until staging approval.",

@@ -10,7 +10,7 @@
   "client": {
     "token": {"hmac_secret_key": "replace-at-runtime"},
     "subscription_token": {"enabled": true, "hmac_secret_key": "replace-at-runtime"},
-    "allowed_origins": ["https://staging.codestra.cloud"],
+    "allowed_origins": ["https://staging.beyvra.com"],
     "connection_limit": 1000,
     "channel_limit": 64,
     "connection_rate_limit": 1000

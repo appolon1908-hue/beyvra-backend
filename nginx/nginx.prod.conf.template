@@ -17,6 +17,7 @@ upstream centrifugo {
 
 server {
     listen 80;
+    server_name ${PUBLIC_SERVER_NAME};
     client_max_body_size 25M;
     proxy_read_timeout 60;
     proxy_connect_timeout 10;

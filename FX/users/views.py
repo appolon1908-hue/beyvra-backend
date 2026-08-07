@@ -369,7 +369,9 @@ class EnableMFAView(generics.GenericAPIView):
             user.save()
 
         # Generate the provisioning URI
-        otp_uri = pyotp.totp.TOTP(user.mfa_secret).provisioning_uri(name=user.email, issuer_name="Tradx.io")
+        otp_uri = pyotp.totp.TOTP(user.mfa_secret).provisioning_uri(
+            name=user.email, issuer_name=settings.PUBLIC_BRAND_NAME
+        )
 
         # Create the QR code
         qr = qrcode.make(otp_uri)

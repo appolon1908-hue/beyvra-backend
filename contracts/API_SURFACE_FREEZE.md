@@ -1,4 +1,4 @@
-# API surface freeze — Codestra Demo v1
+# API surface freeze — Beyvra Demo v1
 
 Generated from the Django URL resolver on 2026-08-04.
 

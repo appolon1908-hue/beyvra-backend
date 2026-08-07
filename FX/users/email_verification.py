@@ -232,11 +232,11 @@ def send_outbox_message(item):
     if item.template_key == "email_otp":
         key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
         code = Fernet(key).decrypt(payload["code_encrypted"].encode()).decode()
-        subject = "Your Codestra verification code"
-        body = f"Your verification code is {code}.\n\nThis code expires in {payload.get('expires_minutes', 10)} minutes. Do not share it. Codestra support will never ask for it.\n\nIgnore this message if you did not start registration."
+        subject = "Your Beyvra verification code"
+        body = f"Your verification code is {code}.\n\nThis code expires in {payload.get('expires_minutes', 10)} minutes. Do not share it. Beyvra support will never ask for it.\n\nIgnore this message if you did not start registration."
     else:
-        subject = "Welcome to Codestra"
-        body = f"Your Codestra account was created successfully, {payload.get('display_name', 'Customer')}.\n\nSign in at {payload.get('frontend_url', '/')}.\n\nIf you did not create this account, contact support immediately."
+        subject = "Welcome to Beyvra"
+        body = f"Your Beyvra account was created successfully, {payload.get('display_name', 'Customer')}.\n\nSign in at {payload.get('frontend_url', '/')}.\n\nIf you did not create this account, contact support immediately."
     if not settings.TRANSACTIONAL_EMAIL_ENABLED:
         return "disabled"
     send_mail(subject, body, settings.EMAIL_FROM_ADDRESS or settings.EMAIL_HOST_USER, [item.recipient_email], fail_silently=False)

@@ -146,7 +146,7 @@ class NotificationReadAll(generics.GenericAPIView):
 
 
 class StagingWebhookReceiver(generics.GenericAPIView):
-    """Controlled staging sink for verifying Codestra webhook signatures."""
+    """Controlled staging sink for verifying Beyvra compatibility webhook signatures."""
 
     permission_classes = [AllowAny]
 
@@ -214,7 +214,7 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         from django.db import transaction
         from .services import _queue_webhook, emit_notification
         subscription = self.get_object()
-        event = emit_notification(user_id=request.user.id, title="Webhook test", message="Codestra webhook delivery test.", category="WEBHOOK_TEST", payload={"subscription_id": str(subscription.id)}, force=True)
+        event = emit_notification(user_id=request.user.id, title="Webhook test", message="Beyvra webhook delivery test.", category="WEBHOOK_TEST", payload={"subscription_id": str(subscription.id)}, force=True)
         delivery, _ = WebhookDelivery.objects.get_or_create(subscription=subscription, event=event)
         transaction.on_commit(lambda delivery_id=delivery.id: _queue_webhook(delivery_id))
         return Response(NotificationEventSerializer(event).data, status=status.HTTP_202_ACCEPTED)

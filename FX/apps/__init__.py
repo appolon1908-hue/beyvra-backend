@@ -1,1 +1,1 @@
-"""Canonical Codestra application domains."""
+"""Canonical Beyvra application domains."""
