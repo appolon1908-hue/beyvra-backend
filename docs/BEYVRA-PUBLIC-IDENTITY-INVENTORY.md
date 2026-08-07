@@ -12,7 +12,7 @@ production were not changed.
 | `staging.codestra.cloud` in Compose, Centrifugo, probes, and active realtime operations documentation | `STAGING_DOMAIN` | Changed to `staging.beyvra.com`; deployment remains separately gated. |
 | `tradx.io`, `xtradx.com`, Tradx/Tradex in serializer defaults, SMS, and email templates | `PUBLIC_DOMAIN` / `USER_VISIBLE_BRAND` | Changed to `beyvra.com` and Beyvra; remote legacy logo references were removed. |
 | Email subjects, bodies, account notifications, webhook test copy, and OpenAPI titles containing Codestra | `USER_VISIBLE_BRAND` | Changed to Beyvra. |
-| `PUBLIC_SITE_URL`, `PUBLIC_API_URL`, `PUBLIC_WS_URL`, `PUBLIC_STATUS_URL`, OAuth callback, CORS, CSRF, hosts, cookie-domain examples | `PRODUCTION_DOMAIN` | Added explicit Beyvra configuration. No runtime deployment performed. |
+| `PUBLIC_SITE_URL`, `PUBLIC_API_URL`, `PUBLIC_WS_URL`, `PUBLIC_STATUS_URL`, OAuth callback, CORS, CSRF, hosts, cookie-domain examples | `PRODUCTION_DOMAIN` | Added explicit Beyvra configuration. Realtime uses the certified API hostname rather than inventing an unverified `ws` hostname. Cookies remain host-only by default. No runtime deployment performed. |
 | Nginx `server_name` and Centrifugo allowed origin | `PUBLIC_DOMAIN` | Made explicit/configurable for Beyvra; no certificate or listener cutover performed. |
 | `X-Codestra-*` webhook/proxy headers | `INTERNAL_NAME` / compatibility protocol | Preserved to avoid silently breaking signed webhook and proxy contracts. Rename requires a versioned dual-header migration. |
 | `codestra_*` Prometheus/StatsD metrics, logger names, NATS durable/source names | `INTERNAL_NAME` | Preserved so dashboards, alerts, deduplication, and operational continuity do not break. |
@@ -31,8 +31,9 @@ against reintroducing the old domains or Tradx/Tradex identity.
 
 Before any environment uses the new public endpoints, independently verify:
 
-1. DNS ownership and records for `beyvra.com`, `api`, `ws`, `status`, and the
-   intended staging hostname.
+1. DNS ownership and records for `beyvra.com`, `www`, `api`, `admin`,
+   `platform`, and the intended staging hostname. A dedicated `ws` or `status`
+   hostname must not be used until it is independently created and certified.
 2. TLS/ACME certificate issuance and renewal.
 3. Edge routing, Nginx host matching, WebSocket upgrades, and Centrifugo origin
    authorization.

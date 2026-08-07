@@ -244,8 +244,8 @@ class SafetyBoundaryTests(TestCase):
         self.assertEqual(settings.PUBLIC_BRAND_NAME, "Beyvra")
         self.assertEqual(settings.PUBLIC_SITE_URL, "https://beyvra.com")
         self.assertEqual(settings.PUBLIC_API_URL, "https://api.beyvra.com")
-        self.assertEqual(settings.PUBLIC_WS_URL, "wss://ws.beyvra.com/ws/v2/")
-        self.assertEqual(settings.PUBLIC_STATUS_URL, "https://status.beyvra.com")
+        self.assertEqual(settings.PUBLIC_WS_URL, "wss://api.beyvra.com/ws/v2/")
+        self.assertEqual(settings.PUBLIC_STATUS_URL, "https://api.beyvra.com/health/ready")
         self.assertNotIn("codestra.cloud", settings.GOOGLE_OIDC_REDIRECT_URI)
 
     def test_financial_database_alias_and_credentials_are_absent(self):

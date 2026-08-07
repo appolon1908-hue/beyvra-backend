@@ -83,8 +83,8 @@ CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
 PUBLIC_BRAND_NAME = os.getenv("PUBLIC_BRAND_NAME", "Beyvra")
 PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "https://beyvra.com").rstrip("/")
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "https://api.beyvra.com").rstrip("/")
-PUBLIC_WS_URL = os.getenv("PUBLIC_WS_URL", "wss://ws.beyvra.com/ws/v2/")
-PUBLIC_STATUS_URL = os.getenv("PUBLIC_STATUS_URL", "https://status.beyvra.com").rstrip("/")
+PUBLIC_WS_URL = os.getenv("PUBLIC_WS_URL", "wss://api.beyvra.com/ws/v2/")
+PUBLIC_STATUS_URL = os.getenv("PUBLIC_STATUS_URL", "https://api.beyvra.com/health/ready").rstrip("/")
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
 CORS_ALLOWED_ORIGINS = json.loads(os.getenv("CORS_ALLOWED_ORIGINS", "[]"))

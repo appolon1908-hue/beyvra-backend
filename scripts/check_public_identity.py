@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_PUBLIC_FILES = (
     ".env.example",
+    "FX/FX/settings.py",
     "docker-compose.yaml",
     "infra/realtime-v2/centrifugo.json",
     "nginx/nginx.prod.conf.template",
