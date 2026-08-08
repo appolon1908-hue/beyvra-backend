@@ -17,9 +17,27 @@ from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _provider_credential(name: str) -> str:
+    """Load a provider credential from one environment or mounted-file source."""
+    value = os.getenv(name, "").strip()
+    file_reference = os.getenv(f"{name}_FILE", "").strip()
+    if value and file_reference:
+        raise ImproperlyConfigured(f"Configure only one source for {name}")
+    if not file_reference:
+        return value
+    try:
+        secret = Path(file_reference).read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ImproperlyConfigured(f"Unable to read configured secret file for {name}") from exc
+    if not secret:
+        raise ImproperlyConfigured(f"Configured secret file for {name} is empty")
+    return secret
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
@@ -470,11 +488,11 @@ if not DEBUG:
     PROMETHEUS_METRICS_EXPORT_PORT_RANGE = range(7001, 7100)
 
 
-NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
-POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+NEWS_DATA_API_KEY: str = _provider_credential("NEWS_DATA_API_KEY")
+POLYGON_API_KEY: str = _provider_credential("POLYGON_API_KEY")
 TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
 PROVIDER_CREDENTIAL_ROOT: str = os.getenv("PROVIDER_CREDENTIAL_ROOT", "/etc/codestra/providers")
-COINGECKO_API_KEY: str = os.getenv("COINGECKO_API_KEY", "")
+COINGECKO_API_KEY: str = _provider_credential("COINGECKO_API_KEY")
 SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
 TWELVE_DATA_REST_URL: str = os.getenv(
     "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"

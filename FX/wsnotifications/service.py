@@ -11,6 +11,7 @@ import asyncio
 
 import logging
 from django.conf import settings
+from FX.provider_credentials import required_provider_credential
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +100,10 @@ class UserNotificationService:
     
     @staticmethod
     def make_request(url):
-        headers = {"accept": "application/json"}
-        if settings.COINGECKO_API_KEY:
-            headers["x-cg-demo-api-key"] = settings.COINGECKO_API_KEY
+        headers = {
+            "accept": "application/json",
+            "x-cg-demo-api-key": required_provider_credential("COINGECKO_API_KEY"),
+        }
         response = requests.get(url, headers=headers)
         return response
 
