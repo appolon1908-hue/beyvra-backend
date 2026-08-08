@@ -14,6 +14,9 @@ ENV PATH="/opt/venv/bin:${PATH}"
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir --requirement /tmp/requirements.txt \
+    && sed -i '/    Example input:/,/    :param keydata:/{ /    Example input:/!{ /    :param keydata:/!d; }; }' /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
+    && find /opt/venv -type d -name __pycache__ -prune -exec rm -rf '{}' + \
+    && find /opt/venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
     && pip uninstall --yes pip setuptools wheel \
     && rm -rf /root/.cache /tmp/requirements.txt
 
