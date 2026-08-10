@@ -39,5 +39,9 @@ services:
   demo-event-publisher:
     user: "999:999"
 
+  celery_beat:
+    command: ["celery", "-A", "FX", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+    entrypoint: []
+
   celery-flower:
     command: ["sh", "-c", "celery -A FX flower --port=5555"]
