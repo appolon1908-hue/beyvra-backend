@@ -87,7 +87,7 @@ def _tenant(user):
 
 def _owns_demo_account(user_id, channel):
     if channel.startswith(("simulation.order.", "simulation.execution.", "simulation.position.")):
-        return channel.rsplit(".", 1)[-1] == f"sim:{user_id}"
+        return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
     if not channel.startswith(("demo.order.", "demo.execution.")):
         return False
     account_id = channel.rsplit(".", 1)[-1]

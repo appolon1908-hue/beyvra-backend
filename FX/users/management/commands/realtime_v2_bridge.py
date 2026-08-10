@@ -38,8 +38,9 @@ async def _bridge_stream(js, stream, subject, api_url, api_key):
                     payload = envelope.get("payload", {})
                     account_ref = payload.get("account_ref") if isinstance(payload, dict) else None
                     if isinstance(account_ref, str) and account_ref.startswith("sim:"):
+                        channel_account_ref = "sim-" + account_ref.removeprefix("sim:")
                         category = "execution" if event_type.startswith(("trading.execution.", "trading.trade.")) or "filled" in event_type else "position" if event_type.startswith("trading.position.") or "balance_projection" in event_type else "order"
-                        channel = f"simulation.{category}.{account_ref}"
+                        channel = f"simulation.{category}.{channel_account_ref}"
                         envelope = {
                             **envelope,
                             "type": event_type,
