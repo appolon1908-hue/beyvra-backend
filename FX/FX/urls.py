@@ -20,10 +20,11 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from users.views import GuestDemoSessionView, SessionResolveView
+from users.views import GuestDemoSessionView, ManageUserView, SessionResolveView
 from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
+from users import urls as user_urls
 
 urlpatterns = [
     path("health/", include("apps.foundation.health_urls")),
@@ -32,7 +33,12 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/frontendadmin/90210/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
     path("api/user/", include("users.urls")),
+    # Canonical aliases delegate to the existing views. Legacy routes remain
+    # compatibility-only and are measured by deprecation middleware.
+    path("api/v1/auth/", include((user_urls.urlpatterns, "canonical_auth"), namespace="canonical_auth")),
     path("api/v1/auth/", include("users.google_urls")),
+    path("api/v1/me/", ManageUserView.as_view(), name="me_v1"),
+    path("api/v1/notifications/", include("notifications.urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),

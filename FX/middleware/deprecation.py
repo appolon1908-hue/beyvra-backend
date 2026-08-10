@@ -1,9 +1,14 @@
 import logging
 
+from django.conf import settings
 from prometheus_client import Counter
 
-logger = logging.getLogger("codestra.deprecation")
-legacy_requests = Counter("codestra_legacy_api_requests_total", "Requests to compatibility API routes", ("prefix",))
+logger = logging.getLogger("beyvra.compatibility")
+legacy_requests = Counter(
+    "legacy_api_requests_total",
+    "Requests to compatibility API routes",
+    ("route", "client_version", "environment"),
+)
 
 SUCCESSORS = {
     "/api/user/": "/api/v1/auth/",
@@ -29,7 +34,11 @@ class LegacyApiDeprecationMiddleware:
                 response["Deprecation"] = "true"
                 response["Sunset"] = "Wed, 31 Dec 2026 23:59:59 GMT"
                 response["Link"] = f'<{successor}>; rel="successor-version"'
-                legacy_requests.labels(prefix=prefix).inc()
+                legacy_requests.labels(
+                    route=prefix,
+                    client_version=request.headers.get("X-Client-Version", "unknown")[:64],
+                    environment=getattr(settings, "ENVIRONMENT", "unknown"),
+                ).inc()
                 logger.info("legacy_api_request", extra={"request_id": request.headers.get("X-Request-ID", ""), "legacy_prefix": prefix, "successor": successor})
                 break
         return response

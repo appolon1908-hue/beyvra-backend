@@ -24,12 +24,19 @@ from ws.channels_auth import CustomTokenAuthMiddleware  # noqa
 from real_wallet.routing import websocket_urlpatterns as real_wallet_websocket_urlpatterns
 from ws.gateway import CanonicalGatewayConsumer
 
+canonical_gateway_routes = [
+    re_path(r"ws/v2/$", CanonicalGatewayConsumer.as_asgi()),
+    # Compatibility wrapper only. It executes the exact same consumer and is
+    # measured separately so it can be retired after usage reaches zero.
+    re_path(r"ws/v1/$", CanonicalGatewayConsumer.as_asgi()),
+]
+
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": CustomTokenAuthMiddleware(
             URLRouter(
-                [re_path(r"ws/v1/$", CanonicalGatewayConsumer.as_asgi())]
+                canonical_gateway_routes
                 + portfolio_websocket_urlpatterns
                 + ws_websocket_urlpatterns
                 + wsnotifications_websocket_urlpatterns

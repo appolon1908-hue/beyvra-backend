@@ -31,6 +31,14 @@ class CanonicalGatewayTests(TransactionTestCase):
             self.assertFalse(connected)
             self.assertEqual(code, 4401)
 
+            canonical = WebsocketCommunicator(application, f"/ws/v2/?ws_ticket={self.ticket()}")
+            connected, _ = await canonical.connect()
+            self.assertTrue(connected)
+            ready = await canonical.receive_json_from()
+            self.assertEqual(ready["version"], 2)
+            self.assertNotIn("deprecation", ready)
+            await canonical.disconnect()
+
             communicator = WebsocketCommunicator(application, f"/ws/v1/?ws_ticket={self.ticket()}")
             connected, _ = await communicator.connect()
             self.assertTrue(connected)

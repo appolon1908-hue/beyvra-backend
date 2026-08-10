@@ -10,6 +10,8 @@ from urllib.parse import parse_qs
 import aiohttp
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
+from prometheus_client import Counter
 
 from integrations.models import OrganizationMembership
 from provider_governance.service import ProviderNotAvailable, resolve_provider
@@ -17,6 +19,11 @@ from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
 CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
+legacy_ws_connections = Counter(
+    "legacy_ws_connections_total",
+    "Connections to compatibility WebSocket routes",
+    ("route", "client_version", "environment"),
+)
 
 
 @database_sync_to_async
@@ -57,8 +64,21 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return
         query = parse_qs(self.scope.get("query_string", b"").decode())
         self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
+        route = self.scope.get("path", "")
+        legacy = route.startswith("/ws/v1/")
+        if legacy:
+            headers = dict(self.scope.get("headers", []))
+            legacy_ws_connections.labels(
+                route="/ws/v1/",
+                client_version=headers.get(b"x-client-version", b"unknown").decode(errors="replace")[:64],
+                environment=getattr(settings, "ENVIRONMENT", "unknown"),
+            ).inc()
         await self.accept()
-        await self.send_json({"type": "gateway.ready", "version": 1, "tenant": self.tenant_id})
+        ready = {"type": "gateway.ready", "version": 2, "tenant": self.tenant_id}
+        if legacy:
+            ready["deprecation"] = True
+            ready["successor"] = "/ws/v2/"
+        await self.send_json(ready)
 
     async def disconnect(self, close_code):
         for task in self.market_tasks.values():
