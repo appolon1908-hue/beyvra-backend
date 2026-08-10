@@ -1,4 +1,7 @@
 services:
+  static-init:
+    command: ["sh", "-c", "chown -R 100:101 /app/static"]
+
   web:
     environment:
       DEPLOYMENT_ENV: staging
@@ -18,6 +21,7 @@ services:
       REAL_MONEY_ENABLED: "false"
 
   simulated-execution-consumer:
+    user: "999:999"
     environment:
       DEPLOYMENT_ENV: staging
       SIMULATED_TRADING_ENABLED: "true"
@@ -25,3 +29,15 @@ services:
       REAL_TRADING_ENABLED: "false"
       EXTERNAL_EXECUTION_ENABLED: "false"
       REAL_MONEY_ENABLED: "false"
+
+  canonical-outbox-publisher:
+    user: "999:999"
+
+  realtime_bridge:
+    user: "999:999"
+
+  demo-event-publisher:
+    user: "999:999"
+
+  celery-flower:
+    command: ["sh", "-c", "celery -A FX flower --port=5555"]
