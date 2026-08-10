@@ -1,0 +1,27 @@
+services:
+  web:
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      SIMULATED_EXECUTION_SCENARIO: IMMEDIATE_FULL_FILL
+      SIMULATED_EXECUTION_INLINE: "false"
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+
+  daphne:
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+
+  simulated-execution-consumer:
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      SIMULATED_EXECUTION_SCENARIO: IMMEDIATE_FULL_FILL
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
