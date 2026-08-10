@@ -33,9 +33,25 @@ async def _bridge_stream(js, stream, subject, api_url, api_key):
             try:
                 envelope = json.loads(msg.data)
                 channel = envelope.get("channel")
+                if stream == "TRADING_EVENTS":
+                    event_type = str(envelope.get("event_type", ""))
+                    payload = envelope.get("payload", {})
+                    account_ref = payload.get("account_ref") if isinstance(payload, dict) else None
+                    if isinstance(account_ref, str) and account_ref.startswith("sim:"):
+                        category = "execution" if event_type.startswith(("trading.execution.", "trading.trade.")) or "filled" in event_type else "position" if event_type.startswith("trading.position.") or "balance_projection" in event_type else "order"
+                        channel = f"simulation.{category}.{account_ref}"
+                        envelope = {
+                            **envelope,
+                            "type": event_type,
+                            "event_version": envelope.get("schema_version", 1),
+                            "channel": channel,
+                            "sequence": msg.metadata.sequence.stream,
+                            "data": payload,
+                        }
                 if not isinstance(channel, str) or envelope.get("type") != "event":
-                    await msg.ack()
-                    continue
+                    if stream != "TRADING_EVENTS":
+                        await msg.ack()
+                        continue
                 body = json.dumps({"channel": channel, "data": envelope}).encode()
                 request = urllib.request.Request(
                     api_url, data=body, method="POST",
@@ -65,6 +81,10 @@ async def _run():
             tls_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
     await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context)
     js = nc.jetstream()
+    try:
+        await js.add_stream(name="TRADING_EVENTS", subjects=["trading.>"])
+    except Exception:
+        pass
     api_url = os.getenv("CENTRIFUGO_PUBLISH_URL", "http://centrifugo:8000/api/publish")
     api_key = os.getenv("CENTRIFUGO_API_KEY", "")
     streams = (
@@ -72,6 +92,7 @@ async def _run():
         ("MARKET_CANDLES", "market.candle.*.*"), ("MARKET_ORDERBOOK", "market.orderbook.*"),
         ("MARKET_TRADES", "market.trade.*"), ("NEWS_EVENTS", "news.>"),
         ("PRIVATE_ACCOUNT_EVENTS", "private.>"), ("SYSTEM_EVENTS", "system.>"),
+        ("TRADING_EVENTS", "trading.>"),
     )
     await asyncio.gather(*(_bridge_stream(js, stream, subject, api_url, api_key) for stream, subject in streams))
 

@@ -210,3 +210,9 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))
+
+    async def simulation_update(self, event):
+        message = event.get("message", {})
+        event_type = str(message.get("event_type", "trading.order.updated.v1"))
+        channel = "demo.execution" if "trade." in event_type or "filled" in event_type else "demo.position" if "position." in event_type or "balance_projection" in event_type else "demo.order"
+        await self._emit(channel, message)

@@ -24,4 +24,15 @@ def financial_database_isolation(_app_configs=None, **_kwargs):
     )
     if any(getattr(settings, flag, False) for flag in safety_flags):
         errors.append(Error("P0 real-money and execution flags must remain disabled.", id="codestra.E003"))
+    if getattr(settings, "SIMULATED_TRADING_REQUESTED", False) and getattr(settings, "DEPLOYMENT_ENV", "") not in {
+        "local",
+        "test",
+        "staging",
+    }:
+        errors.append(
+            Error(
+                "Simulation trading is forbidden outside local, test, and staging environments.",
+                id="codestra.E004",
+            )
+        )
     return errors

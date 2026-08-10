@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import ssl
 
 from django.conf import settings
 
@@ -20,13 +21,18 @@ def envelope(event):
 async def _publish(rows):
     from nats.aio.client import Client as NATS
     client = NATS()
-    await client.connect(os.getenv("NATS_URL", "nats://nats:4222"))
+    tls_context = None
+    if ca_file := os.getenv("NATS_TLS_CA_FILE"):
+        tls_context = ssl.create_default_context(cafile=ca_file)
+        if cert_file := os.getenv("NATS_TLS_CERT_FILE"):
+            tls_context.load_cert_chain(cert_file, os.getenv("NATS_TLS_KEY_FILE"))
+    await client.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context)
     stream = client.jetstream()
     results = []
     try:
         for event in rows:
             try:
-                subject = f"application.{event.event_type}"
+                subject = event.event_type if event.event_type.startswith("trading.") else f"application.{event.event_type}"
                 await stream.publish(subject, json.dumps(envelope(event), separators=(",", ":"), default=str).encode(), headers={"Nats-Msg-Id": str(event.event_id)})
                 results.append((event, ""))
             except Exception as exc:

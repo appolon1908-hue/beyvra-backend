@@ -9,6 +9,7 @@ streams:
   MARKET_STATUS: {subjects: ["market.status.*"], max_age: "7d", max_msgs: 10000, storage: file}
   NEWS_EVENTS: {subjects: ["news.article.*", "news.alert.*"], max_age: "30d", max_msgs: 100000, storage: file}
   ECONOMIC_EVENTS: {subjects: ["news.economic.*"], max_age: "90d", max_msgs: 100000, storage: file}
+  TRADING_EVENTS: {subjects: ["trading.>"], max_age: "30d", max_msgs: 500000, storage: file}
 defaults:
   duplicate_window: "2m"
   ack_policy: explicit

@@ -18,6 +18,8 @@ class RiskEngine:
         review_reasons = []
         if inputs.get("account_status", "ACTIVE") != "ACTIVE":
             reasons.append("ACCOUNT_RESTRICTED")
+        if "simulation_eligible" in inputs and inputs.get("simulation_eligible") is not True:
+            reasons.append("SIMULATION_NOT_AUTHORIZED")
         if inputs.get("kyc_status", "APPROVED") != "APPROVED":
             reasons.append("COMPLIANCE_RESTRICTED")
         if inputs.get("jurisdiction_allowed", True) is not True:
