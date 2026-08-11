@@ -227,7 +227,17 @@ class ExecutionRoutingDecision(models.Model):
     risk_snapshot_hash = models.CharField(max_length=64, blank=True)
     selected_score = models.DecimalField(max_digits=24, decimal_places=8, null=True)
     reference_price = models.DecimalField(max_digits=36, decimal_places=18)
+    revision = models.PositiveIntegerField(default=1)
+    supersedes = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="revisions")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("order", "revision"), condition=models.Q(order__isnull=False), name="execution_route_order_revision_unique")]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("ROUTING_DECISION_IMMUTABLE")
+        return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         raise ValueError("ROUTING_DECISION_IMMUTABLE")
@@ -235,7 +245,7 @@ class ExecutionRoutingDecision(models.Model):
 
 class ExecutionQualityReport(models.Model):
     report_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.OneToOneField(TradingOrder, on_delete=models.PROTECT, related_name="execution_quality")
+    order = models.ForeignKey(TradingOrder, on_delete=models.PROTECT, related_name="execution_quality_reports")
     routing_decision = models.ForeignKey(ExecutionRoutingDecision, on_delete=models.PROTECT)
     reference_price = models.DecimalField(max_digits=36, decimal_places=18)
     execution_price = models.DecimalField(max_digits=36, decimal_places=18)
@@ -253,7 +263,17 @@ class ExecutionQualityReport(models.Model):
     quality_state = models.CharField(max_length=32, default="MEASURED")
     time_to_first_fill_ms = models.PositiveIntegerField(null=True)
     time_to_complete_ms = models.PositiveIntegerField(null=True)
+    revision = models.PositiveIntegerField(default=1)
+    supersedes = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="revisions")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("order", "revision"), name="execution_quality_order_revision_unique")]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("EXECUTION_QUALITY_IMMUTABLE")
+        return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         raise ValueError("EXECUTION_QUALITY_IMMUTABLE")
@@ -337,6 +357,14 @@ class ExecutionRouteCandidate(models.Model):
     rejection_reasons = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("ROUTE_CANDIDATE_IMMUTABLE")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("ROUTE_CANDIDATE_IMMUTABLE")
+
 
 class CanonicalExecution(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -397,3 +425,31 @@ class ExecutionReconciliationRun(models.Model):
     evidence_hash = models.CharField(max_length=64)
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField()
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("EXECUTION_RECONCILIATION_IMMUTABLE")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("EXECUTION_RECONCILIATION_IMMUTABLE")
+
+
+class ExecutionGovernanceChange(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        APPROVED = "APPROVED"
+        REJECTED = "REJECTED"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider = models.ForeignKey(ExecutionProviderRecord, on_delete=models.PROTECT, related_name="governance_changes")
+    action = models.CharField(max_length=32)
+    requested_by_ref = models.CharField(max_length=128)
+    reviewed_by_ref = models.CharField(max_length=128, blank=True)
+    reason = models.TextField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("provider", "action"), condition=models.Q(status="PENDING"), name="one_pending_execution_governance_change")]

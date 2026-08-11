@@ -27,6 +27,11 @@ class SmartOrderRouter:
             if provider.mode != mode: continue
             economics=self._economics(provider,request)
             reasons=self.governance.reasons(provider,mode)
+            order_capability=f'{request["order_type"]}_ORDER'
+            if not self.brokers.supports(provider, asset_class=request["asset_class"], capability=order_capability, venue=venue):
+                reasons.append("PROVIDER_ORDER_TYPE_UNSUPPORTED")
+            if not self.brokers.supports(provider, asset_class=request["asset_class"], capability=request["time_in_force"], venue=venue):
+                reasons.append("PROVIDER_TIF_UNSUPPORTED")
             reasons += self.venues.validate(venue,asset_class=request["asset_class"],order_type=request["order_type"],time_in_force=request["time_in_force"],quantity=request["quantity"],price=request.get("limit_price"))
             if not self.health.is_routable(provider) and "PROVIDER_UNHEALTHY" not in reasons: reasons.append("PROVIDER_UNHEALTHY")
             candidates.append({"provider":provider,"venue":venue,"economics":economics,"reasons":sorted(set(reasons))})
@@ -55,7 +60,7 @@ class SmartOrderRouter:
         return "HIGHEST_POLICY_SCORE_THEN_COST_PRIORITY_CODE" if selected else "ORDER_NOT_ROUTABLE"
 
     @transaction.atomic
-    def route(self,user,request,order=None,persist=True):
+    def route(self,user,request,order=None,persist=True,supersedes=None):
         if request["mode"]=="LIVE": raise ValueError("FEATURE_DISABLED")
         policy=self.policies.active(request["asset_class"],request["mode"]); candidates=self.score_candidates(self.generate_candidates(request),policy); selected=self.select_route(candidates)
         safe=[{"provider_id":x["provider"].provider_id,"venue_id":x["venue"].venue_id,"eligible":not x["reasons"],"rejection_reasons":x["reasons"],
@@ -74,16 +79,17 @@ class SmartOrderRouter:
             if item["reasons"]: EXECUTION_ROUTE_REJECTIONS.labels(item["provider"].provider_id,request["asset_class"],request["order_type"],item["reasons"][0].lower(),request["mode"].lower()).inc()
         if selected: EXECUTION_ROUTE_SELECTED.labels(selected["provider"].provider_id,selected["venue"].venue_type,request["asset_class"],request["order_type"],request["mode"].lower()).inc()
         if persist:
+            revision=(supersedes.revision+1) if supersedes else 1
             decision=ExecutionRoutingDecision.objects.create(order=order,tenant_ref="default",subject_ref=str(user.pk),mode=request["mode"],status="SELECTED" if selected else "DENIED",
                 selected_provider_id=selected["provider"].provider_id if selected else "",selected_venue_id=selected["venue"].venue_id if selected else "",policy_version=policy.policy_version,
                 candidate_evidence=safe,exclusion_reasons=[x for x in safe if not x["eligible"]],market_snapshot_hash=request["market_snapshot_hash"],pricing_snapshot_hash=request["pricing_snapshot_hash"],
-                risk_snapshot_hash=request["risk_snapshot_hash"],request_hash=digest(request),evidence_hash=result["evidence_hash"],selected_score=selected["score"] if selected else None,reference_price=request["reference_price"])
+                risk_snapshot_hash=request["risk_snapshot_hash"],request_hash=digest(request),evidence_hash=result["evidence_hash"],selected_score=selected["score"] if selected else None,reference_price=request["reference_price"],revision=revision,supersedes=supersedes)
             for item in candidates:
                 e=item["economics"]; ExecutionRouteCandidate.objects.create(decision=decision,provider=item["provider"],venue=item["venue"],mode=request["mode"],expected_price=e["expected_price"],
                     expected_fee=e["expected_fee"],expected_slippage=e["expected_slippage"],available_quantity=e["available_quantity"],estimated_fill_probability=e["fill_probability"],
                     estimated_latency_ms=e["latency_ms"],provider_health=item["provider"].health,score=item["score"],eligible=not item["reasons"],rejection_reasons=item["reasons"])
             correlation=__import__("uuid").UUID(str(request.get("correlation_id") or __import__("uuid").uuid4()))
-            ApplicationAuditEvent.objects.create(actor_ref=str(user.pk),action="execution.route.selected" if selected else "execution.route.denied",resource_type="execution_route",resource_id=str(decision.decision_id),request_id="routing",correlation_id=correlation,context={"mode":request["mode"],"policy_version":policy.policy_version,"evidence_hash":result["evidence_hash"]},reason=self.explain_selection(selected),occurred_at=timezone.now())
+            ApplicationAuditEvent.objects.create(actor_ref=str(user.pk),action="execution.route.selected" if selected else "execution.route.denied",resource_type="execution_route",resource_id=str(decision.decision_id),request_id="routing",correlation_id=correlation,context={"mode":request["mode"],"policy_version":policy.policy_version,"evidence_hash":result["evidence_hash"],"provider_ref":decision.selected_provider_id,"venue_ref":decision.selected_venue_id,"reason_code":self.explain_selection(selected)},reason=self.explain_selection(selected),occurred_at=timezone.now())
             if selected: enqueue_event(aggregate_type="execution_route",aggregate_id=decision.decision_id,event_type="execution.route.selected.v1",payload={"order_id":str(order.id) if order else None,"mode":request["mode"],"policy_version":policy.policy_version,"simulation":request["mode"]=="SIMULATION"},tenant_ref="default",correlation_id=correlation)
             result["decision_id"]=str(decision.decision_id)
         return result

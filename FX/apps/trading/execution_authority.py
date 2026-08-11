@@ -82,12 +82,16 @@ def record_quality(order):
     slippage_bps = signed / reference * Decimal("10000")
     improvement = -signed
     fees=sum((x.fee for x in order.simulated_trades.all()), Decimal("0")); fill_rate=order.filled_quantity/order.quantity if order.quantity else Decimal("0")
-    report, _ = ExecutionQualityReport.objects.update_or_create(order=order, defaults={"routing_decision": decision,
+    values={"routing_decision": decision,
         "reference_price": reference, "execution_price": execution, "filled_quantity": order.filled_quantity,
         "slippage_bps": slippage_bps, "price_improvement_amount": improvement,
         "price_improvement_bps": improvement / reference * Decimal("10000"), "measurement_version": MEASUREMENT_VERSION,
         "arrival_price":reference,"decision_price":reference,"fees":fees,"fill_rate":fill_rate,"unfilled_quantity":order.quantity-order.filled_quantity,
-        "quality_state":"MEASURED","evidence_hash": _hash({"order": order.id, "decision": decision.decision_id, "reference": reference, "execution": execution, "quantity": order.filled_quantity})})
+        "quality_state":"MEASURED","evidence_hash": _hash({"order": order.id, "decision": decision.decision_id, "reference": reference, "execution": execution, "quantity": order.filled_quantity})}
+    prior = ExecutionQualityReport.objects.filter(order=order).order_by("-revision").first()
+    if prior and prior.evidence_hash == values["evidence_hash"]:
+        return prior
+    report = ExecutionQualityReport.objects.create(order=order,revision=prior.revision+1 if prior else 1,supersedes=prior,**values)
     return report
 
 
@@ -96,7 +100,7 @@ def serialize_quality(row):
         "venue_id": row.routing_decision.selected_venue_id, "reference_price": str(row.reference_price), "execution_price": str(row.execution_price),
         "filled_quantity": str(row.filled_quantity), "slippage_bps": str(row.slippage_bps),
         "price_improvement_amount": str(row.price_improvement_amount), "price_improvement_bps": str(row.price_improvement_bps),
-        "measurement_version": row.measurement_version, "simulation": row.order.simulation}
+        "measurement_version": row.measurement_version,"revision":row.revision,"supersedes":str(row.supersedes_id) if row.supersedes_id else None,"simulation": row.order.simulation}
 
 
 @transaction.atomic
@@ -123,8 +127,9 @@ def record_ambiguous_outcome(order, provider_id):
         mode=prior.mode, status="UNKNOWN", selected_provider_id=provider_id, selected_venue_id=prior.selected_venue_id,
         policy_version=prior.policy_version, candidate_evidence=prior.candidate_evidence,
         exclusion_reasons=[{"provider_id": provider_id, "reasons": ["UNKNOWN_EXECUTION_OUTCOME", "RECONCILIATION_REQUIRED", "FAILOVER_PROHIBITED"]}],
-        market_snapshot_hash=prior.market_snapshot_hash, request_hash=prior.request_hash, reference_price=prior.reference_price)
-    enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="execution.outcome.unknown.v1",
+        market_snapshot_hash=prior.market_snapshot_hash, request_hash=prior.request_hash, reference_price=prior.reference_price,
+        pricing_snapshot_hash=prior.pricing_snapshot_hash,risk_snapshot_hash=prior.risk_snapshot_hash,revision=prior.revision+1,supersedes=prior)
+    enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="execution.unknown.v1",
         payload={"order_id": str(order.id), "provider_id": provider_id, "reconciliation_required": True, "retry_allowed": False,
             "failover_allowed": False, "live": False}, tenant_ref=order.tenant_ref)
     provider=ExecutionProviderRecord.objects.get(pk=provider_id); venue=ExecutionVenue.objects.get(pk=prior.selected_venue_id)

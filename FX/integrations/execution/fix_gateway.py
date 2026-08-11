@@ -19,6 +19,11 @@ class FixExecutionGateway:
         if message_type not in self.supported_messages: raise ValueError("FIX_MESSAGE_UNSUPPORTED")
         if message_type in {"D","F","G"}: raise RuntimeError("FIX_LIVE_SESSION_DISABLED")
         self.session.outgoing_seq+=1
+    def build_fixture(self,message_type,fields=None):
+        """Builds protocol evidence only; it never opens a socket or transmits."""
+        if message_type not in self.supported_messages: raise ValueError("FIX_MESSAGE_UNSUPPORTED")
+        message={"35":message_type,"34":str(self.session.outgoing_seq),"fixture":True,"network":False}
+        message.update(fields or {});self.session.outgoing_seq+=1;return message
     def receive(self,message):
         seq=int(message["34"]); expected=self.session.incoming_seq
         if seq>expected: self.session.state="RECOVERING"; return {"action":"RESEND_REQUEST","begin_seq":expected,"end_seq":seq-1}
