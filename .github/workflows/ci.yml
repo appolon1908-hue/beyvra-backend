@@ -40,7 +40,7 @@ jobs:
         working-directory: FX
         env:
           DJANGO_SETTINGS_MODULE: FX.postgres_test_settings
-          SECRET_KEY: ci-only-secret
+          SECRET_KEY: ci-only-secret-key-with-more-than-fifty-unique-characters-2026
           DEBUG: "0"
           ALLOWED_HOSTS: '["localhost","testserver"]'
           CSRF_TRUSTED_ORIGINS: '[]'
@@ -54,7 +54,7 @@ jobs:
           DB_HOST: localhost
           DB_PORT: "5432"
         run: |
-          python manage.py check --deploy
+          DJANGO_SETTINGS_MODULE=FX.settings python manage.py check --deploy
           python manage.py test \
             operations \
             users.tests.test_account_enumeration \
