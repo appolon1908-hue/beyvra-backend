@@ -56,6 +56,8 @@ urlpatterns = [
     path("api/v1/", include("trade.market_urls")),
     path("api/v1/trading/", include("apps.trading.api.urls")),
     path("api/v1/compliance/", include("apps.compliance.urls")),
+    path("api/v1/institutional/", include("apps.institutional.urls")),
+    path("api/v1/operator/institutional/", include("apps.institutional.operator_urls")),
     path("api/v1/admin/compliance/", include("apps.compliance.admin_urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
