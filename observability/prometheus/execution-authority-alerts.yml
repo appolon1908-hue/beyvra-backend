@@ -11,3 +11,18 @@ groups:
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "Execution provider failures are sustained"}
+      - alert: BeyvraNoEligibleExecutionRoutes
+        expr: increase(beyvra_execution_route_requests_total{result="denied"}[10m]) > 5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Execution routing repeatedly found no eligible route"}
+      - alert: BeyvraExecutionReconciliationCritical
+        expr: increase(beyvra_execution_reconciliation_violations_total{result="critical"}[5m]) > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations: {summary: "Execution reconciliation found a critical violation"}
+      - alert: BeyvraExecutionProviderUnexpectedlyLive
+        expr: beyvra_execution_provider_requests_total{mode="live"} > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations: {summary: "A live execution-provider request was observed"}
