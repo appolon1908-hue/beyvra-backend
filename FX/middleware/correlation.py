@@ -2,7 +2,7 @@ import uuid
 
 
 class CorrelationIdMiddleware:
-    """Propagate a bounded correlation ID across HTTP responses and logs."""
+    """Attach a bounded internal correlation ID without exposing it publicly."""
     header = "X-Correlation-ID"
 
     def __init__(self, get_response):
@@ -12,6 +12,4 @@ class CorrelationIdMiddleware:
         supplied = request.headers.get(self.header, "")
         correlation_id = supplied if len(supplied) <= 96 and supplied.replace("-", "").isalnum() else str(uuid.uuid4())
         request.correlation_id = correlation_id
-        response = self.get_response(request)
-        response[self.header] = correlation_id
-        return response
+        return self.get_response(request)

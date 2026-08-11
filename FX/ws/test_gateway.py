@@ -58,6 +58,23 @@ class CanonicalGatewayTests(TransactionTestCase):
         with patch("ws.gateway.CanonicalGatewayConsumer._stream_market", new=AsyncMock()):
             async_to_sync(scenario)()
 
+    def test_v2_route_and_event_envelope_contract(self):
+        async def scenario():
+            communicator = WebsocketCommunicator(application, f"/ws/v2/?ws_ticket={self.ticket()}")
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+            await communicator.receive_json_from()
+            await communicator.send_json_to({"action": "subscribe", "channels": ["demo.order"]})
+            await communicator.receive_json_from()
+            await communicator.send_input({"type": "send_price_update", "message": {"state": "OPEN"}})
+            event = await communicator.receive_json_from()
+            for key in ("event_id", "event_type", "schema_version", "sequence", "server_timestamp", "payload"):
+                self.assertIn(key, event)
+            self.assertEqual(event["event_type"], "demo.order.updated.v1")
+            await communicator.disconnect()
+
+        async_to_sync(scenario)()
+
     def test_realtime_provider_gate_denies_before_outbound_connection(self):
         async def scenario():
             communicator = WebsocketCommunicator(application, f"/ws/v1/?ws_ticket={self.ticket()}")

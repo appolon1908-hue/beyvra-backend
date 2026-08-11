@@ -183,10 +183,25 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             self.sequence[channel] = data["time"]
         else:
             self.sequence[channel] += 1
-        event_type = "market.quote.updated" if channel.startswith("market.quote:") else "market.candle.updated" if channel.startswith("market.candle:") else "market.status.changed"
+        if channel.startswith("market.quote:"):
+            event_type = "market.quote.updated.v1"
+        elif channel.startswith("market.candle:"):
+            event_type = "market.candle.updated.v1"
+        elif channel.startswith("demo.order"):
+            event_type = "demo.order.updated.v1"
+        elif channel.startswith("demo.execution"):
+            event_type = "demo.execution.updated.v1"
+        elif channel.startswith("demo.position"):
+            event_type = "demo.position.updated.v1"
+        elif channel.startswith("notification"):
+            event_type = "notification.updated.v1"
+        elif channel.startswith("compliance."):
+            event_type = channel.rsplit(".", 1)[0] if channel.rsplit(".", 1)[-1].isdigit() else channel
+        else:
+            event_type = "market.status.changed.v1"
         now = datetime.now(timezone.utc).isoformat()
         instrument_id = channel.split(":")[1] if channel.startswith("market.") and ":" in channel else None
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_time": now, "source": "approved-provider", "data": data})
+        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "schema_version": 1, "event_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_timestamp": now, "server_time": now, "source": "approved-provider", "payload": data, "data": data})
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))

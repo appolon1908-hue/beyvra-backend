@@ -29,7 +29,11 @@ application = ProtocolTypeRouter(
         "http": django_asgi_app,
         "websocket": CustomTokenAuthMiddleware(
             URLRouter(
-                [re_path(r"ws/v1/$", CanonicalGatewayConsumer.as_asgi())]
+                [
+                    re_path(r"ws/v2/$", CanonicalGatewayConsumer.as_asgi()),
+                    re_path(r"ws/v2/connection/websocket$", CanonicalGatewayConsumer.as_asgi()),
+                    re_path(r"ws/v1/$", CanonicalGatewayConsumer.as_asgi()),
+                ]
                 + portfolio_websocket_urlpatterns
                 + ws_websocket_urlpatterns
                 + wsnotifications_websocket_urlpatterns
