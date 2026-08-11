@@ -2,7 +2,7 @@
 
 | Surface | Classification | Authority |
 |---|---|---|
-| `apps.trading.execution_control` | AUTHORITATIVE | Capabilities, governance, policy, routing, state, quality, recovery, health, reconciliation |
+| `apps.trading.execution_control` | AUTHORITATIVE | Distinct capability, governance, policy, routing, state, quality, recovery, health, and reconciliation services |
 | `integrations.execution.simulated` | SIMULATION_ONLY | Deterministic local fills |
 | `integrations.execution.paper` | SIMULATION_ONLY | Deterministic paper fixture; no network |
 | `integrations.execution.fix_gateway` | FIXTURE_ONLY | Session/sequence/duplicate contracts; no transport |
@@ -10,4 +10,6 @@
 | `apps.trading.application.simulation` | AUTHORITATIVE | Current order/risk/reservation/fill integration |
 | Financial settlement | MISSING / EXTERNAL | Financial Service authority; intentionally unchanged |
 
-No production broker credential, live provider, or live FIX transport is configured.
+The Alpaca legacy modules are not inputs to route selection. Their mutation URLs are absent while the hard `PAPER_TRADING_ONLY` setting is active; they remain unsafe as execution authority and must not be re-enabled directly.
+
+No production broker credential, live provider, live FIX transport, live settlement path, or regulatory best-execution approval is configured or claimed.
