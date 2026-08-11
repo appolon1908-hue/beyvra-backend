@@ -122,7 +122,7 @@ class StripeCheckoutView(APIView):
             checkout_url = checkout_session.url
             checkout_session_id = checkout_session.id
         except Exception as e:
-            return Response({"error": str(e)})
+            raise ValidationError("Payment request failed") from e
 
         transaction.reference = checkout_session_id
         transaction.save(update_fields=["reference", "updated_at"])
@@ -146,11 +146,9 @@ class StripeWebhook(APIView):
             event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
         except ValueError:
             # Invalid payload
-            # print("Error occured during processing webhook data /n", str(e))
             return Response(status=400)
         except stripe.error.SignatureVerificationError:
             # Invalid signature
-            # print("Error occured during processing webhook data /n", str(e))
             return Response(status=400)
 
         # Handle the checkout.session.completed event
@@ -240,7 +238,7 @@ class PaymentView(APIView):
             serializer.save(user=request.user)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"data": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Payment request failed") from e
         
 
     @extend_schema(
@@ -262,7 +260,7 @@ class PaymentView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Payment request failed") from e
     
 
 class DepositHistoryView(APIView):

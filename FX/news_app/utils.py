@@ -1,4 +1,5 @@
 import requests
+import hashlib
 from django.conf import settings
 from django.core.cache import cache
 
@@ -16,7 +17,10 @@ def get_newsdata_news(request):
     url = f"https://newsdata.io/api/1/latest?apikey={settings.NEWS_DATA_API_KEY}&q={query}&language=en&country={country}&size={size}"
 
     # Check cache first
-    cached_response = cache.get(url)
+    cache_key = "newsdata:" + hashlib.sha256(
+        f"{query}|{country}|{size}".encode("utf-8")
+    ).hexdigest()
+    cached_response = cache.get(cache_key)
     if cached_response:
         return cached_response
 
@@ -45,7 +49,7 @@ def get_newsdata_news(request):
                 del article[key]
 
     # Cache the modified response
-    cache.set(url, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
+    cache.set(cache_key, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
 
     return response_data
 
@@ -65,7 +69,10 @@ def get_newsdata_news_by_id(request, article_id):
     url = f"https://newsdata.io/api/1/latest?apikey={settings.NEWS_DATA_API_KEY}&q={query}&language=en&country={country}&size={size}"
 
     # Check cache first
-    cached_response = cache.get(url)
+    cache_key = "newsdata:" + hashlib.sha256(
+        f"{query}|{country}|{size}".encode("utf-8")
+    ).hexdigest()
+    cached_response = cache.get(cache_key)
     if cached_response:
         response_data = cached_response
     else:
@@ -74,7 +81,7 @@ def get_newsdata_news_by_id(request, article_id):
         response_data = response.json()
 
         # Cache the response data
-        cache.set(url, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
+        cache.set(cache_key, response_data, settings.REDIS_CACHE_CUSTOM_TIMEOUT)
 
     # Filter for the specific article by article_id
     for article in response_data["results"]:

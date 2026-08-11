@@ -40,8 +40,8 @@ class BaseDataConsumer(AsyncWebsocketConsumer):
         try:
             async with self.session.get(url) as response:
                 return await response.json()
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception:
+            return {"error": "Market data is temporarily unavailable"}
 
 class CryptoMarketDataConsumer(BaseDataConsumer):
     async def send_data(self):

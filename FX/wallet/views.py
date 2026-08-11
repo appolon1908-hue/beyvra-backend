@@ -310,7 +310,7 @@ class DepositToWalletView(APIView):
                 }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Deposit to wallet failed: {str(e)}", exc_info=True)
+            logger.error("Deposit to wallet failed")
             return Response({
                 "detail": "An unexpected error occurred during the deposit process."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -406,7 +406,7 @@ class WithdrawFromWalletView(APIView):
             return Response({"detail": "Withdrawal request successfully processed."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Withdrawal from wallet failed: {str(e)}", exc_info=True)
+            logger.error("Withdrawal from wallet failed")
             return Response({"detail": "An unexpected error occurred during the withdrawal process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -457,7 +457,7 @@ class TransferFromWalletView(APIView):
             return Response({"detail": "Transfer successful."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Transfer from wallet failed: {str(e)}", exc_info=True)
+            logger.error("Transfer from wallet failed")
             return Response({"detail": "An unexpected error occurred during the transfer process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

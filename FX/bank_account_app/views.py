@@ -49,7 +49,7 @@ class BankAccountView(APIView):
                 bank_account_serializer.save()
                 return Response({"data": bank_account_serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
         
     @extend_schema(
         request=BankAccountSerializer,
@@ -67,7 +67,7 @@ class BankAccountView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
 
     def delete(self, request):
         try:
@@ -84,7 +84,7 @@ class BankAccountView(APIView):
             return Response({"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)
         
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
         
 
 class WithdrawalRequestView(APIView):
@@ -133,7 +133,7 @@ class WithdrawalRequestView(APIView):
             serializer.save(user=request.user, bank_account=bank_account)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Withdrawal request failed") from e
 
     @extend_schema(
         request=WithdrawalRequestSerializer,
@@ -156,7 +156,7 @@ class WithdrawalRequestView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Withdrawal request failed") from e
 
     
 class AdminBankAccountView(APIView):

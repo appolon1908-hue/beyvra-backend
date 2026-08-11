@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from dotenv import load_dotenv
 import os
 import requests
@@ -42,7 +43,7 @@ class CryptocurrencyListinglatestView(APIView):
         api_key = os.getenv('COINMARKETCAP_API_KEY', '')
 
         if not api_url or not api_key:
-            return Response({"detail": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable")
 
         headers = {
             'Accepts': 'application/json',
@@ -84,9 +85,9 @@ class CryptocurrencyListinglatestView(APIView):
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx and 5xx)
             return Response(response.json(), status=response.status_code)
         except requests.exceptions.RequestException as e:
-            return Response({"detail": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError:
-            return Response({"detail": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable") from e
+        except ValueError as e:
+            raise APIException("Market data is temporarily unavailable") from e
 
 
 class CryptocurrencyListingHistoricalView(APIView):
@@ -181,7 +182,7 @@ class CryptocurrencyListingHistoricalView(APIView):
         api_url = os.getenv('COINMARKETCAP_URL', '')
         api_key = os.getenv('COINMARKETCAP_API_KEY', '')
         if not api_url or not api_key:
-            return Response({"detail": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable")
         
         endpoint = '/v1/cryptocurrency/listings/historical'
 
@@ -209,8 +210,8 @@ class CryptocurrencyListingHistoricalView(APIView):
             response.raise_for_status()
             response_data = response.json()
         except requests.RequestException as e:
-            return Response({"detail": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError:
-            return Response({"detail": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable") from e
+        except ValueError as e:
+            raise APIException("Market data is temporarily unavailable") from e
 
         return Response(response_data, status=status.HTTP_200_OK)

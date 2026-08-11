@@ -966,12 +966,12 @@ class BulkCreateUserView(APIView):
             # Bulk create wallets
             Wallet.objects.bulk_create(wallet_objs)
 
-        except Exception as e:
+        except Exception:
             errors.append(
                 {
                     "row": index + 1,
                     "email": email,
-                    "reason": f"Error creating user: {str(e)}",
+                    "reason": "User creation failed.",
                 }
             )
 
@@ -1934,7 +1934,7 @@ def assign_user_to_role(request):
             }
         )
     except (User.DoesNotExist, Group.DoesNotExist) as e:
-        return Response({"error": str(e)}, status=404)
+        raise ValidationError("Resource not found") from e
 
 
 @api_view(["POST"])
@@ -2025,7 +2025,7 @@ def create_user(request):
             status=status.HTTP_201_CREATED,
         )
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        raise ValidationError("User creation failed") from e
 
 
 @api_view(["PUT"])

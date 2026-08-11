@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from dotenv import load_dotenv
 import os
 import requests
@@ -85,7 +86,7 @@ class CryptocurrencyQuotesLatestView(APIView):
         api_url = os.getenv('COINMARKETCAP_URL', '')
         api_key = os.getenv('COINMARKETCAP_API_KEY', '')
         if not api_url or not api_key:
-            return Response({"detail": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable")
         
         endpoint = '/v2/cryptocurrency/quotes/latest'
 
@@ -112,14 +113,10 @@ class CryptocurrencyQuotesLatestView(APIView):
             response.raise_for_status()  # Raise HTTPError for bad responses
             response_data = response.json()
         except requests.RequestException as e:
-            return Response({"detail": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError:
-            return Response({"detail": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable") from e
+        except ValueError as e:
+            raise APIException("Market data is temporarily unavailable") from e
         
         if response.status_code == 200:
             return Response(response_data, status=status.HTTP_200_OK)
-        else:
-            return Response(response_data, status=response.status_code)
-
-
-
+        raise APIException("Market data is temporarily unavailable")

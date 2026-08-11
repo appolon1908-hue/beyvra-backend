@@ -36,8 +36,8 @@ def update_transaction(status, transaction_id, amount=None, currency=None):
             transaction.status = "F"
             transaction.save()
             return {"error": "Payment Failed"}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return {"error": "Payment processing failed"}
 
 class AdyenService:
 
@@ -77,8 +77,8 @@ class AdyenService:
             else:
                 update_transaction(400, transaction_id)
                 return {"error": result.message}
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception:
+            return {"error": "Payment processing failed"}
 
     def withdraw_from_wallet(self, amount, currency, transfer_details, transaction_id):
        
@@ -119,8 +119,8 @@ class AdyenService:
             else:
                 update_transaction(400, transaction_id)
                 return {"error": result.message}
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception:
+            return {"error": "Payment processing failed"}
 
 class PayRetailersService:
     def __init__(self) -> None:
