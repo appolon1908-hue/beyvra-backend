@@ -14,7 +14,7 @@ Run date: 2026-08-11 UTC. Starting head: `4d369df1363174cc1088728d3a006ccce84048
 - A failed transactional migration candidate left no partial relation. A missing required secret failed closed and the known-good application configuration recovered.
 - Pre-backup audit rows survived, audit mutation was rejected by the restored trigger, and a post-restore event appended.
 - Real/external/money flags were fail-closed at the verifier boundary; no production or Financial Service connection was used.
-- RPO target 300 seconds; deterministic fixture RPO observed 0 seconds. RTO target 1800 seconds; isolated restore drill observed 8 seconds.
+- RPO target 300 seconds; deterministic fixture RPO observed 0 seconds. RTO target 1800 seconds; the final exact-tree measurement is recorded in `latest/results.env`.
 - Gitleaks found zero current-source secrets. Filesystem dependency scan found zero known vulnerabilities. Filesystem and application-image CycloneDX SBOMs were generated.
 - The recovery PostgreSQL image runs as the unprivileged `postgres` user without the unused vulnerable privilege-drop helper; NATS was upgraded to 2.11. Trivy found zero critical vulnerabilities across the backend, PostgreSQL, Redis and NATS images.
 - GitHub CI passed secret scanning, the Django/PostgreSQL validation suite (including simulated trading E2E, tenant isolation and websocket v2 tests), exact head/base verification, and the application-image critical/high scan.

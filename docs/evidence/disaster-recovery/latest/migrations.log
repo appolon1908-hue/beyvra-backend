@@ -37,6 +37,7 @@ Running migrations:
   Applying bank_account_app.0004_alter_withdrawalrequest_amount_and_more... OK
   Applying canonical_trading.0001_initial... OK
   Applying canonical_trading.0002_simulated_trading... OK
+  Applying canonical_trading.0003_reconciliation_evidence... OK
   Applying django_celery_beat.0001_initial... OK
   Applying django_celery_beat.0002_auto_20161118_0346... OK
   Applying django_celery_beat.0003_auto_20161209_0049... OK

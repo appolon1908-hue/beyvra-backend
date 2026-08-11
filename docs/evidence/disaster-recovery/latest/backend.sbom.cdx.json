@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:da8cfdc0-cb7b-4b40-b5fe-5aeddb733257",
+  "serialNumber": "urn:uuid:ab0f3c9e-839b-4642-b9b0-6062342b2c53",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-08-11T08:21:57+00:00",
+    "timestamp": "2026-08-11T08:29:39+00:00",
     "tools": {
       "components": [
         {
@@ -20,10 +20,10 @@
       ]
     },
     "component": {
-      "bom-ref": "pkg:oci/beyvra-backend-dr@sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
+      "bom-ref": "pkg:oci/beyvra-backend-dr@sha256:5efe426a07d4d800fc64575fea3df69d8ce486edf883d060faffb5d20a6d319a?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
       "type": "container",
       "name": "beyvra-backend-dr:local",
-      "purl": "pkg:oci/beyvra-backend-dr@sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
+      "purl": "pkg:oci/beyvra-backend-dr@sha256:5efe426a07d4d800fc64575fea3df69d8ce486edf883d060faffb5d20a6d319a?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -39,11 +39,15 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:12978eccc752d621e5719ffd9bbc2374fb7d84a72b8f15cd46544c64bd1a5830"
+          "value": "sha256:77fd0b4b5c72855ebbbf15e1741f53085ce2b9c96635d129359b459cd8c0095f"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:8ec9d1608b4ff3e924168fd21ebce288a3d7a40defde30787bd1cd6af952860a"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:ac62c5ffe657d5e90973d3a881b28537450d8ca0716e8b275a67805b240d0176"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -55,19 +59,15 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:f4dd577b925d35a35d26efce6ea5d0e35aec50f02c9f791e14c260f050fac6a5"
-        },
-        {
-          "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:fe0075db8ccf8afba3bf51584742bb73ab74f82c23c973b8ad6c32ba3c379fc2"
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6"
+          "value": "sha256:5efe426a07d4d800fc64575fea3df69d8ce486edf883d060faffb5d20a6d319a"
         },
         {
           "name": "aquasecurity:trivy:Labels:com.docker.compose.project",
-          "value": "beyvra-dr-application-completion"
+          "value": "beyvra-dr-exact-tree"
         },
         {
           "name": "aquasecurity:trivy:Labels:com.docker.compose.service",
@@ -99,7 +99,7 @@
         },
         {
           "name": "aquasecurity:trivy:RepoDigest",
-          "value": "beyvra-backend-dr@sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6"
+          "value": "beyvra-backend-dr@sha256:5efe426a07d4d800fc64575fea3df69d8ce486edf883d060faffb5d20a6d319a"
         },
         {
           "name": "aquasecurity:trivy:RepoTag",
@@ -111,14 +111,14 @@
         },
         {
           "name": "aquasecurity:trivy:Size",
-          "value": "389794304"
+          "value": "389829632"
         }
       ]
     }
   },
   "components": [
     {
-      "bom-ref": "96d6fa4d-278f-43e7-a8ce-e98865af378b",
+      "bom-ref": "8b1febcc-4e23-425a-8cac-fc3fe312faa6",
       "type": "operating-system",
       "name": "alpine",
       "version": "3.22.4",
@@ -6164,7 +6164,7 @@
   ],
   "dependencies": [
     {
-      "ref": "96d6fa4d-278f-43e7-a8ce-e98865af378b",
+      "ref": "8b1febcc-4e23-425a-8cac-fc3fe312faa6",
       "dependsOn": [
         "pkg:apk/alpine/.python-rundeps@20260417.003556?arch=noarch&distro=3.22.4",
         "pkg:apk/alpine/alpine-baselayout@3.7.0-r0?arch=x86_64&distro=3.22.4",
@@ -6432,9 +6432,9 @@
       ]
     },
     {
-      "ref": "pkg:oci/beyvra-backend-dr@sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
+      "ref": "pkg:oci/beyvra-backend-dr@sha256:5efe426a07d4d800fc64575fea3df69d8ce486edf883d060faffb5d20a6d319a?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-dr",
       "dependsOn": [
-        "96d6fa4d-278f-43e7-a8ce-e98865af378b",
+        "8b1febcc-4e23-425a-8cac-fc3fe312faa6",
         "pkg:pypi/adyen@12.3.0",
         "pkg:pypi/aiohappyeyeballs@2.7.1",
         "pkg:pypi/aiohttp-retry@2.9.1",

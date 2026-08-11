@@ -20,6 +20,7 @@ cleanup() { $compose down -v --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 
 started=$(date +%s)
+$compose build app source-db restore-db >/dev/null
 $compose up -d --wait source-db restore-db redis nats
 $compose run --rm app python manage.py migrate --noinput > "$evidence/migrations.log"
 $compose run --rm app python manage.py shell -c "import uuid; from django.utils import timezone; from apps.foundation.models import OutboxEvent; OutboxEvent.objects.create(aggregate_type='Recovery',aggregate_id='dr-application',event_type='trading.recovery.verified.v1',payload={'simulation':True},correlation_id=uuid.uuid4(),tenant_ref='tenant-a',occurred_at=timezone.now())" >/dev/null
