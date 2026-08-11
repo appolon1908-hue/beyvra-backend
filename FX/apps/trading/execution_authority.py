@@ -9,7 +9,8 @@ from django.utils import timezone
 
 from apps.foundation.models import ApplicationAuditEvent
 from apps.foundation.services import enqueue_event
-from apps.trading.models import ExecutionProviderRecord, ExecutionQualityReport, ExecutionRoutingDecision, ExecutionVenue, TradingOrder
+from apps.trading.models import CanonicalExecution, ExecutionProviderRecord, ExecutionQualityReport, ExecutionRoutingDecision, ExecutionVenue, TradingOrder, UnknownExecutionOutcome
+from apps.trading.execution_control.router import SmartOrderRouter, digest
 
 POLICY_VERSION = "best-execution-sim-v1"
 MEASUREMENT_VERSION = "execution-quality-v1"
@@ -52,35 +53,22 @@ def preview_route(user, data, *, persist=False, order=None):
         order_type = str(data.get("order_type") or "MARKET").upper()
         side = str(data.get("side") or "").upper()
         quantity = Decimal(str(data.get("quantity")))
-        reference_price = Decimal(str(data.get("reference_price")))
+        reference_price = Decimal(str(data.get("reference_price") or settings.SIMULATED_EXECUTION_PRICES.get(instrument)))
     except (InvalidOperation, TypeError):
         raise ValueError("VALIDATION_ERROR")
     if not instrument or side not in {"BUY", "SELL"} or quantity <= 0 or reference_price <= 0:
         raise ValueError("VALIDATION_ERROR")
-    seed_safe_authorities()
-    candidates, exclusions = [], []
-    for provider in ExecutionProviderRecord.objects.all().order_by("provider_id"):
-        reasons = []
-        if provider.mode != mode: reasons.append("MODE_MISMATCH")
-        if not provider.enabled: reasons.append("PROVIDER_DISABLED")
-        if provider.health != "HEALTHY": reasons.append("PROVIDER_UNHEALTHY")
-        if provider.circuit_open_until and provider.circuit_open_until > timezone.now(): reasons.append("CIRCUIT_OPEN")
-        if order_type not in provider.supported_order_types: reasons.append("ORDER_TYPE_UNSUPPORTED")
-        if reasons: exclusions.append({"provider_id": provider.provider_id, "reasons": reasons})
-        else: candidates.append({"provider_id": provider.provider_id, "venue_id": provider.supported_venues[0], "score": "100", "mode": provider.mode})
-    selected = candidates[0] if candidates else None
-    request = {"instrument": instrument, "side": side, "order_type": order_type, "quantity": str(quantity), "reference_price": str(reference_price), "mode": mode}
-    result = {"decision": "SELECTED" if selected else "DENIED", "selected_provider_id": selected["provider_id"] if selected else None,
-        "selected_venue_id": selected["venue_id"] if selected else None, "policy_version": POLICY_VERSION,
-        "candidates": candidates, "exclusions": exclusions, "market_snapshot_hash": _hash({"instrument": instrument, "reference_price": str(reference_price)}),
-        "request_hash": _hash(request), "simulation": mode == "SIMULATION", "paper": mode == "PAPER", "live": False,
-        "outbound_live_execution_requests": 0, "real_financial_effects": 0}
-    if persist:
-        decision = ExecutionRoutingDecision.objects.create(order=order, tenant_ref="default", subject_ref=str(user.pk), mode=mode,
-            status=result["decision"], selected_provider_id=result["selected_provider_id"] or "", selected_venue_id=result["selected_venue_id"] or "",
-            policy_version=POLICY_VERSION, candidate_evidence=candidates, exclusion_reasons=exclusions,
-            market_snapshot_hash=result["market_snapshot_hash"], request_hash=result["request_hash"], reference_price=reference_price)
-        result["decision_id"] = str(decision.decision_id)
+    if data.get("market_data_stale") is True: raise ValueError("MARKET_DATA_STALE")
+    snapshot={"instrument":instrument,"reference_price":str(reference_price),"source":data.get("market_source","deterministic_fixture")}
+    request={"instrument_id":instrument,"side":side,"order_type":order_type,"quantity":str(quantity),"reference_price":str(reference_price),"mode":mode,
+        "asset_class":str(data.get("asset_class") or "CRYPTO").upper(),"time_in_force":str(data.get("time_in_force") or "DAY").upper(),
+        "limit_price":str(data["limit_price"]) if data.get("limit_price") is not None else None,"market_snapshot_hash":digest(snapshot),
+        "pricing_snapshot_hash":digest({"fees":data.get("fees","fixture-policy")}),"risk_snapshot_hash":str(data.get("risk_snapshot_hash") or digest({"risk":"prechecked"})),
+        "correlation_id":str(data.get("correlation_id") or uuid.uuid4())}
+    result=SmartOrderRouter().route(user,request,order=order,persist=persist)
+    result.update({"decision":"SELECTED" if result["routable"] else "DENIED","selected_provider_id":result["selected_route_summary"]["provider_id"] if result["routable"] else None,
+        "selected_venue_id":result["selected_route_summary"]["venue_id"] if result["routable"] else None,"market_snapshot_hash":request["market_snapshot_hash"],
+        "request_hash":digest(request),"live":False,"outbound_live_execution_requests":0,"real_financial_effects":0})
     return result
 
 
@@ -93,11 +81,13 @@ def record_quality(order):
     signed = (execution - reference) if order.side == "BUY" else (reference - execution)
     slippage_bps = signed / reference * Decimal("10000")
     improvement = -signed
+    fees=sum((x.fee for x in order.simulated_trades.all()), Decimal("0")); fill_rate=order.filled_quantity/order.quantity if order.quantity else Decimal("0")
     report, _ = ExecutionQualityReport.objects.update_or_create(order=order, defaults={"routing_decision": decision,
         "reference_price": reference, "execution_price": execution, "filled_quantity": order.filled_quantity,
         "slippage_bps": slippage_bps, "price_improvement_amount": improvement,
         "price_improvement_bps": improvement / reference * Decimal("10000"), "measurement_version": MEASUREMENT_VERSION,
-        "evidence_hash": _hash({"order": order.id, "decision": decision.decision_id, "reference": reference, "execution": execution, "quantity": order.filled_quantity})})
+        "arrival_price":reference,"decision_price":reference,"fees":fees,"fill_rate":fill_rate,"unfilled_quantity":order.quantity-order.filled_quantity,
+        "quality_state":"MEASURED","evidence_hash": _hash({"order": order.id, "decision": decision.decision_id, "reference": reference, "execution": execution, "quantity": order.filled_quantity})})
     return report
 
 
@@ -137,4 +127,8 @@ def record_ambiguous_outcome(order, provider_id):
     enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="execution.outcome.unknown.v1",
         payload={"order_id": str(order.id), "provider_id": provider_id, "reconciliation_required": True, "retry_allowed": False,
             "failover_allowed": False, "live": False}, tenant_ref=order.tenant_ref)
+    provider=ExecutionProviderRecord.objects.get(pk=provider_id); venue=ExecutionVenue.objects.get(pk=prior.selected_venue_id)
+    execution=CanonicalExecution.objects.create(order=order,provider=provider,venue=venue,state="UNKNOWN",quantity=order.quantity,
+        filled_quantity=order.filled_quantity,remaining_quantity=order.quantity-order.filled_quantity,mode=prior.mode)
+    UnknownExecutionOutcome.objects.create(execution=execution)
     return decision

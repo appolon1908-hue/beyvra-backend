@@ -127,10 +127,10 @@ def create(user, data, idempotency_key, correlation_id=None):
     if not fresh and record.response_body is not None:
         return record.response_body, record.response_status
     order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], state=OrderState.PENDING, simulation=True)
-    preview_route(user, {"instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"],
-        "quantity": str(payload["quantity"]), "reference_price": str(payload["price"]), "mode": "SIMULATION"}, persist=True, order=order)
-    risk = RiskDecision.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, order_id=order.id, decision=result.decision, reason_codes=list(result.reason_codes), policy_version=result.policy_version, inputs_hash=result.inputs_hash)
     correlation = correlation_uuid(correlation_id)
+    preview_route(user, {"instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"],
+        "quantity": str(payload["quantity"]), "reference_price": str(payload["price"]), "mode": "SIMULATION", "correlation_id":str(correlation)}, persist=True, order=order)
+    risk = RiskDecision.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, order_id=order.id, decision=result.decision, reason_codes=list(result.reason_codes), policy_version=result.policy_version, inputs_hash=result.inputs_hash)
     audit_ref(subject, "simulation.risk.decided", "risk_decision", risk.decision_id, correlation, result.decision)
     order.risk_decision_id = risk.decision_id
     if result.decision != "ALLOW":
