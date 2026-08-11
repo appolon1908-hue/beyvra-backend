@@ -23,4 +23,7 @@ MESSAGES = {
 
 
 def error_response(request, code, status_code, details=None):
-    return Response({"error": {"code": code, "message": MESSAGES.get(code, code.replace("_", " ").title()), "request_id": request.headers.get("X-Request-ID", ""), "details": details or {}}}, status=status_code)
+    payload = {"code": code, "message": MESSAGES.get(code, code.replace("_", " ").title())}
+    if details:
+        payload["details"] = details
+    return Response({"error": payload}, status=status_code)

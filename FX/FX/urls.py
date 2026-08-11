@@ -33,6 +33,9 @@ urlpatterns = [
     path("api/frontendadmin/90210/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
     path("api/user/", include("users.urls")),
     path("api/v1/auth/", include("users.google_urls")),
+    # Canonical platform routes precede compatibility includes so exact public
+    # contracts cannot be shadowed by legacy real-wallet placeholders.
+    path("api/v1/", include("apps.platform_api.urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),

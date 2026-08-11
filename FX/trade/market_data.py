@@ -29,11 +29,11 @@ def validate_market(symbol: str, interval: str):
 def serialize_candle(candle: MarketCandle):
     return {
         "time": int(candle.timestamp.timestamp()),
-        "open": float(candle.open),
-        "high": float(candle.high),
-        "low": float(candle.low),
-        "close": float(candle.close),
-        "volume": float(candle.volume),
+        "open": str(candle.open),
+        "high": str(candle.high),
+        "low": str(candle.low),
+        "close": str(candle.close),
+        "volume": str(candle.volume),
     }
 
 

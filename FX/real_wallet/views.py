@@ -17,15 +17,14 @@ from .webhooks import WebhookSecurityError, create_secret_version, validate_webh
 def disabled_response(request, feature):
     return Response(
         {
-            "type": "https://api.beyvra.com/errors/wallet/feature-disabled",
-            "title": "Real wallet feature disabled",
-            "status": 503,
-            "detail": "Real-value wallet operations are disabled until staging approval.",
-            "instance": request.path,
+            # Compatibility aliases for the pre-v1 boundary tests and callers.
+            # Canonical clients consume the nested Beyvra error object below.
             "code": "FEATURE_DISABLED",
-            "request_id": request.headers.get("X-Request-ID", ""),
-            "errors": [],
-            "feature": feature,
+            "message": "This feature is not enabled.",
+            "error": {
+                "code": "FEATURE_DISABLED",
+                "message": "This feature is not enabled.",
+            },
         },
         status=503,
     )

@@ -69,7 +69,24 @@ class OrderDetailView(APIView):
 
 class OrderCancelView(APIView):
     permission_classes = (IsAuthenticated,)
-    def post(self, request, order_id): return error_response(request,"FEATURE_DISABLED",503)
+    @transaction.atomic
+    def post(self, request, order_id):
+        if request.headers.get("X-Beyvra-Simulation-Mode", "").lower() != "true":
+            return error_response(request, "FEATURE_DISABLED", 503)
+        org, _ = _context(request, lock=True)
+        order = TradingOrder.objects.select_for_update().filter(
+            pk=order_id,
+            tenant_ref=str(org),
+            subject_ref=str(request.user.pk),
+            simulation=True,
+        ).first()
+        if not order:
+            return error_response(request, "RESOURCE_NOT_FOUND", 404)
+        if order.state in (OrderState.CANCELLED, OrderState.REJECTED, OrderState.FILLED):
+            return Response(_serialize(order))
+        order.state = OrderState.CANCELLED
+        order.save(update_fields=["state", "updated_at"])
+        return Response(_serialize(order))
 
 class EmptyCollectionView(APIView):
     permission_classes = (IsAuthenticated,)

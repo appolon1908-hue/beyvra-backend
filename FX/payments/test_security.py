@@ -9,7 +9,7 @@ from wallet.models import Currency, Transaction, Wallet
 
 
 class StripeWebhookSecurityTests(TestCase):
-    def test_completed_webhook_is_idempotent(self):
+    def test_completed_webhook_is_fail_closed_while_real_money_disabled(self):
         user = get_user_model().objects.create_user(
             email="stripe@example.com", password="test-pass", phone_number="+12025550141"
         )
@@ -38,9 +38,9 @@ class StripeWebhookSecurityTests(TestCase):
                 HTTP_STRIPE_SIGNATURE="test", secure=True,
             )
 
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.status_code, 503)
+        self.assertEqual(second.status_code, 503)
         wallet.refresh_from_db()
         transaction.refresh_from_db()
-        self.assertEqual(wallet.balance, Decimal("125.00"))
-        self.assertEqual(transaction.status, "S")
+        self.assertEqual(wallet.balance, Decimal("100.00"))
+        self.assertEqual(transaction.status, "P")

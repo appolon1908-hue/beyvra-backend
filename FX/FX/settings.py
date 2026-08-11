@@ -74,6 +74,8 @@ COMPLIANCE_POLICY_VERSION = "compliance-2026-08-11.v1"
 COMPLIANCE_WEBHOOK_SECRET = os.getenv("COMPLIANCE_WEBHOOK_SECRET", "")
 COMPLIANCE_WEBHOOK_MAX_AGE_SECONDS = 300
 COMPLIANCE_PROVIDER_RESULT_MAX_AGE_SECONDS = 86400
+PLATFORM_WEBHOOK_SECRETS = {}
+PLATFORM_WEBHOOK_EVENT_TYPES = {}
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
@@ -149,6 +151,7 @@ INSTALLED_APPS = [
     "apps.foundation",
     "apps.trading",
     "apps.compliance",
+    "apps.platform_api",
 ]
 
 MIDDLEWARE = [
@@ -344,6 +347,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "apps.platform_api.exceptions.beyvra_exception_handler",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
 }

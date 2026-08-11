@@ -18,6 +18,10 @@ from django.shortcuts import get_object_or_404
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+def feature_disabled():
+    return Response({"error": {"code": "FEATURE_DISABLED", "message": "This feature is not enabled."}}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
 @extend_schema(request=PaymentRequestSerializer)
 class StripeCheckoutView(APIView):
     """
@@ -31,6 +35,8 @@ class StripeCheckoutView(APIView):
         responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        if not settings.REAL_DEPOSITS_ENABLED or not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         serializer = PaymentRequestSerializer(data=request.data)
 
         if not serializer.is_valid():
@@ -120,6 +126,8 @@ class StripeWebhook(APIView):
     permission_classes = []
 
     def post(self, request):
+        if not settings.REAL_DEPOSITS_ENABLED or not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         # webhook_recieved_time = timezone.now()
         endpoint_secret = settings.STRIPE_ENDPOINT_SECRET
         payload = request.body
@@ -190,6 +198,8 @@ class BinancePay(APIView):
         responses={201: BinancePaymentResponseSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        if not settings.REAL_DEPOSITS_ENABLED or not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         serializer = BinancePaymentResponseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         response_data = serializer.data
@@ -217,6 +227,8 @@ class PaymentView(APIView):
         responses={201: PaymentSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        if not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         try:
             data = request.data
             serializer = PaymentSerializer(data=data, context={'request': request})
@@ -233,6 +245,8 @@ class PaymentView(APIView):
         responses={201: PaymentSerializer, 400: 'Bad Request'},
     )
     def patch(self, request):
+        if not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         try:
             payment_id = request.data.get('payment_id', None)
             if not payment_id:
@@ -298,6 +312,8 @@ class PaymentProcessingView(APIView):
             responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
         )
     def post(self, request):
+        if not settings.REAL_DEPOSITS_ENABLED or not settings.REAL_MONEY_ENABLED:
+            return feature_disabled()
         serializer = PaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data

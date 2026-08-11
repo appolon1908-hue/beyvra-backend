@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -60,7 +61,14 @@ def _canonical_candles(candles, interval, before=None):
         low_value = str(candle["low"])
         close_value = str(candle["close"])
         volume_value = str(candle.get("volume", 0))
-        if not (float(high_value) >= max(float(open_value), float(close_value)) and float(low_value) <= min(float(open_value), float(close_value)) and float(high_value) >= float(low_value)):
+        try:
+            open_decimal = Decimal(open_value)
+            high_decimal = Decimal(high_value)
+            low_decimal = Decimal(low_value)
+            close_decimal = Decimal(close_value)
+        except InvalidOperation as exc:
+            raise MarketDataError("MALFORMED_PROVIDER_CANDLE") from exc
+        if not (high_decimal >= max(open_decimal, close_decimal) and low_decimal <= min(open_decimal, close_decimal) and high_decimal >= low_decimal):
             raise MarketDataError("MALFORMED_PROVIDER_CANDLE")
         normalized.append({
             "open_time": datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -90,11 +98,11 @@ class MarketSnapshotV1View(APIView):
             _require_available_interval(interval)
             candles = get_market_history(symbol=definition["provider_symbol"], interval=interval, limit=limit)
             candles = _canonical_candles(candles, interval)
-        except (ValueError, MarketDataError) as exc:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
+        except (ValueError, MarketDataError):
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable."}}, status=503)
         latest = candles[-1] if candles else None
         if latest is None:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": "No snapshot is currently available."}, status=503)
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable."}}, status=503)
         sequence = int(latest["sequence"])
         price = str(latest["close"])
         return Response({
@@ -123,8 +131,8 @@ class MarketCandlesV1View(APIView):
                 history_kwargs["before"] = before
             candles = get_market_history(**history_kwargs)
             candles = _canonical_candles(candles, interval, before)
-        except (ValueError, MarketDataError) as exc:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
+        except (ValueError, MarketDataError):
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable."}}, status=503)
         sequence = int(candles[-1]["sequence"]) if candles else 0
         cursor = candles[0]["open_time"] if candles else None
         return Response({"instrument_id": instrument_id, "interval": interval, "sequence": sequence, "server_time": _server_time(), "history_cursor": cursor, "candles": candles})
@@ -137,8 +145,8 @@ class MarketStatusV1View(APIView):
     def get(self, request):
         try:
             instrument_id, definition = _instrument(request.query_params.get("instrument_id", "BTC-USD"))
-        except ValueError as exc:
-            return Response({"code": str(exc)}, status=404)
+        except ValueError:
+            return Response({"error": {"code": "NOT_FOUND", "message": "The requested instrument was not found."}}, status=404)
         return Response({"instrument_id": instrument_id, "market_status": _market_status(definition), "server_time": _server_time()})
 
 
@@ -149,8 +157,8 @@ class InstrumentV1View(APIView):
     def get(self, request, instrument_id):
         try:
             normalized, definition = _instrument(instrument_id)
-        except ValueError as exc:
-            return Response({"code": str(exc)}, status=404)
+        except ValueError:
+            return Response({"error": {"code": "NOT_FOUND", "message": "The requested instrument was not found."}}, status=404)
         return Response({"instrument_id": normalized, **definition, "status": "DEMO_ONLY"})
 
 
@@ -158,8 +166,8 @@ class InstrumentTradingRulesV1View(InstrumentV1View):
     def get(self, request, instrument_id):
         try:
             normalized, definition = _instrument(instrument_id)
-        except ValueError as exc:
-            return Response({"code": str(exc)}, status=404)
+        except ValueError:
+            return Response({"error": {"code": "NOT_FOUND", "message": "The requested instrument was not found."}}, status=404)
         return Response({
             "instrument_id": normalized,
             "market_status": _market_status(definition),
@@ -173,8 +181,8 @@ class InstrumentMarketDataCapabilitiesV1View(InstrumentV1View):
     def get(self, request, instrument_id):
         try:
             normalized, _definition = _instrument(instrument_id)
-        except ValueError as exc:
-            return Response({"code": str(exc)}, status=404)
+        except ValueError:
+            return Response({"error": {"code": "NOT_FOUND", "message": "The requested instrument was not found."}}, status=404)
         timeframes = []
         for interval in CHART_INTERVALS:
             if interval in SUPPORTED_INTERVALS:
@@ -202,8 +210,8 @@ class MarketCandlesView(APIView):
         try:
             limit = min(max(int(request.query_params.get("limit", 500)), 1), 1000)
             candles = get_market_history(symbol=symbol, interval=timeframe, limit=limit)
-        except (ValueError, MarketDataError) as exc:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc), "symbol": symbol, "timeframe": timeframe}, status=503)
+        except (ValueError, MarketDataError):
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable."}}, status=503)
         return Response({"symbol": symbol, "timeframe": timeframe, "results": candles, "freshness": "provider_or_cache"})
 
 
@@ -214,7 +222,7 @@ class MarketQuotesView(APIView):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()
         candle = MarketCandle.objects.filter(symbol=symbol).order_by("-timestamp").first()
         if candle is None:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": "No quote is currently available.", "symbol": symbol}, status=503)
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable."}}, status=503)
         return Response({"symbol": symbol, "bid": str(candle.close), "ask": str(candle.close), "mid": str(candle.close), "last": str(candle.close), "timestamp": candle.timestamp.isoformat(), "source": candle.provider, "sequence": 0})
 
 
@@ -229,7 +237,7 @@ class MarketCapabilityUnsupportedView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
-        return Response({"code": "CAPABILITY_UNSUPPORTED", "detail": "This provider does not expose the requested capability.", "symbol": symbol.upper()}, status=501)
+        return Response({"symbol": symbol.upper(), "results": [], "available": False, "reason_code": "PROVIDER_NOT_AVAILABLE", "next": None})
 
 
 class FeedHealthView(APIView):
