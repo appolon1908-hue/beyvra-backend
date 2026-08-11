@@ -59,6 +59,10 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
 
+        asset_response = client.get("/api/v1/wallets/USD/")
+        self.assertEqual(asset_response.status_code, 503)
+        self.assertEqual(asset_response.data["code"], "FEATURE_DISABLED")
+
     def test_real_money_mutation_routes_fail_closed_with_canonical_contract(self):
         client = APIClient()
         client.force_authenticate(self.user)

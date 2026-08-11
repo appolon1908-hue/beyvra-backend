@@ -30,7 +30,9 @@ urlpatterns = [
     path("networks/", RealWalletNetworksView.as_view(), name="networks"),
     path("asset-networks/", RealWalletAssetNetworksView.as_view(), name="asset-networks"),
     path("wallets/", RealWalletListView.as_view(), name="wallets"),
-    path("wallets/<uuid:wallet_id>/", RealWalletDetailView.as_view(), name="wallet-detail"),
+    # The canonical public identifier is an asset code. UUID wallet IDs remain
+    # accepted by the view for compatibility once reads are authorized.
+    path("wallets/<str:wallet_id>/", RealWalletDetailView.as_view(), name="wallet-detail"),
     path("wallets/<uuid:wallet_id>/balances/", RealWalletBalanceListView.as_view(), name="wallet-balances"),
     path("wallets/<uuid:wallet_id>/addresses/", WalletAddressesView.as_view(), name="wallet-addresses"),
     path("wallets/<uuid:wallet_id>/addresses/<uuid:address_id>/", disabled, name="wallet-address-detail"),
