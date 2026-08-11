@@ -30,9 +30,9 @@ Cross-chain is described at the platform level but is not activated here.
 No provider credential is stored, no network client exists, and the application
 cannot issue an OMS mutation. Fixture identifiers contain no real PII.
 
-The custody model is `UNDECIDED`. Selecting custodial, non-custodial, or agentic
-wallets requires an external financial/legal architecture decision. If custodial
-is later chosen, OMS—not the Beyvra application or frontend—must retain keys.
+The authorized integration profile is `CUSTODIAL`. OMS—not the Beyvra
+application backend or frontend—retains and manages wallet keys. This readiness
+decision does not activate custody, a provider, production, or real money.
 
 ## Public API
 

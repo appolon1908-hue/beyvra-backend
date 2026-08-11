@@ -58,7 +58,7 @@ class PolygonOmsContractTests(TestCase):
 
     def test_entity_and_wallet_mappings_keep_beyvra_identity(self):
         entity = EntityMapping("tenant_fixture_a", "acct_fixture_a", "cst_fixture_a")
-        wallet = WalletMapping("tenant_fixture_a", "wallet_fixture_a", "wlt_fixture_a", "usdc", "polygon", "UNDECIDED", "PENDING")
+        wallet = WalletMapping("tenant_fixture_a", "wallet_fixture_a", "wlt_fixture_a", "usdc", "polygon", "CUSTODIAL", "PENDING")
         self.assertNotEqual(entity.beyvra_account_ref, entity.oms_entity_ref)
         self.assertNotEqual(wallet.wallet_ref, wallet.provider_wallet_ref)
 
