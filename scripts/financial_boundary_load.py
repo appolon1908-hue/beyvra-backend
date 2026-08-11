@@ -18,7 +18,7 @@ from django.test import override_settings  # noqa: E402
 from django.conf import settings  # noqa: E402
 from rest_framework.test import APIRequestFactory, force_authenticate  # noqa: E402
 from financial_boundary.views import WithdrawalView  # noqa: E402
-from financial_boundary.reconciliation import compare_records  # noqa: E402
+from financial_boundary.reconciliation import ReconciliationEvidence, compare_records, reconcile_financial_boundary  # noqa: E402
 from financial_client.client import FinancialContext, FinancialServiceClient  # noqa: E402
 
 
@@ -87,6 +87,15 @@ def main():
         started = time.perf_counter(); assert compare_records(left, left) == []
         samples.append((time.perf_counter() - started) * 1000)
     print(f"RECONCILIATION_ROWS=10000 P95_MS={percentile(samples,.95):.3f}")
+    application = tuple({"reference": str(i), "state": "PENDING"} for i in range(10000))
+    financial = tuple({"reference": str(i), "state": "PENDING", "effect_id": f"effect-{i}"} for i in range(10000))
+    evidence = ReconciliationEvidence(application_operations=application, financial_operations=financial)
+    samples = []
+    for _ in range(10):
+        started = time.perf_counter(); report = reconcile_financial_boundary(evidence)
+        samples.append((time.perf_counter() - started) * 1000)
+        assert report.activation_ready and len(report.checks_executed) == 10
+    print(f"RECONCILIATION_ENGINE_ROWS=10000 CHECKS=10 FALSE_POSITIVES=0 P95_MS={percentile(samples,.95):.3f}")
     print("OUTBOUND_REQUESTS=0 REAL_FINANCIAL_EFFECTS=0")
 
 
