@@ -175,6 +175,7 @@ INSTALLED_APPS = [
     "provider_governance",
     "financial_client",
     "reference_data",
+    "pricing_authority",
     "apps.foundation",
     "apps.trading",
     "apps.compliance",
