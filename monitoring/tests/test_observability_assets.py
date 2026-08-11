@@ -1,4 +1,4 @@
-import ast, json, pathlib, re, unittest
+import ast, importlib.util, json, logging, pathlib, re, unittest
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 
 class ObservabilityAssetTests(unittest.TestCase):
@@ -32,5 +32,9 @@ class ObservabilityAssetTests(unittest.TestCase):
         text=(ROOT/"FX/apps/foundation/health.py").read_text().lower()
         self.assertNotRegex(text,r"\b(password|token|credential|hostname|port)\b")
         self.assertIn('def live(',text); self.assertIn('def ready(',text)
+    def test_structured_logger_redacts_secret_values(self):
+        path=ROOT/"FX/fx_utils/json_logging.py"; spec=importlib.util.spec_from_file_location("json_logging",path); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        record=logging.LogRecord("test",logging.INFO,"",0,"token=supersecret event ok",(),None); data=json.loads(module.JsonFormatter().format(record))
+        self.assertNotIn("supersecret",json.dumps(data)); self.assertEqual(data["service"],"beyvra-backend"); self.assertIn("environment",data); self.assertIn("simulation",data)
 
 if __name__=="__main__": unittest.main()

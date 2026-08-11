@@ -105,3 +105,50 @@ class SimulatedPosition(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=("account", "instrument_id"), name="simulation_position_unique")]
+
+
+class ReconciliationRun(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "RUNNING"
+        PASS = "PASS"
+        FAIL = "FAIL"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    environment = models.CharField(max_length=32)
+    simulation = models.BooleanField(default=True)
+    scope = models.CharField(max_length=32, default="full")
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RUNNING)
+    policy_version = models.CharField(max_length=32)
+    candidate_sha = models.CharField(max_length=64)
+    summary_hash = models.CharField(max_length=64, blank=True)
+    check_count = models.PositiveIntegerField(default=0)
+    violation_count = models.PositiveIntegerField(default=0)
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exclude(status=ReconciliationRun.Status.RUNNING).exists():
+            raise ValueError("RECONCILIATION_RUN_IMMUTABLE")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("RECONCILIATION_RUN_IMMUTABLE")
+
+
+class ReconciliationViolation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    run = models.ForeignKey(ReconciliationRun, on_delete=models.PROTECT, related_name="violations")
+    check_code = models.CharField(max_length=64)
+    severity = models.CharField(max_length=16)
+    entity_type = models.CharField(max_length=32)
+    opaque_entity_ref = models.CharField(max_length=64)
+    evidence_hash = models.CharField(max_length=64)
+    detected_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValueError("RECONCILIATION_VIOLATION_IMMUTABLE")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("RECONCILIATION_VIOLATION_IMMUTABLE")
