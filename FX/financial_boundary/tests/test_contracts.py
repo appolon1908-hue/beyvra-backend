@@ -9,6 +9,7 @@ from financial_boundary.contracts import (
 from financial_boundary.providers import DisabledProvider, ProviderAuthorization, ProviderDenied, guard_outbound
 from financial_boundary.reconciliation import Violation, compare_records
 from financial_boundary.security import WithdrawalSecurityContext, WithdrawalPolicy, assert_separation_of_duties, evaluate_withdrawal
+from financial_boundary.metrics import RECONCILIATION_VIOLATIONS, WITHDRAWAL_SECURITY_DENIALS, WITHDRAWAL_STEP_UP_REQUIRED
 
 
 class MoneyContractTests(SimpleTestCase):
@@ -57,6 +58,15 @@ class SecurityPolicyTests(SimpleTestCase):
         self.assertEqual(evaluate_withdrawal(self.context(now, destination_cooldown_until=now+timedelta(hours=1)), "10", now=now), "DESTINATION_COOLDOWN")
         self.assertEqual(evaluate_withdrawal(self.context(now), "10001", now=now, policy=WithdrawalPolicy(per_transaction_limit=Decimal("10000"))), "REVIEW_REQUIRED")
 
+    def test_security_metrics_have_bounded_reasons_and_step_up_counter(self):
+        now = datetime(2026, 8, 11, tzinfo=timezone.utc)
+        denial_before = WITHDRAWAL_SECURITY_DENIALS.labels(reason="STEP_UP_REQUIRED")._value.get()
+        step_before = WITHDRAWAL_STEP_UP_REQUIRED._value.get()
+        self.assertEqual(evaluate_withdrawal(self.context(now, mfa_authenticated_at=None), "10", now=now), "STEP_UP_REQUIRED")
+        self.assertEqual(WITHDRAWAL_SECURITY_DENIALS.labels(reason="STEP_UP_REQUIRED")._value.get(), denial_before + 1)
+        self.assertEqual(WITHDRAWAL_STEP_UP_REQUIRED._value.get(), step_before + 1)
+        self.assertEqual(WITHDRAWAL_SECURITY_DENIALS._labelnames, ("reason",))
+
     def test_maker_checker(self):
         with self.assertRaises(PermissionError): assert_separation_of_duties("actor", "actor")
         assert_separation_of_duties("actor", "checker")
@@ -75,3 +85,14 @@ class ProviderAndReconciliationTests(SimpleTestCase):
         self.assertEqual(len(findings), 2)
         self.assertIn(("two", Violation.MISSING_FINANCIAL_OPERATION), findings)
         self.assertEqual(repr((application, authoritative)), before)
+
+    def test_reconciliation_detects_duplicate_authoritative_effect(self):
+        application = [{"reference": "duplicate", "state": "COMPLETED"}]
+        authoritative = [
+            {"reference": "duplicate", "state": "COMPLETED"},
+            {"reference": "duplicate", "state": "COMPLETED"},
+        ]
+        before = RECONCILIATION_VIOLATIONS.labels(violation="DUPLICATE_FINANCIAL_EFFECT")._value.get()
+        self.assertEqual(compare_records(application, authoritative), [("duplicate", Violation.DUPLICATE_FINANCIAL_EFFECT)])
+        self.assertEqual(RECONCILIATION_VIOLATIONS.labels(violation="DUPLICATE_FINANCIAL_EFFECT")._value.get(), before + 1)
+        self.assertEqual(RECONCILIATION_VIOLATIONS._labelnames, ("violation",))

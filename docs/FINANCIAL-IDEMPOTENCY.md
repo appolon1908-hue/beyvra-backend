@@ -24,3 +24,8 @@ consumer still deduplicates by `event_id`.
 
 No publisher, broker, Financial Service, custody, or payment connection is
 activated by this implementation.
+
+The Financial Service client emits bounded-label request, failure, duration,
+idempotency-conflict, and unknown-outcome metrics. Labels contain only finite
+method/outcome/category enums—never URL paths, tenant/user/account references,
+idempotency keys, request IDs, or provider details.

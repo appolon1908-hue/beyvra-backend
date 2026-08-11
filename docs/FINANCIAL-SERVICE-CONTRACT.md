@@ -28,6 +28,30 @@ operation-lookup endpoint intentionally fails validation. That is a review
 signal, not permission to enable it: update the client and consumer fixtures
 only after Financial Service ownership approves the versioned contract.
 
+## Failure and deadline policy
+
+The client uses explicit connect, request, retry-count, and overall-deadline
+budgets. Only `GET`/`HEAD` retry timeout, connection failure, or approved
+500/502/503/504 responses. Mutation requests make one network attempt.
+Validation, restriction, insufficient-balance, and idempotency-conflict
+responses never retry.
+
+A timeout or connection loss during a mutation raises `UNKNOWN_OUTCOME`.
+Callers may invoke `resolve_unknown_outcome()`, which performs authoritative
+lookup only and can never retry the mutation. Because authoritative v1 has no
+operation-lookup endpoint, resolution currently raises `CONTRACT_UNAVAILABLE`
+without a network request. This is the required fail-closed result until the
+Financial Service owner publishes that contract.
+
+An ordinary `FEATURE_DISABLED` response proves the service is reachable. It is
+not counted as a client failure, does not open the circuit, and does not alert.
+The circuit allows only one half-open probe and prevents retry storms.
+
+Deterministic fault fixtures cover timeout, refused connection, expired
+certificate, wrong CA, wrong identity, 500, 503, late known response, duplicate
+response, lost response after commit, idempotency conflict, and client restart.
+They use an in-memory authority and create no real financial effect.
+
 The private client supplies mTLS certificate/key, CA verification, `X-Service-Scope: financial.application`, `X-Service-Audience: financial-service`, tenant, subject, request and correlation context. Connect timeout is 2 seconds, request timeout 5 seconds, and safe-read retries default to 2. Mutations are never automatically retried. A connection loss or timeout during mutation is `UNKNOWN_OUTCOME`; canonical lookup by reference/idempotency key must precede any subsequent mutation.
 
 Live v1 supports health/readiness, wallet list/detail/balances, deposit and withdrawal reads, disabled withdrawal/transfer mutations, ledger-transaction read, disabled holds, and reconciliation run stubs. Reservation/release semantics, settlement, deposit intent, operation lookup, and asset-keyed wallet snapshots are absent as of the recorded Financial Service head. Client methods for those operations fail locally with `CONTRACT_UNAVAILABLE`; owner-approved Financial Service versioning is required before certification. Amounts are finite non-negative decimal strings plus uppercase asset code and precision. Floating point, NaN, Infinity, negatives, and excessive precision are rejected.

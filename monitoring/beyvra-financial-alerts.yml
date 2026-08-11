@@ -7,7 +7,7 @@ groups:
         labels: {severity: warning}
         annotations: {summary: "Financial Service unavailable"}
       - alert: FinancialCircuitBreakerOpen
-        expr: beyvra_financial_circuit_breaker_state == 1
+        expr: beyvra_financial_circuit_breaker_state == 2
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "Financial client circuit breaker remains open"}

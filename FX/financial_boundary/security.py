@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from .metrics import observe_withdrawal_decision
+
 
 @dataclass(frozen=True)
 class WithdrawalSecurityContext:
@@ -32,21 +34,21 @@ class WithdrawalPolicy:
 def evaluate_withdrawal(context, amount: str, *, now=None, policy=WithdrawalPolicy()):
     now = now or datetime.now(timezone.utc)
     if context.frozen or not context.account_active:
-        return "WITHDRAWAL_NOT_ALLOWED"
+        return observe_withdrawal_decision("WITHDRAWAL_NOT_ALLOWED")
     if not all((context.kyc_approved, context.aml_cleared, context.sanctions_clear, context.jurisdiction_supported)):
-        return "COMPLIANCE_REVIEW_REQUIRED"
+        return observe_withdrawal_decision("COMPLIANCE_REVIEW_REQUIRED")
     if context.session_authenticated_at is None or now - context.session_authenticated_at > policy.session_max_age:
-        return "STEP_UP_REQUIRED"
+        return observe_withdrawal_decision("STEP_UP_REQUIRED")
     if context.mfa_authenticated_at is None or now - context.mfa_authenticated_at > policy.mfa_max_age:
-        return "STEP_UP_REQUIRED"
+        return observe_withdrawal_decision("STEP_UP_REQUIRED")
     if context.security_changed_at and now - context.security_changed_at < policy.security_change_cooldown:
-        return "SECURITY_CHANGE_COOLDOWN"
+        return observe_withdrawal_decision("SECURITY_CHANGE_COOLDOWN")
     if not context.destination_verified:
-        return "DESTINATION_NOT_VERIFIED"
+        return observe_withdrawal_decision("DESTINATION_NOT_VERIFIED")
     if context.destination_cooldown_until and context.destination_cooldown_until > now:
-        return "DESTINATION_COOLDOWN"
+        return observe_withdrawal_decision("DESTINATION_COOLDOWN")
     if Decimal(amount) > policy.per_transaction_limit:
-        return "REVIEW_REQUIRED"
+        return observe_withdrawal_decision("REVIEW_REQUIRED")
     return "ELIGIBLE"
 
 
