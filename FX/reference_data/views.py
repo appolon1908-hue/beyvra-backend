@@ -1,9 +1,9 @@
 from django.utils.dateparse import parse_date
 from rest_framework import generics, permissions, response, status, views
 
-from .models import CalendarSession, CorporateAction, Instrument, MarketStatusRecord
+from .models import CalendarSession, CorporateAction, Instrument, MarketStatusRecord, ProviderSymbolMapping
 from .reconciliation import run_reference_data_reconciliation
-from .serializers import CalendarSessionSerializer, CorporateActionSerializer, InstrumentSerializer, MarketStatusSerializer
+from .serializers import CalendarSessionSerializer, CorporateActionSerializer, InstrumentSerializer, MarketStatusSerializer, ProviderMappingSerializer
 
 
 class InstrumentListView(generics.ListAPIView):
@@ -77,3 +77,13 @@ class ReconciliationView(views.APIView):
     def get(self, request):
         report = run_reference_data_reconciliation()
         return response.Response(report, status=status.HTTP_200_OK if report["status"] == "PASS" else status.HTTP_409_CONFLICT)
+
+
+class ProviderMappingView(generics.ListAPIView):
+    permission_classes = (permissions.IsAdminUser,)
+    serializer_class = ProviderMappingSerializer
+
+    def get_queryset(self):
+        return ProviderSymbolMapping.objects.filter(
+            instrument_id=self.kwargs["instrument_id"]
+        ).order_by("provider_id", "product", "effective_from")

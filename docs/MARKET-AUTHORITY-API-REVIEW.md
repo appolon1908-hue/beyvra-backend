@@ -11,6 +11,8 @@
 
 All endpoints require authentication. Reference data is global and contains no tenant/customer fields. Client-supplied tenant headers cannot select or reveal tenant data. Invalid IDs return the standard DRF not-found contract; provider credentials and topology are never returned.
 
+Provider symbol mappings are excluded from public instrument responses. Staff operators may inspect them through `GET /api/v1/internal/reference-data/provider-mappings/{instrument_uuid}`; customers and support-only users receive `403`.
+
 ## Existing API compatibility
 
 Existing snapshot, candle, quote, trade, status, trading-rule, and market-capability routes remain available. Their symbol resolver now prefers the reference authority and uses an effective current provider mapping. The static registry is a documented temporary fallback for unseeded stacked environments.

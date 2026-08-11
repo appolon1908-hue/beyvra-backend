@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import CalendarView, CorporateActionListView, InstrumentDetailView, InstrumentListView, MarketStatusView, ReconciliationView
+from .views import CalendarView, CorporateActionListView, InstrumentDetailView, InstrumentListView, MarketStatusView, ProviderMappingView, ReconciliationView
 
 urlpatterns = [
     path("market/instruments", InstrumentListView.as_view(), name="reference-instrument-list"),
@@ -9,4 +9,5 @@ urlpatterns = [
     path("market/corporate-actions", CorporateActionListView.as_view(), name="reference-corporate-actions"),
     path("market/status", MarketStatusView.as_view(), name="reference-market-status"),
     path("internal/reference-data/reconciliation", ReconciliationView.as_view(), name="reference-reconciliation"),
+    path("internal/reference-data/provider-mappings/<uuid:instrument_id>", ProviderMappingView.as_view(), name="reference-provider-mappings"),
 ]

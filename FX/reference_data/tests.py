@@ -60,7 +60,7 @@ class ReferenceAuthorityTests(TestCase):
         row = listing.json()["results"][0]
         self.assertEqual(row["instrument_id"], str(self.instrument.instrument_id))
         self.assertEqual(row["canonical_symbol"], "AAPL.XNYS")
-        self.assertEqual(row["provider_mappings"][0]["provider_symbol"], "AAPL")
+        self.assertNotIn("provider_mappings", row)
         self.assertNotIn("credential", str(row).lower())
         detail = self.client.get(f"/api/v1/market/instruments/{self.instrument.instrument_id}")
         self.assertEqual(detail.status_code, 200)
@@ -148,6 +148,15 @@ class ReferenceAuthorityTests(TestCase):
         self.user.is_staff = True
         self.user.save(update_fields=("is_staff",))
         self.assertEqual(self.client.get("/api/v1/internal/reference-data/reconciliation").json()["status"], "PASS")
+
+    def test_provider_mappings_are_staff_only_and_not_public_identity(self):
+        path = f"/api/v1/internal/reference-data/provider-mappings/{self.instrument.instrument_id}"
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.user.is_staff = True
+        self.user.save(update_fields=("is_staff",))
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["provider_symbol"], "AAPL")
 
     def test_append_only_records_reject_mutation_on_postgresql(self):
         if connection.vendor != "postgresql":
