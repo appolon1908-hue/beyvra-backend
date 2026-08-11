@@ -108,6 +108,19 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         get.assert_not_called()
 
+    @patch("trade.market_data.requests.get")
+    @override_settings(DEMO_MARKET_FIXTURE_ENABLED=True)
+    def test_staging_demo_fixture_is_local_and_decimal_safe(self, get):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=BTCUSDT&interval=1m&limit=3",
+            secure=True,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 3)
+        self.assertIsInstance(response.data["results"][0]["close"], str)
+        get.assert_not_called()
+
     @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
     @patch("trade.market_data.requests.get")
     def test_stock_history_uses_twelve_data_and_is_normalized(self, get):

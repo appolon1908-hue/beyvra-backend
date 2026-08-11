@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "target": "https://staging.beyvra.com",
+  "websocket_target": "wss://staging.beyvra.com/ws/v2/connection/websocket",
+  "authenticated_principal": "synthetic_guest_demo",
+  "requested": 520,
+  "connected_at_start": 520,
+  "connected_after_soak": 520,
+  "failures": 0,
+  "failure_samples": [],
+  "soak_seconds": 60,
+  "ramp": {
+    "batch_size": 20,
+    "delay_ms": 100
+  },
+  "latency_ms": {
+    "p50": 44.61,
+    "p95": 86.94,
+    "p99": 93.79
+  },
+  "result": "PASS"
+}

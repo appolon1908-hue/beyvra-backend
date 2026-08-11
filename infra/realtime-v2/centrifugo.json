@@ -13,7 +13,7 @@
     "allowed_origins": ["https://staging.beyvra.com"],
     "connection_limit": 1000,
     "channel_limit": 64,
-    "connection_rate_limit": 1000
+    "connection_rate_limit": 10000
   },
   "admin": {"enabled": false},
   "http_api": {"key": "${CENTRIFUGO_API_KEY}"},

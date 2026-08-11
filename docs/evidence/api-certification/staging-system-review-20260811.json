@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "target": "https://staging.beyvra.com",
+  "principal": "guest_demo",
+  "probe_count": 27,
+  "anonymous_auth_result": "PASS",
+  "results": [
+    {
+      "method": "GET",
+      "path": "/health/live",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/health/ready",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/status",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/features",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/sessions",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/security-events",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/compliance/profile",
+      "http_status": 409,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "COMPLIANCE_PROFILE_REQUIRED",
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/compliance/requirements",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/compliance/restrictions",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/market/instruments",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/demo/account",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/demo/wallets",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/demo/orders",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/demo/trades",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/demo/positions",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/activity",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/transactions",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/privacy/requests",
+      "http_status": 200,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": null,
+      "result": "PASS"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/wallets",
+      "http_status": 503,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "FEATURE_DISABLED",
+      "result": "PASS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/deposits",
+      "http_status": 503,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "FEATURE_DISABLED",
+      "result": "PASS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/withdrawals",
+      "http_status": 503,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "FEATURE_DISABLED",
+      "result": "PASS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/transfers",
+      "http_status": 503,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "FEATURE_DISABLED",
+      "result": "PASS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/trading/orders",
+      "http_status": 503,
+      "schema_valid": true,
+      "safe_error": true,
+      "error_code": "FEATURE_DISABLED",
+      "result": "PASS"
+    }
+  ],
+  "overall": "PASS"
+}
