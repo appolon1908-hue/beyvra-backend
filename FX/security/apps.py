@@ -2,7 +2,7 @@ import logging
 
 from django.apps import AppConfig
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import DatabaseError
+from django.db.models.signals import post_migrate
 
 
 class SecurityConfig(AppConfig):
@@ -10,30 +10,14 @@ class SecurityConfig(AppConfig):
     name = "security"
 
     def ready(self):
-        # Ensure this code only runs once all apps are loaded
-        from security.models import AnomalyCheckSchedule, UserActivity
-
-        try:
-            if is_model_migrated(AnomalyCheckSchedule) and is_model_migrated(UserActivity):
-                # Trigger task creation on app startup
-                create_periodic_task()
-        except DatabaseError:
-            logging.warning("Tables for AnomalyCheckSchedule or UserActivity are not yet available.")
+        post_migrate.connect(
+            create_periodic_task,
+            sender=self,
+            dispatch_uid="security.create_periodic_task",
+        )
 
 
-def is_model_migrated(model):
-    """
-    Check if the model has been migrated by checking the table existence using Django's ORM.
-    """
-    try:
-        # Attempt to access any object in the model's table. If the table does not exist,
-        model.objects.exists()
-        return True
-    except DatabaseError:
-        return False
-
-
-def create_periodic_task():
+def create_periodic_task(**_kwargs):
     from django_celery_beat.models import IntervalSchedule, PeriodicTask
 
     try:

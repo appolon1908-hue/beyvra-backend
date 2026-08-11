@@ -22,20 +22,7 @@ class CryptocurrencyMapView(APIView):
             OpenApiParameter('symbol', OpenApiTypes.STR, description='Cryptocurrency symbol (e.g., "BTC")', required=False),
             OpenApiParameter('aux', OpenApiTypes.STR, description='Optional auxiliary parameter', required=False),
         ],
-        responses={
-            200: {
-                'description': 'Successfully retrieved the cryptocurrency list.',
-                'content': {'application/json': {'example': {}}}
-            },
-            400: {
-                'description': 'Bad Request',
-                'content': {'application/json': {'example': {"detail": "Invalid parameter value"}}}
-            },
-            500: {
-                'description': 'Internal Server Error',
-                'content': {'application/json': {'example': {"detail": "Server error"}}}
-            }
-        }
+        responses={200: OpenApiTypes.OBJECT, 400: OpenApiTypes.OBJECT, 500: OpenApiTypes.OBJECT}
     )
     def get(self, request):
         # Load API configuration

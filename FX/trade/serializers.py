@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction as db_transaction
+from django.utils import timezone
 from rest_framework import serializers
 from wallet.models import Transaction
 
@@ -50,6 +52,10 @@ class TradeSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is None or data["wallet"].user_id != request.user.id:
             raise serializers.ValidationError("Wallet does not belong to the authenticated user.")
+        if settings.PAPER_TRADING_ONLY and data["wallet"].is_real:
+            raise serializers.ValidationError(
+                "Real-money trading is disabled in this environment. Select a demo wallet."
+            )
         if data["quantity"] <= 0:
             raise serializers.ValidationError("Quantity must be greater than zero.")
         if data["price_per_unit"] <= 0:
@@ -63,7 +69,7 @@ class TradeSerializer(serializers.ModelSerializer):
             )
             amount = validated_data["price_per_unit"] * validated_data["quantity"]
             duration = validated_data.get("duration", 0)
-            validated_data["result_time"] = datetime.now() + timedelta(seconds=duration)
+            validated_data["result_time"] = timezone.now() + timedelta(seconds=duration)
             if wallet.balance < amount:
                 raise serializers.ValidationError("Insufficient balance. please recharge your wallet first.")
             transaction = Transaction.objects.create(

@@ -1,4 +1,4 @@
-# FX Back-End
+# Trading backend
 
 Back-end for the FX portal.
 
@@ -15,8 +15,8 @@ Make sure you have the following installed on your machine:
 1. **Clone the Repository:**
 
     ```bash
-    git clone https://github.com/appolon1908-hue/backend.git
-    cd backend
+    git clone https://github.com/appolon1908-hue/trading-backend.git
+    cd trading-backend
     ```
 
 2. **Copy .env.example file and create .env file**

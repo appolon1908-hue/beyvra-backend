@@ -4,7 +4,6 @@ WORKDIR /app/
 
 # # Install system dependencies
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
@@ -16,10 +15,12 @@ RUN apt-get update \
     redis-tools \
     netcat-openbsd \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system app \
+    && useradd --system --gid app --create-home app
 
 # Create logs directory
-RUN mkdir -p /logs
+RUN mkdir -p /logs && chown app:app /logs
 
 # Install python dependencies
 COPY requirements.txt /app/requirements.txt
@@ -39,6 +40,7 @@ COPY . /app/
 COPY worker-entrypoint.sh /app/worker-entrypoint.sh
 COPY beat-entrypoint.sh /app/beat-entrypoint.sh
 
-RUN chmod +x /app/worker-entrypoint.sh
-RUN chmod +x /app/beat-entrypoint.sh
-RUN chmod +x /app/web-init-prod.sh
+RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh \
+    && chown -R app:app /app
+
+USER app

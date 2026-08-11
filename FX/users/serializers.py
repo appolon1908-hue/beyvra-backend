@@ -250,7 +250,12 @@ class LogoutSerializer(serializers.Serializer):
 
     def save(self, request):
         try:
-            RefreshToken(self.token).blacklist()
+            refresh = RefreshToken(self.token)
+            if str(refresh.get("user_id")) != str(request.user.pk):
+                raise serializers.ValidationError(
+                    {"refresh": "Refresh token does not belong to the authenticated user."}
+                )
+            refresh.blacklist()
         except TokenError:
             self.fail("bad_token")
 

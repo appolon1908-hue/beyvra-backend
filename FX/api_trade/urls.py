@@ -9,6 +9,7 @@ from api_trade.views import (
     alpaca_trail_order,
 )
 from django.urls import path
+from django.conf import settings
 from rest_framework import routers
 
 router = routers.DefaultRouter()
@@ -67,3 +68,10 @@ urlpatterns = [
     ),
     path("get-assets/", alpaca_assets_view.get_asset, name="assets"),
 ]
+
+# Paper deployments expose read-only market data but never broker order routes.
+if settings.PAPER_TRADING_ONLY:
+    urlpatterns = [
+        route for route in urlpatterns
+        if route.name not in {"orders", "orders-detail", "trail-order"}
+    ]
