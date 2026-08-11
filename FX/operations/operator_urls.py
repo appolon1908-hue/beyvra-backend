@@ -6,6 +6,7 @@ urlpatterns = [
     path("safety-flags", views.SafetyFlags.as_view()),
     path("accounts/<int:account_id>/freeze", views.OperatorFreeze.as_view()),
     path("actions/<uuid:request_id>/approve", views.OperatorApprove.as_view()),
+    path("actions/<uuid:request_id>/execute", views.OperatorExecute.as_view()),
     path("actions", views.OperatorActionCreate.as_view()),
     path("fraud/cases", views.OperatorFraudCases.as_view()),
     path("fraud/cases/<uuid:case_id>/status", views.OperatorFraudCaseUpdate.as_view()),

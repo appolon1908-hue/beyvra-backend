@@ -16,9 +16,9 @@ All seven real-feature flags are hard-coded false in backend authority. Support 
 
 ## Certification evidence
 
-- Python 3.11.15 and PostgreSQL 16.14: migration from zero, operations rollback, reapply, drift check, system check, and all 18 scoped tests pass. Migration `0002` adds legal-hold-aware deletion requests and reconciliation evidence.
+- Python 3.11.15 and PostgreSQL 16.14: migration from zero, operations rollback, reapply, drift check, system check, and the PostgreSQL-scoped suite passed at its 18-test checkpoint. The current SQLite scoped suite has 25 passing tests after adding private realtime isolation, governed unfreeze execution, non-executable provider activation, and operator MFA enforcement.
 - Internal operator APIs now cover scoped fraud cases, support escalation/internal notes, legal hold creation, action requests/independent approval, audit timeline, and non-destructive reconciliation. Cross-tenant account targets are rejected before freeze or hold creation.
-- Notification delivery has a fail-closed provider interface. No delivery provider is configured or activated, and provider-disabled outcomes are never represented as delivered.
+- Notification delivery has a fail-closed provider interface. No delivery provider is configured or activated, and provider-disabled outcomes are never represented as delivered. `/ws/v2/` rejects anonymous clients and isolates authenticated connections by tenant/account-derived private groups; the scoped suite includes cross-tenant realtime isolation coverage.
 - Frontend TypeScript, ESLint, and production Vite build pass. The operational center is responsive at CSS breakpoints and uses semantic headings, status/alert regions, keyboard-focus styling, and scrollable table labeling.
 - Gitleaks reports zero current-source leaks after moving the legacy demo provider key to environment configuration. Frontend production dependency audit reports zero vulnerabilities.
 - Trivy filesystem scan reports zero critical source/dependency/misconfiguration findings. The refreshed Debian 13 image reports zero **fixable** critical findings; 17 upstream Debian critical advisories remain unfixed/fix-deferred and require base-image vendor resolution. The CycloneDX SBOM is stored with the backup.

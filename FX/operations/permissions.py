@@ -10,6 +10,11 @@ class IsScopedOperator(BasePermission):
     def has_permission(self, request, view):
         if not request.user.is_authenticated or not request.user.is_staff:
             return False
+        if not (
+            request.user.is_mfa_enabled
+            and request.user.two_factor_authentication_enabled
+        ):
+            return False
         tenant = request.headers.get(
             "X-Beyvra-Tenant", tenant_for(request.user)
         ).lower()

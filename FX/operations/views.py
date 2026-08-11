@@ -53,6 +53,7 @@ from .services import (
     REAL_FEATURE_FLAGS,
     approve_operator_request,
     deletion_disposition,
+    execute_operator_request,
     reconcile_operational_domains,
     stable_hash,
     tenant_for,
@@ -467,7 +468,7 @@ class OperatorFreeze(APIView):
 
 
 class OperatorApprove(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsManagerOperator,)
 
     def post(self, request, request_id):
         tenant = request.headers.get(
@@ -491,6 +492,31 @@ class OperatorApprove(APIView):
                 status=403,
             )
         return Response({"request_id": action.request_id, "status": "APPROVED"})
+
+
+class OperatorExecute(APIView):
+    permission_classes = (IsManagerOperator,)
+
+    def post(self, request, request_id):
+        tenant = operator_tenant(request)
+        roles = set(
+            OperatorRole.objects.filter(
+                user=request.user, tenant_id=tenant
+            ).values_list("role", flat=True)
+        )
+        try:
+            action = execute_operator_request(
+                request_id=request_id, executor=request.user, executor_roles=roles
+            )
+        except (PermissionError, OperatorActionRequest.DoesNotExist):
+            return Response(
+                {
+                    "code": "ACTION_NOT_ALLOWED",
+                    "message": "The requested action is not available.",
+                },
+                status=403,
+            )
+        return Response({"request_id": action.request_id, "status": "EXECUTED"})
 
 
 def operator_tenant(request):

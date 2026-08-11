@@ -4,6 +4,9 @@ import io
 import json
 from dataclasses import dataclass
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -61,6 +64,11 @@ REAL_FEATURE_FLAGS = {
 
 def tenant_for(user):
     return (getattr(user, "brand", None) or "default").strip().lower()
+
+
+def notification_group(tenant_id, account_id):
+    identity = f"{tenant_id}:{account_id}".encode()
+    return "private_notifications_" + hashlib.sha256(identity).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -128,7 +136,7 @@ def create_notification(
     channel,
     template_version,
     payload_safe,
-    dedup_key
+    dedup_key,
 ):
     notification, created = Notification.objects.get_or_create(
         tenant_id=tenant_id,
@@ -150,6 +158,30 @@ def create_notification(
         )
         notifications_created.labels(category=category, channel=channel).inc()
     return notification, created
+
+
+def realtime_notification_payload(notification):
+    """Allowlisted payload for the private websocket outbox publisher."""
+    return {
+        "notification_id": str(notification.notification_id),
+        "type": notification.type,
+        "category": notification.category,
+        "severity": notification.severity,
+        "channel": notification.channel,
+        "status": notification.status,
+        "created_at": notification.created_at.isoformat(),
+        "payload_safe": notification.payload_safe,
+    }
+
+
+def publish_realtime_notification(notification):
+    async_to_sync(get_channel_layer().group_send)(
+        notification_group(notification.tenant_id, notification.account_id),
+        {
+            "type": "notification.created",
+            "notification": realtime_notification_payload(notification),
+        },
+    )
 
 
 def record_delivery_failure(notification, *, transient, reason_safe, max_attempts=5):
@@ -270,6 +302,64 @@ def approve_operator_request(*, request_id, approver, approver_roles):
         target=request.target_ref,
         reason=request.reason,
         request_id=request.pk,
+    )
+    return request
+
+
+@transaction.atomic
+def execute_operator_request(*, request_id, executor, executor_roles):
+    request = OperatorActionRequest.objects.select_for_update().get(pk=request_id)
+    if request.status != "APPROVED" or not request.approved_by_id:
+        raise PermissionError("REQUEST_NOT_EXECUTABLE")
+    if request.requested_by_id == executor.id:
+        raise PermissionError("MAKER_CANNOT_EXECUTE")
+    if request.action_type != "UNFREEZE":
+        raise PermissionError("EXTERNAL_AUTHORITY_REQUIRED")
+    if not set(executor_roles) & {"security_manager", "platform_admin"}:
+        raise PermissionError("INSUFFICIENT_ROLE")
+    prefix, separator, raw_account_id = request.target_ref.partition(":")
+    if prefix != "account" or not separator or not raw_account_id.isdigit():
+        raise PermissionError("INVALID_TARGET")
+    account = (
+        get_user_model()
+        .objects.filter(pk=int(raw_account_id), brand__iexact=request.tenant_id)
+        .first()
+    )
+    if account is None:
+        raise PermissionError("INVALID_TARGET")
+    freeze = (
+        AccountFreeze.objects.select_for_update()
+        .filter(tenant_id=request.tenant_id, account=account, released_at__isnull=True)
+        .first()
+    )
+    if freeze is None:
+        raise PermissionError("NO_ACTIVE_FREEZE")
+    before_hash = stable_hash(
+        {"level": freeze.level, "reason_code": freeze.reason_code, "released": False}
+    )
+    freeze.released_at = timezone.now()
+    freeze.review_evidence = {
+        "operator_action_request": str(request.pk),
+        "approved_by": request.approved_by_id,
+    }
+    freeze.save(update_fields=("released_at", "review_evidence"))
+    request.status = "EXECUTED"
+    request.executed_at = timezone.now()
+    OperatorActionRequest.objects.filter(pk=request.pk, status="APPROVED").update(
+        status="EXECUTED", executed_at=request.executed_at
+    )
+    AuditEvent.objects.create(
+        tenant_id=request.tenant_id,
+        actor=executor,
+        role="security_manager",
+        action="ACCOUNT_UNFROZEN",
+        target=request.target_ref,
+        reason=request.reason,
+        request_id=request.pk,
+        before_state_hash=before_hash,
+        after_state_hash=stable_hash(
+            {"level": freeze.level, "reason_code": freeze.reason_code, "released": True}
+        ),
     )
     return request
 

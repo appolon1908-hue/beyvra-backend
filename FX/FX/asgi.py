@@ -16,17 +16,27 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "FX.settings")
 django_asgi_app = get_asgi_application()
 
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa
-from wsnotifications.routing import websocket_urlpatterns as wsnotifications_websocket_urlpatterns
-from portfolio.routing import websocket_urlpatterns as portfolio_websocket_urlpatterns  # noqa
-from ws.routing import websocket_urlpatterns as ws_websocket_urlpatterns  # noqa
+from operations.routing import (
+    websocket_urlpatterns as operations_websocket_urlpatterns,
+)  # noqa
+from portfolio.routing import (
+    websocket_urlpatterns as portfolio_websocket_urlpatterns,
+)  # noqa
 from ws.channels_auth import CustomTokenAuthMiddleware  # noqa
+from ws.routing import websocket_urlpatterns as ws_websocket_urlpatterns  # noqa
+from wsnotifications.routing import (
+    websocket_urlpatterns as wsnotifications_websocket_urlpatterns,
+)
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": CustomTokenAuthMiddleware(
             URLRouter(
-                portfolio_websocket_urlpatterns + ws_websocket_urlpatterns + wsnotifications_websocket_urlpatterns
+                operations_websocket_urlpatterns
+                + portfolio_websocket_urlpatterns
+                + ws_websocket_urlpatterns
+                + wsnotifications_websocket_urlpatterns
             )
         ),
     }

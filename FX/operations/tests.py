@@ -2,8 +2,12 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from channels.testing import WebsocketCommunicator
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APIClient
@@ -30,6 +34,9 @@ from .services import (
     create_notification,
     csv_safe,
     evaluate_account_risk,
+    execute_operator_request,
+    notification_group,
+    realtime_notification_payload,
     record_delivery_failure,
 )
 
@@ -43,6 +50,8 @@ def user(email, phone, brand="tenant-a", staff=False):
         last_name="User",
         brand=brand,
         is_staff=staff,
+        is_mfa_enabled=staff,
+        two_factor_authentication_enabled=staff,
     )
 
 
@@ -334,6 +343,68 @@ class OperatorAuthorityTests(TestCase):
                 approver_roles={"security_manager"},
             )
 
+    def test_approved_unfreeze_executes_once_with_audit_hashes(self):
+        freeze = AccountFreeze.objects.create(
+            tenant_id="tenant-a",
+            account=self.maker,
+            actor=self.checker,
+            level="FULL",
+            reason_code="ACCOUNT_REVIEW_REQUIRED",
+        )
+        action = OperatorActionRequest.objects.create(
+            tenant_id="tenant-a",
+            action_type="UNFREEZE",
+            target_ref=f"account:{self.maker.pk}",
+            requested_by=self.maker,
+            reason="independent review complete",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        approve_operator_request(
+            request_id=action.pk,
+            approver=self.checker,
+            approver_roles={"security_manager"},
+        )
+        executed = execute_operator_request(
+            request_id=action.pk,
+            executor=self.checker,
+            executor_roles={"security_manager"},
+        )
+        self.assertEqual(executed.status, "EXECUTED")
+        freeze.refresh_from_db()
+        self.assertIsNotNone(freeze.released_at)
+        audit = AuditEvent.objects.get(request_id=action.pk, action="ACCOUNT_UNFROZEN")
+        self.assertEqual(len(audit.before_state_hash), 64)
+        self.assertEqual(len(audit.after_state_hash), 64)
+        with self.assertRaises(PermissionError):
+            execute_operator_request(
+                request_id=action.pk,
+                executor=self.checker,
+                executor_roles={"security_manager"},
+            )
+
+    def test_provider_activation_cannot_execute_in_this_service(self):
+        action = OperatorActionRequest.objects.create(
+            tenant_id="tenant-a",
+            action_type="PROVIDER_ACTIVATION",
+            target_ref="provider:future",
+            requested_by=self.maker,
+            reason="fixture only",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        approve_operator_request(
+            request_id=action.pk,
+            approver=self.checker,
+            approver_roles={"security_manager"},
+        )
+        with self.assertRaisesRegex(PermissionError, "EXTERNAL_AUTHORITY_REQUIRED"):
+            execute_operator_request(
+                request_id=action.pk,
+                executor=self.checker,
+                executor_roles={"security_manager"},
+            )
+        action.refresh_from_db()
+        self.assertEqual(action.status, "APPROVED")
+
     def test_audit_is_immutable(self):
         audit = AuditEvent.objects.create(
             tenant_id="tenant-a", actor=self.checker, action="TEST", target="safe"
@@ -391,6 +462,17 @@ class OperatorAuthorityTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertFalse(AccountFreeze.objects.filter(account=outsider).exists())
 
+    def test_operator_without_mfa_cannot_access_internal_api(self):
+        operator = user("no-mfa@example.test", "+10000000036", staff=False)
+        operator.is_staff = True
+        operator.save(update_fields=("is_staff",))
+        OperatorRole.objects.create(
+            user=operator, tenant_id="tenant-a", role="support_viewer"
+        )
+        client = APIClient()
+        client.force_authenticate(operator)
+        self.assertEqual(client.get("/api/internal/v1/safety-flags").status_code, 403)
+
 
 class ExportSafetyTests(TestCase):
     def test_csv_formula_prefixes_are_neutralized(self):
@@ -410,3 +492,67 @@ class ExportSafetyTests(TestCase):
                 "message": "This feature is currently unavailable.",
             },
         )
+
+
+class PrivateNotificationRealtimeTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        self.a = user("socket-a@example.test", "+10000000041", brand="a")
+        self.b = user("socket-b@example.test", "+10000000042", brand="b")
+
+    def test_anonymous_connection_is_rejected(self):
+        from FX.asgi import application
+
+        async def scenario():
+            communicator = WebsocketCommunicator(application, "/ws/v2/")
+            connected, code = await communicator.connect()
+            self.assertFalse(connected)
+            self.assertEqual(code, 4401)
+
+        async_to_sync(scenario)()
+
+    def test_private_group_does_not_cross_accounts_or_tenants(self):
+        from FX.asgi import application
+
+        cache.set("ticket-a", self.a.pk, 120)
+        cache.set("ticket-b", self.b.pk, 120)
+
+        async def scenario():
+            socket_a = WebsocketCommunicator(application, "/ws/v2/?ws_ticket=ticket-a")
+            socket_b = WebsocketCommunicator(application, "/ws/v2/?ws_ticket=ticket-b")
+            self.assertTrue((await socket_a.connect())[0])
+            self.assertTrue((await socket_b.connect())[0])
+            await get_channel_layer().group_send(
+                notification_group("a", self.a.pk),
+                {
+                    "type": "notification.created",
+                    "notification": {
+                        "notification_id": "safe-id",
+                        "category": "SECURITY",
+                    },
+                },
+            )
+            message = await socket_a.receive_json_from()
+            self.assertEqual(message["notification"]["notification_id"], "safe-id")
+            self.assertTrue(await socket_b.receive_nothing(timeout=0.05))
+            await socket_a.disconnect()
+            await socket_b.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_realtime_payload_excludes_delivery_diagnostics(self):
+        notification = Notification.objects.create(
+            tenant_id="a",
+            account=self.a,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            dedup_key="safe",
+            failure_reason_safe="internal diagnostic",
+        )
+        payload = realtime_notification_payload(notification)
+        self.assertNotIn("failure_reason_safe", payload)
+        self.assertNotIn("account", payload)
+        self.assertNotIn("tenant_id", payload)
