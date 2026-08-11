@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from decimal import Decimal
 
@@ -5,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
+from rest_framework.test import APIRequestFactory
 
 from integrations.models import Organization, OrganizationMembership
 from users.models import User
@@ -136,3 +138,16 @@ class InstitutionalAuthorityTests(TestCase):
     def test_inbox_deduplicates(self):
         InstitutionalInboxEvent.objects.create(source="fixture", event_id="evt-1", payload_hash="0" * 64)
         with self.assertRaises(Exception): InstitutionalInboxEvent.objects.create(source="fixture", event_id="evt-1", payload_hash="0" * 64)
+
+    def test_realtime_is_user_scoped_and_has_gap_snapshot(self):
+        from ws import v2
+        pattern = "institutional.subaccount.updated.v1.{user_id}"
+        entry = v2.CHANNEL_REGISTRY[pattern]
+        self.assertTrue(entry["resume_supported"])
+        self.assertEqual(entry["snapshot_provider"], "/api/v1/institutional/account/hierarchy")
+        factory = APIRequestFactory()
+        own = factory.post("/", {"channel": f"institutional.subaccount.updated.v1.{self.user.id}", "user": str(self.user.id)}, format="json", HTTP_X_BEYVRA_PROXY_SECRET="fixture-proxy-secret")
+        other = factory.post("/", {"channel": "institutional.subaccount.updated.v1.someone-else", "user": str(self.user.id)}, format="json", HTTP_X_BEYVRA_PROXY_SECRET="fixture-proxy-secret")
+        with __import__("unittest.mock", fromlist=["patch"]).patch.dict("os.environ", {"CENTRIFUGO_PROXY_SECRET": "fixture-proxy-secret"}):
+            self.assertEqual(json.loads(v2.authorize_subscription(own).content), {"result": {}})
+            self.assertEqual(json.loads(v2.authorize_subscription(other).content)["error"]["code"], 403)
