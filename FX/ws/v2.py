@@ -37,6 +37,10 @@ CHANNEL_REGISTRY = {
     "wallet.balance.{account_id}": {"visibility": "private", "required_permission": "demo.wallet.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
     "account.security.{user_id}": {"visibility": "private", "required_permission": "account.security.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/session", "rate_limit": 5},
+    "wallet.updated.v1:{user_id}": {"visibility": "private", "required_permission": "financial.wallet.read", "feature_flag": "REAL_WALLET_READ_ENABLED", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/wallets/", "rate_limit": 5},
+    "deposit.updated.v1:{user_id}": {"visibility": "private", "required_permission": "financial.deposit.read", "feature_flag": "REAL_WALLET_READ_ENABLED", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/deposits/", "rate_limit": 5},
+    "withdrawal.updated.v1:{user_id}": {"visibility": "private", "required_permission": "financial.withdrawal.read", "feature_flag": "REAL_WALLET_READ_ENABLED", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/withdrawals/", "rate_limit": 5},
+    "transfer.updated.v1:{user_id}": {"visibility": "private", "required_permission": "financial.transfer.read", "feature_flag": "REAL_WALLET_READ_ENABLED", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/transfers/", "rate_limit": 5},
     "system.status": {"visibility": "public", "required_permission": "system.read", "tenant_scope": False, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 50, "history_ttl": 60, "resume_supported": False, "snapshot_provider": "/api/v1/realtime/v2/health", "rate_limit": 10},
 }
 
@@ -70,6 +74,20 @@ def _channel_entry(channel):
         if _PATTERN_RE[pattern].match(channel):
             return pattern, entry
     return None, None
+
+
+def _private_channel_allowed(pattern, channel, user_id):
+    """Derive private ownership from the authenticated identity, never payload claims."""
+    if "{user_id}" in pattern:
+        return channel == pattern.replace("{user_id}", user_id)
+    if "{account_id}" in pattern:
+        return channel == pattern.replace("{account_id}", user_id)
+    return False
+
+
+def _entry_enabled(entry):
+    flag = entry.get("feature_flag")
+    return not flag or os.getenv(flag, "false").lower() == "true"
 
 
 def _tenant(user):
@@ -126,10 +144,10 @@ def subscription_token(request):
         return JsonResponse({"code": "UNSUPPORTED_CHANNEL"}, status=403)
     user_id = str(request.user.id)
     if entry["visibility"] == "private":
-        if pattern in {"notification.{user_id}", "account.security.{user_id}"} and not channel.endswith(user_id):
+        if not _private_channel_allowed(pattern, channel, user_id):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
-        if entry["account_scope"] and user_id not in channel:
-            return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
+    if not _entry_enabled(entry):
+        return JsonResponse({"code": "FEATURE_DISABLED"}, status=503)
     if entry["required_permission"].startswith("demo.") and not request.user.is_active:
         return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
     token = _claims(request, audience="centrifugo-subscription", extra={"channel": channel, "channel_pattern": pattern})
@@ -149,8 +167,10 @@ def authorize_subscription(request):
     pattern, entry = _channel_entry(channel) if isinstance(channel, str) else (None, None)
     if not entry:
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and user_id not in channel:
+    if entry["visibility"] == "private" and not _private_channel_allowed(pattern, channel, user_id):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+    if not _entry_enabled(entry):
+        return JsonResponse({"error": {"code": 503, "message": "feature disabled"}})
     return JsonResponse({"result": {}})
 
 

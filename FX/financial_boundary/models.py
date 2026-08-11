@@ -85,6 +85,27 @@ class FinancialAuditEvent(ImmutableFinancialRecord):
         indexes = [models.Index(fields=["tenant_ref", "occurred_at"], name="financial_audit_tenant_idx")]
 
 
+class FinancialProjectionCursor(models.Model):
+    tenant_ref = models.UUIDField()
+    subject_ref = models.CharField(max_length=64)
+    event_type = models.CharField(max_length=64)
+    last_sequence = models.PositiveBigIntegerField(default=0)
+    last_event_id = models.UUIDField(null=True, blank=True)
+    snapshot_version = models.PositiveBigIntegerField(default=0)
+    projection = models.JSONField(default=dict, blank=True)
+    projection_hash = models.CharField(max_length=64, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "financial_projection_cursors"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant_ref", "subject_ref", "event_type"],
+                name="financial_projection_cursor_scope_unique",
+            )
+        ]
+
+
 class FinancialIncident(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     severity = models.CharField(max_length=16)

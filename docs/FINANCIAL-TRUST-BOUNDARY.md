@@ -32,3 +32,8 @@ balances, postings, or authoritative settlement state.
 `BEFORE UPDATE OR DELETE` trigger. Audit records contain bounded safe metadata
 and hashes, not provider payloads, credentials, or private Financial database
 identifiers.
+
+Private financial realtime topics use exact authenticated-subject channel
+ownership. Projection cursors are partitioned by tenant, subject, and event
+type. Sequence gaps require canonical snapshot replacement; they cannot be
+treated as successful incremental updates. See `FINANCIAL-REALTIME.md`.
