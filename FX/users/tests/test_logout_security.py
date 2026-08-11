@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -7,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 class LogoutSecurityTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = get_user_model().objects.create_user(
             email="logout@example.com",
             password="test-pass",

@@ -28,3 +28,19 @@ class WebSocketTicketSecurityTests(TransactionTestCase):
 
         self.assertTrue(async_to_sync(middleware)(first_scope, _noop, _noop))
         self.assertFalse(async_to_sync(middleware)(second_scope, _noop, _noop))
+
+    def test_missing_or_expired_ticket_is_anonymous(self):
+        async def inner(scope, receive, send):
+            return scope["user"].is_authenticated
+
+        middleware = CustomTokenAuthMiddleware(inner)
+        cache.set("expired-ticket", 999999, 0)
+
+        self.assertFalse(
+            async_to_sync(middleware)(
+                {"query_string": b"ws_ticket=expired-ticket"}, _noop, _noop
+            )
+        )
+        self.assertFalse(
+            async_to_sync(middleware)({"query_string": b""}, _noop, _noop)
+        )

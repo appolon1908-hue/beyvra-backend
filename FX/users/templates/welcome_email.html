@@ -1,194 +1,45 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!doctype html>
+<html lang="en">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Welcome to Tradex</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Beyvra</title>
 </head>
-<body style="margin: 0; padding: 0;">
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #121217; font-family: Arial, sans-serif;">
+<body style="margin:0;background:#0b1020;color:#f8fafc;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
-            <td align="center" style="padding: 40px 20px;">
-                <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px;">
+            <td align="center" style="padding:40px 16px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                       style="max-width:600px;background:#151c30;border-radius:16px;">
                     <tr>
-                        <td align="center" style="padding-bottom: 20px; display: inline;">
-                            <h1 style="color: #ffffff; font-size: 36px; font-weight: bold; margin: 0;">TRAD <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/tradxlogo_utukxj.png" alt="" style="width: 32px; vertical-align: middle; margin-left: -10px; margin-bottom: 5px;"></h1>
-
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align="center" style="padding-bottom: 20px; padding-top: 20px;">
-                            <h2 style="color: #ffffff; font-size: 24px; font-weight: bold; margin: 0; display: inline;">Welcome</h2>
-                            <h2 style="color: #FF1802; font-size: 24px; font-weight: bold; margin: 0; display: inline; margin-left: 8px;">{{ first_name }}!</h2>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="color: #FFFFFF99; font-size: 18px; line-height: 1.5; padding-bottom: 20px;">
-                            Welcome to Tradex, your one-stop platform for all your trading needs! We're thrilled to have you on board and excited to help you navigate the world of financial markets.<br><br>
-                            <!-- temp_password for bulk created user -->
+                        <td style="padding:32px;">
+                            <h1 style="margin:0 0 24px;color:#fff;">Beyvra</h1>
+                            <h2 style="margin:0 0 16px;color:#fff;">Welcome, {{ first_name }}.</h2>
+                            <p style="line-height:1.6;color:#cbd5e1;">
+                                Your account is ready. You can explore market context and the
+                                virtual-funds demo workspace without enabling real-money trading.
+                            </p>
                             {% if temp_password %}
-                                <div style="color: #FFFFFF99; font-size: 18px; line-height: 1.5; padding-bottom: 16px;">
-                                    <b>Your temporary password is: <span style="font-size: 20px; color: #FF1802;">{{ temp_password }}</span></b><br>
-                                    <b>For security reasons, we recommend changing your password after logging in.</b>
-                                </div>
+                            <p style="line-height:1.6;color:#cbd5e1;">
+                                Your temporary password is <strong>{{ temp_password }}</strong>.
+                                Change it immediately after signing in.
+                            </p>
                             {% endif %}
-                            Tradex empowers you to trade a wide range of assets, all in a single, user-friendly platform. Here's what you can look forward to:
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align="center" style="padding-bottom: 20px;">
-                            <table cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                    <td style="padding: 5px;">
-                                        <a href="https://xtradx.com/markets/Commodities" style="text-decoration: none; cursor: pointer;">
-
-                                            <span style="color: #ffffff; border: 1px solid #568cf7cd; padding: 5px 10px; border-radius: 20px; font-size: 14px;">Forex</span>
-                                        </a>
-                                    </td>
-                                    <td style="padding: 5px;">
-                                        <a href="https://xtradx.com/markets/Commodities" style="text-decoration: none; cursor: pointer;">
-                                            <span style="color: #ffffff; border: 1px solid #568cf7cd; padding: 5px 10px; border-radius: 20px; font-size: 14px;">Stocks</span>
-                                        </a>
-                                    </td>
-                                    <td style="padding: 5px;">
-                                        <a href="https://xtradx.com/markets/Commodities" style="text-decoration: none; cursor: pointer;">
-                                            <span style="color: #ffffff; border: 1px solid #568cf7cd; padding: 5px 10px; border-radius: 20px; font-size: 14px;">Commodities</span>
-                                        </a>
-                                    </td>
-                                    <td style="padding: 5px;">
-                                        <a href="https://xtradx.com/markets/crypto" style="text-decoration: none; cursor: pointer;">
-
-                                            <span style="color: #ffffff; border: 1px solid #568cf7cd; padding: 5px 10px; border-radius: 20px; font-size: 14px;">Crypto</span>
-                                        </a>
-                                    </td>
-                                    <td style="padding: 5px;">
-                                        <a href="https://xtradx.com/markets/ipos" style="text-decoration: none; cursor: pointer;">
-                                            <span style="color: #ffffff; border: 1px solid #568cf7cd; padding: 5px 10px; border-radius: 20px; font-size: 14px;">IPOs</span>
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="color: #A0A0A2; font-size: 18px; line-height: 1.5; padding-bottom: 20px;">
-                            <b>Tradex</b> offers more than just a diverse asset selection. We provide the tools and resources to make informed decisions:
-                        </td>
-                    </tr>
-                    <!-- Feature boxes -->
-                    <tr>
-                        <td>
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <tr>
-                                    <td  style="padding: 10px; width: 50%;">
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%" height="165px" style="background: linear-gradient(to bottom, #286ffe6b, #286ffe57 40%, #0095ff2c 60%); border: 1px solid #2871FE; border-radius: 8px;">
-                                            <tr>
-                                                <td style="padding: 15px;">
-                                                    <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/setting_plm831.png" alt="" style="width: 44px;">
-                                                    <p style="color: #ffffff; font-size: 16px;"><b>Advanced charting</b> and technical analysis tools to identify trading opportunities</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                    <td width="50%" style="padding: 10px;">
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%"  height="165px" style="background: linear-gradient(to bottom, #286ffe6b, #286ffe57 40%, #0095ff2c 60%); border: 1px solid #2871FE; border-radius: 8px;">
-                                            <tr>
-                                                <td style="padding: 15px;">
-                                                    <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/Clock_avybnv.png" alt="" style="width: 44px;">
-                                                    <p style="color: #ffffff; font-size: 16px;"><b>Real-time market </b>data and news to stay ahead of the curve.</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td width="50%" style="padding: 10px;">
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%"  height="165px" style="background: linear-gradient(to bottom, #286ffe6b, #286ffe57 40%, #0095ff2c 60%); border: 1px solid #2871FE; border-radius: 8px;">
-                                            <tr>
-                                                <td style="padding: 15px;">
-                                                    <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/Book_ksrecq.png" alt="" style="height: 44px;">
-                                                    <p style="color: #ffffff; font-size: 16px;"><b>Educational resources </b>to enhance your trading knowledge and skills</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                    <td width="50%" style="padding: 10px;">
-                                        <table cellpadding="0" cellspacing="0" border="0" width="100%"  height="165px" style="background: linear-gradient(to bottom, #286ffe6b, #286ffe57 40%, #0095ff2c 60%); border: 1px solid #2871FE; border-radius: 8px;">
-                                            <tr>
-                                                <td style="padding: 15px;">
-                                                    <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/Shields_roxk56.png" alt="" style="height: 44px;">
-                                                    <p style="color: #ffffff; font-size: 16px;"><b>Secure and reliable </b>platform to ensure the safety of your funds</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="color: #A0A0A2; font-size: 18px; line-height: 1.5; padding: 20px 0;">
-                            Getting started is easy! Simply fund your account and explore the vast opportunities that await you. Our dedicated customer support team is always available to assist you with any questions you may have.
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <h2 style="color: #ffffff; font-size: 20px; font-weight: 600;">You're 2 steps from start trading:</h2>
-                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <tr>
-                                    <td align="center" width="33%" style="padding: 10px;">
-                                        <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/tradestep1_bfwwns.png" alt="" style="height: 80px;">
-                                        <p style="color: #FFFFFF99; font-size: 16px; font-weight: 600; text-align: center;">1.<br>Create your account</p>
-                                    </td>
-                                    <td align="center" width="33%" style="padding: 10px;">
-                                        <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/tradestep2_yjy20n.png" alt="" style="height: 80px;">
-                                        <p style="color: #FFFFFF99; font-size: 16px; font-weight: 600; text-align: center;">2.<br>Fund your account</p>
-                                    </td>
-                                    <td align="center" width="33%" style="padding: 10px;">
-                                        <img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/tradestep3_ymunsa.png" alt="" style="height: 80px;">
-                                        <p style="color: #FFFFFF99; font-size: 16px; font-weight: 600; text-align: center;">3.<br>Start trading straight away</p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td align="center" style="padding: 30px 0;">
-                            <a href={{ frontend_url }} style="background-color: #FF1802; color: #ffffff; padding: 12px 32px; text-decoration: none; font-weight: 600; border-radius: 8px; font-size: 18px;">Start Trading</a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="color: #A0A0A2; font-size: 18px; line-height: 1.5; padding-bottom: 20px;">
-                            We invite you to embark on your trading journey with Tradex. Let's unlock your financial potential together!
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="color: #A0A0A2; font-size: 18px; line-height: 1.5; padding-top: 20px;">
-                            All the best,<br>
-                            Tradex team
+                            <p style="margin:28px 0;">
+                                <a href="{{ frontend_url }}/platform"
+                                   style="display:inline-block;padding:12px 20px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;">
+                                    Open Beyvra
+                                </a>
+                            </p>
+                            <p style="line-height:1.6;color:#94a3b8;font-size:14px;">
+                                If you did not create this account, contact support immediately.
+                            </p>
+                            <p style="margin-top:32px;color:#94a3b8;font-size:13px;">
+                                &copy; 2026 Beyvra. All rights reserved.
+                            </p>
                         </td>
                     </tr>
                 </table>
-            </td>
-        </tr>
-        <tr>
-            <td align="center" style="padding: 20px 0px 0px 0px; background-color: white;">
-                <table cellpadding="10" cellspacing="20" border="0">
-                    <tr>
-                        <td style="padding: 10px 10px; background-color: #6c696941; border-radius: 1000px;  "><a href="#"><img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/twiiter_iuezvw.png" alt="Twitter" style="width: 24px;"></a></td>
-                        <td style="padding: 10px 10px; background-color: #6c696941; border-radius: 1000px;  "><a href="#"><img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/facebook_bcwexi.png" alt="Facebook" style="width: 24px;"></a></td>
-                        <td style="padding: 10px 10px; background-color: #6c696941; border-radius: 1000px;  "><a href="#"><img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/insta_hcifqz.png" alt="Instagram" style="width: 24px;"></a></td>
-                        <td style="padding: 10px 10px; background-color: #6c696941; border-radius: 1000px;  "><a href="#"><img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472899/youtube_m1ltma.png" alt="YouTube" style="width: 24px;"></a></td>
-                        <td style="padding: 10px 10px; background-color: #6c696941; border-radius: 1000px;  "><a href="#"><img src="https://res.cloudinary.com/dojqwvim5/image/upload/v1723472898/linkiden_dcplwf.png" alt="LinkedIn" style="width: 24px;"></a></td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td align="center" style="padding-bottom: 5px; background-color:white;">
-                <p style="color: #000000; font-size: 16px; line-height: 1.5; max-width: 600px;">
-                    You are receiving this email because you signed up to Tradex.io. Learn more about our <b style="cursor: pointer;">privacy policy</b> or <b style="cursor: pointer;">change notifications.</b>
-                </p>
             </td>
         </tr>
     </table>

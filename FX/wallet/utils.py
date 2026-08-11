@@ -71,7 +71,7 @@ def send_balance_update_email(balance):
         balance (ManualBalanceUpdate): The balance object that was updated.
     """
     
-    subject = "Balance Update Notification | Tradx.io"
+    subject = "Balance update notification | Beyvra"
     email_template = template.loader.get_template("email_balance_update.html")
 
     context = {

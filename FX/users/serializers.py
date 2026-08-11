@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.core.validators import MinLengthValidator
+from django.db import transaction
 from django.utils import timezone
 from operations.services import evaluate_login_risk, record_login_failure
 from rest_framework import serializers
@@ -88,6 +89,13 @@ class UserSerializer(BaseUserSerializer):
         }
         read_only_fields = USER_READ_ONLY
 
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return email
+
+    @transaction.atomic
     def create(self, validated_data):
         user = get_user_model().objects.create_user(**validated_data)
 
@@ -100,11 +108,7 @@ class UserSerializer(BaseUserSerializer):
         # create a demo account with DEMO_BALANCE as initial balance
         demo_currency, _ = Currency.objects.get_or_create(
             name="Đ",
-            defaults={
-                "symbol": "DEM",
-                "longer_name": "Beyvra Demo Currency",
-                "is_crypto": False,
-            },
+            defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"},
         )
         Wallet.objects.create(
             name=DEMO_WALLET_NAME,
@@ -190,10 +194,11 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     new_password = serializers.CharField(
-        max_length=20, validators=[MinLengthValidator(5)]
+        max_length=20, write_only=True,
+        validators=[MinLengthValidator(8), password_check_policy],
     )
     new_password_confirm = serializers.CharField(
-        max_length=20, validators=[MinLengthValidator(5)]
+        max_length=20, write_only=True
     )
 
     def validate(self, data):
@@ -239,7 +244,7 @@ class LoginSerializer(serializers.Serializer):
         email = data.get("email")
         password = data.get("password")
         if email and password:
-            user = get_user_model().objects.filter(email=email).first()
+            user = get_user_model().objects.filter(email__iexact=email.strip()).first()
             if user is not None:
                 if not check_password(password, user.password):
                     record_login_failure(user=user)

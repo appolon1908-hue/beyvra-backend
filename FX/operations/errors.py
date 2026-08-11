@@ -1,4 +1,5 @@
 from rest_framework.views import exception_handler
+from rest_framework.exceptions import AuthenticationFailed
 
 SAFE_MESSAGES = {
     400: ("INVALID_REQUEST", "The request could not be processed."),
@@ -13,6 +14,29 @@ SAFE_MESSAGES = {
 def BeyvraErrorMapper(exc, context):  # noqa: N802 - public error-contract name
     response = exception_handler(exc, context)
     if response is None:
+        if exc.__class__.__module__.startswith("redis"):
+            from rest_framework.response import Response
+
+            return Response(
+                {
+                    "code": "SERVICE_TEMPORARILY_UNAVAILABLE",
+                    "message": "The service is temporarily unavailable.",
+                },
+                status=503,
+            )
+        return response
+    if isinstance(exc, AuthenticationFailed):
+        response.data = {
+            "code": "INVALID_CREDENTIALS",
+            "message": "Invalid credentials.",
+        }
+        return response
+    detail = getattr(exc, "detail", {})
+    if isinstance(detail, dict) and str(detail.get("code", "")) == "FINANCIAL_WALLET_ID_NOT_ACCEPTED":
+        response.data = {
+            "code": "FINANCIAL_WALLET_ID_NOT_ACCEPTED",
+            "message": "This wallet is not available for simulated trading.",
+        }
         return response
     if "Real-money trading is disabled" in str(getattr(exc, "detail", "")):
         response.data = {

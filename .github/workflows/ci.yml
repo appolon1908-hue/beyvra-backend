@@ -7,10 +7,32 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: codestra_ci
+          POSTGRES_USER: codestra_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U codestra_ci -d codestra_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -26,7 +48,7 @@ jobs:
         working-directory: FX
         env:
           DJANGO_SETTINGS_MODULE: FX.test_settings
-          SECRET_KEY: ci-only-secret
+          SECRET_KEY: ci-only-secret-key-with-more-than-fifty-characters-for-checks
           DEBUG: "0"
           ALLOWED_HOSTS: '["localhost","testserver"]'
           CSRF_TRUSTED_ORIGINS: '[]'
@@ -34,13 +56,55 @@ jobs:
           REDIS_PORT: "6379"
           REDIS_PASSWORD: ci-only-password
           REDIS_DATABASE: "0"
+          DB_NAME: codestra_ci
+          DB_USER: codestra_ci
+          DB_PASSWORD: ci-only-password
+          DB_HOST: 127.0.0.1
+          DB_PORT: "5432"
+          TEST_DB_NAME: test_codestra_ci
         run: |
           python manage.py check --deploy
+          python manage.py makemigrations --check --dry-run
           python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
+          python manage.py test news_app.test_phase5_contracts ws.test_v2
+          python manage.py test apps.trading.tests
+      - name: Verify Beyvra public identity surfaces
+        run: python scripts/check_public_identity.py
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies
         run: pip-audit -r FX/requirements.txt
+
+  exact-head-base-ci:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify exact tuple at start
+        run: |
+          observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+          base_ref=$(jq -r .base.ref <<<"$observed")
+          observed_base=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$base_ref" --jq .object.sha)
+          test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
+          test "$observed_base" = "$EXPECTED_BASE_SHA"
+          printf 'EXPECTED_HEAD_SHA=%s\nEXPECTED_BASE_SHA=%s\nOBSERVED_HEAD_SHA=%s\nOBSERVED_BASE_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$EXPECTED_BASE_SHA" "$(jq -r .head.sha <<<"$observed")" "$observed_base"
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+      - name: Verify exact tuple and ancestry at end
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git fetch origin "$EXPECTED_BASE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA"
+          observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+          base_ref=$(jq -r .base.ref <<<"$observed")
+          observed_base=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$base_ref" --jq .object.sha)
+          test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
+          test "$observed_base" = "$EXPECTED_BASE_SHA"
 
   container:
     runs-on: ubuntu-latest

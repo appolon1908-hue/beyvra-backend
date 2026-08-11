@@ -5,6 +5,7 @@ from rest_framework.exceptions import APIException, ValidationError
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from rest_framework.decorators import api_view
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 from urllib.parse import urlencode
@@ -63,6 +64,7 @@ class CryptocurrencyMapView(APIView):
         }
 
         try:
+            authorize_coinmarketcap(product="ASSET_MAP")
             response = requests.get(url, headers=headers)
             response_data = response.json()
         except requests.RequestException as e:

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 # just start a single worker. You can increase number of workers by changing --concurrency parameter.
 # celery -A FX worker -l info --pool=solo

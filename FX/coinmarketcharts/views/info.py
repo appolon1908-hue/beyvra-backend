@@ -5,6 +5,7 @@ from rest_framework.exceptions import APIException
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 
 load_dotenv()
@@ -112,6 +113,7 @@ class CryptocurrencyInfoView(APIView):
 
         try:
             # Make the API request
+            authorize_coinmarketcap(product="ASSET_INFO", symbol=str(filtered_params.get("symbol", "*")))
             response = requests.get(api_url, headers=headers, params=filtered_params)
             response_data = response.json()
 

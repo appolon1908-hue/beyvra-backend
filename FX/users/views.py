@@ -1,13 +1,14 @@
 import base64
 import io
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pandas as pd
 import pyotp
 import qrcode
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
@@ -20,6 +21,7 @@ from django.db.models import Case, CharField, Q, Sum, Value, When
 from django.db.models.signals import post_save
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -38,9 +40,11 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.views import TokenRefreshView
 from trade.models import Trade, Transaction
+from trade.models import DemoLedgerEntry
 from trade.serializers import (
     TradeDetailSerializer,
     TradeHistorySerializer,
@@ -93,6 +97,22 @@ class CreateUserView(generics.CreateAPIView):
 
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        if getattr(settings, "EMAIL_OTP_VERIFICATION_ENABLED", False):
+            return Response({"code": "EMAIL_VERIFICATION_REQUIRED", "message": "Use the email verification registration flow."}, status=status.HTTP_409_CONFLICT)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        refresh = AuthTokenObtainPairSerializer.get_token(user)
+        return Response(
+            {
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class DeleteUserView(generics.GenericAPIView):
@@ -268,15 +288,12 @@ class PasswordResetRequestView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = request.data["email"]
-
-        user = User.objects.filter(email__iexact=email).first()
-        if user is not None:
+        email = serializer.validated_data["email"].strip()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user:
             async_send_password_reset_link_email.delay(user.id)
         return Response(
-            {
-                "detail": "If an account matches that email, password reset instructions will be sent."
-            },
+            {"detail": "If an active account matches that email, password reset instructions will be sent."},
             status=status.HTTP_200_OK,
         )
 
@@ -290,7 +307,7 @@ def password_reset_confirm(request, uidb64, token):
     serializer = PasswordResetConfirmSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
-    new_password = serializer.data["new_password"]
+    new_password = serializer.validated_data["new_password"]
 
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -300,11 +317,16 @@ def password_reset_confirm(request, uidb64, token):
 
     if (user is not None) and default_token_generator.check_token(user, token):
         user.set_password(new_password)
+        user._password_changed = True
         user.save()
         revoke_sessions_after_credential_change(user=user, event_type="PASSWORD_RESET")
 
+        for outstanding_token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=outstanding_token)
+
         return Response(
-            {"detail": "Password updated successfully"}, status=status.HTTP_200_OK
+            {"detail": "Password updated successfully. You can now sign in."},
+            status=status.HTTP_200_OK,
         )
     else:
         return Response(
@@ -364,9 +386,7 @@ class DisableWalkthroughView(generics.UpdateAPIView):
 
     def put(self, request, *args, **kwargs):
         user = self.get_object()
-        serializer = self.get_serializer(
-            user, data={"is_walkthrough": True}, partial=True
-        )
+        serializer = self.get_serializer(user, data={"is_walkthrough": False}, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -385,7 +405,7 @@ class EnableMFAView(generics.GenericAPIView):
 
         # Generate the provisioning URI
         otp_uri = pyotp.totp.TOTP(user.mfa_secret).provisioning_uri(
-            name=user.email, issuer_name="Tradx.io"
+            name=user.email, issuer_name=settings.PUBLIC_BRAND_NAME
         )
 
         # Create the QR code
@@ -484,7 +504,7 @@ class LoginView(generics.CreateAPIView):
         serializer = self.serializer_class(
             data=request.data, context={"request": request}
         )
-        if serializer.is_valid(raise_exception=True):
+        if serializer.is_valid():
             user = serializer.validated_data["user"]
             user_logged_in.send(sender=user.__class__, request=request, user=user)
             # check if user is not active
@@ -529,10 +549,90 @@ class LoginView(generics.CreateAPIView):
             )
             set_browser_auth_cookies(response, request, credentials)
             return response
-        return Response(
-            {"detail": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED,
+        non_field_errors = serializer.errors.get("non_field_errors", [])
+        invalid_credentials = any(
+            getattr(error, "code", None) == "authorization"
+            for error in non_field_errors
         )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_401_UNAUTHORIZED if invalid_credentials else status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class GuestDemoSessionView(APIView):
+    """Issue a short-lived, anonymous paper-trading access token.
+
+    No PII is accepted or returned, no refresh token is issued, and the
+    identity is explicitly marked as demo-only. This endpoint is enabled only
+    while the server is in paper-trading mode.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "guest_demo"
+
+    def post(self, request):
+        if not getattr(settings, "GUEST_DEMO_ENABLED", False) or not getattr(settings, "PAPER_TRADING_ONLY", True):
+            return Response({"code": "GUEST_DEMO_DISABLED", "message": "Demo access is unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+        cache_key = f"guest-demo-session:{idempotency_key}" if idempotency_key else ""
+        if cache_key:
+            cached = cache.get(cache_key)
+            if cached:
+                response = Response(cached, status=status.HTTP_201_CREATED)
+                response.set_cookie("codestra_guest_session", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+                response.set_cookie("access_token", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+                return response
+
+        expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
+        with transaction.atomic():
+            guest = User.objects.create_user(
+                email=f"guest-{uuid4().hex}@guest.invalid",
+                password=uuid4().hex,
+                first_name="Guest",
+                last_name="Demo",
+                phone_number=f"+999{uuid4().int % 10**12:012d}",
+                is_active=True,
+                is_walkthrough=True,
+                email_verified=False,
+                email_verification_source="guest_demo",
+                is_guest_demo=True,
+                guest_demo_expires_at=expires_at,
+            )
+            demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
+            wallet = Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=10000, is_real=False)
+            DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=10000, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
+
+        refresh = AuthTokenObtainPairSerializer.get_token(guest)
+        access = refresh.access_token
+        access["guest_demo"] = True
+        access["demo_only"] = True
+        access["guest_expires_at"] = int(expires_at.timestamp())
+        access.set_exp(lifetime=timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS))
+        payload = {"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}
+        if cache_key:
+            cache.set(cache_key, payload, timeout=settings.GUEST_DEMO_TTL_SECONDS)
+        response = Response(payload, status=status.HTTP_201_CREATED)
+        response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        return response
+
+
+class SessionResolveView(APIView):
+    """Bounded, server-authoritative session bootstrap contract for the SPA."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        guest = bool(getattr(user, "is_guest_demo", False))
+        return Response({
+            "state": "guest.ready" if guest else "user.ready",
+            "principal": "guest" if guest else "user",
+            "guestDemo": guest,
+            "demoOnly": True,
+            "user": {"id": user.pk, "email": None if guest else user.email, "displayName": user.get_full_name() or "Guest Demo"},
+        })
 
 
 class LogoutView(generics.GenericAPIView):

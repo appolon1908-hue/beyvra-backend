@@ -1,0 +1,7 @@
+{
+  "records": [
+    {"service_type":"MARKET_DATA","provider_code":"pending","provider_name":"","environment":"staging","approval_status":"PENDING","enabled":false,"approval_reference":null,"approved_by":null,"supported_symbols":[],"supported_timeframes":[],"credential_reference":null,"license_reference":null,"owner":null},
+    {"service_type":"FINANCIAL_NEWS","provider_code":"pending","provider_name":"","environment":"staging","approval_status":"PENDING","enabled":false,"approval_reference":null,"approved_by":null,"supported_symbols":[],"supported_timeframes":[],"credential_reference":null,"license_reference":null,"owner":null},
+    {"service_type":"ECONOMIC_CALENDAR","provider_code":"pending","provider_name":"","environment":"staging","approval_status":"PENDING","enabled":false,"approval_reference":null,"approved_by":null,"supported_symbols":[],"supported_timeframes":[],"credential_reference":null,"license_reference":null,"owner":null}
+  ]
+}

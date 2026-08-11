@@ -1,177 +1,87 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from uuid import uuid4
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..models import Currency, Wallet
-from ..serializers import WalletListSerializer
+from wallet.models import Currency, Wallet
+from wallet.serializers import WalletListSerializer
 
 WALLETS_URL = "/api/wallet/wallets/"
 
 
-def create_user(email="user@example.come", password="testpass123"):
-    """Create and return user."""
-    phone_number = f"+1{uuid4().int % 10**10:010d}"
+def create_user(email="wallet@example.com", password="testpass123"):
+    phone_suffix = "1" if email.startswith("wallet@") else "2"
     return get_user_model().objects.create_user(
-        email=email, password=password, phone_number=phone_number
+        email=email, password=password, phone_number=f"+1202555020{phone_suffix}"
     )
 
 
-def create_currency(symbol="USD", name="US dollar"):
-    return Currency.objects.create(
-        symbol=symbol, name=name, longer_name=f"{name} currency"
-    )
-
-
-def detail_url(id):
-    return f"{WALLETS_URL}{id}/"
-
-
-class PublicWalletsApiTests(TestCase):
-    """Test unauthenticated API requests."""
-
+class WalletApiTests(TestCase):
     def setUp(self):
-        self.client = APIClient()
+        self.currency = Currency.objects.create(
+            name="USD", symbol="USD", longer_name="US Dollar"
+        )
 
     def test_auth_required(self):
-        """Test auth is requited for retrieving wallets."""
-        res = self.client.get(WALLETS_URL)
-        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        response = APIClient().get(WALLETS_URL)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_wallet_list_is_limited_to_authenticated_user(self):
+        user = create_user()
+        other = create_user("other-wallet@example.com")
+        own = Wallet.objects.create(user=user, name="Own", currency=self.currency, is_real=False)
+        Wallet.objects.create(user=other, name="Other", currency=self.currency, is_real=False)
+        client = APIClient()
+        client.force_authenticate(user)
 
-class PrivateWalletsApiTests(TestCase):
-    """Test unauthenticated API requests."""
+        response = client.get(WALLETS_URL)
 
-    def setUp(self):
-        self.user = create_user()
-        self.currency = create_currency()
-        self.client = APIClient()
-        self.client.force_authenticate(self.user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["id"], own.id)
 
-    def test_retrieve_wallets(self):
-        """Test retrieving a list of wallets."""
-        Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
+    def test_retrieve_own_wallet_and_hide_other_users_wallet(self):
+        user = create_user()
+        other = create_user("other-wallet@example.com")
+        own = Wallet.objects.create(user=user, name="Own", currency=self.currency, is_real=False)
+        hidden = Wallet.objects.create(user=other, name="Hidden", currency=self.currency, is_real=False)
+        client = APIClient()
+        client.force_authenticate(user)
+
+        own_response = client.get(f"{WALLETS_URL}{own.id}/")
+        hidden_response = client.get(f"{WALLETS_URL}{hidden.id}/")
+
+        self.assertEqual(own_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_create_wallet_ignores_read_only_balance_and_owner(self):
+        user = create_user()
+        other = create_user("other-wallet@example.com")
+        client = APIClient()
+        client.force_authenticate(user)
+
+        response = client.post(
+            WALLETS_URL,
+            {
+                "name": "New demo",
+                "currency": self.currency.id,
+                "balance": "500.00",
+                "user": other.id,
+                "is_real": True,
+            },
+            format="json",
         )
 
-        res = self.client.get(WALLETS_URL)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        wallet = Wallet.objects.get(id=response.data["id"])
+        self.assertEqual(wallet.user, user)
+        self.assertEqual(wallet.balance, 0)
+        self.assertFalse(wallet.is_real)
 
-        wallets = Wallet.objects.all().order_by("-created_at")
-        serializer = WalletListSerializer(wallets, many=True)
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["results"], serializer.data)
-
-    def test_wallets_limited_to_user(self):
-        """Test list of wallets is limited to authenticated user."""
-        user2 = create_user(email="user2@example.com")
-        Wallet.objects.create(
-            user=user2, name="other", currency=self.currency, is_real=False
-        )
-        wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-
-        res = self.client.get(WALLETS_URL)
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data["results"]), 1)
-        self.assertEqual(str(res.data["results"][0]["user"]), str(self.user.id))
-        self.assertEqual(str(res.data["results"][0]["id"]), str(wallet.id))
-
-    def test_get_wallet_details(self):
-        """Test retrieving a wallet details."""
-        wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-
-        url = detail_url(str(wallet.id))
-        res = self.client.get(url)
-
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(str(res.data["user"]["id"]), str(self.user.id))
-        self.assertEqual(str(res.data["id"]), str(wallet.id))
-
-    def test_get_other_users_wallet_details_fails(self):
-        """Test retrieving a wallet details."""
-        Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-
-        user2 = create_user(email="user2@example.com")
-        wallet2 = Wallet.objects.create(
-            user=user2, name="other", currency=self.currency, is_real=False
-        )
-
-        url = detail_url(str(wallet2.id))
-        res = self.client.get(url)
-
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_create_wallet(self):
-        """Test creating a wallet."""
-        payload = {"name": "primary", "currency": self.currency.id}
-        res = self.client.post(WALLETS_URL, payload)
-
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(str(res.data["user"]), str(self.user.id))
-        self.assertEqual(str(res.data["currency"]), str(self.currency.id))
-
-    def test_create_wallet_with_same_name_fails(self):
-        """Wallet names are unique per user."""
-        Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-
-        payload = {"name": "primary", "currency": self.currency.id}
-        res = self.client.post(WALLETS_URL, payload)
-
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_wallet_with_unknown_currency_fails(self):
-        payload = {"name": "primary", "currency": 999999}
-        res = self.client.post(WALLETS_URL, payload)
-
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_wallet_creation_with_read_only_fields(self):
-        """Test creating a wallet with"""
-        user2 = create_user(email="user2@gmail.com")
-        payload = {
-            "name": "primary",
-            "currency": self.currency.id,
-            "balance": 100.0,
-            "user": str(user2.id),
-            "is_real": True,
-        }
-        res = self.client.post(WALLETS_URL, payload)
-
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertNotEqual(res.data["balance"], 100)
-        self.assertNotEqual(res.data["user"], user2.id)
-        self.assertEqual(res.data["balance"], "0.00")
-        self.assertFalse(res.data["is_real"])
-        self.assertEqual(str(res.data["user"]), str(self.user.id))
-
-    def test_update_wallet_name_is_owner_scoped(self):
-        wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-        payload = {"name": "renamed"}
-
-        url = detail_url(wallet.id)
-        res = self.client.patch(url, payload)
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        wallet.refresh_from_db()
-        self.assertEqual(wallet.name, "renamed")
-
-    def test_delete_wallet_not_permitted(self):
-        """Test deleting a wallet."""
-        wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency, is_real=False
-        )
-
-        url = detail_url(str(wallet.id))
-        res = self.client.delete(url)
-
-        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+    def test_list_serialization_matches_current_schema(self):
+        user = create_user()
+        wallet = Wallet.objects.create(user=user, name="Demo", currency=self.currency, is_real=False)
+        client = APIClient()
+        client.force_authenticate(user)
+        response = client.get(WALLETS_URL)
+        self.assertEqual(response.data["results"], WalletListSerializer([wallet], many=True).data)

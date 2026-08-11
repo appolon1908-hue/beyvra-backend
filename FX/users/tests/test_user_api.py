@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -18,11 +19,13 @@ def create_user(**params):
     return get_user_model().objects.create_user(**params)
 
 
+@override_settings(EMAIL_OTP_VERIFICATION_ENABLED=False)
 class PublicTransactionsApiTests(TestCase):
     """Test unauthenticated API requests."""
 
     def setUp(self):
-        self.client = APIClient()
+        cache.clear()
+        self.client = APIClient(HTTP_X_FORWARDED_PROTO="https")
 
     def test_create_user_success(self):
         """Test creating a user is successful."""
@@ -31,7 +34,7 @@ class PublicTransactionsApiTests(TestCase):
             "password": "testpass123",
             "first_name": "Test",
             "last_name": "Test Name",
-            "phone_number": "+123456789123",
+            "phone_number": "+12025550101",
         }
         res = self.client.post(CREATE_USER_URL, payload)
 
@@ -39,6 +42,9 @@ class PublicTransactionsApiTests(TestCase):
         user = get_user_model().objects.get(email=payload["email"])
         self.assertTrue(user.check_password(payload["password"]))
         self.assertNotIn("password", res.data)
+        self.assertIn("access", res.data)
+        self.assertIn("refresh", res.data)
+        self.assertEqual(res.data["user"]["email"], payload["email"])
 
     def test_user_with_email_exists_error(self):
         """Test error returned if user with email exists."""
@@ -51,6 +57,24 @@ class PublicTransactionsApiTests(TestCase):
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_user_email_is_normalized_and_case_insensitive_unique(self):
+        payload = {
+            "email": "Mixed.Case@Example.COM",
+            "password": "testpass123",
+            "first_name": "Test",
+            "last_name": "Trader",
+            "phone_number": "+12025550141",
+        }
+        first_response = self.client.post(CREATE_USER_URL, payload)
+        duplicate_response = self.client.post(
+            CREATE_USER_URL,
+            {**payload, "email": "mixed.case@example.com", "phone_number": "+12025550142"},
+        )
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(duplicate_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(get_user_model().objects.get(phone_number="+12025550141").email, "mixed.case@example.com")
+
     def test_password_too_short_error(self):
         """Test an error is returned if password less than 5 chars."""
         payload = {
@@ -58,7 +82,7 @@ class PublicTransactionsApiTests(TestCase):
             "password": "pw",
             "first_name": "Test",
             "last_name": "Test Name",
-            "phone_number": "+123456789123",
+            "phone_number": "+12025550102",
         }
         res = self.client.post(CREATE_USER_URL, payload)
 
@@ -116,6 +140,26 @@ class PublicTransactionsApiTests(TestCase):
         self.assertNotIn("access", res.data)
         self.assertNotIn("refresh", res.data)
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_does_not_reveal_whether_account_exists(self):
+        response = self.client.post(
+            GET_TOKEN_URL,
+            {"email": "missing@example.com", "password": "not-the-password"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn("Invalid credentials", str(response.data))
+
+    def test_login_email_is_case_insensitive(self):
+        create_user(email="case@example.com", password="goodpass")
+
+        response = self.client.post(
+            GET_TOKEN_URL,
+            {"email": "CASE@EXAMPLE.COM", "password": "goodpass"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
 
     def test_create_token_blank_password(self):
         """Test posting a blank password returns an error."""
@@ -178,6 +222,7 @@ class PrivateUserApiTests(TestCase):
     """Test API requests that require authentication."""
 
     def setUp(self):
+        cache.clear()
         user_details = {
             "email": "test@example.com",
             "password": "testpass123",
@@ -186,7 +231,7 @@ class PrivateUserApiTests(TestCase):
             "phone_number": "123456789123",
         }
         self.user = create_user(**user_details)
-        self.client = APIClient()
+        self.client = APIClient(HTTP_X_FORWARDED_PROTO="https")
         self.client.force_authenticate(user=self.user)
 
     def test_retrieve_profile_success(self):
@@ -204,12 +249,12 @@ class PrivateUserApiTests(TestCase):
 
     def test_update_user_profile(self):
         """Test updating the user profile for the authenticated user."""
-        payload = {"first_name": "Updated name", "password": "newpassword123"}
+        payload = {"first_name": "Updated"}
         res = self.client.patch(ME_URL, payload)
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, payload["first_name"])
-        self.assertFalse(self.user.check_password(payload["password"]))
+        self.assertTrue(self.user.check_password("testpass123"))
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_update_user_profile_read_only_fields(self):

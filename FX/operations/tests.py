@@ -1038,6 +1038,20 @@ class ExportSafetyTests(TestCase):
             },
         )
 
+    def test_cache_outage_maps_to_safe_service_unavailable(self):
+        CacheConnectionError = type(
+            "ConnectionError", (Exception,), {"__module__": "redis.exceptions"}
+        )
+        response = BeyvraErrorMapper(CacheConnectionError("sensitive endpoint"), {})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.data,
+            {
+                "code": "SERVICE_TEMPORARILY_UNAVAILABLE",
+                "message": "The service is temporarily unavailable.",
+            },
+        )
+
 
 class PrivateArtifactTests(TestCase):
     def setUp(self):
@@ -1183,6 +1197,8 @@ class PrivateNotificationRealtimeTests(TransactionTestCase):
             socket_b = WebsocketCommunicator(application, "/ws/v2/?ws_ticket=ticket-b")
             self.assertTrue((await socket_a.connect())[0])
             self.assertTrue((await socket_b.connect())[0])
+            self.assertEqual((await socket_a.receive_json_from())["type"], "gateway.ready")
+            self.assertEqual((await socket_b.receive_json_from())["type"], "gateway.ready")
             await get_channel_layer().group_send(
                 notification_group("a", self.a.pk),
                 {

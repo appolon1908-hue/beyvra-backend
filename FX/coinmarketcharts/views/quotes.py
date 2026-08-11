@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.exceptions import APIException
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 from urllib.parse import urlencode
 
@@ -86,7 +86,7 @@ class CryptocurrencyQuotesLatestView(APIView):
         api_url = os.getenv('COINMARKETCAP_URL', '')
         api_key = os.getenv('COINMARKETCAP_API_KEY', '')
         if not api_url or not api_key:
-            raise APIException("Market data is temporarily unavailable")
+            return Response({"detail": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         endpoint = '/v2/cryptocurrency/quotes/latest'
 
@@ -109,14 +109,16 @@ class CryptocurrencyQuotesLatestView(APIView):
         }
 
         try:
+            authorize_coinmarketcap(product="QUOTES", symbol=str(filtered_params.get("symbol", "*")))
             response = requests.get(url, headers=headers, params=filtered_params)
             response.raise_for_status()  # Raise HTTPError for bad responses
             response_data = response.json()
         except requests.RequestException as e:
-            raise APIException("Market data is temporarily unavailable") from e
-        except ValueError as e:
-            raise APIException("Market data is temporarily unavailable") from e
+            return Response({"detail": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError:
+            return Response({"detail": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         if response.status_code == 200:
             return Response(response_data, status=status.HTTP_200_OK)
-        raise APIException("Market data is temporarily unavailable")
+        else:
+            return Response(response_data, status=response.status_code)

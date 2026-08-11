@@ -476,7 +476,10 @@ class AuditEvent(ImmutableModel):
     audit_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     tenant_id = models.CharField(max_length=120, db_index=True)
     actor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT
+        settings.AUTH_USER_MODEL,
+        null=True,
+        related_name="operations_audit_events",
+        on_delete=models.PROTECT,
     )
     role = models.CharField(max_length=40, blank=True)
     action = models.CharField(max_length=64)

@@ -8,6 +8,7 @@ from django.contrib.auth.signals import user_logged_in
 import geoip2.database 
 from users.models import UserDeviceInfo, KYC
 from notifications.models import UserNotifications, Notifications
+from notifications.services import emit_notification
 import os
 
 User = get_user_model()
@@ -31,25 +32,31 @@ def send_account_creation_notification(sender, instance, created, **kwargs):
             "body": f"Welcome, to Trade App! Your account has been created successfully.",
         }
         UserNotificationService.send_account_created(user_id, message)
+        emit_notification(
+            user_id=user_id,
+            title="Account created",
+            message="Your Beyvra account has been created successfully.",
+            category="ACCOUNT_CHANGE",
+        )
         
    
-@receiver(post_save, sender=Trade, dispatch_uid="trade_order_placed")
+@receiver(post_save, sender=Trade, dispatch_uid="legacy_trade_order_placed_disabled")
 def trade_order_placed(sender, instance, created, **kwargs):
     """
     Sends a WebSocket notification when a new user account is created.
     """
     user_id = instance.wallet.user.id
-    if created:
+    if False and created:
         message = {
             "title": "Trade_order_placed",
             "body": f"Your trade order has been placed.",
         }
         UserNotificationService.trade_order_placed(user_id, message)
            
-@receiver(post_save, sender=Trade)
+@receiver(post_save, sender=Trade, dispatch_uid="legacy_trade_execution_disabled")
 def trade_execution_notification(sender, instance, **kwargs):
     user_id = instance.wallet.user.id
-    if not instance.is_active:
+    if False and not instance.is_active:
         message = {
             "title": "Trade_order_executed",
             "body": f"Your trade order has been executed.",
@@ -67,6 +74,13 @@ def handling_deposit(sender, instance, **kwargs):
             "body": f"Your {instance.type} has been approved.",
         }
         UserNotificationService.handle_deposit(user_id, message)
+        emit_notification(
+            user_id=user_id,
+            title=f"{instance.type} approved",
+            message=f"Your {instance.type} has been approved.",
+            category="DEPOSIT" if str(instance.type).lower() == "deposit" else "WITHDRAWAL",
+            payload={"payment_id": str(instance.id), "status": instance.status},
+        )
         logger.info(f" executed: {instance}")
     elif instance.status == 'Declined':
         message = {
@@ -74,6 +88,13 @@ def handling_deposit(sender, instance, **kwargs):
             "body": f"Your {instance.type} was rejected, please try again later.",
         }
         UserNotificationService.handle_deposit(user_id, message)
+        emit_notification(
+            user_id=user_id,
+            title=f"{instance.type} rejected",
+            message=f"Your {instance.type} was rejected. Please try again later.",
+            category="DEPOSIT" if str(instance.type).lower() == "deposit" else "WITHDRAWAL",
+            payload={"payment_id": str(instance.id), "status": instance.status},
+        )
         # Trade has been executed
        
        
@@ -93,6 +114,12 @@ def send_reset_password_notification(sender, **kwargs):
             old_password = None
         if new_password != old_password:
             UserNotificationService.password_changed_confirmation(user_id, message)
+            emit_notification(
+                user_id=user_id,
+                title="Password changed",
+                message="Your password was changed successfully.",
+                category="SECURITY",
+            )
             
             
 
@@ -107,6 +134,13 @@ def login_alert(sender, request, user, **kwargs):
     exists = UserDeviceInfo.objects.filter(ip_address=ip_address, user_agent=user_agent, user=user).exists()
     if not exists:
         UserNotificationService.handle_login_activity(user.id, message)
+        emit_notification(
+            user_id=user.id,
+            title="New login detected",
+            message="A new login to your account was detected.",
+            category="SECURITY",
+            payload={"ip_address": ip_address, "user_agent": user_agent},
+        )
         
         
 @receiver(post_save, sender=User)
@@ -118,6 +152,13 @@ def account_suspension_notification(sender, **kwargs):
     user = kwargs.get('instance', None)
     if not user.is_active:
         UserNotificationService.handle_account_suspension(user.id, message)
+        emit_notification(
+            user_id=user.id,
+            title="Account suspended",
+            message="Your account has been suspended.",
+            category="SECURITY",
+            force=True,
+        )
         
         
 @receiver(pre_save, sender=KYC)
@@ -131,6 +172,13 @@ def Kyc_notification_status(sender, instance,**kwargs):
             "body": f"Field KYC has changed from {original_instance.status} to {instance.status}",}
             if original_instance.status != instance.status:
                 UserNotificationService.handle_kyc_notification(user_id, message)
+                emit_notification(
+                    user_id=user_id,
+                    title="KYC status updated",
+                    message=message["body"],
+                    category="ACCOUNT_CHANGE",
+                    payload={"status": instance.status},
+                )
     except sender.DoesNotExist:
         pass
     

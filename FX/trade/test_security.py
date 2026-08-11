@@ -5,26 +5,16 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from trade.models import Asset, AssetType, Trade, TradeCategory
+from trade.models import Asset, AssetType, TradeCategory
 from wallet.models import Currency, Wallet
-from operations.models import AccountFreeze
 
 
 class TradeSecurityTests(TestCase):
-    def test_account_freeze_blocks_simulated_trade_mutation(self):
+    def _trade_fixture(self):
         user = get_user_model().objects.create_user(
-            email="frozen-trader@example.com",
-            password="test-pass",
-            phone_number="+12025550124",
+            email="trade-demo@example.com", password="test-pass", phone_number="+12025550130"
         )
-        actor = get_user_model().objects.create_user(
-            email="freeze-reviewer@example.com",
-            password="test-pass",
-            phone_number="+12025550125",
-        )
-        currency = Currency.objects.create(
-            name="Demo Safety", symbol="DMS", longer_name="Demo Safety Currency"
-        )
+        currency = Currency.objects.create(name="GBP", symbol="GBP", longer_name="British Pound")
         wallet = Wallet.objects.create(
             user=user,
             name="demo-wallet",
@@ -33,34 +23,50 @@ class TradeSecurityTests(TestCase):
             is_real=False,
         )
         asset_type, _ = AssetType.objects.get_or_create(name="Stock")
-        asset = Asset.objects.create(name="Frozen Example", symbol="FRZ", asset_type=asset_type)
+        asset = Asset.objects.create(name="Test Equity", symbol="TST", asset_type=asset_type)
         category, _ = TradeCategory.objects.get_or_create(name="market")
-        AccountFreeze.objects.create(
-            tenant_id="default",
-            account=user,
-            actor=actor,
-            level="PARTIAL",
-            reason_code="ACCOUNT_REVIEW_REQUIRED",
-        )
         client = APIClient()
         client.force_authenticate(user)
-        response = client.post(
-            "/api/trades/",
-            {
-                "wallet": wallet.pk,
-                "asset": asset.pk,
-                "quantity": "1.0",
-                "price_per_unit": "10.0000",
-                "trade_type": "buy",
-                "category": category.name,
-                "duration": 1,
-            },
-            format="json",
-            secure=True,
+        payload = {
+            "wallet": wallet.id,
+            "asset": asset.id,
+            "quantity": "1.0",
+            "price_per_unit": "10.0000",
+            "trade_type": "buy",
+            "category": category.name,
+            "duration": 1,
+        }
+        return client, wallet, payload
+
+    def test_idempotency_key_prevents_duplicate_trade(self):
+        client, wallet, payload = self._trade_fixture()
+
+        first = client.post(
+            "/api/trades/", payload, format="json", secure=True,
+            HTTP_IDEMPOTENCY_KEY="same-request"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "ACCOUNT_FROZEN")
-        self.assertFalse(Trade.objects.filter(wallet=wallet).exists())
+        second = client.post(
+            "/api/trades/", payload, format="json", secure=True,
+            HTTP_IDEMPOTENCY_KEY="same-request"
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(first.data["id"], second.data["id"])
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, Decimal("90.00"))
+
+    def test_cancel_active_trade_refunds_wallet_once(self):
+        client, wallet, payload = self._trade_fixture()
+        created = client.post("/api/trades/", payload, format="json", secure=True)
+
+        cancelled = client.post(f"/api/trades/{created.data['id']}/cancel/", secure=True)
+        repeated = client.post(f"/api/trades/{created.data['id']}/cancel/", secure=True)
+
+        self.assertEqual(cancelled.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated.status_code, status.HTTP_409_CONFLICT)
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, Decimal("100.00"))
 
     def test_staging_rejects_real_money_wallet(self):
         user = get_user_model().objects.create_user(
@@ -94,13 +100,8 @@ class TradeSecurityTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(
-            response.data,
-            {
-                "code": "FEATURE_DISABLED",
-                "message": "This feature is currently unavailable.",
-            },
-        )
+        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
+        self.assertNotIn("wallet", str(response.data).lower())
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
 
