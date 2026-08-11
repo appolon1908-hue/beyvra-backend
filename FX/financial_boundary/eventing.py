@@ -27,6 +27,7 @@ AUDIT_ACTIONS = {
     "deposit_intent.requested", "withdrawal.requested", "withdrawal.cancelled",
     "transfer.requested", "provider_operation.denied", "compliance_gate.denied",
     "security_gate.denied",
+    "financial_halt.requested", "financial_halt.approved",
 }
 
 

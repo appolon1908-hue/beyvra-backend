@@ -145,6 +145,42 @@ class Destination(models.Model):
         ]
 
 
+class FinancialHaltRequest(ImmutableFinancialRecord):
+    class State(models.TextChoices):
+        ACTIVE = "ACTIVE"
+        READ_ONLY = "READ_ONLY"
+        WITHDRAWALS_HALTED = "WITHDRAWALS_HALTED"
+        FUNDING_HALTED = "FUNDING_HALTED"
+        ALL_MUTATIONS_HALTED = "ALL_MUTATIONS_HALTED"
+
+    request_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_ref = models.UUIDField()
+    proposed_state = models.CharField(max_length=24, choices=State.choices)
+    requested_by = models.PositiveBigIntegerField()
+    reason_code = models.CharField(max_length=64)
+    policy_version = models.CharField(max_length=32)
+    correlation_id = models.UUIDField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "financial_halt_requests"
+        indexes = [models.Index(fields=["tenant_ref", "requested_at"], name="financial_halt_req_tenant_idx")]
+
+
+class FinancialHaltApproval(ImmutableFinancialRecord):
+    approval_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.OneToOneField(
+        FinancialHaltRequest, on_delete=models.PROTECT, related_name="approval",
+    )
+    approved_by = models.PositiveBigIntegerField()
+    correlation_id = models.UUIDField()
+    approved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "financial_halt_approvals"
+        indexes = [models.Index(fields=["approved_at"], name="financial_halt_approved_idx")]
+
+
 class FinancialIncident(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     severity = models.CharField(max_length=16)
