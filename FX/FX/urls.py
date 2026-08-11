@@ -25,6 +25,7 @@ from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, 
 from ws import v2 as realtime_v2
 from news_app import views as news_views
 from users import urls as user_urls
+from treasury.api import LiquidityView as InstitutionalLiquidityView
 
 urlpatterns = [
     path("health/", include("apps.foundation.health_urls")),
@@ -78,6 +79,9 @@ urlpatterns = [
     path("api/reporting/", include("reporting.urls")),
     path("api/", include("integrations.urls")),
     path("api/v1/", include("operations.urls")),
+    path("api/v1/treasury/", include("treasury.urls")),
+    path("api/v1/institutional/liquidity", InstitutionalLiquidityView.as_view(), name="institutional_liquidity_v1"),
+    path("api/v1/operator/treasury/", include("treasury.operator_urls")),
     path("api/internal/v1/", include("operations.operator_urls")),
 ]
 
