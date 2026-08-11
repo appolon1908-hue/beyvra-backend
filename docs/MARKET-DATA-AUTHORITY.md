@@ -6,3 +6,4 @@ Every event preserves provider/message/source type, original provider timestamp,
 
 REST authority is `/api/v1/market/instruments`, `/quotes`, `/candles`, `/trades/{instrument}`, and `/status/{instrument}`. Legacy provider-specific surfaces are deprecated and must be removed after client migration. `/ws/v2/` remains the existing realtime architecture; no new bus was introduced. Browser provider calls are forbidden.
 
+Quotes, trades, and statuses are stored only after canonical normalization. Their read APIs enforce instrument identity and freshness, exclude suspect/stale records, retain safe provenance, and return `503 PROVIDER_NOT_AVAILABLE` when no fresh authority exists. Order book remains explicit `501 CAPABILITY_UNSUPPORTED` until a licensed adapter supplies genuine depth; it is never synthesized from quotes.

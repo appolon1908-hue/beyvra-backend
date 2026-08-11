@@ -69,6 +69,57 @@ class MarketCandle(models.Model):
         ]
 
 
+class CanonicalQuote(models.Model):
+    instrument_id = models.CharField(max_length=64)
+    bid = models.DecimalField(max_digits=30, decimal_places=12, null=True)
+    ask = models.DecimalField(max_digits=30, decimal_places=12, null=True)
+    bid_size = models.DecimalField(max_digits=30, decimal_places=12, null=True)
+    ask_size = models.DecimalField(max_digits=30, decimal_places=12, null=True)
+    last = models.DecimalField(max_digits=30, decimal_places=12, null=True)
+    provider_timestamp = models.DateTimeField()
+    received_at = models.DateTimeField()
+    provider_id = models.CharField(max_length=64)
+    sequence = models.CharField(max_length=128, blank=True)
+    delayed = models.BooleanField(default=False)
+    suspect = models.BooleanField(default=False)
+    provenance = models.JSONField(default=dict)
+
+    class Meta:
+        indexes = [models.Index(fields=("instrument_id", "-provider_timestamp"), name="canonical_quote_latest_idx")]
+        constraints = [models.UniqueConstraint(fields=("provider_id", "instrument_id", "provider_timestamp", "sequence"), name="canonical_quote_identity")]
+
+
+class CanonicalTradeTick(models.Model):
+    instrument_id = models.CharField(max_length=64)
+    price = models.DecimalField(max_digits=30, decimal_places=12)
+    size = models.DecimalField(max_digits=30, decimal_places=12)
+    trade_id = models.CharField(max_length=255)
+    provider_timestamp = models.DateTimeField()
+    received_at = models.DateTimeField()
+    provider_id = models.CharField(max_length=64)
+    venue = models.CharField(max_length=64, default="UNKNOWN")
+    sequence = models.CharField(max_length=128, blank=True)
+    conditions = models.JSONField(default=list)
+    provenance = models.JSONField(default=dict)
+
+    class Meta:
+        indexes = [models.Index(fields=("instrument_id", "-provider_timestamp"), name="canonical_trade_latest_idx")]
+        constraints = [models.UniqueConstraint(fields=("provider_id", "instrument_id", "trade_id"), name="canonical_trade_identity")]
+
+
+class CanonicalMarketStatus(models.Model):
+    instrument_id = models.CharField(max_length=64)
+    status = models.CharField(max_length=16)
+    halt_status_available = models.BooleanField(default=False)
+    provider_timestamp = models.DateTimeField()
+    received_at = models.DateTimeField()
+    provider_id = models.CharField(max_length=64)
+    provenance = models.JSONField(default=dict)
+
+    class Meta:
+        indexes = [models.Index(fields=("instrument_id", "-provider_timestamp"), name="canonical_status_latest_idx")]
+
+
 class TradeCategory(TimeStampedModel):
     name = models.CharField(max_length=20, unique=True)
 

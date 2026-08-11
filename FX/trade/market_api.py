@@ -6,8 +6,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS, MarketDataError, get_market_history
-from .models import MarketCandle
-from .market_authority import FIVE_SECOND_AVAILABLE, TIMEFRAME_AUTHORITY
+from .models import CanonicalMarketStatus, CanonicalQuote, CanonicalTradeTick, MarketCandle
+from .market_authority import FIVE_SECOND_AVAILABLE, TIMEFRAME_AUTHORITY, FreshnessState, assess_freshness
 
 
 CHART_INTERVALS = ("5s", "10s", "15s", "30s", "1m", "5m", "15m", "1h", "4h", "1d")
@@ -75,6 +75,10 @@ def _canonical_candles(candles, interval, before=None):
 
 def _server_time():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _fresh(record, stale_ms=60000):
+    return assess_freshness(record.provider_timestamp,record.received_at,datetime.now(timezone.utc),degraded_ms=stale_ms//2,stale_ms=stale_ms)
 
 
 def _market_status(definition):
@@ -219,15 +223,41 @@ class MarketQuotesView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     def get(self, request):
-        symbol = request.query_params.get("symbol", "BTCUSDT").upper()
-        return Response({"code":"MARKET_DATA_UNAVAILABLE","detail":"No approved quote authority is configured.","instrument_id":symbol},status=503)
+        requested=request.query_params.get("instrument_ids") or request.query_params.get("instrument_id") or request.query_params.get("symbol")
+        instrument_ids=[item.strip().upper() for item in requested.split(",")] if requested else sorted(INSTRUMENTS)
+        results=[]
+        for instrument_id in instrument_ids:
+            if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND","instrument_id":instrument_id},status=404)
+            quote=CanonicalQuote.objects.filter(instrument_id=instrument_id,suspect=False).order_by("-provider_timestamp").first()
+            if quote is None: continue
+            freshness=_fresh(quote)
+            if freshness in {FreshnessState.STALE,FreshnessState.UNAVAILABLE}: continue
+            results.append({"instrument_id":instrument_id,"bid":str(quote.bid) if quote.bid is not None else None,"ask":str(quote.ask) if quote.ask is not None else None,"bid_size":str(quote.bid_size) if quote.bid_size is not None else None,"ask_size":str(quote.ask_size) if quote.ask_size is not None else None,"last":str(quote.last) if quote.last is not None else None,"provider_timestamp":quote.provider_timestamp.isoformat(),"received_at":quote.received_at.isoformat(),"provider_id":quote.provider_id,"sequence":quote.sequence or None,"delayed":quote.delayed,"stale":False,"freshness":freshness.value,"provenance":quote.provenance})
+        if not results: return Response({"code":"PROVIDER_NOT_AVAILABLE","detail":"No fresh approved quote authority is available."},status=503)
+        return Response({"results":results,"server_time":_server_time()})
 
 
 class MarketStatusView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
-        return Response({"instrument_id": symbol.upper(), "status": "UNKNOWN", "halt_status":"UNKNOWN", "provider_id": None})
+        instrument_id=symbol.upper()
+        if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND"},status=404)
+        value=CanonicalMarketStatus.objects.filter(instrument_id=instrument_id).order_by("-provider_timestamp").first()
+        if value is None or _fresh(value) in {FreshnessState.STALE,FreshnessState.UNAVAILABLE}: return Response({"instrument_id":instrument_id,"status":"UNKNOWN","halt_status":"UNKNOWN","provider_id":None},status=503)
+        return Response({"instrument_id":instrument_id,"status":value.status,"halt_status":value.status if value.halt_status_available else "UNKNOWN","provider_timestamp":value.provider_timestamp.isoformat(),"received_at":value.received_at.isoformat(),"provider_id":value.provider_id,"provenance":value.provenance})
+
+
+class MarketTradesView(APIView):
+    permission_classes=[IsAuthenticated]; authentication_classes=[JWTAuthentication]
+    def get(self,request,symbol):
+        instrument_id=symbol.upper()
+        if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND"},status=404)
+        limit=min(max(int(request.query_params.get("limit",100)),1),1000)
+        rows=CanonicalTradeTick.objects.filter(instrument_id=instrument_id).order_by("-provider_timestamp")[:limit]
+        results=[{"instrument_id":row.instrument_id,"price":str(row.price),"size":str(row.size),"trade_id":row.trade_id,"provider_timestamp":row.provider_timestamp.isoformat(),"received_at":row.received_at.isoformat(),"provider_id":row.provider_id,"venue":row.venue,"sequence":row.sequence or None,"conditions":row.conditions,"provenance":row.provenance} for row in rows if _fresh(row) not in {FreshnessState.STALE,FreshnessState.UNAVAILABLE}]
+        if not results: return Response({"code":"PROVIDER_NOT_AVAILABLE","detail":"No fresh approved trade authority is available."},status=503)
+        return Response({"instrument_id":instrument_id,"results":results,"server_time":_server_time()})
 
 
 class MarketCapabilityUnsupportedView(APIView):
