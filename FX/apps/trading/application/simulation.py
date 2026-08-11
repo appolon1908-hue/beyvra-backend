@@ -9,6 +9,7 @@ from apps.foundation.models import ApplicationAuditEvent, OutboxEvent, TradingCo
 from apps.foundation.services import begin_idempotent_request, complete_idempotent_request, consume_once, enqueue_event
 from apps.trading.domain.orders import OrderState, transition_order
 from apps.trading.models import RiskDecision, SimulatedAccount, SimulatedReservation, SimulatedTrade, TradingOrder
+from apps.trading.execution_authority import preview_route, record_quality
 from apps.trading.risk import RiskEngine
 from integrations.execution.simulated import SimulatedExecutionProvider
 from integrations.financial.simulated import SimulatedFinancialAdapter
@@ -126,6 +127,8 @@ def create(user, data, idempotency_key, correlation_id=None):
     if not fresh and record.response_body is not None:
         return record.response_body, record.response_status
     order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], state=OrderState.PENDING, simulation=True)
+    preview_route(user, {"instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"],
+        "quantity": str(payload["quantity"]), "reference_price": str(payload["price"]), "mode": "SIMULATION"}, persist=True, order=order)
     risk = RiskDecision.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, order_id=order.id, decision=result.decision, reason_codes=list(result.reason_codes), policy_version=result.policy_version, inputs_hash=result.inputs_hash)
     correlation = correlation_uuid(correlation_id)
     audit_ref(subject, "simulation.risk.decided", "risk_decision", risk.decision_id, correlation, result.decision)
@@ -208,6 +211,11 @@ def apply_execution(order_id, execution):
             enqueue_event(aggregate_type="position", aggregate_id=position.id, event_type="trading.position.updated.v1", payload={"position_id": str(position.id), "account_ref": order.account_ref, "instrument": order.instrument_id, "quantity": str(position.quantity), "average_price": str(position.average_price), "simulation": True}, tenant_ref=tenant,correlation_id=correlation)
             enqueue_event(aggregate_type="account", aggregate_id=account.id, event_type="trading.balance_projection.updated.v1", payload=serialize_account(account), tenant_ref=tenant,correlation_id=correlation)
         order.save(update_fields=("state", "filled_quantity", "average_fill_price", "updated_at"))
+        if order.filled_quantity:
+            quality = record_quality(order)
+            enqueue_event(aggregate_type="execution_quality", aggregate_id=quality.report_id, event_type="execution.quality.measured.v1",
+                payload={"report_id": str(quality.report_id), "order_id": str(order.id), "slippage_bps": str(quality.slippage_bps),
+                    "price_improvement_bps": str(quality.price_improvement_bps), "simulation": True}, tenant_ref=order.tenant_ref, correlation_id=correlation)
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type=event_type, payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
     consumed = consume_once(envelope=envelope, consumer_name="simulated-execution-v1", mutation=mutation)
     if not consumed:

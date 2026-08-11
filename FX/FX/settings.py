@@ -41,7 +41,9 @@ def _provider_credential(name: str) -> str:
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
-PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
+# This candidate is structurally paper/simulation-only. Environment input may
+# not expose legacy broker mutation routes.
+PAPER_TRADING_ONLY = True
 REAL_WALLET_REQUIRE_MFA = os.getenv("REAL_WALLET_REQUIRE_MFA", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
@@ -83,7 +85,11 @@ REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 REAL_TRADING_ENABLED = False
 EXTERNAL_EXECUTION_ENABLED = False
+LIVE_BROKER_ROUTING_ENABLED = False
+FIX_LIVE_SESSION_ENABLED = False
 DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "local").lower()
+PAPER_TRADING_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
+SIMULATION_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"
 SIMULATED_TRADING_ENABLED = SIMULATED_TRADING_REQUESTED and DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATED_EXECUTION_SCENARIO = os.getenv("SIMULATED_EXECUTION_SCENARIO", "IMMEDIATE_FULL_FILL")

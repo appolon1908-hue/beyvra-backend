@@ -39,6 +39,7 @@ CHANNEL_REGISTRY = {
     "simulation.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/orders", "rate_limit": 10},
     "simulation.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/trades", "rate_limit": 10},
     "simulation.position.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/positions", "rate_limit": 10},
+    "simulation.execution-quality.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/execution/reports", "rate_limit": 10},
     "demo.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "demo.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "portfolio.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
@@ -86,7 +87,7 @@ def _tenant(user):
 
 
 def _owns_demo_account(user_id, channel):
-    if channel.startswith(("simulation.order.", "simulation.execution.", "simulation.position.")):
+    if channel.startswith(("simulation.order.", "simulation.execution.", "simulation.position.", "simulation.execution-quality.")):
         return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
     if not channel.startswith(("demo.order.", "demo.execution.")):
         return False

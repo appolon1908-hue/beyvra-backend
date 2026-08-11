@@ -1,0 +1,13 @@
+groups:
+  - name: beyvra-execution-authority
+    rules:
+      - alert: BeyvraExecutionUnknownOutcome
+        expr: increase(beyvra_execution_unknown_outcomes_total[5m]) > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations: {summary: "Execution outcome requires reconciliation before retry"}
+      - alert: BeyvraExecutionProviderFailures
+        expr: sum by (provider) (rate(beyvra_execution_provider_failures_total[10m])) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Execution provider failures are sustained"}
