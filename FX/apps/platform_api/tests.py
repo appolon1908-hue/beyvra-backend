@@ -5,6 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from django.db import close_old_connections
+from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -63,6 +64,7 @@ class CanonicalPlatformApiTests(TestCase):
 
     @override_settings(GUEST_DEMO_ENABLED=True, PAPER_TRADING_ONLY=True)
     def test_guest_demo_wallet_has_canonical_tenant_context(self):
+        cache.delete("guest-demo-session:tenant-linked-guest-fixture")
         guest = APIClient().post(
             "/api/user/guest-demo/",
             {},

@@ -119,6 +119,7 @@ class CanonicalRouteMatrixTests(TestCase):
                 actual = payload.get("error", payload).get("code")
                 self.assertEqual(actual, code)
 
+    @override_settings(NATS_JETSTREAM_ENABLED=False)
     def test_public_health_status_and_features_are_bounded(self):
         public = APIClient()
         for route in ("/health/live", "/health/ready", "/api/v1/status", "/api/v1/features"):

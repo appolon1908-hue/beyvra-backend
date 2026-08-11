@@ -87,8 +87,6 @@ def _tenant(user):
 
 
 def _owns_demo_account(user_id, channel):
-    if not channel.startswith(("demo.order.", "demo.execution.")):
-        return False
     account_id = channel.rsplit(".", 1)[-1]
     try:
         return Wallet.objects.filter(pk=account_id, user_id=user_id, is_real=False, is_archived=False).exists()
@@ -161,7 +159,8 @@ def subscription_token(request):
 @permission_classes([AllowAny])
 def authorize_subscription(request):
     """Centrifugo subscribe-proxy contract; reachable only on the private network."""
-    if request.headers.get("X-Codestra-Proxy-Secret") != os.getenv("CENTRIFUGO_PROXY_SECRET", ""):
+    proxy_secret = request.headers.get("X-Beyvra-Proxy-Secret") or request.headers.get("X-Codestra-Proxy-Secret")
+    if proxy_secret != os.getenv("CENTRIFUGO_PROXY_SECRET", ""):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     channel = request.data.get("channel")
     user_id = str(request.data.get("user", ""))
