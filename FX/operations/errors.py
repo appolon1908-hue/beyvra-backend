@@ -14,6 +14,14 @@ def BeyvraErrorMapper(exc, context):  # noqa: N802 - public error-contract name
     response = exception_handler(exc, context)
     if response is None:
         return response
-    code, message = SAFE_MESSAGES.get(response.status_code, ("REQUEST_FAILED", "The request could not be completed."))
+    if "Real-money trading is disabled" in str(getattr(exc, "detail", "")):
+        response.data = {
+            "code": "FEATURE_DISABLED",
+            "message": "This feature is currently unavailable.",
+        }
+        return response
+    code, message = SAFE_MESSAGES.get(
+        response.status_code, ("REQUEST_FAILED", "The request could not be completed.")
+    )
     response.data = {"code": code, "message": message}
     return response

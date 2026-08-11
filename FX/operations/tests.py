@@ -5,9 +5,11 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APIClient
 from users.models import User
 
+from .errors import BeyvraErrorMapper
 from .models import (
     AccountDeletionRequest,
     AccountFreeze,
@@ -395,3 +397,16 @@ class ExportSafetyTests(TestCase):
         for prefix in "=+-@":
             self.assertEqual(csv_safe(prefix + "cmd"), "'" + prefix + "cmd")
         self.assertEqual(csv_safe("normal"), "normal")
+
+    def test_real_money_error_is_feature_disabled_without_internal_detail(self):
+        response = BeyvraErrorMapper(
+            DRFValidationError("Real-money trading is disabled in this environment."),
+            {},
+        )
+        self.assertEqual(
+            response.data,
+            {
+                "code": "FEATURE_DISABLED",
+                "message": "This feature is currently unavailable.",
+            },
+        )
