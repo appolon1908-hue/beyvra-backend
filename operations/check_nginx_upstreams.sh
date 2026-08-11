@@ -22,11 +22,12 @@ invalid_login=$(http_code \
   --header 'Content-Type: application/json' \
   --data '{"email":"nonexistent-certification-user@invalid.example","password":"not-a-real-password"}' \
   "${base_url}/api/user/token/" || true)
+ws_probe_key='Y2VydGlmaWNhdGlvbi10ZXN0' # gitleaks:allow fixed RFC 6455 probe value
 websocket=$(http_code --http1.1 \
   --header 'Connection: Upgrade' \
   --header 'Upgrade: websocket' \
   --header 'Sec-WebSocket-Version: 13' \
-  --header 'Sec-WebSocket-Key: Y2VydGlmaWNhdGlvbi10ZXN0' \
+  --header "Sec-WebSocket-Key: ${ws_probe_key}" \
   "${base_url}/ws/nonexistent-certification/" || true)
 centrifugo=$(http_code "${base_url}/ws/v2/health" || true)
 

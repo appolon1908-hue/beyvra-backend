@@ -21,8 +21,17 @@ class TradingOrder(models.Model):
         choices=[(value.value, value.value) for value in OrderState],
         default=OrderState.PENDING.value,
     )
+    simulation = models.BooleanField(default=True, editable=False)
+    eligibility_policy_version = models.CharField(max_length=32, default="")
+    eligibility_result = models.CharField(max_length=20, default="DENIED")
+    eligibility_reason_codes = models.JSONField(default=list)
+    eligibility_evaluated_at = models.DateTimeField(null=True)
+    idempotency_key = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("tenant_ref", "subject_ref", "idempotency_key"), condition=~models.Q(idempotency_key=""), name="unique_sim_order_idempotency")]
 
 
 class RiskDecision(models.Model):

@@ -52,6 +52,7 @@ urlpatterns = [
     path("api/v1/", include("real_wallet.urls")),
     path("api/v1/", include("trade.market_urls")),
     path("api/v1/trading/", include("apps.trading.api.urls")),
+    path("api/v1/compliance/", include("apps.compliance.urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
     path("api/v1/news/<str:article_id>", news_views.news_detail_v1, name="news_detail_v1"),

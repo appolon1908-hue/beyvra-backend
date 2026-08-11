@@ -1,0 +1,3 @@
+# Compliance security and privacy
+
+PII includes identity, address, DOB, document references, and tax identifiers. Raw PII is prohibited in logs, metrics, traces, URLs, event subjects, alerts, and source control. Public APIs expose only safe states, restrictions, requirements, and times; provider notes, risk scores, match detail, internal case notes, request IDs, and document data are excluded. Tenant access is derived server-side from authenticated organization membership. Provider webhooks require HMAC, timestamp freshness, provider approval, and inbox replay protection. No new encryption claim is made: source KYC documents remain in the legacy storage mechanism and require a separate approved encryption-at-rest review before production use.

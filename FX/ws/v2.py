@@ -42,6 +42,9 @@ CHANNEL_REGISTRY = {
     "wallet.balance.{account_id}": {"visibility": "private", "required_permission": "demo.wallet.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
     "account.security.{user_id}": {"visibility": "private", "required_permission": "account.security.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/session", "rate_limit": 5},
+    "compliance.profile.updated.v1.{user_id}": {"visibility": "private", "required_permission": "compliance.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 20, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/compliance/profile", "rate_limit": 5},
+    "compliance.requirement.updated.v1.{user_id}": {"visibility": "private", "required_permission": "compliance.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 20, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/compliance/requirements", "rate_limit": 5},
+    "compliance.restriction.updated.v1.{user_id}": {"visibility": "private", "required_permission": "compliance.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 20, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/compliance/profile", "rate_limit": 5},
     "system.status": {"visibility": "public", "required_permission": "system.read", "tenant_scope": False, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 50, "history_ttl": 60, "resume_supported": False, "snapshot_provider": "/api/v1/realtime/v2/health", "rate_limit": 10},
 }
 
@@ -141,7 +144,7 @@ def subscription_token(request):
         return JsonResponse({"code": "UNSUPPORTED_CHANNEL"}, status=403)
     user_id = str(request.user.id)
     if entry["visibility"] == "private":
-        if pattern in {"notification.{user_id}", "account.security.{user_id}"} and not channel.endswith(user_id):
+        if pattern in {"notification.{user_id}", "account.security.{user_id}", "compliance.profile.updated.v1.{user_id}", "compliance.requirement.updated.v1.{user_id}", "compliance.restriction.updated.v1.{user_id}"} and not channel.endswith(user_id):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if entry["account_scope"] and not (user_id in channel or _owns_demo_account(request.user.id, channel)):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)

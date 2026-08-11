@@ -1,4 +1,9 @@
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:  # Python 3.10 compatibility for local certification.
+    from enum import Enum
+    class StrEnum(str, Enum):
+        def __str__(self): return self.value
 
 
 class OrderState(StrEnum):
