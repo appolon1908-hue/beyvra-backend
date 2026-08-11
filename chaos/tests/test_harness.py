@@ -1,7 +1,7 @@
 import os, unittest
 from unittest.mock import patch
 from chaos.harness import SCENARIOS, Scenario, UnsafeTarget, safety_gate
-from chaos.invariants import INVARIANTS, assert_all
+from chaos.invariants import INVARIANTS, assert_all, evaluate
 
 SAFE={"BEYVRA_CHAOS_ISOLATED":"1","REAL_TRADING_ENABLED":"false","EXTERNAL_EXECUTION_ENABLED":"false","REAL_MONEY_ENABLED":"false"}
 
@@ -27,6 +27,24 @@ class HarnessTests(unittest.TestCase):
     def test_controlled_corruption_is_detected(self):
         with self.assertRaisesRegex(AssertionError,"DUPLICATE_TRADES=1"):
             assert_all({"trades":[{"execution_id":"same"},{"execution_id":"same"}]})
+    def test_standalone_invariants_do_not_rely_on_zero_defaults(self):
+        corruptions = {
+            "LOST_COMMITTED_ORDERS": {"committed_order_ids": ["missing"]},
+            "LOST_COMMITTED_OUTBOX_EVENTS": {"committed_outbox_event_ids": ["missing"]},
+            "DUPLICATE_ORDERS": {"orders": [
+                {"id":"1", "tenant_id":"t", "idempotency_key":"same"},
+                {"id":"2", "tenant_id":"t", "idempotency_key":"same"},
+            ]},
+            "POSITION_ACCOUNTING_ERRORS": {
+                "positions":[{"account_id":"a", "instrument_id":"i", "quantity":"2"}],
+                "expected_positions":[{"account_id":"a", "instrument_id":"i", "quantity":"1"}],
+            },
+            "CROSS_TENANT_ACCESS_SUCCESSES": {"cross_tenant_access_successes":["opaque-event"]},
+        }
+        for invariant, snapshot in corruptions.items():
+            with self.subTest(invariant=invariant):
+                findings = {finding.invariant: finding.count for finding in evaluate(snapshot)}
+                self.assertGreater(findings[invariant], 0)
 
 class RecoveryContractTests(unittest.TestCase):
     def test_outbox_crash_points_eventually_publish_once(self):
