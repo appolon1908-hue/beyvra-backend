@@ -1,0 +1,12 @@
+{
+  "title": "Beyvra / Post-Trade & Settlement",
+  "uid": "beyvra-post-trade",
+  "schemaVersion": 39,
+  "panels": [
+    {"type": "timeseries", "title": "Trades captured", "targets": [{"expr": "rate(beyvra_trades_captured_total[5m])"}]},
+    {"type": "timeseries", "title": "Processing latency p95", "targets": [{"expr": "histogram_quantile(0.95, sum by (le, stage) (rate(beyvra_post_trade_processing_seconds_bucket[5m])))"}]},
+    {"type": "timeseries", "title": "Settlement states", "targets": [{"expr": "beyvra_settlement_instructions_total"}]},
+    {"type": "stat", "title": "Open exceptions", "targets": [{"expr": "sum(beyvra_post_trade_exceptions_open)"}]},
+    {"type": "stat", "title": "Reconciliation violations", "targets": [{"expr": "sum(increase(beyvra_post_trade_reconciliation_violations_total[1h]))"}]}
+  ]
+}
