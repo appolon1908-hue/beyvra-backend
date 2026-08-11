@@ -80,6 +80,15 @@ SAFE_MESSAGES = {
     "INVALID_WEBHOOK": "Webhook authentication failed.",
     "WEBHOOK_REPLAY_CONFLICT": "The webhook event conflicts with an earlier delivery.",
 }
+
+
+class ProviderWebhookThrottle(ScopedRateThrottle):
+    """Keep the provider bound active even when test settings disable defaults."""
+
+    def get_rate(self):
+        return self.THROTTLE_RATES.get(self.scope, "300/minute")
+
+
 IDEMPOTENCY_PARAMETER = OpenApiParameter("Idempotency-Key", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True, description="Unique mutation key. Reuse with a different body returns IDEMPOTENCY_CONFLICT.")
 
 
@@ -724,7 +733,7 @@ class FeatureView(APIView):
 class ProviderWebhookView(APIView):
     authentication_classes = ()
     permission_classes = (AllowAny,)
-    throttle_classes = (ScopedRateThrottle,)
+    throttle_classes = (ProviderWebhookThrottle,)
     throttle_scope = "provider_webhook"
     max_body = 262144
     event_id_pattern = re.compile(r"[A-Za-z0-9:_.-]{1,255}")
