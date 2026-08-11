@@ -12,8 +12,14 @@ MESSAGES = {
     "ORDER_INVALID_STATE": "This simulated order can no longer be changed.",
     "VALIDATION_ERROR": "Some order information needs to be corrected.",
     "SIMULATION_AUTHORITY_REQUIRED": "Simulation authority is required.",
+    "TRADING_NOT_AVAILABLE": "Trading is not available for this account or instrument.",
+    "ORDER_REJECTED": "The order could not be accepted.",
+    "ACCOUNT_REVIEW_REQUIRED": "Your account is being reviewed.",
+    "SURVEILLANCE_TEMPORARILY_UNAVAILABLE": "Trading controls are temporarily unavailable.",
+    "PERMISSION_DENIED": "You do not have permission to perform this action.",
+    "SELF_APPROVAL_FORBIDDEN": "Independent approval is required.",
 }
 
 
 def error_response(request, code, status_code, details=None):
-    return Response({"error": {"code": code, "message": MESSAGES.get(code, code.replace("_", " ").title()), "request_id": request.headers.get("X-Request-ID", ""), "details": details or {}}}, status=status_code)
+    return Response({"error": {"code": code, "message": MESSAGES.get(code, "The request could not be completed."), "details": details or {}}}, status=status_code)

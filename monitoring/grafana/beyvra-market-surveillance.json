@@ -1,0 +1,17 @@
+{
+  "title": "Beyvra / Market Surveillance",
+  "uid": "beyvra-market-surveillance",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["beyvra", "surveillance", "restricted"],
+  "templating": {"list": []},
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Indicators by type and severity", "targets": [{"expr": "sum by (rule_type,severity) (rate(beyvra_surveillance_events_total[5m]))"}], "gridPos": {"h": 7, "w": 12, "x": 0, "y": 0}},
+    {"id": 2, "type": "stat", "title": "Open cases", "targets": [{"expr": "sum(beyvra_surveillance_cases_open)"}], "gridPos": {"h": 7, "w": 6, "x": 12, "y": 0}},
+    {"id": 3, "type": "stat", "title": "Active restrictions", "targets": [{"expr": "sum(beyvra_surveillance_restrictions_active)"}], "gridPos": {"h": 7, "w": 6, "x": 18, "y": 0}},
+    {"id": 4, "type": "timeseries", "title": "STP prevented", "targets": [{"expr": "increase(beyvra_self_trade_preventions_total[15m])"}], "gridPos": {"h": 7, "w": 8, "x": 0, "y": 7}},
+    {"id": 5, "type": "timeseries", "title": "Evaluation p95", "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(beyvra_surveillance_evaluation_seconds_bucket[5m])))"}], "gridPos": {"h": 7, "w": 8, "x": 8, "y": 7}},
+    {"id": 6, "type": "timeseries", "title": "Dead letters and reconciliation", "targets": [{"expr": "increase(beyvra_surveillance_dead_letter_total[15m])"}, {"expr": "sum(beyvra_surveillance_reconciliation_violations_total)"}], "gridPos": {"h": 7, "w": 8, "x": 16, "y": 7}}
+  ]
+}
