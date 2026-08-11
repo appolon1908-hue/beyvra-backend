@@ -1,0 +1,60 @@
+;
+; Archive created at 2026-08-11 08:02:55 UTC
+;     dbname: beyvradr
+;     TOC Entries: 49
+;     Compression: gzip
+;     Dump Version: 1.15-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 16.14
+;     Dumped by pg_dump version: 16.14
+;
+;
+; Selected TOC Entries:
+;
+227; 1255 16494 FUNCTION public reject_audit_mutation() dr_verifier
+224; 1259 16477 TABLE public audit_events dr_verifier
+216; 1259 16393 TABLE public orders dr_verifier
+222; 1259 16462 TABLE public outbox_events dr_verifier
+220; 1259 16446 TABLE public positions dr_verifier
+223; 1259 16470 TABLE public processed_events dr_verifier
+226; 1259 16486 TABLE public reconciliation_records dr_verifier
+225; 1259 16485 SEQUENCE public reconciliation_records_id_seq dr_verifier
+219; 1259 16431 TABLE public reservations dr_verifier
+215; 1259 16385 TABLE public schema_migrations dr_verifier
+218; 1259 16419 TABLE public settlements dr_verifier
+221; 1259 16453 TABLE public simulated_accounts dr_verifier
+217; 1259 16404 TABLE public trades dr_verifier
+3540; 0 16477 TABLE DATA public audit_events dr_verifier
+3532; 0 16393 TABLE DATA public orders dr_verifier
+3538; 0 16462 TABLE DATA public outbox_events dr_verifier
+3536; 0 16446 TABLE DATA public positions dr_verifier
+3539; 0 16470 TABLE DATA public processed_events dr_verifier
+3542; 0 16486 TABLE DATA public reconciliation_records dr_verifier
+3535; 0 16431 TABLE DATA public reservations dr_verifier
+3531; 0 16385 TABLE DATA public schema_migrations dr_verifier
+3534; 0 16419 TABLE DATA public settlements dr_verifier
+3537; 0 16453 TABLE DATA public simulated_accounts dr_verifier
+3533; 0 16404 TABLE DATA public trades dr_verifier
+3549; 0 0 SEQUENCE SET public reconciliation_records_id_seq dr_verifier
+3381; 2606 16484 CONSTRAINT public audit_events audit_events_pkey dr_verifier
+3357; 2606 16403 CONSTRAINT public orders orders_pkey dr_verifier
+3376; 2606 16469 CONSTRAINT public outbox_events outbox_events_pkey dr_verifier
+3372; 2606 16452 CONSTRAINT public positions positions_pkey dr_verifier
+3379; 2606 16476 CONSTRAINT public processed_events processed_events_pkey dr_verifier
+3383; 2606 16493 CONSTRAINT public reconciliation_records reconciliation_records_pkey dr_verifier
+3368; 2606 16440 CONSTRAINT public reservations reservations_order_id_key dr_verifier
+3370; 2606 16438 CONSTRAINT public reservations reservations_pkey dr_verifier
+3355; 2606 16392 CONSTRAINT public schema_migrations schema_migrations_pkey dr_verifier
+3364; 2606 16423 CONSTRAINT public settlements settlements_pkey dr_verifier
+3366; 2606 16425 CONSTRAINT public settlements settlements_trade_id_key dr_verifier
+3374; 2606 16461 CONSTRAINT public simulated_accounts simulated_accounts_pkey dr_verifier
+3360; 2606 16413 CONSTRAINT public trades trades_execution_id_key dr_verifier
+3362; 2606 16411 CONSTRAINT public trades trades_pkey dr_verifier
+3358; 1259 16496 INDEX public orders_tenant_state_idx dr_verifier
+3377; 1259 16497 INDEX public outbox_pending_idx dr_verifier
+3387; 2620 16495 TRIGGER public audit_events audit_no_update dr_verifier
+3386; 2606 16441 FK CONSTRAINT public reservations reservations_order_id_fkey dr_verifier
+3385; 2606 16426 FK CONSTRAINT public settlements settlements_trade_id_fkey dr_verifier
+3384; 2606 16414 FK CONSTRAINT public trades trades_order_id_fkey dr_verifier

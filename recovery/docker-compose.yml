@@ -1,0 +1,52 @@
+name: beyvra-dr-verification
+
+services:
+  source-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: beyvradr
+      POSTGRES_USER: dr_verifier
+      POSTGRES_PASSWORD: disposable-dr-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dr_verifier -d beyvradr"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  restore-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: beyvradr_restore
+      POSTGRES_USER: dr_verifier
+      POSTGRES_PASSWORD: disposable-dr-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dr_verifier -d beyvradr_restore"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+networks:
+  recovery:
+    internal: true
+
