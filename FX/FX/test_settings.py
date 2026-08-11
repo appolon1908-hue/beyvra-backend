@@ -15,3 +15,7 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 DEBUG = False
 SECURE_SSL_REDIRECT = False
+
+# Synthetic test-only key material. Production settings remain fail-closed
+# unless the corresponding protected secret or secret-file reference exists.
+API_TOKEN_PEPPER = "isolated-test-only-api-token-pepper"

@@ -289,7 +289,13 @@ class RealWalletBoundaryTests(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             key_file = Path(directory) / "webhook-master.key"
             key_file.write_bytes(b"w" * 32)
-            with override_settings(REAL_WALLET_WEBHOOK_MASTER_KEY_FILE=str(key_file)):
+            with (
+                override_settings(REAL_WALLET_WEBHOOK_MASTER_KEY_FILE=str(key_file)),
+                patch(
+                    "real_wallet.webhooks.socket.getaddrinfo",
+                    return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+                ),
+            ):
                 client = APIClient()
                 client.force_authenticate(self.user)
                 response = client.post(
