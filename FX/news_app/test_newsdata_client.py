@@ -72,11 +72,14 @@ class NewsDataClientTests(SimpleTestCase):
     def test_invalid_cursor(self):
         with self.assertRaises(ValueError): decode_cursor("not-json")
     def test_normalize_article(self):
-        item=normalize_article(ARTICLE["results"][0],delayed=True); self.assertEqual(item["provider_id"],"newsdata"); self.assertEqual(item["instrument_refs"],["BTC"]); self.assertTrue(item["delayed"]); self.assertNotIn("apikey",item)
+        item=normalize_article(ARTICLE["results"][0],delayed=True); self.assertEqual(item["provider_id"],"newsdata"); self.assertEqual(item["instrument_refs"],["BTC-USD"]); self.assertTrue(item["delayed"]); self.assertNotIn("apikey",item)
+    def test_unknown_provider_symbol_is_not_promoted_to_instrument(self):
+        self.assertEqual(normalize_article(ARTICLE["results"][0] | {"coin":["CAT"]},delayed=True)["instrument_refs"],[])
     def test_deterministic_fallback_identity(self):
         raw={**ARTICLE["results"][0]}; raw.pop("article_id"); self.assertEqual(normalize_article(raw,delayed=True)["news_id"],normalize_article(raw,delayed=True)["news_id"])
     def test_ambiguous_text_does_not_map_ticker(self): self.assertEqual(normalize_article(ARTICLE["results"][0] | {"coin":None},delayed=True)["instrument_refs"],[])
     def test_unsafe_urls_removed(self): self.assertIsNone(safe_url("javascript:alert(1)")); self.assertIsNone(safe_url("data:text/html,x"))
-    def test_source_normalization(self): self.assertEqual(normalize_source(SOURCES["results"][0])["provider_id"],"newsdata")
+    def test_source_normalization(self):
+        source=normalize_source(SOURCES["results"][0]); self.assertEqual(source["provider_id"],"newsdata"); self.assertEqual(source["domain"],"example.com")
     def test_invalid_timestamp(self):
         with self.assertRaises(NewsDataMalformed): normalize_article(ARTICLE["results"][0] | {"pubDate":"bad"},delayed=True)

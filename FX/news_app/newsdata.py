@@ -21,6 +21,11 @@ from .observability import PROVIDER_DURATION, PROVIDER_FAILURES, PROVIDER_RATE_L
 BASE_URL = "https://newsdata.io/api/1"
 ALLOWED_HOST = "newsdata.io"
 NORMALIZER_VERSION = "newsdata-v1"
+CANONICAL_INSTRUMENTS = {
+    "BTC": "BTC-USD", "BITCOIN": "BTC-USD", "ETH": "ETH-USD", "ETHEREUM": "ETH-USD",
+    "BNB": "BNB-USD", "SOL": "SOL-USD", "SOLANA": "SOL-USD", "XRP": "XRP-USD",
+    "AAPL": "AAPL", "MSFT": "MSFT", "TSLA": "TSLA",
+}
 ENDPOINTS = {"latest":"latest", "crypto":"crypto", "market":"market", "sources":"sources", "archive":"archive"}
 ARTICLE_PARAMS = {"q","language","country","category","domain","timeframe","page","size"}
 CRYPTO_PARAMS = ARTICLE_PARAMS | {"coin"}
@@ -177,7 +182,8 @@ def normalize_article(raw: dict[str,Any], *, delayed: bool) -> dict[str,Any]:
     instrument_refs=[]
     for symbol in _strings(raw.get("symbol") or raw.get("coin")):
         normalized=symbol.strip().upper()
-        if normalized and normalized.replace("-","").isalnum(): instrument_refs.append(normalized)
+        canonical=CANONICAL_INSTRUMENTS.get(normalized)
+        if canonical: instrument_refs.append(canonical)
     canonical={"news_id":f"newsdata:{provider_id}","headline":str(raw["title"]).strip()[:512],"summary":str(raw.get("description") or "")[:4000],"content_preview":str(raw.get("content") or "")[:1000],"source_name":str(raw.get("source_name") or "")[:255],"source_id":str(raw.get("source_id") or "")[:255],"source_url":safe_url(raw.get("source_url")),"article_url":safe_url(raw.get("link")),"image_url":safe_url(raw.get("image_url")),"published_at":published,"received_at":datetime.now(timezone.utc),"language":str(raw.get("language") or "")[:16],"countries":_strings(raw.get("country")),"categories":_strings(raw.get("category")),"instrument_refs":sorted(set(instrument_refs)),"keywords":_strings(raw.get("keywords")),"sentiment":str(raw.get("sentiment") or "")[:32],"provider_id":"newsdata","provider_article_id":provider_id,"provider_timestamp":published,"delayed":bool(delayed),"provenance":{"provider_id":"newsdata","normalizer_version":NORMALIZER_VERSION}}
     canonical["raw_payload_hash"]=hashlib.sha256(json.dumps(raw,sort_keys=True,separators=(",",":"),default=str).encode()).hexdigest()
     return canonical
@@ -185,4 +191,5 @@ def normalize_article(raw: dict[str,Any], *, delayed: bool) -> dict[str,Any]:
 
 def normalize_source(raw):
     if not isinstance(raw,dict) or not raw.get("id") or not raw.get("name"): raise NewsDataMalformed("PROVIDER_NOT_AVAILABLE")
-    return {"source_id":str(raw["id"]),"name":str(raw["name"]),"domain":str(raw.get("url") or raw.get("domain") or ""),"url":safe_url(raw.get("url")),"country":str(raw.get("country") or ""),"language":str(raw.get("language") or ""),"categories":_strings(raw.get("category")),"provider_id":"newsdata","active":True}
+    url=safe_url(raw.get("url")); domain=str(raw.get("domain") or (urlparse(url).hostname if url else "") or "")
+    return {"source_id":str(raw["id"]),"name":str(raw["name"]),"domain":domain,"url":url,"country":str(raw.get("country") or ""),"language":str(raw.get("language") or ""),"categories":_strings(raw.get("category")),"provider_id":"newsdata","active":True}

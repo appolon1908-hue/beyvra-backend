@@ -7,6 +7,7 @@ from provider_governance.service import resolve_provider
 
 from apps.foundation.services import enqueue_event
 from .models import EconomicCalendarEvent, NewsArticle
+from .observability import ARTICLES_DEDUPLICATED, ARTICLES_INGESTED, LAST_SUCCESS, NEWS_AGE
 
 def _news(article):
     return {"news_id":article.article_id,"provider_id":article.provider_id,"provider_article_id":article.provider_article_id,"headline":article.headline,"summary":article.summary,"article_url":article.canonical_url,"published_at":article.published_at,"received_at":article.received_at,"instrument_refs":article.affected_instruments,"delayed":article.delayed,"provenance":{"provider_id":article.provider_id,"normalizer_version":article.normalizer_version}}
@@ -49,6 +50,7 @@ def _ingest_news(payload, provider_id, instruments):
     if existing is None and canonical_url:
         existing = NewsArticle.objects.filter(canonical_url=canonical_url).first()
     if existing is not None and payload.get("raw_payload_hash") and existing.raw_payload_hash == payload["raw_payload_hash"]:
+        ARTICLES_DEDUPLICATED.labels(provider_id).inc()
         return existing, None
     status = payload.get("status", NewsArticle.Status.PUBLISHED)
     article_id = existing.article_id if existing else payload["article_id"]
@@ -62,6 +64,9 @@ def _ingest_news(payload, provider_id, instruments):
     suffix = "retracted" if status == NewsArticle.Status.RETRACTED else "published" if created else "updated"
     channel = f"news.instrument:{instruments[0]}" if len(instruments) == 1 else "news.market"
     event = _enqueue(event_type=f"news.article.{suffix}", channel=channel, source=provider_id, data=_news(article), occurred_at=payload.get("occurred_at"))
+    ARTICLES_INGESTED.labels(provider_id, payload.get("endpoint", "unknown")).inc()
+    LAST_SUCCESS.labels(provider_id, payload.get("endpoint", "unknown")).set(timezone.now().timestamp())
+    NEWS_AGE.labels(provider_id, payload.get("endpoint", "unknown")).set(max(0, (timezone.now()-article.published_at).total_seconds()))
     return article, event
 
 

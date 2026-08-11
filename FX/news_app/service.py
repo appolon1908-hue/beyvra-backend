@@ -45,8 +45,8 @@ def _serialize(article):
     return {"news_id":article.article_id,"headline":article.headline,"summary":article.summary,"content_preview":article.content_preview,"source_name":article.publisher,"source_id":article.source_id,"source_url":article.source_url,"article_url":article.canonical_url,"image_url":article.image_url,"published_at":article.published_at,"received_at":article.received_at,"language":article.language,"countries":article.countries,"categories":article.categories,"instrument_refs":article.affected_instruments,"keywords":article.keywords,"sentiment":article.sentiment,"provider_id":article.provider_id,"provider_article_id":article.provider_article_id,"provider_timestamp":article.provider_timestamp,"delayed":article.delayed,"stale":False,"provenance":{"provider_id":article.provider_id,"normalizer_version":article.normalizer_version}}
 
 
-def _payload(canonical):
-    return {"article_id":canonical["news_id"],"provider_id":"newsdata","provider_article_id":canonical["provider_article_id"],"headline":canonical["headline"],"summary":canonical["summary"],"content_preview":canonical["content_preview"],"publisher":canonical["source_name"],"source_id":canonical["source_id"],"source_url":canonical["source_url"],"canonical_url":canonical["article_url"],"image_url":canonical["image_url"],"published_at":canonical["published_at"],"provider_timestamp":canonical["provider_timestamp"],"affected_instruments":canonical["instrument_refs"],"affected_assets":canonical["instrument_refs"],"affected_currencies":[],"countries":canonical["countries"],"categories":canonical["categories"],"keywords":canonical["keywords"],"sentiment":canonical["sentiment"],"language":canonical["language"],"delayed":canonical["delayed"],"raw_payload_hash":canonical["raw_payload_hash"],"normalizer_version":canonical["provenance"]["normalizer_version"]}
+def _payload(canonical, endpoint):
+    return {"article_id":canonical["news_id"],"provider_id":"newsdata","provider_article_id":canonical["provider_article_id"],"headline":canonical["headline"],"summary":canonical["summary"],"content_preview":canonical["content_preview"],"publisher":canonical["source_name"],"source_id":canonical["source_id"],"source_url":canonical["source_url"],"canonical_url":canonical["article_url"],"image_url":canonical["image_url"],"published_at":canonical["published_at"],"provider_timestamp":canonical["provider_timestamp"],"affected_instruments":canonical["instrument_refs"],"affected_assets":canonical["instrument_refs"],"affected_currencies":[],"countries":canonical["countries"],"categories":canonical["categories"],"keywords":canonical["keywords"],"sentiment":canonical["sentiment"],"language":canonical["language"],"delayed":canonical["delayed"],"raw_payload_hash":canonical["raw_payload_hash"],"normalizer_version":canonical["provenance"]["normalizer_version"],"endpoint":endpoint}
 
 
 def fetch_newsdata(request, endpoint, article_id=None):
@@ -73,6 +73,6 @@ def fetch_newsdata(request, endpoint, article_id=None):
     else:
         results=[]
         for item in raw["results"]:
-            canonical=normalize_article(item,delayed=delayed); article,_event=ingest_news(_payload(canonical)); results.append(_serialize(article))
+            canonical=normalize_article(item,delayed=delayed); article,_event=ingest_news(_payload(canonical,endpoint)); results.append(_serialize(article))
     response={"results":results,"next_cursor":opaque_cursor(raw.get("nextPage")),"delayed":delayed,"stale":False}
     cache.set(cache_key,response,TTL.get(endpoint,300)); return response
