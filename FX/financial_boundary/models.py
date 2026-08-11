@@ -2,6 +2,21 @@ import uuid
 from django.db import models
 
 
+class ImmutableFinancialRecord(models.Model):
+    """Application guard; PostgreSQL triggers provide the final authority."""
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise TypeError(f"{type(self).__name__} is append-only")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise TypeError(f"{type(self).__name__} is append-only")
+
+
 class ProcessedEvent(models.Model):
     event_id = models.UUIDField(primary_key=True)
     event_type = models.CharField(max_length=128)
@@ -11,6 +26,34 @@ class ProcessedEvent(models.Model):
 
     class Meta:
         db_table = "financial_inbox"
+
+
+class FinancialOutboxEvent(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        IN_FLIGHT = "IN_FLIGHT"
+        PUBLISHED = "PUBLISHED"
+
+    event_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_type = models.CharField(max_length=128)
+    schema_version = models.PositiveSmallIntegerField(default=1)
+    occurred_at = models.DateTimeField()
+    correlation_id = models.UUIDField()
+    causation_id = models.UUIDField(null=True, blank=True)
+    tenant_ref = models.UUIDField()
+    payload = models.JSONField()
+    payload_hash = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField()
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    safe_error_reference = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "financial_outbox"
+        indexes = [models.Index(fields=["status", "next_attempt_at"], name="financial_outbox_ready_idx")]
 
 
 class DeadLetterEvent(models.Model):
@@ -23,6 +66,23 @@ class DeadLetterEvent(models.Model):
 
     class Meta:
         db_table = "financial_dead_letters"
+
+
+class FinancialAuditEvent(ImmutableFinancialRecord):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    action = models.CharField(max_length=64)
+    tenant_ref = models.UUIDField()
+    account_ref = models.UUIDField(null=True, blank=True)
+    actor_ref = models.UUIDField(null=True, blank=True)
+    correlation_id = models.UUIDField()
+    subject_ref = models.CharField(max_length=128, blank=True, default="")
+    payload_hash = models.CharField(max_length=64)
+    safe_metadata = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "financial_audit"
+        indexes = [models.Index(fields=["tenant_ref", "occurred_at"], name="financial_audit_tenant_idx")]
 
 
 class FinancialIncident(models.Model):
