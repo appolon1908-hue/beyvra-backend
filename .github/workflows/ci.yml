@@ -75,7 +75,7 @@ jobs:
           python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
           python manage.py test --noinput
-          python manage.py spectacular --file /tmp/openapi.yaml --validate
+          DJANGO_SETTINGS_MODULE=FX.settings python manage.py spectacular --file /tmp/openapi.yaml --validate
           cmp /tmp/openapi.yaml ../docs/evidence/api-certification/openapi.yaml
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
