@@ -370,6 +370,7 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
         "import_upload": "5/hour",
         "import_action": "10/hour",
         "crm_inbound": "120/minute",
+        "provider_webhook": "300/minute",
         "webhook_test": "5/minute",
         "webhook_retry": "10/hour",
         "guest_demo": "5/hour",

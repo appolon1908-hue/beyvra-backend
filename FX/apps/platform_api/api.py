@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from django.contrib.auth import get_user_model
@@ -723,6 +724,8 @@ class FeatureView(APIView):
 class ProviderWebhookView(APIView):
     authentication_classes = ()
     permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "provider_webhook"
     max_body = 262144
     event_id_pattern = re.compile(r"[A-Za-z0-9:_.-]{1,255}")
     serializer_class = WebhookAckSerializer
