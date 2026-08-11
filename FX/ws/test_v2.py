@@ -29,3 +29,10 @@ class RealtimeV2ContractTests(SimpleTestCase):
         request = self.factory.post("/", {"channel": "wallet.balance.99", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
         payload = json.loads(v2.authorize_subscription(request).content)
         self.assertEqual(payload["error"]["code"], 403)
+
+    @patch.dict("os.environ", {"CENTRIFUGO_PROXY_SECRET": "proxy-secret"})
+    def test_proxy_requires_exact_compliance_user_scope(self):
+        own = self.factory.post("/", {"channel": "compliance.profile.updated.v1.42", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
+        self.assertEqual(v2.authorize_subscription(own).status_code, 200)
+        other = self.factory.post("/", {"channel": "compliance.profile.updated.v1.142", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
+        self.assertEqual(json.loads(v2.authorize_subscription(other).content)["error"]["code"], 403)

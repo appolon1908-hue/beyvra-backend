@@ -1,3 +1,3 @@
 # Compliance webhook failure
 
-Inspect bounded failure metrics: signature, stale timestamp, duplicate, or processing failure. Never log payloads. Rotate a compromised secret through approved secret management. Replay only authenticated provider events through inbox semantics; confirm one business effect and one outbox event.
+Inspect bounded failure metrics for signature rejection, stale delivery timestamp, stale result timestamp, event-ID conflict, or processing failure. Never log payloads, signatures, evidence references, or subject identifiers. Rotate a compromised secret through approved secret management. Replay only the original authenticated provider event through inbox semantics; the signature covers `provider_key.timestamp.event_id.raw_body`. Confirm one inbox row, one business effect, one audit event, and the required shared-outbox event. Escalate event-ID reuse with different content as a security incident.

@@ -11,6 +11,8 @@ Inventory date: 2026-08-11. Scope: canonical backend and client portal. Financia
 | Paper/live/execution and real-value flags | `FX/FX/settings.py`, real wallet, trading integration | AUTHORITATIVE | Retained fail-closed; all real-value constants remain false. |
 | Canonical trading endpoints | `FX/apps/trading/api/*` | AUTHORITATIVE | Server-side eligibility now gates simulation preview/create and snapshots decisions. |
 | Legacy trade creation | `FX/trade/*` | LEGACY / UNSAFE | Historical API; not canonical eligibility surface. Release routing must keep it unavailable for real value. |
+| Real-wallet tenant compliance profile/restrictions | `FX/real_wallet/models.py`, `compliance.py` | DUPLICATE / UNSAFE | Quarantined behind hard-disabled real-wallet endpoints. It is not customer/account eligibility authority and was not modified because Financial PostgreSQL is out of scope. Any future real-value activation must first migrate this dependency to canonical account-level eligibility. |
+| Real-wallet compliance URLs | `FX/real_wallet/urls.py` | LEGACY / AUTHORITATIVE DENY | Continue returning `FEATURE_DISABLED`; they must not shadow or replace canonical safe summary APIs. |
 | Provider governance | `FX/provider_governance/*` | AUTHORITATIVE for other providers | Compliance providers have separate disabled-by-default governance. |
 | Old KYC screens/hooks | client `api/kyc`, KYC pages | UI_ONLY / LEGACY | Submission UI only; canonical summary comes from compliance APIs. |
 | Frontend trading checks | platform chart container | UI_ONLY | Convenience only; server remains authority. |

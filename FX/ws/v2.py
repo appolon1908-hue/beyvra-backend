@@ -61,6 +61,7 @@ def _compile_pattern(pattern):
 
 
 _PATTERN_RE = {pattern: _compile_pattern(pattern) for pattern in CHANNEL_REGISTRY}
+USER_SCOPED_PATTERNS = {"notification.{user_id}", "account.security.{user_id}", "compliance.profile.updated.v1.{user_id}", "compliance.requirement.updated.v1.{user_id}", "compliance.restriction.updated.v1.{user_id}"}
 
 
 def _secret():
@@ -144,7 +145,7 @@ def subscription_token(request):
         return JsonResponse({"code": "UNSUPPORTED_CHANNEL"}, status=403)
     user_id = str(request.user.id)
     if entry["visibility"] == "private":
-        if pattern in {"notification.{user_id}", "account.security.{user_id}", "compliance.profile.updated.v1.{user_id}", "compliance.requirement.updated.v1.{user_id}", "compliance.restriction.updated.v1.{user_id}"} and not channel.endswith(user_id):
+        if pattern in USER_SCOPED_PATTERNS and channel.rsplit(".", 1)[-1] != user_id:
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if entry["account_scope"] and not (user_id in channel or _owns_demo_account(request.user.id, channel)):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
@@ -167,8 +168,11 @@ def authorize_subscription(request):
     pattern, entry = _channel_entry(channel) if isinstance(channel, str) else (None, None)
     if not entry:
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and not (user_id in channel or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
-        return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+    if entry["visibility"] == "private":
+        if pattern in USER_SCOPED_PATTERNS and channel.rsplit(".", 1)[-1] != user_id:
+            return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+        if pattern not in USER_SCOPED_PATTERNS and not (user_id in channel or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
+            return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     return JsonResponse({"result": {}})
 
 
