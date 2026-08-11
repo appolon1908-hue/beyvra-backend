@@ -7491,6 +7491,335 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/institutional/account:
+    get:
+      operationId: v1_institutional_account_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/account/hierarchy:
+    get:
+      operationId: v1_institutional_account_hierarchy_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/allocation-groups:
+    get:
+      operationId: v1_institutional_allocation_groups_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/allocation-groups/{group_id}:
+    get:
+      operationId: v1_institutional_allocation_groups_retrieve_2
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/allocations:
+    get:
+      operationId: v1_institutional_allocations_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/allocations/{allocation_id}:
+    get:
+      operationId: v1_institutional_allocations_retrieve_2
+      parameters:
+      - in: path
+        name: allocation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/custody/structure:
+    get:
+      operationId: v1_institutional_custody_structure_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/exposure:
+    get:
+      operationId: v1_institutional_exposure_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/orders:
+    get:
+      operationId: v1_institutional_orders_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/portfolio:
+    get:
+      operationId: v1_institutional_portfolio_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/positions:
+    get:
+      operationId: v1_institutional_positions_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/reconciliation/status:
+    get:
+      operationId: v1_institutional_reconciliation_status_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/risk:
+    get:
+      operationId: v1_institutional_risk_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts:
+    get:
+      operationId: v1_institutional_subaccounts_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts/{subaccount_id}:
+    get:
+      operationId: v1_institutional_subaccounts_retrieve_2
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts/{subaccount_id}/orders:
+    get:
+      operationId: v1_institutional_subaccounts_orders_retrieve
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts/{subaccount_id}/positions:
+    get:
+      operationId: v1_institutional_subaccounts_positions_retrieve
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts/{subaccount_id}/risk:
+    get:
+      operationId: v1_institutional_subaccounts_risk_retrieve
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/subaccounts/{subaccount_id}/trades:
+    get:
+      operationId: v1_institutional_subaccounts_trades_retrieve
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/institutional/trades:
+    get:
+      operationId: v1_institutional_trades_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/instruments/{instrument_id}:
     get:
       operationId: v1_instruments_retrieve
@@ -8565,6 +8894,354 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatorAction'
+          description: ''
+  /api/v1/operator/institutional/accounts:
+    get:
+      operationId: v1_operator_institutional_accounts_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/accounts/{account_id}:
+    get:
+      operationId: v1_operator_institutional_accounts_retrieve_2
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/accounts/{account_id}/ownership:
+    get:
+      operationId: v1_operator_institutional_accounts_ownership_retrieve
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/allocation-groups:
+    get:
+      operationId: v1_operator_institutional_allocation_groups_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationGroup'
+          description: ''
+  /api/v1/operator/institutional/allocations:
+    get:
+      operationId: v1_operator_institutional_allocations_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationInstruction'
+          description: ''
+  /api/v1/operator/institutional/broker-account-mappings:
+    get:
+      operationId: v1_operator_institutional_broker_account_mappings_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerAccountMapping'
+          description: ''
+  /api/v1/operator/institutional/clearing-brokers:
+    get:
+      operationId: v1_operator_institutional_clearing_brokers_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingBroker'
+          description: ''
+  /api/v1/operator/institutional/clearing-relationships:
+    get:
+      operationId: v1_operator_institutional_clearing_relationships_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingRelationship'
+          description: ''
+  /api/v1/operator/institutional/custody:
+    get:
+      operationId: v1_operator_institutional_custody_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorCustody'
+          description: ''
+  /api/v1/operator/institutional/omnibus:
+    get:
+      operationId: v1_operator_institutional_omnibus_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorOmnibus'
+          description: ''
+  /api/v1/operator/institutional/reconciliation:
+    get:
+      operationId: v1_operator_institutional_reconciliation_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_operator_institutional_reconciliation_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/reconciliation/run:
+    get:
+      operationId: v1_operator_institutional_reconciliation_run_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_operator_institutional_reconciliation_run_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/segregated-accounts:
+    get:
+      operationId: v1_operator_institutional_segregated_accounts_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorSegregated'
+          description: ''
+  /api/v1/operator/institutional/settlement-mappings:
+    get:
+      operationId: v1_operator_institutional_settlement_mappings_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementMapping'
+          description: ''
+  /api/v1/operator/institutional/subaccounts:
+    get:
+      operationId: v1_operator_institutional_subaccounts_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_operator_institutional_subaccounts_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/institutional/subaccounts/{subaccount_id}:
+    get:
+      operationId: v1_operator_institutional_subaccounts_retrieve_2
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    patch:
+      operationId: v1_operator_institutional_subaccounts_partial_update
+      parameters:
+      - in: path
+        name: subaccount_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
           description: ''
   /api/v1/operator/providers/actions:
     get:
@@ -12627,6 +13304,22 @@ paths:
           description: ''
 components:
   schemas:
+    AccountRoleEnum:
+      enum:
+      - EXECUTION
+      - CLEARING
+      - CUSTODY
+      - SETTLEMENT
+      - OMNIBUS
+      - SEGREGATED
+      type: string
+      description: |-
+        * `EXECUTION` - EXECUTION
+        * `CLEARING` - CLEARING
+        * `CUSTODY` - CUSTODY
+        * `SETTLEMENT` - SETTLEMENT
+        * `OMNIBUS` - OMNIBUS
+        * `SEGREGATED` - SEGREGATED
     AccountStateEnum:
       enum:
       - PENDING
@@ -12726,6 +13419,109 @@ components:
       - email
       - id
       - status
+    AllocationGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+        name:
+          type: string
+          maxLength: 160
+        allocation_method:
+          $ref: '#/components/schemas/AllocationMethodEnum'
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - allocation_method
+      - code
+      - effective_from
+      - id
+      - institution_id
+      - name
+    AllocationInstruction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        trade_id:
+          type: string
+          maxLength: 128
+        allocation_group_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        source_account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        allocation_method:
+          $ref: '#/components/schemas/AllocationMethodEnum'
+        state:
+          $ref: '#/components/schemas/StateEnum'
+        policy_version:
+          type: string
+          maxLength: 32
+        canonical_quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        lines:
+          type: string
+          readOnly: true
+      required:
+      - allocation_group_id
+      - allocation_method
+      - canonical_quantity
+      - created_at
+      - id
+      - lines
+      - policy_version
+      - source_account_id
+      - trade_id
+      - updated_at
+    AllocationMethodEnum:
+      enum:
+      - PRO_RATA
+      - FIXED_PERCENT
+      - FIXED_QUANTITY
+      - ORDER_SPECIFIED
+      - STRATEGY_DEFINED
+      - MANUAL_REVIEW
+      type: string
+      description: |-
+        * `PRO_RATA` - PRO_RATA
+        * `FIXED_PERCENT` - FIXED_PERCENT
+        * `FIXED_QUANTITY` - FIXED_QUANTITY
+        * `ORDER_SPECIFIED` - ORDER_SPECIFIED
+        * `STRATEGY_DEFINED` - STRATEGY_DEFINED
+        * `MANUAL_REVIEW` - MANUAL_REVIEW
     AmlStateEnum:
       enum:
       - NOT_SCREENED
@@ -13012,6 +13808,131 @@ components:
     BlankEnum:
       enum:
       - ''
+    BrokerAccountMapping:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subaccount_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        execution_provider_id:
+          type: string
+          maxLength: 80
+        clearing_broker_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        provider_account_ref:
+          type: string
+          readOnly: true
+        account_role:
+          $ref: '#/components/schemas/AccountRoleEnum'
+        environment:
+          $ref: '#/components/schemas/EnvironmentEnum'
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - account_role
+      - clearing_broker_id
+      - effective_from
+      - environment
+      - execution_provider_id
+      - id
+      - institution_id
+      - provider_account_ref
+      - subaccount_id
+    ClearingBroker:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+        name:
+          type: string
+          maxLength: 160
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        environment:
+          $ref: '#/components/schemas/EnvironmentEnum'
+        supported_asset_classes: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - environment
+      - id
+      - name
+      - updated_at
+    ClearingRelationship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        relationship_type:
+          $ref: '#/components/schemas/RelationshipTypeEnum'
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        approved_for_paper:
+          type: boolean
+        institution:
+          type: string
+          format: uuid
+        clearing_broker:
+          type: string
+          format: uuid
+      required:
+      - clearing_broker
+      - created_at
+      - effective_from
+      - id
+      - institution
+      - relationship_type
+      - updated_at
     ComplexityEnum:
       enum:
       - SPECIAL_CHARACTERS
@@ -13140,6 +14061,20 @@ components:
       - longer_name
       - name
       - symbol
+    CustodyModelEnum:
+      enum:
+      - SEGREGATED
+      - OMNIBUS
+      - HYBRID
+      - NON_CUSTODIAL_REFERENCE
+      - UNKNOWN
+      type: string
+      description: |-
+        * `SEGREGATED` - SEGREGATED
+        * `OMNIBUS` - OMNIBUS
+        * `HYBRID` - HYBRID
+        * `NON_CUSTODIAL_REFERENCE` - NON_CUSTODIAL_REFERENCE
+        * `UNKNOWN` - UNKNOWN
     DashboardMetricsRequest:
       type: object
       properties:
@@ -13222,6 +14157,16 @@ components:
           $ref: '#/components/schemas/SafeErrorDetailRequest'
       required:
       - error
+    EnvironmentEnum:
+      enum:
+      - SIMULATION
+      - PAPER
+      - SANDBOX_REFERENCE
+      type: string
+      description: |-
+        * `SIMULATION` - SIMULATION
+        * `PAPER` - PAPER
+        * `SANDBOX_REFERENCE` - SANDBOX_REFERENCE
     Feature:
       type: object
       properties:
@@ -13813,6 +14758,140 @@ components:
       - action_type
       - reason
       - target_ref
+    OperatorCustody:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        custody_model:
+          $ref: '#/components/schemas/CustodyModelEnum'
+        provider:
+          type: string
+          maxLength: 80
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        policy_version:
+          type: string
+          maxLength: 32
+        institution:
+          type: string
+          format: uuid
+      required:
+      - created_at
+      - effective_from
+      - id
+      - institution
+      - policy_version
+      - updated_at
+    OperatorOmnibus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        custody_structure_id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider_id:
+          type: string
+          maxLength: 80
+        external_account_ref:
+          type: string
+          readOnly: true
+        asset_class:
+          type: string
+          maxLength: 32
+        currency:
+          type: string
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        environment:
+          $ref: '#/components/schemas/EnvironmentEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - asset_class
+      - created_at
+      - custody_structure_id
+      - environment
+      - external_account_ref
+      - id
+      - institution_id
+      - updated_at
+    OperatorSegregated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subaccount_id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider_id:
+          type: string
+          maxLength: 80
+        external_account_ref:
+          type: string
+          readOnly: true
+        custody_structure_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        environment:
+          $ref: '#/components/schemas/EnvironmentEnum'
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - custody_structure_id
+      - effective_from
+      - environment
+      - external_account_ref
+      - id
+      - institution_id
+      - subaccount_id
     PaginatedAdminUserStatusList:
       type: object
       required:
@@ -15036,6 +16115,22 @@ components:
         * `BONUS` - Bonus
         * `FEE` - Fee Deduction
         * `OTHER` - Other
+    RelationshipTypeEnum:
+      enum:
+      - CARRYING
+      - CLEARING
+      - PRIME
+      - INTRODUCING_REFERENCE
+      - CUSTODY_REFERENCE
+      - SETTLEMENT_REFERENCE
+      type: string
+      description: |-
+        * `CARRYING` - CARRYING
+        * `CLEARING` - CLEARING
+        * `PRIME` - PRIME
+        * `INTRODUCING_REFERENCE` - INTRODUCING_REFERENCE
+        * `CUSTODY_REFERENCE` - CUSTODY_REFERENCE
+        * `SETTLEMENT_REFERENCE` - SETTLEMENT_REFERENCE
     ReportExport:
       type: object
       properties:
@@ -15197,6 +16292,91 @@ components:
         * `POSSIBLE_MATCH` - POSSIBLE_MATCH
         * `CONFIRMED_MATCH` - CONFIRMED_MATCH
         * `MANUAL_REVIEW` - MANUAL_REVIEW
+    SettlementMapping:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        asset_class:
+          type: string
+          maxLength: 32
+        currency:
+          type: string
+          maxLength: 3
+        settlement_model:
+          $ref: '#/components/schemas/SettlementModelEnum'
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        institution:
+          type: string
+          format: uuid
+        subaccount:
+          type: string
+          format: uuid
+          nullable: true
+        custody_structure:
+          type: string
+          format: uuid
+        broker_account_mapping:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - asset_class
+      - created_at
+      - custody_structure
+      - effective_from
+      - id
+      - institution
+      - settlement_model
+      - updated_at
+    SettlementModelEnum:
+      enum:
+      - INTERNAL_SIMULATION
+      - OMNIBUS_REFERENCE
+      - SEGREGATED_REFERENCE
+      - DVP_REFERENCE
+      - FOP_REFERENCE
+      type: string
+      description: |-
+        * `INTERNAL_SIMULATION` - INTERNAL_SIMULATION
+        * `OMNIBUS_REFERENCE` - OMNIBUS_REFERENCE
+        * `SEGREGATED_REFERENCE` - SEGREGATED_REFERENCE
+        * `DVP_REFERENCE` - DVP_REFERENCE
+        * `FOP_REFERENCE` - FOP_REFERENCE
+    StateEnum:
+      enum:
+      - DRAFT
+      - CALCULATED
+      - VALIDATED
+      - ALLOCATED
+      - EXCEPTION
+      - REVERSED
+      type: string
+      description: |-
+        * `DRAFT` - DRAFT
+        * `CALCULATED` - CALCULATED
+        * `VALIDATED` - VALIDATED
+        * `ALLOCATED` - ALLOCATED
+        * `EXCEPTION` - EXCEPTION
+        * `REVERSED` - REVERSED
     Status:
       type: object
       properties:
@@ -15221,6 +16401,22 @@ components:
         * `P` - PENDING
         * `S` - SUCCESSFUL
         * `F` - FAILED
+    StatusB38Enum:
+      enum:
+      - PENDING
+      - ACTIVE
+      - RESTRICTED
+      - SUSPENDED
+      - CLOSED
+      - UNKNOWN
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `ACTIVE` - ACTIVE
+        * `RESTRICTED` - RESTRICTED
+        * `SUSPENDED` - SUSPENDED
+        * `CLOSED` - CLOSED
+        * `UNKNOWN` - UNKNOWN
     StrengthEnum:
       enum:
       - STRONG

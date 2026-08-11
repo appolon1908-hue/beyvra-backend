@@ -46,6 +46,13 @@ CHANNEL_REGISTRY = {
     "compliance.requirement.updated.v1.{user_id}": {"visibility": "private", "required_permission": "compliance.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 20, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/compliance/requirements", "rate_limit": 5},
     "compliance.restriction.updated.v1.{user_id}": {"visibility": "private", "required_permission": "compliance.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 20, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/compliance/profile", "rate_limit": 5},
     "system.status": {"visibility": "public", "required_permission": "system.read", "tenant_scope": False, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 50, "history_ttl": 60, "resume_supported": False, "snapshot_provider": "/api/v1/realtime/v2/health", "rate_limit": 10},
+    "institutional.subaccount.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/account/hierarchy", "rate_limit": 10},
+    "institutional.allocation.created.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/allocations", "rate_limit": 10},
+    "institutional.allocation.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/allocations", "rate_limit": 10},
+    "institutional.position.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/positions", "rate_limit": 10},
+    "institutional.risk.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/risk", "rate_limit": 10},
+    "institutional.custody.mapping.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/custody/structure", "rate_limit": 5},
+    "institutional.reconciliation.completed.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/reconciliation/status", "rate_limit": 5},
 }
 
 def _compile_pattern(pattern):
@@ -61,7 +68,7 @@ def _compile_pattern(pattern):
 
 
 _PATTERN_RE = {pattern: _compile_pattern(pattern) for pattern in CHANNEL_REGISTRY}
-USER_SCOPED_PATTERNS = {"notification.{user_id}", "account.security.{user_id}", "compliance.profile.updated.v1.{user_id}", "compliance.requirement.updated.v1.{user_id}", "compliance.restriction.updated.v1.{user_id}"}
+USER_SCOPED_PATTERNS = {pattern for pattern in CHANNEL_REGISTRY if pattern.endswith(".{user_id}")}
 
 
 def _secret():
