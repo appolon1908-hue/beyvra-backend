@@ -11,6 +11,20 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: beyvraci
+          POSTGRES_USER: beyvraci
+          POSTGRES_PASSWORD: ci-only-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beyvraci -d beyvraci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -25,7 +39,7 @@ jobs:
       - name: Run Django checks and security regression tests
         working-directory: FX
         env:
-          DJANGO_SETTINGS_MODULE: FX.test_settings
+          DJANGO_SETTINGS_MODULE: FX.postgres_test_settings
           SECRET_KEY: ci-only-secret
           DEBUG: "0"
           ALLOWED_HOSTS: '["localhost","testserver"]'
@@ -34,9 +48,24 @@ jobs:
           REDIS_PORT: "6379"
           REDIS_PASSWORD: ci-only-password
           REDIS_DATABASE: "0"
+          DB_NAME: beyvraci
+          DB_USER: beyvraci
+          DB_PASSWORD: ci-only-postgres-password
+          DB_HOST: localhost
+          DB_PORT: "5432"
         run: |
           python manage.py check --deploy
-          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
+          python manage.py test \
+            operations \
+            users.tests.test_account_enumeration \
+            users.tests.test_logout_security \
+            wallet.tests.test_real_feature_fail_closed \
+            wallet.tests.test_transfer_security \
+            bank_account_app.test_security \
+            payments.test_security \
+            trade.test_security \
+            users.tests.test_mfa_security \
+            ws.test_security
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies
