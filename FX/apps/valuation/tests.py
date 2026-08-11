@@ -1,11 +1,12 @@
 from decimal import Decimal
 from datetime import timedelta
-from django.test import TestCase
+from django.db import DatabaseError, transaction
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from users.models import User
 from .fx import FxValuationService
-from .models import FxValuationRate, ValuationPrice
+from .models import FxValuationRate, RealizedPnLEvent, TaxLot, ValuationPrice
 from .prices import ValuationPriceService
 from .services import PerformanceReturnService, PortfolioNavService, PositionValuationService, UnrealizedPnLService
 
@@ -35,3 +36,19 @@ class ValuationAuthorityTests(TestCase):
  def test_unimplemented_authorities_fail_closed(self):
   self.assertEqual(self.client.get("/api/v1/valuation/positions").json()["code"],"FEATURE_DISABLED")
   self.assertEqual(self.client.get("/api/v1/valuation/reconciliation/status").status_code,503)
+
+ def test_evidence_is_database_immutable(self):
+  with self.assertRaises(DatabaseError), transaction.atomic():
+   ValuationPrice.objects.filter(pk=self.price.pk).update(price=Decimal("999"))
+
+ @override_settings(SIMULATED_TRADING_ENABLED=True, DEPLOYMENT_ENV="test", SIMULATED_EXECUTION_INLINE=False)
+ def test_canonical_buy_and_sell_create_fifo_lot_and_realized_pnl_once(self):
+  from apps.post_trade.models import Trade
+  from apps.trading.application.simulation import create, process_created_order
+  buy, _ = create(self.user,{"instrument":"BTC-USD","side":"BUY","order_type":"MARKET","quantity":"0.01"},"valuation-buy")
+  process_created_order(buy["id"],scenario="IMMEDIATE_FULL_FILL")
+  lot=TaxLot.objects.get(acquisition_trade__order_id=buy["id"]); self.assertEqual(lot.remaining_quantity,Decimal("0.01"))
+  sell, _ = create(self.user,{"instrument":"BTC-USD","side":"SELL","order_type":"MARKET","quantity":"0.005"},"valuation-sell")
+  process_created_order(sell["id"],scenario="IMMEDIATE_FULL_FILL")
+  lot.refresh_from_db(); self.assertEqual(lot.remaining_quantity,Decimal("0.005"))
+  trade=Trade.objects.get(order_id=sell["id"]); self.assertEqual(RealizedPnLEvent.objects.filter(disposal_trade=trade).count(),1)
