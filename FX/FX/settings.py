@@ -97,6 +97,9 @@ REAL_WITHDRAWALS_ENABLED = False
 REAL_INTERNAL_TRANSFERS_ENABLED = False
 SURVEILLANCE_ENABLED = os.getenv("SURVEILLANCE_ENABLED", "true").lower() == "true"
 SELF_TRADE_PREVENTION_ENABLED = os.getenv("SELF_TRADE_PREVENTION_ENABLED", "true").lower() == "true"
+REAL_SETTLEMENT_ENABLED = False
+LIVE_CLEARING_ENABLED = False
+LIVE_CUSTODIAN_SETTLEMENT_ENABLED = False
 NEWSDATA_API_KEY = _provider_credential("NEWSDATA_API_KEY")
 NEWSDATA_LATEST_ENTITLED = os.getenv("NEWSDATA_LATEST_ENTITLED", "false").lower() == "true"
 NEWSDATA_CRYPTO_ENTITLED = os.getenv("NEWSDATA_CRYPTO_ENTITLED", "false").lower() == "true"
@@ -181,6 +184,7 @@ INSTALLED_APPS = [
     "apps.trading",
     "apps.compliance",
     "apps.surveillance",
+    "apps.post_trade",
 ]
 
 MIDDLEWARE = [

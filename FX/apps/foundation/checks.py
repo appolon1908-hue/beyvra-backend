@@ -21,6 +21,9 @@ def financial_database_isolation(_app_configs=None, **_kwargs):
         "REAL_TRADING_ENABLED",
         "EXTERNAL_EXECUTION_ENABLED",
         "REAL_MONEY_ENABLED",
+        "REAL_SETTLEMENT_ENABLED",
+        "LIVE_CLEARING_ENABLED",
+        "LIVE_CUSTODIAN_SETTLEMENT_ENABLED",
     )
     if any(getattr(settings, flag, False) for flag in safety_flags):
         errors.append(Error("P0 real-money and execution flags must remain disabled.", id="codestra.E003"))
