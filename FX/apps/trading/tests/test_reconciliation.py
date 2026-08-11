@@ -12,7 +12,7 @@ def valid_snapshot():
       "reservations":[{"order_id":"o1","state":"CONSUMED","remaining_amount":"0"}],
       "positions":[{"account_id":"a1","instrument_id":"BTC-USD","quantity":"10"}],
       "accounts":[{"id":"a1","total_balance":"8999","pending_balance":"0"}],
-      "outbox_order_ids":["o1"],"audit_order_ids":["o1"],"duplicate_trades":[],"duplicate_settlements":[],"duplicate_processed":[]}
+      "outbox_order_ids":["o1"],"execution_outbox_ids":["e1"],"audit_order_ids":["o1"],"duplicate_trades":[],"duplicate_settlements":[],"duplicate_processed":[]}
 
 class ReconciliationDetectionTests(SimpleTestCase):
     def codes(self,snapshot): return {v["check_code"] for v in evaluate_snapshot(snapshot)[1]}
@@ -29,6 +29,8 @@ class ReconciliationDetectionTests(SimpleTestCase):
         data=valid_snapshot(); data["outbox_order_ids"]=[]; self.assertIn("MISSING_REQUIRED_OUTBOX",self.codes(data))
     def test_audit_gap_detected(self):
         data=valid_snapshot(); data["audit_order_ids"]=[]; self.assertIn("AUDIT_GAP",self.codes(data))
+    def test_missing_execution_event_detected(self):
+        data=valid_snapshot(); data["execution_outbox_ids"]=[]; self.assertIn("MISSING_EXECUTION_EVENT",self.codes(data))
     def test_output_contains_only_opaque_entity_references(self):
         data=valid_snapshot(); data["audit_order_ids"]=[]; violation=evaluate_snapshot(data)[1][0]
         self.assertNotEqual(violation["opaque_entity_ref"],"o1"); self.assertEqual(len(violation["opaque_entity_ref"]),64)
