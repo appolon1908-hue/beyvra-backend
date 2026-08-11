@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "wsnotifications",
     "reporting",
+    "operations",
 ]
 
 MIDDLEWARE = [
@@ -243,7 +244,18 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    "EXCEPTION_HANDLER": "operations.errors.BeyvraErrorMapper",
 }
+
+# Server-authoritative kill switches. Enabling requires a separately governed release.
+REAL_WALLET_READ_ENABLED = False
+REAL_DEPOSITS_ENABLED = False
+REAL_WITHDRAWALS_ENABLED = False
+REAL_INTERNAL_TRANSFERS_ENABLED = False
+REAL_TRADING_ENABLED = False
+EXTERNAL_EXECUTION_ENABLED = False
+REAL_MONEY_ENABLED = False
+SUPPORT_IMPERSONATION = False
 
 if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [

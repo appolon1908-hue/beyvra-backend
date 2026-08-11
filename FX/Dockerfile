@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim-trixie
 
 WORKDIR /app/
 
@@ -29,7 +29,9 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir --requirement /app/requirements.txt \
-    && pip uninstall --yes pip setuptools wheel
+    && pip uninstall --yes pip setuptools wheel \
+    && apt-get purge -y --auto-remove build-essential python3-dev gcc libc-dev libffi-dev libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the source code
 COPY . /app/

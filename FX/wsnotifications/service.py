@@ -7,6 +7,7 @@ from users.models import User
 import json
 from asgiref.sync import sync_to_async
 import asyncio
+import os
 
 
 import logging
@@ -100,7 +101,7 @@ class UserNotificationService:
     def make_request(url):
         headers = {
             "accept": "application/json",
-            "x-cg-demo-api-key": "CG-NgaLHLy457wk81jkXajMRGdx"
+            "x-cg-demo-api-key": os.getenv("COINGECKO_DEMO_API_KEY", "")
         }
         response = requests.get(url, headers=headers)
         return response
@@ -289,5 +290,4 @@ class UserNotificationService:
             
     
             
-    
     

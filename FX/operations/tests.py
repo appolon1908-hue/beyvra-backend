@@ -1,0 +1,256 @@
+import uuid
+from datetime import timedelta
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APIClient
+from users.models import User
+
+from .models import (
+    AccountFreeze,
+    AuditEvent,
+    Notification,
+    OperatorActionRequest,
+    OperatorRole,
+    SupportCase,
+    SupportCaseEvent,
+    TransactionHistoryEntry,
+)
+from .services import (
+    approve_operator_request,
+    assert_sensitive_mutation_allowed,
+    consume_once,
+    create_notification,
+    csv_safe,
+    evaluate_account_risk,
+    record_delivery_failure,
+)
+
+
+def user(email, phone, brand="tenant-a", staff=False):
+    return User.objects.create_user(
+        email=email,
+        password="safe-test-password",
+        phone_number=phone,
+        first_name="Test",
+        last_name="User",
+        brand=brand,
+        is_staff=staff,
+    )
+
+
+class FraudAuthorityTests(TestCase):
+    def setUp(self):
+        self.account = user("account@example.test", "+10000000001")
+        self.actor = user("security@example.test", "+10000000002", staff=True)
+
+    def test_risk_decision_is_deterministic(self):
+        decision = evaluate_account_risk(tenant_id="tenant-a", account=self.account, signals=["NEW_DEVICE"])
+        self.assertEqual(decision.decision, "STEP_UP")
+        self.assertEqual(decision.reason_codes, ("NEW_DEVICE",))
+
+    def test_freeze_precedes_all_sensitive_authority(self):
+        AccountFreeze.objects.create(
+            tenant_id="tenant-a",
+            account=self.account,
+            actor=self.actor,
+            level="FULL",
+            reason_code="ACCOUNT_REVIEW_REQUIRED",
+        )
+        self.assertEqual(evaluate_account_risk(tenant_id="tenant-a", account=self.account, signals=[]).decision, "DENY")
+        with self.assertRaisesRegex(PermissionError, "ACCOUNT_FROZEN"):
+            assert_sensitive_mutation_allowed(tenant_id="tenant-a", account=self.account, action="trading")
+
+    def test_partial_freeze_blocks_withdrawal(self):
+        AccountFreeze.objects.create(
+            tenant_id="tenant-a",
+            account=self.account,
+            actor=self.actor,
+            level="PARTIAL",
+            reason_code="HIGH_RISK_ACTION",
+        )
+        with self.assertRaises(PermissionError):
+            assert_sensitive_mutation_allowed(tenant_id="tenant-a", account=self.account, action="withdrawal")
+
+
+class TenantIsolationApiTests(TestCase):
+    def setUp(self):
+        self.a = user("a@example.test", "+10000000011", "a")
+        self.b = user("b@example.test", "+10000000012", "b")
+        self.client = APIClient()
+
+    def test_support_case_idor_returns_safe_not_found(self):
+        case = SupportCase.objects.create(tenant_id="b", account=self.b, category="OTHER", safe_summary="private")
+        self.client.force_authenticate(self.a)
+        response = self.client.get(f"/api/v1/support/cases/{case.pk}")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"code": "RESOURCE_NOT_FOUND", "message": "Resource not found."})
+
+    def test_internal_notes_never_reach_customer_timeline(self):
+        case = SupportCase.objects.create(tenant_id="a", account=self.a, category="SECURITY", safe_summary="help")
+        SupportCaseEvent.objects.create(
+            tenant_id="a",
+            account=self.a,
+            case=case,
+            event_type="INTERNAL_NOTE",
+            visibility="INTERNAL_NOTE",
+            body_safe="risk model detail",
+            actor=self.a,
+        )
+        SupportCaseEvent.objects.create(
+            tenant_id="a",
+            account=self.a,
+            case=case,
+            event_type="MESSAGE_ADDED",
+            visibility="CUSTOMER_VISIBLE_MESSAGE",
+            body_safe="public update",
+            actor=self.a,
+        )
+        self.client.force_authenticate(self.a)
+        body = self.client.get(f"/api/v1/support/cases/{case.pk}").json()
+        self.assertEqual([event["body_safe"] for event in body["timeline"]], ["public update"])
+
+    def test_notification_idor_cannot_mark_read(self):
+        notification = Notification.objects.create(
+            tenant_id="b",
+            account=self.b,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            dedup_key="x",
+        )
+        self.client.force_authenticate(self.a)
+        response = self.client.post(f"/api/v1/notifications/{notification.pk}/read")
+        self.assertEqual(response.status_code, 404)
+        notification.refresh_from_db()
+        self.assertIsNone(notification.read_at)
+
+    def test_reports_are_account_scoped_and_precise(self):
+        TransactionHistoryEntry.objects.create(
+            tenant_id="a",
+            account=self.a,
+            type="TRADE",
+            asset="BTC",
+            amount=Decimal("0.123456789012"),
+            fee=Decimal("0.000000000001"),
+            status="SETTLED",
+            occurred_at=timezone.now(),
+            source_ref="sim-1",
+        )
+        TransactionHistoryEntry.objects.create(
+            tenant_id="b",
+            account=self.b,
+            type="TRADE",
+            asset="BTC",
+            amount=1,
+            status="SETTLED",
+            occurred_at=timezone.now(),
+            source_ref="sim-2",
+        )
+        self.client.force_authenticate(self.a)
+        results = self.client.get("/api/v1/reports/transactions").json()["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["amount"], "0.123456789012000000")
+        self.assertTrue(results[0]["simulation"])
+
+
+class NotificationAuthorityTests(TestCase):
+    def setUp(self):
+        self.account = user("notify@example.test", "+10000000021")
+
+    def test_deduplication_has_one_business_effect(self):
+        first, created = create_notification(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            payload_safe={"action": "review"},
+            dedup_key="device:1",
+        )
+        second, duplicate_created = create_notification(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            payload_safe={"action": "review"},
+            dedup_key="device:1",
+        )
+        self.assertTrue(created)
+        self.assertFalse(duplicate_created)
+        self.assertEqual(first.pk, second.pk)
+
+    def test_inbox_consumes_once(self):
+        effects = []
+        event_id = uuid.uuid4()
+        self.assertTrue(consume_once(event_id=event_id, consumer="test", effect=lambda: effects.append(1)))
+        self.assertFalse(consume_once(event_id=event_id, consumer="test", effect=lambda: effects.append(2)))
+        self.assertEqual(effects, [1])
+
+    def test_retry_is_bounded_and_dead_letters(self):
+        notification, _ = create_notification(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="PASSWORD_CHANGED",
+            category="SECURITY",
+            channel="EMAIL",
+            template_version="1",
+            payload_safe={},
+            dedup_key="password:1",
+        )
+        for _ in range(4):
+            self.assertEqual(record_delivery_failure(notification, transient=True, reason_safe="temporary"), "QUEUED")
+        self.assertEqual(record_delivery_failure(notification, transient=True, reason_safe="temporary"), "FAILED")
+        self.assertEqual(notification.attempts, 5)
+
+
+class OperatorAuthorityTests(TestCase):
+    def setUp(self):
+        self.maker = user("maker@example.test", "+10000000031", staff=True)
+        self.checker = user("checker@example.test", "+10000000032", staff=True)
+        OperatorRole.objects.create(user=self.checker, tenant_id="tenant-a", role="security_manager")
+
+    def action(self):
+        return OperatorActionRequest.objects.create(
+            tenant_id="tenant-a",
+            action_type="UNFREEZE",
+            target_ref="account:1",
+            requested_by=self.maker,
+            reason="reviewed evidence",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+    def test_self_approval_is_forbidden(self):
+        action = self.action()
+        with self.assertRaisesRegex(PermissionError, "SELF_APPROVAL_FORBIDDEN"):
+            approve_operator_request(request_id=action.pk, approver=self.maker, approver_roles={"security_manager"})
+
+    def test_independent_manager_can_approve_once(self):
+        action = self.action()
+        approved = approve_operator_request(
+            request_id=action.pk, approver=self.checker, approver_roles={"security_manager"}
+        )
+        self.assertEqual(approved.status, "APPROVED")
+        with self.assertRaises(PermissionError):
+            approve_operator_request(request_id=action.pk, approver=self.checker, approver_roles={"security_manager"})
+
+    def test_audit_is_immutable(self):
+        audit = AuditEvent.objects.create(tenant_id="tenant-a", actor=self.checker, action="TEST", target="safe")
+        audit.reason = "mutated"
+        with self.assertRaises(ValidationError):
+            audit.save()
+        with self.assertRaises(ValidationError):
+            audit.delete()
+
+
+class ExportSafetyTests(TestCase):
+    def test_csv_formula_prefixes_are_neutralized(self):
+        for prefix in "=+-@":
+            self.assertEqual(csv_safe(prefix + "cmd"), "'" + prefix + "cmd")
+        self.assertEqual(csv_safe("normal"), "normal")

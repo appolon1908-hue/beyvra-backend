@@ -1,0 +1,21 @@
+groups:
+  - name: beyvra-operational-control-plane
+    rules:
+      - alert: BeyvraAccountTakeoverPattern
+        expr: rate(beyvra_security_events_total{reason="TOO_MANY_FAILED_LOGINS"}[5m]) > 10
+      - alert: BeyvraFreezeEnforcementFailure
+        expr: increase(beyvra_freeze_enforcement_failures_total[5m]) > 0
+      - alert: BeyvraSupportBacklog
+        expr: beyvra_support_cases_open > 100
+      - alert: BeyvraReportGenerationFailure
+        expr: increase(beyvra_report_jobs_failed_total[15m]) > 0
+      - alert: BeyvraPrivacyExportFailure
+        expr: increase(beyvra_privacy_exports_failed_total[15m]) > 0
+      - alert: BeyvraNotificationDeadLetterSpike
+        expr: increase(beyvra_notification_dead_letter_total[10m]) > 5
+      - alert: BeyvraUnauthorizedOperatorAction
+        expr: increase(beyvra_operator_unauthorized_action_total[5m]) > 0
+      - alert: BeyvraAuditIntegrityFailure
+        expr: increase(beyvra_audit_integrity_failures_total[5m]) > 0
+      - alert: BeyvraMakerCheckerBypassAttempt
+        expr: increase(beyvra_operator_unauthorized_action_total{action="self_approval"}[5m]) > 0
