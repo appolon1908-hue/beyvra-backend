@@ -11,7 +11,7 @@ from django.db import DatabaseError, connection, transaction
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 from users.models import User
 
 from .errors import BeyvraErrorMapper
@@ -24,6 +24,7 @@ from .models import (
     Notification,
     OperatorActionRequest,
     OperatorRole,
+    SecurityEvent,
     Statement,
     SupportCase,
     SupportCaseEvent,
@@ -37,6 +38,7 @@ from .services import (
     csv_safe,
     evaluate_account_risk,
     execute_operator_request,
+    issue_session_token_pair,
     notification_group,
     realtime_notification_payload,
     record_delivery_failure,
@@ -230,6 +232,33 @@ class TenantIsolationApiTests(TestCase):
         other.refresh_from_db()
         self.assertIsNone(current.revoked_at)
         self.assertIsNotNone(other.revoked_at)
+
+
+class SessionBindingTests(TestCase):
+    def setUp(self):
+        self.account = user("bound@example.test", "+10000000019")
+
+    def test_issued_token_is_bound_to_revocable_session(self):
+        request = APIRequestFactory().post(
+            "/api/users/login/", HTTP_USER_AGENT="safe-browser/1.0"
+        )
+        credentials = issue_session_token_pair(
+            user=self.account, request=request, mfa_verified=False
+        )
+        session = credentials["session"]
+        self.assertEqual(session.auth_strength, "PASSWORD")
+        self.assertEqual(SecurityEvent.objects.filter(account=self.account).count(), 3)
+        self.assertTrue(
+            Notification.objects.filter(
+                account=self.account, type="NEW_DEVICE"
+            ).exists()
+        )
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {credentials['access']}")
+        self.assertEqual(client.get("/api/v1/security/sessions").status_code, 200)
+        session.revoked_at = timezone.now()
+        session.save(update_fields=("revoked_at",))
+        self.assertEqual(client.get("/api/v1/security/sessions").status_code, 401)
 
 
 class NotificationAuthorityTests(TestCase):

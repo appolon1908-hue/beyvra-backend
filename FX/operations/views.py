@@ -55,6 +55,7 @@ from .services import (
     deletion_disposition,
     execute_operator_request,
     reconcile_operational_domains,
+    revoke_bound_session,
     stable_hash,
     tenant_for,
 )
@@ -368,13 +369,7 @@ class SessionRevoke(TenantMixin, APIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request, session_id):
-        updated = AccountSession.objects.filter(
-            session_id=session_id,
-            tenant_id=self.tenant_id(),
-            account=request.user,
-            revoked_at__isnull=True,
-        ).update(revoked_at=timezone.now())
-        if not updated:
+        if not revoke_bound_session(user=request.user, session_id=session_id):
             raise NotFound("Resource not found")
         AuditEvent.objects.create(
             tenant_id=self.tenant_id(),

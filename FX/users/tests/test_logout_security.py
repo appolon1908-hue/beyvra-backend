@@ -19,12 +19,18 @@ class LogoutSecurityTests(TestCase):
         refresh = RefreshToken.for_user(self.user)
 
         response = self.client.post(
-            "/api/user/token/logout/", {"refresh": str(refresh)}, format="json", secure=True
+            "/api/user/token/logout/",
+            {"refresh": str(refresh)},
+            format="json",
+            secure=True,
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         refresh_response = APIClient().post(
-            "/api/user/token/refresh/", {"refresh": str(refresh)}, format="json", secure=True
+            "/api/user/token/refresh/",
+            {"refresh": str(refresh)},
+            format="json",
+            secure=True,
         )
         self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -37,8 +43,17 @@ class LogoutSecurityTests(TestCase):
         refresh = RefreshToken.for_user(other_user)
 
         response = self.client.post(
-            "/api/user/token/logout/", {"refresh": str(refresh)}, format="json", secure=True
+            "/api/user/token/logout/",
+            {"refresh": str(refresh)},
+            format="json",
+            secure=True,
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("does not belong", str(response.data))
+        self.assertEqual(
+            response.data,
+            {
+                "code": "INVALID_REQUEST",
+                "message": "The request could not be processed.",
+            },
+        )

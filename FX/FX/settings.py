@@ -21,7 +21,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
-PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
+PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -160,31 +164,29 @@ CACHES = {
 }
 
 
-
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
-CELERY_TIMEZONE = 'UTC'
+CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
-    
-    'periodic_price_updates': {
-        'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")
+    "periodic_price_updates": {
+        "task": "wsnotifications.tasks.periodic_price_updates",
+        "schedule": crontab(minute="*/1"),
     },
-    'send_asset_specific_updates': {
-        'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/2")
+    "send_asset_specific_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/2"),
     },
-    'send_email_verification_reminder': {
-        'task': 'wsnotifications.tasks.send_email_verification_reminder',
-        'schedule': crontab(minute="*/1")
-    }
+    "send_email_verification_reminder": {
+        "task": "wsnotifications.tasks.send_email_verification_reminder",
+        "schedule": crontab(minute="*/1"),
+    },
 }
 
 # CHANNELS
@@ -241,7 +243,9 @@ STATIC_ROOT = "/app/static"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "operations.authentication.SessionBoundJWTAuthentication",
+    ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",

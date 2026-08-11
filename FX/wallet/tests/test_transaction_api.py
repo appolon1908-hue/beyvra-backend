@@ -1,9 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from uuid import uuid4
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..models import Transaction, Wallet
+from ..models import Currency, Transaction, Wallet
 from ..serializers import TransactionSerializer
 
 TRANSACTIONS_URL = "/api/wallet/transactions/"
@@ -11,25 +12,28 @@ TRANSACTIONS_URL = "/api/wallet/transactions/"
 
 def create_user(email="user@example.come", password="testpass123"):
     """Create and return user."""
-    return get_user_model().objects.create_user(email=email, password=password)
+    phone_number = f"+1{uuid4().int % 10**10:010d}"
+    return get_user_model().objects.create_user(
+        email=email, password=password, phone_number=phone_number
+    )
 
 
 def create_transaction(
     wallet,
-    type="DEPOSIT",
+    type="D",
     amount=100,
-    currency="USD",
-    status="PENDING",
-    gateway_ref="traking-id-1234",
+    status="P",
+    gateway="test",
+    reference="tracking-id-1234",
 ):
     """Create and return transaction."""
     return Transaction.objects.create(
         wallet=wallet,
         type=type,
         amount=amount,
-        currency=currency,
         status=status,
-        gateway_ref=gateway_ref,
+        gateway=gateway,
+        reference=reference,
     )
 
 
@@ -54,7 +58,12 @@ class PrivateTransactionsApiTests(TestCase):
 
     def setUp(self):
         self.user = create_user()
-        self.wallet = Wallet.objects.create(user=self.user)
+        self.currency = Currency.objects.create(
+            name="Test Dollar", symbol="TST", longer_name="Test Dollar Currency"
+        )
+        self.wallet = Wallet.objects.create(
+            user=self.user, name="primary", currency=self.currency, is_real=False
+        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -66,12 +75,14 @@ class PrivateTransactionsApiTests(TestCase):
         transactions = Transaction.objects.all().order_by("-created_at")
         serializer = TransactionSerializer(transactions, many=True)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, serializer.data)
+        self.assertEqual(res.data["results"], serializer.data)
 
     def test_transactions_limited_to_user(self):
         """Test list of transactions is limited to authenticated user."""
         user2 = create_user(email="user2@example.com")
-        user2_wallet = Wallet.objects.create(user=user2, account_type=self.account_type)
+        user2_wallet = Wallet.objects.create(
+            user=user2, name="other", currency=self.currency, is_real=False
+        )
 
         transaction_1 = create_transaction(self.wallet)
         create_transaction(user2_wallet)
@@ -79,9 +90,11 @@ class PrivateTransactionsApiTests(TestCase):
         res = self.client.get(TRANSACTIONS_URL)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)
-        self.assertEqual(str(res.data[0]["wallet"]), str(self.wallet.id))
-        self.assertEqual(str(res.data[0]["id"]), str(transaction_1.id))
+        self.assertEqual(len(res.data["results"]), 1)
+        self.assertEqual(
+            str(res.data["results"][0]["wallet"]["id"]), str(self.wallet.id)
+        )
+        self.assertEqual(str(res.data["results"][0]["id"]), str(transaction_1.id))
 
     def test_get_transaction_details(self):
         """Test retrieving a transaction details."""
@@ -91,13 +104,15 @@ class PrivateTransactionsApiTests(TestCase):
         res = self.client.get(url)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(str(res.data["wallet"]), str(self.wallet.id))
+        self.assertEqual(str(res.data["wallet"]["id"]), str(self.wallet.id))
         self.assertEqual(str(res.data["id"]), str(transaction.id))
 
     def test_get_other_users_transaction_details_fails(self):
         """Test retrieving a wallet details."""
         user2 = create_user(email="user2@example.com")
-        user2_wallet = Wallet.objects.create(user=user2, account_type=self.account_type)
+        user2_wallet = Wallet.objects.create(
+            user=user2, name="other", currency=self.currency, is_real=False
+        )
         transaction2 = create_transaction(user2_wallet)
 
         url = detail_url(transaction2.id)

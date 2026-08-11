@@ -1,8 +1,8 @@
-
 from decimal import Decimal
+
 from rest_framework import serializers
-from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate
 from users.serializers import UserSerializer
+from wallet.models import Currency, ManualBalanceUpdate, Transaction, Wallet
 
 WALLET_BASE_READ_ONLY = [
     "user",
@@ -49,20 +49,30 @@ class WalletCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")
         validated_data["user"] = request.user
+        validated_data["is_real"] = False
         return super().create(validated_data)
+
+    def validate_name(self, value):
+        request = self.context.get("request")
+        if request and Wallet.objects.filter(user=request.user, name=value).exists():
+            raise serializers.ValidationError("A wallet with this name already exists.")
+        return value
 
 
 class WalletDetailSerializer(serializers.ModelSerializer):
 
     user = UserSerializer(read_only=True)
+
     class Meta:
         model = Wallet
         fields = "__all__"
         read_only_fields = [*WALLET_BASE_READ_ONLY, "currency"]
 
     def validate_name(self, value):
-        if Wallet.objects.filter(name=value, id=self.instance.id).exists():
-            raise serializers.ValidationError([{"name": "This name is already taken."}])
+        if Wallet.objects.filter(user=self.instance.user, name=value).exclude(
+            id=self.instance.id
+        ).exists():
+            raise serializers.ValidationError("A wallet with this name already exists.")
         return value
 
 
@@ -81,17 +91,26 @@ class WalletArchivedSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Wallet already archived.")
 
         if value and instance.balance > 0 and instance.available_balance > 0:
-            raise serializers.ValidationError("Cannot archive wallet with money in the account.")
+            raise serializers.ValidationError(
+                "Cannot archive wallet with money in the account."
+            )
 
-        live_accounts = Wallet.objects.filter(user=request.user, is_archived=False).count()
+        live_accounts = Wallet.objects.filter(
+            user=request.user, is_archived=False
+        ).count()
         if value and live_accounts <= 1:
-            raise serializers.ValidationError("You must have more than one live account to archive this wallet.")
+            raise serializers.ValidationError(
+                "You must have more than one live account to archive this wallet."
+            )
 
         transaction = Transaction.objects.filter(id=instance.id).exists()
         if value and transaction:
-            raise serializers.ValidationError("You must have no transactions for this account.")
+            raise serializers.ValidationError(
+                "You must have no transactions for this account."
+            )
 
         return value
+
 
 class TransactionSerializer(serializers.ModelSerializer):
     wallet = WalletDetailSerializer()
@@ -115,8 +134,9 @@ class TransactionSerializer(serializers.ModelSerializer):
         )
 
 
+MIN_REQUIRED_DEPOSIT = Decimal("1.00")
 
-MIN_REQUIRED_DEPOSIT = Decimal('1.00')
+
 class DepositSerializer(serializers.Serializer):
 
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)
@@ -128,9 +148,13 @@ class DepositSerializer(serializers.Serializer):
 
     def validate_amount(self, value):
         if value <= 0:
-            raise serializers.ValidationError("Deposit amount must be greater than zero.")
+            raise serializers.ValidationError(
+                "Deposit amount must be greater than zero."
+            )
         if value < MIN_REQUIRED_DEPOSIT:
-            raise serializers.ValidationError(f"Deposit amount must be greater than the minimum required: {MIN_REQUIRED_DEPOSIT}.")
+            raise serializers.ValidationError(
+                f"Deposit amount must be greater than the minimum required: {MIN_REQUIRED_DEPOSIT}."
+            )
         return value
 
 
@@ -142,18 +166,28 @@ class WithdrawSerializer(serializers.Serializer):
 
 class TransferSerializer(serializers.Serializer):
     recipient_id = serializers.IntegerField()
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=Decimal("0.01")
+    )
 
 
 class ManualBalanceUpdateSerializer(serializers.ModelSerializer):
     # admin is current request user
-    admin = serializers.HiddenField(default=serializers.CurrentUserDefault())  
+    admin = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = ManualBalanceUpdate
-        fields = ['id', 'admin', 'wallet', 'previous_balance',
-                  'new_balance', 'reason', 'description', 'created_at']
-        read_only_fields = ['created_at', 'previous_balance', 'admin']
+        fields = [
+            "id",
+            "admin",
+            "wallet",
+            "previous_balance",
+            "new_balance",
+            "reason",
+            "description",
+            "created_at",
+        ]
+        read_only_fields = ["created_at", "previous_balance", "admin"]
 
     def validate_wallet(self, value):
         if not Wallet.objects.filter(id=value.id).exists():
@@ -161,15 +195,17 @@ class ManualBalanceUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_new_balance(self, value):
-        wallet = self.initial_data['wallet']
-        if self.initial_data['reason'] == 'FEE' and value > wallet.balance:
-            raise serializers.ValidationError("Fee deduction should reduce the balance.")
+        wallet = self.initial_data["wallet"]
+        if self.initial_data["reason"] == "FEE" and value > wallet.balance:
+            raise serializers.ValidationError(
+                "Fee deduction should reduce the balance."
+            )
         if value < 0:
             raise serializers.ValidationError("Balance cannot be negative.")
         return value
 
     def create(self, validated_data):
         # Automatically set the previous_balance from the wallet's current balance
-        wallet = validated_data['wallet']
-        validated_data['previous_balance'] = wallet.balance
+        wallet = validated_data["wallet"]
+        validated_data["previous_balance"] = wallet.balance
         return super().create(validated_data)

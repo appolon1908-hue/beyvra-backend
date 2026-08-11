@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 from dataclasses import dataclass
+from datetime import timedelta
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -17,13 +18,16 @@ from .metrics import (
 )
 from .models import (
     AccountFreeze,
+    AccountSession,
     AuditEvent,
+    DeviceIdentity,
     LegalHold,
     Notification,
     OperatorActionRequest,
     OutboxEvent,
     ProcessedEvent,
     ReconciliationCheck,
+    SecurityEvent,
 )
 
 REASON_CODES = frozenset(
@@ -66,9 +70,178 @@ def tenant_for(user):
     return (getattr(user, "brand", None) or "default").strip().lower()
 
 
+@transaction.atomic
+def issue_session_token_pair(*, user, request, mfa_verified=False):
+    from rest_framework_simplejwt.settings import api_settings
+    from users.serializers import AuthTokenObtainPairSerializer
+
+    now = timezone.now()
+    tenant_id = tenant_for(user)
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "unknown")[:255]
+    fingerprint_hash = hashlib.sha256(
+        f"{tenant_id}:{user.pk}:{user_agent}".encode()
+    ).hexdigest()
+    device, new_device = DeviceIdentity.objects.get_or_create(
+        tenant_id=tenant_id,
+        account=user,
+        fingerprint_hash=fingerprint_hash,
+        defaults={
+            "device_class": "MOBILE" if "mobile" in user_agent.lower() else "BROWSER",
+            "risk_state": "NEW",
+        },
+    )
+    session = AccountSession.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        expires_at=now + api_settings.REFRESH_TOKEN_LIFETIME,
+        device_ref=device,
+        auth_strength="MFA" if mfa_verified else "PASSWORD",
+        mfa_verified_at=now if mfa_verified else None,
+    )
+    refresh = AuthTokenObtainPairSerializer.get_token(user)
+    refresh["session_id"] = str(session.session_id)
+    refresh["auth_strength"] = session.auth_strength
+    if mfa_verified:
+        refresh["mfa_verified_at"] = int(now.timestamp())
+    SecurityEvent.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        event_type="LOGIN_SUCCESS",
+        occurred_at=now,
+        source="AUTH",
+        risk_level="LOW",
+        device_ref=device.device_id,
+        session_ref=session.session_id,
+        metadata_safe={"auth_strength": session.auth_strength},
+    )
+    SecurityEvent.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        event_type="SESSION_CREATED",
+        occurred_at=now,
+        source="AUTH",
+        risk_level="LOW",
+        device_ref=device.device_id,
+        session_ref=session.session_id,
+    )
+    if new_device:
+        SecurityEvent.objects.create(
+            tenant_id=tenant_id,
+            account=user,
+            event_type="NEW_DEVICE",
+            occurred_at=now,
+            source="AUTH",
+            risk_level="MEDIUM",
+            device_ref=device.device_id,
+            session_ref=session.session_id,
+        )
+        create_notification(
+            tenant_id=tenant_id,
+            account=user,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            payload_safe={"action": "review_sessions"},
+            dedup_key=f"new-device:{device.device_id}",
+        )
+    access = refresh.access_token
+    return {"refresh": str(refresh), "access": str(access), "session": session}
+
+
+@transaction.atomic
+def revoke_sessions_after_credential_change(*, user, event_type):
+    now = timezone.now()
+    tenant_id = tenant_for(user)
+    revoked = AccountSession.objects.filter(
+        tenant_id=tenant_id, account=user, revoked_at__isnull=True
+    ).update(revoked_at=now)
+    SecurityEvent.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        event_type=event_type,
+        occurred_at=now,
+        source="AUTH",
+        risk_level="MEDIUM",
+        metadata_safe={"sessions_revoked": revoked},
+    )
+    create_notification(
+        tenant_id=tenant_id,
+        account=user,
+        type="PASSWORD_CHANGED",
+        category="SECURITY",
+        channel="IN_APP",
+        template_version="1",
+        payload_safe={"action": "review_sessions"},
+        dedup_key=f"password-changed:{int(now.timestamp())}",
+    )
+    return revoked
+
+
+@transaction.atomic
+def revoke_bound_session(*, user, session_id):
+    now = timezone.now()
+    tenant_id = tenant_for(user)
+    updated = AccountSession.objects.filter(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        account=user,
+        revoked_at__isnull=True,
+    ).update(revoked_at=now)
+    if not updated:
+        return False
+    SecurityEvent.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        event_type="SESSION_REVOKED",
+        occurred_at=now,
+        source="AUTH",
+        risk_level="LOW",
+        session_ref=session_id,
+    )
+    create_notification(
+        tenant_id=tenant_id,
+        account=user,
+        type="SESSION_REVOKED",
+        category="SECURITY",
+        channel="IN_APP",
+        template_version="1",
+        payload_safe={"action": "review_sessions"},
+        dedup_key=f"session-revoked:{session_id}",
+    )
+    return True
+
+
 def notification_group(tenant_id, account_id):
     identity = f"{tenant_id}:{account_id}".encode()
     return "private_notifications_" + hashlib.sha256(identity).hexdigest()
+
+
+def record_login_failure(*, user):
+    now = timezone.now()
+    tenant_id = tenant_for(user)
+    recent_failures = SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=user,
+        event_type="LOGIN_FAILURE",
+        occurred_at__gte=now - timedelta(minutes=10),
+    ).count()
+    risk_level = "HIGH" if recent_failures >= 4 else "MEDIUM"
+    return SecurityEvent.objects.create(
+        tenant_id=tenant_id,
+        account=user,
+        event_type="LOGIN_FAILURE",
+        occurred_at=now,
+        source="AUTH",
+        risk_level=risk_level,
+        metadata_safe={
+            "reason_code": (
+                "TOO_MANY_FAILED_LOGINS"
+                if risk_level == "HIGH"
+                else "INVALID_CREDENTIALS"
+            )
+        },
+    )
 
 
 @dataclass(frozen=True)

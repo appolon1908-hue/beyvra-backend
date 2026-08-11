@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..serializers import UserSerializer
+from ..serializers import UserSerializer, UserUpdateSerializer
 
 CREATE_USER_URL = reverse("user:create")
 ME_URL = reverse("user:me")
@@ -31,7 +31,7 @@ class PublicTransactionsApiTests(TestCase):
             "password": "testpass123",
             "first_name": "Test",
             "last_name": "Test Name",
-            "phone_number": "123456789123",
+            "phone_number": "+123456789123",
         }
         res = self.client.post(CREATE_USER_URL, payload)
 
@@ -58,7 +58,7 @@ class PublicTransactionsApiTests(TestCase):
             "password": "pw",
             "first_name": "Test",
             "last_name": "Test Name",
-            "phone_number": "123456789123",
+            "phone_number": "+123456789123",
         }
         res = self.client.post(CREATE_USER_URL, payload)
 
@@ -194,7 +194,7 @@ class PrivateUserApiTests(TestCase):
         res = self.client.get(ME_URL)
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data, UserSerializer(self.user).data)
+        self.assertEqual(res.data, UserUpdateSerializer(self.user).data)
 
     def test_post_me_not_allowed(self):
         """Test POST is not allowed for the me endpoint"""
@@ -209,7 +209,7 @@ class PrivateUserApiTests(TestCase):
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, payload["first_name"])
-        self.assertTrue(self.user.check_password(payload["password"]))
+        self.assertFalse(self.user.check_password(payload["password"]))
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
     def test_update_user_profile_read_only_fields(self):
