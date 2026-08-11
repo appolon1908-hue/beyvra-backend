@@ -7,7 +7,13 @@ from provider_governance.service import resolve_provider
 
 from apps.foundation.services import enqueue_event
 from .models import EconomicCalendarEvent, NewsArticle
-from .views import _calendar, _news
+
+def _news(article):
+    return {"news_id":article.article_id,"provider_id":article.provider_id,"provider_article_id":article.provider_article_id,"headline":article.headline,"summary":article.summary,"article_url":article.canonical_url,"published_at":article.published_at,"received_at":article.received_at,"instrument_refs":article.affected_instruments,"delayed":article.delayed,"provenance":{"provider_id":article.provider_id,"normalizer_version":article.normalizer_version}}
+
+
+def _calendar(event):
+    return {field:getattr(event,field) for field in ("event_id","provider_id","title","country","currency","importance","scheduled_at","actual_at","previous_value","forecast_value","actual_value","unit","affected_instruments","status")}
 
 
 def _authorize(provider_id, provider_type, product, symbol):
@@ -42,12 +48,14 @@ def _ingest_news(payload, provider_id, instruments):
     canonical_url = payload.get("canonical_url") or None
     if existing is None and canonical_url:
         existing = NewsArticle.objects.filter(canonical_url=canonical_url).first()
+    if existing is not None and payload.get("raw_payload_hash") and existing.raw_payload_hash == payload["raw_payload_hash"]:
+        return existing, None
     status = payload.get("status", NewsArticle.Status.PUBLISHED)
     article_id = existing.article_id if existing else payload["article_id"]
     values = {field: payload.get(field) for field in (
-        "provider_id", "provider_article_id", "headline", "summary", "publisher", "published_at",
+        "provider_id", "provider_article_id", "headline", "summary", "content_preview", "publisher", "source_id", "source_url", "canonical_url", "image_url", "published_at", "provider_timestamp", "delayed", "raw_payload_hash", "normalizer_version",
         "updated_at", "retracted_at", "importance", "affected_instruments", "affected_assets",
-        "affected_currencies", "language", "status",
+        "affected_currencies", "countries", "categories", "keywords", "sentiment", "language", "status",
     ) if field in payload}
     values["canonical_url"] = canonical_url
     article, created = NewsArticle.objects.update_or_create(article_id=article_id, defaults=values)

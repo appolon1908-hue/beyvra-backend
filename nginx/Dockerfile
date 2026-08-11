@@ -16,9 +16,11 @@ RUN mkdir /etc/nginx/templates
 
 COPY $CONFIG_FILE /etc/nginx/templates
 
-RUN chgrp -R 0 /etc/nginx/conf.d && \
-    chmod -R g=u /etc/nginx/conf.d
+RUN chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/templates && \
+    chmod -R u=rwX,go=rX /etc/nginx/conf.d /etc/nginx/templates
 
 EXPOSE 80
+
+USER nginx
 
 CMD ["nginx", "-g", "daemon off;"]

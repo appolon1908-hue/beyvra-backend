@@ -95,6 +95,13 @@ REAL_WALLET_READ_ENABLED = False
 REAL_DEPOSITS_ENABLED = False
 REAL_WITHDRAWALS_ENABLED = False
 REAL_INTERNAL_TRANSFERS_ENABLED = False
+NEWSDATA_API_KEY = _provider_credential("NEWSDATA_API_KEY")
+NEWSDATA_LATEST_ENTITLED = os.getenv("NEWSDATA_LATEST_ENTITLED", "false").lower() == "true"
+NEWSDATA_CRYPTO_ENTITLED = os.getenv("NEWSDATA_CRYPTO_ENTITLED", "false").lower() == "true"
+NEWSDATA_MARKET_ENTITLED = os.getenv("NEWSDATA_MARKET_ENTITLED", "false").lower() == "true"
+NEWSDATA_SOURCES_ENTITLED = os.getenv("NEWSDATA_SOURCES_ENTITLED", "false").lower() == "true"
+NEWSDATA_ARCHIVE_ENTITLED = os.getenv("NEWSDATA_ARCHIVE_ENTITLED", "false").lower() == "true"
+NEWSDATA_DELAYED = os.getenv("NEWSDATA_DELAYED", "true").lower() == "true"
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
