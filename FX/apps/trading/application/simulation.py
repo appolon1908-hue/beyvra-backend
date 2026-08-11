@@ -144,6 +144,7 @@ def create(user, data, idempotency_key, correlation_id=None):
         order.reservation_id = reservation.id
         order.save(update_fields=("risk_decision_id", "reservation_id", "updated_at"))
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.created.v1", payload=event_payload(order), tenant_ref=tenant, correlation_id=correlation)
+        enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="execution.submitted.v1", payload=event_payload(order, execution_mode="SIMULATION"), tenant_ref=tenant, correlation_id=correlation)
     audit(user, "simulation.order.submitted", order.id, correlation)
     SIMULATED_ORDERS.labels(decision=result.decision).inc()
     transaction.on_commit(lambda: ORDERS.labels(ENVIRONMENT, "true").inc())
@@ -211,9 +212,13 @@ def apply_execution(order_id, execution):
             enqueue_event(aggregate_type="position", aggregate_id=position.id, event_type="trading.position.updated.v1", payload={"position_id": str(position.id), "account_ref": order.account_ref, "instrument": order.instrument_id, "quantity": str(position.quantity), "average_price": str(position.average_price), "simulation": True}, tenant_ref=tenant,correlation_id=correlation)
             enqueue_event(aggregate_type="account", aggregate_id=account.id, event_type="trading.balance_projection.updated.v1", payload=serialize_account(account), tenant_ref=tenant,correlation_id=correlation)
         order.save(update_fields=("state", "filled_quantity", "average_fill_price", "updated_at"))
+        canonical_event={"REJECT":"execution.rejected.v1","EXPIRE":"execution.cancelled.v1"}.get(execution.outcome)
+        if not canonical_event:
+            canonical_event="execution.filled.v1" if order.state=="FILLED" else "execution.partial_fill.v1"
+        enqueue_event(aggregate_type="execution",aggregate_id=execution.execution_id,event_type=canonical_event,payload=event_payload(order,execution_id=execution.execution_id,execution_mode="SIMULATION"),tenant_ref=order.tenant_ref,correlation_id=correlation)
         if order.filled_quantity:
             quality = record_quality(order)
-            enqueue_event(aggregate_type="execution_quality", aggregate_id=quality.report_id, event_type="execution.quality.measured.v1",
+            enqueue_event(aggregate_type="execution_quality", aggregate_id=quality.report_id, event_type="execution.quality.updated.v1",
                 payload={"report_id": str(quality.report_id), "order_id": str(order.id), "slippage_bps": str(quality.slippage_bps),
                     "price_improvement_bps": str(quality.price_improvement_bps), "simulation": True}, tenant_ref=order.tenant_ref, correlation_id=correlation)
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type=event_type, payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
@@ -233,6 +238,7 @@ def process_created_order(order_id, scenario=None):
     if order.state == "PENDING" and selected != "REJECT":
         order.state = transition_order(order.state, "ACCEPTED"); order.save(update_fields=("state", "updated_at"))
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.accepted.v1", payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
+        enqueue_event(aggregate_type="execution",aggregate_id=order.id,event_type="execution.acknowledged.v1",payload=event_payload(order,execution_mode="SIMULATION"),tenant_ref=order.tenant_ref,correlation_id=correlation)
     for execution in SimulatedExecutionProvider(selected).submit_order(order):
         apply_execution(order.id, execution)
     order.refresh_from_db()

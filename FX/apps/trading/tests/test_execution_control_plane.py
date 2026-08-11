@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -12,7 +13,7 @@ from apps.trading.execution_control.reconciliation import ExecutionReconciler
 from apps.trading.execution_control.recovery import ExecutionRecoveryService
 from apps.trading.execution_control.router import SmartOrderRouter, digest
 from apps.trading.execution_control.state import ExecutionStateAuthority
-from apps.trading.models import CanonicalExecution, ExecutionProviderRecord, ExecutionRoutingDecision, TradingOrder, UnknownExecutionOutcome
+from apps.trading.models import CanonicalExecution, ExecutionProviderCapability, ExecutionProviderRecord, ExecutionQualityReport, ExecutionRoutingDecision, TradingOrder, UnknownExecutionOutcome
 from integrations.execution.fix_gateway import FixExecutionGateway
 from integrations.execution.paper import PaperExecutionProvider
 
@@ -73,7 +74,10 @@ class ExecutionControlPlaneTests(TestCase):
         resolved=ExecutionRecoveryService().resolve_unknown(unresolved,lambda _:{"evidence_hash":"a"*64});self.assertEqual(resolved.state,"RESOLVED")
 
     def test_fix_gateway_sequence_gap_and_duplicate_execution(self):
-        gateway=FixExecutionGateway();gateway.transition("CONNECTING");gateway.transition("LOGGED_ON")
+        gateway=FixExecutionGateway()
+        for message_type in ("A","5","0","1","2","4","D","F","G","8","9","j"):
+            self.assertFalse(gateway.build_fixture(message_type)["network"])
+        gateway.transition("CONNECTING");gateway.transition("LOGGED_ON")
         self.assertEqual(gateway.receive({"35":"0","34":"3"})["action"],"RESEND_REQUEST")
         gateway.session.state="LOGGED_ON";gateway.session.incoming_seq=1
         self.assertEqual(gateway.receive({"35":"8","34":"1","17":"exec-1"})["business_effects"],1)
@@ -83,6 +87,8 @@ class ExecutionControlPlaneTests(TestCase):
     def test_paper_adapter_is_deterministic_and_no_network(self):
         provider=PaperExecutionProvider("paper-fixture",{"BTC-USD":"100"});order=self.order()
         self.assertEqual(provider.submit_order(order).state,"FILLED");self.assertEqual(provider.health()["outbound_live_requests"],0)
+        self.assertEqual(provider.replace_order("fixture:1",{"quantity":"1"})["state"],"REPLACED")
+        self.assertEqual(provider.resolve_unknown_operation("fixture:1")["state"],"NOT_FOUND")
 
     def test_customer_and_operator_api_matrix(self):
         for path in ("/api/v1/execution/capabilities","/api/v1/execution/capabilities/simulation","/api/v1/execution/venues","/api/v1/execution/venues/BEYVRA-SIM","/api/v1/execution/providers/status","/api/v1/execution/reports"):
@@ -104,3 +110,49 @@ class ExecutionControlPlaneTests(TestCase):
     def test_live_configuration_produces_zero_candidates(self):
         with self.assertRaisesMessage(ValueError,"LIVE_EXECUTION_DISABLED"):preview_route(self.user,self.payload())
         self.assertEqual(ExecutionRoutingDecision.objects.count(),0)
+
+    def test_provider_capability_records_are_enforced(self):
+        router=SmartOrderRouter();ExecutionProviderCapability.objects.filter(provider_id="simulation",capability_type="MARKET_ORDER").update(enabled=False)
+        result=router.route(self.user,{**self.payload(),"market_snapshot_hash":digest("m"),"pricing_snapshot_hash":digest("p"),"risk_snapshot_hash":digest("r")},persist=False)
+        self.assertFalse(result["routable"]);self.assertIn("PROVIDER_ORDER_TYPE_UNSUPPORTED",result["exclusions"][0]["reasons"])
+
+    def test_route_and_quality_evidence_are_immutable(self):
+        order=self.order(filled_quantity=2,average_fill_price=101,state="FILLED")
+        result=SmartOrderRouter().route(self.user,{**self.payload(),"market_snapshot_hash":digest("m"),"pricing_snapshot_hash":digest("p"),"risk_snapshot_hash":digest("r")},order=order)
+        decision=ExecutionRoutingDecision.objects.get(pk=result["decision_id"]);decision.status="DENIED"
+        with self.assertRaisesMessage(ValueError,"ROUTING_DECISION_IMMUTABLE"):decision.save()
+        from apps.trading.execution_authority import record_quality
+        report=record_quality(order);report.quality_state="ALTERED"
+        with self.assertRaisesMessage(ValueError,"EXECUTION_QUALITY_IMMUTABLE"):report.save()
+        order.average_fill_price=102;order.save(update_fields=("average_fill_price","updated_at"));new_report=record_quality(order)
+        self.assertEqual(new_report.revision,2);self.assertEqual(new_report.supersedes,report)
+
+    def test_quality_get_is_read_only(self):
+        order=self.order(filled_quantity=2,average_fill_price=101,state="FILLED")
+        SmartOrderRouter().route(self.user,{**self.payload(),"market_snapshot_hash":digest("m"),"pricing_snapshot_hash":digest("p"),"risk_snapshot_hash":digest("r")},order=order)
+        self.assertEqual(self.client.get(f"/api/v1/execution/quality/{order.id}").status_code,404)
+        self.assertEqual(ExecutionQualityReport.objects.count(),0)
+
+    def test_paper_enable_requires_independent_manager_checker(self):
+        managers=Group.objects.create(name="execution_manager");first=self.user;first.groups.add(managers)
+        provider=seed_fixture_capabilities()[0][1];provider.enabled=False;provider.save(update_fields=("enabled","updated_at"))
+        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json")
+        self.assertEqual(response.status_code,202);self.assertFalse(response.data["enabled"])
+        self.assertEqual(self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"self approval"},format="json").status_code,409)
+        checker=get_user_model().objects.create_user(email="checker@example.test",password="x",phone_number="+15550000102");checker.groups.add(managers);self.client.force_authenticate(checker)
+        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"independent check"},format="json")
+        self.assertEqual(response.status_code,200);provider.refresh_from_db();self.assertTrue(provider.enabled)
+
+    def test_unknown_api_cannot_force_success_with_caller_evidence(self):
+        operators=Group.objects.create(name="execution_operator");self.user.groups.add(operators)
+        order=self.order();preview_route(self.user,self.payload(),persist=True,order=order);record_ambiguous_outcome(order,"simulation")
+        outcome=UnknownExecutionOutcome.objects.get()
+        response=self.client.post(f"/api/v1/operator/execution/unknown/{outcome.id}/reconcile",{"evidence_hash":"a"*64},format="json")
+        self.assertEqual(response.status_code,409);outcome.refresh_from_db();self.assertEqual(outcome.state,"UNRESOLVED")
+
+    def test_route_correction_is_additive_and_linked(self):
+        order=self.order();first=SmartOrderRouter().route(self.user,{**self.payload(),"market_snapshot_hash":digest("m1"),"pricing_snapshot_hash":digest("p1"),"risk_snapshot_hash":digest("r1")},order=order)
+        prior=ExecutionRoutingDecision.objects.get(pk=first["decision_id"])
+        second=SmartOrderRouter().route(self.user,{**self.payload(),"market_snapshot_hash":digest("m2"),"pricing_snapshot_hash":digest("p2"),"risk_snapshot_hash":digest("r2")},order=order,supersedes=prior)
+        correction=ExecutionRoutingDecision.objects.get(pk=second["decision_id"])
+        self.assertEqual(correction.revision,2);self.assertEqual(correction.supersedes,prior);self.assertEqual(order.routing_decisions.count(),2)
