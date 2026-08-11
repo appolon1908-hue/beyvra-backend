@@ -10,13 +10,71 @@ class IsScopedOperator(BasePermission):
     def has_permission(self, request, view):
         if not request.user.is_authenticated or not request.user.is_staff:
             return False
-        tenant = request.headers.get("X-Beyvra-Tenant", tenant_for(request.user)).lower()
-        return OperatorRole.objects.filter(user=request.user, tenant_id=tenant, role__in=self.allowed_roles).exists()
+        tenant = request.headers.get(
+            "X-Beyvra-Tenant", tenant_for(request.user)
+        ).lower()
+        return OperatorRole.objects.filter(
+            user=request.user, tenant_id=tenant, role__in=self.allowed_roles
+        ).exists()
 
 
 class IsSupportOperator(IsScopedOperator):
-    allowed_roles = frozenset({"support_viewer", "support_agent", "support_manager", "platform_admin"})
+    allowed_roles = frozenset(
+        {"support_viewer", "support_agent", "support_manager", "platform_admin"}
+    )
 
 
 class IsSecurityManager(IsScopedOperator):
     allowed_roles = frozenset({"security_manager", "platform_admin"})
+
+
+class IsSecurityOperator(IsScopedOperator):
+    allowed_roles = frozenset(
+        {"security_viewer", "security_analyst", "security_manager", "platform_admin"}
+    )
+
+
+class IsSecurityAnalyst(IsScopedOperator):
+    allowed_roles = frozenset(
+        {"security_analyst", "security_manager", "platform_admin"}
+    )
+
+
+class IsSupportAgent(IsScopedOperator):
+    allowed_roles = frozenset({"support_agent", "support_manager", "platform_admin"})
+
+
+class IsManagerOperator(IsScopedOperator):
+    allowed_roles = frozenset(
+        {
+            "support_manager",
+            "security_manager",
+            "compliance_manager",
+            "financial_manager",
+            "operations_manager",
+            "platform_admin",
+        }
+    )
+
+
+class IsAnyOperator(IsScopedOperator):
+    allowed_roles = frozenset(
+        {
+            "support_viewer",
+            "support_agent",
+            "support_manager",
+            "security_viewer",
+            "security_analyst",
+            "security_manager",
+            "compliance_viewer",
+            "compliance_analyst",
+            "compliance_manager",
+            "financial_viewer",
+            "financial_operations",
+            "financial_manager",
+            "operations_viewer",
+            "operations_engineer",
+            "operations_manager",
+            "platform_admin",
+        }
+    )

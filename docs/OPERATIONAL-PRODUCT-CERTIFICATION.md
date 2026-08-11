@@ -16,7 +16,9 @@ All seven real-feature flags are hard-coded false in backend authority. Support 
 
 ## Certification evidence
 
-- Python 3.11.15 and PostgreSQL 16.14: migration from zero, operations rollback, reapply, drift check, system check, and 14 scoped tests pass.
+- Python 3.11.15 and PostgreSQL 16.14: migration from zero, operations rollback, reapply, drift check, system check, and all 18 scoped tests pass. Migration `0002` adds legal-hold-aware deletion requests and reconciliation evidence.
+- Internal operator APIs now cover scoped fraud cases, support escalation/internal notes, legal hold creation, action requests/independent approval, audit timeline, and non-destructive reconciliation. Cross-tenant account targets are rejected before freeze or hold creation.
+- Notification delivery has a fail-closed provider interface. No delivery provider is configured or activated, and provider-disabled outcomes are never represented as delivered.
 - Frontend TypeScript, ESLint, and production Vite build pass. The operational center is responsive at CSS breakpoints and uses semantic headings, status/alert regions, keyboard-focus styling, and scrollable table labeling.
 - Gitleaks reports zero current-source leaks after moving the legacy demo provider key to environment configuration. Frontend production dependency audit reports zero vulnerabilities.
 - Trivy filesystem scan reports zero critical source/dependency/misconfiguration findings. The refreshed Debian 13 image reports zero **fixable** critical findings; 17 upstream Debian critical advisories remain unfixed/fix-deferred and require base-image vendor resolution. The CycloneDX SBOM is stored with the backup.

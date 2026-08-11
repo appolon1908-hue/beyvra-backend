@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from .models import (
+    AccountDeletionRequest,
+    FraudCase,
     Notification,
     NotificationPreference,
     PrivacyExportJob,
@@ -10,6 +12,19 @@ from .models import (
     SupportCaseEvent,
     TransactionHistoryEntry,
 )
+
+
+class FraudCaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FraudCase
+        exclude = ("tenant_id",)
+        read_only_fields = (
+            "case_id",
+            "created_at",
+            "updated_at",
+            "resolved_at",
+            "resolution",
+        )
 
 
 class SupportCaseSerializer(serializers.ModelSerializer):
@@ -25,7 +40,13 @@ class SupportCaseSerializer(serializers.ModelSerializer):
             "resolved_at",
             "safe_summary",
         )
-        read_only_fields = ("case_id", "status", "created_at", "updated_at", "resolved_at")
+        read_only_fields = (
+            "case_id",
+            "status",
+            "created_at",
+            "updated_at",
+            "resolved_at",
+        )
 
 
 class CustomerSupportEventSerializer(serializers.ModelSerializer):
@@ -86,4 +107,28 @@ class PrivacyExportSerializer(serializers.ModelSerializer):
     class Meta:
         model = PrivacyExportJob
         exclude = ("tenant_id", "account", "artifact_ref")
-        read_only_fields = ("job_id", "status", "created_at", "completed_at", "expires_at", "policy_version")
+        read_only_fields = (
+            "job_id",
+            "status",
+            "created_at",
+            "completed_at",
+            "expires_at",
+            "policy_version",
+        )
+
+
+class AccountDeletionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountDeletionRequest
+        exclude = ("tenant_id", "account")
+        read_only_fields = (
+            "request_id",
+            "status",
+            "requested_at",
+            "reviewed_at",
+            "completed_at",
+            "policy_version",
+            "retained_categories",
+            "anonymized_categories",
+            "blocked_by_legal_hold",
+        )

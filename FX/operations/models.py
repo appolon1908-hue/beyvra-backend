@@ -71,7 +71,10 @@ class DeviceIdentity(TenantAccountModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=("tenant_id", "account", "fingerprint_hash"), name="unique_safe_device")
+            models.UniqueConstraint(
+                fields=("tenant_id", "account", "fingerprint_hash"),
+                name="unique_safe_device",
+            )
         ]
 
 
@@ -81,7 +84,9 @@ class AccountSession(TenantAccountModel):
     last_seen_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
-    device_ref = models.ForeignKey(DeviceIdentity, null=True, blank=True, on_delete=models.SET_NULL)
+    device_ref = models.ForeignKey(
+        DeviceIdentity, null=True, blank=True, on_delete=models.SET_NULL
+    )
     auth_strength = models.CharField(max_length=24, default="PASSWORD")
     mfa_verified_at = models.DateTimeField(null=True, blank=True)
 
@@ -90,7 +95,11 @@ class AccountFreeze(TenantAccountModel):
     LEVELS = [(x, x) for x in ("NONE", "PARTIAL", "FULL")]
     level = models.CharField(max_length=10, choices=LEVELS, default="NONE")
     reason_code = models.CharField(max_length=64)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="freeze_actions", on_delete=models.PROTECT)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="freeze_actions",
+        on_delete=models.PROTECT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     released_at = models.DateTimeField(null=True, blank=True)
     review_evidence = models.JSONField(default=dict)
@@ -98,20 +107,28 @@ class AccountFreeze(TenantAccountModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=("tenant_id", "account"), condition=models.Q(released_at__isnull=True), name="one_active_freeze"
+                fields=("tenant_id", "account"),
+                condition=models.Q(released_at__isnull=True),
+                name="one_active_freeze",
             )
         ]
 
 
 class FraudCase(TenantAccountModel):
-    STATUSES = [(x, x) for x in ("OPEN", "IN_REVIEW", "ESCALATED", "RESOLVED", "CLOSED")]
+    STATUSES = [
+        (x, x) for x in ("OPEN", "IN_REVIEW", "ESCALATED", "RESOLVED", "CLOSED")
+    ]
     case_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     case_type = models.CharField(max_length=64)
     risk_level = models.CharField(max_length=10)
     status = models.CharField(max_length=16, choices=STATUSES, default="OPEN")
     reason_codes = models.JSONField(default=list)
     assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, related_name="fraud_assignments", on_delete=models.SET_NULL
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="fraud_assignments",
+        on_delete=models.SET_NULL,
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -120,7 +137,17 @@ class FraudCase(TenantAccountModel):
 
 
 class SupportCase(TenantAccountModel):
-    STATUSES = [(x, x) for x in ("OPEN", "PENDING_CUSTOMER", "PENDING_INTERNAL", "ESCALATED", "RESOLVED", "CLOSED")]
+    STATUSES = [
+        (x, x)
+        for x in (
+            "OPEN",
+            "PENDING_CUSTOMER",
+            "PENDING_INTERNAL",
+            "ESCALATED",
+            "RESOLVED",
+            "CLOSED",
+        )
+    ]
     CATEGORIES = [
         (x, x)
         for x in (
@@ -144,7 +171,11 @@ class SupportCase(TenantAccountModel):
     status = models.CharField(max_length=20, choices=STATUSES, default="OPEN")
     assigned_team = models.CharField(max_length=24, blank=True)
     assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, related_name="support_assignments", on_delete=models.SET_NULL
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="support_assignments",
+        on_delete=models.SET_NULL,
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,14 +185,23 @@ class SupportCase(TenantAccountModel):
 
 class SupportCaseEvent(TenantAccountModel, ImmutableModel):
     event_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    case = models.ForeignKey(SupportCase, related_name="timeline", on_delete=models.PROTECT)
+    case = models.ForeignKey(
+        SupportCase, related_name="timeline", on_delete=models.PROTECT
+    )
     event_type = models.CharField(max_length=32)
     visibility = models.CharField(
         max_length=24,
-        choices=(("CUSTOMER_VISIBLE_MESSAGE", "CUSTOMER_VISIBLE_MESSAGE"), ("INTERNAL_NOTE", "INTERNAL_NOTE")),
+        choices=(
+            ("CUSTOMER_VISIBLE_MESSAGE", "CUSTOMER_VISIBLE_MESSAGE"),
+            ("INTERNAL_NOTE", "INTERNAL_NOTE"),
+        ),
     )
     body_safe = models.TextField(blank=True)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="support_events", on_delete=models.PROTECT)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="support_events",
+        on_delete=models.PROTECT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -196,7 +236,10 @@ class ReportJob(TenantAccountModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=("tenant_id", "account", "idempotency_key"), name="unique_report_request")
+            models.UniqueConstraint(
+                fields=("tenant_id", "account", "idempotency_key"),
+                name="unique_report_request",
+            )
         ]
 
 
@@ -208,20 +251,32 @@ class Statement(TenantAccountModel, ImmutableModel):
     issued_at = models.DateTimeField(auto_now_add=True)
     simulation = models.BooleanField(default=True)
     reconciliation_passed = models.BooleanField(default=False)
-    supersedes = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT)
+    supersedes = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT
+    )
     correction_reason = models.CharField(max_length=500, blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("statement_id", "version"), name="unique_statement_version")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("statement_id", "version"), name="unique_statement_version"
+            )
+        ]
 
 
 class LegalHold(TenantAccountModel):
     active = models.BooleanField(default=True)
     reason = models.CharField(max_length=500)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="holds_created", on_delete=models.PROTECT)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="holds_created", on_delete=models.PROTECT
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     released_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, related_name="holds_released", on_delete=models.PROTECT
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="holds_released",
+        on_delete=models.PROTECT,
     )
     released_at = models.DateTimeField(null=True, blank=True)
 
@@ -238,7 +293,31 @@ class PrivacyExportJob(TenantAccountModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=("tenant_id", "account", "idempotency_key"), name="unique_privacy_export")
+            models.UniqueConstraint(
+                fields=("tenant_id", "account", "idempotency_key"),
+                name="unique_privacy_export",
+            )
+        ]
+
+
+class AccountDeletionRequest(TenantAccountModel):
+    request_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    status = models.CharField(max_length=24, default="PENDING_REVIEW")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    policy_version = models.CharField(max_length=32, default="PENDING-LEGAL-APPROVAL")
+    idempotency_key = models.CharField(max_length=128)
+    retained_categories = models.JSONField(default=list)
+    anonymized_categories = models.JSONField(default=list)
+    blocked_by_legal_hold = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_id", "account", "idempotency_key"),
+                name="unique_deletion_request",
+            )
         ]
 
 
@@ -262,7 +341,8 @@ class Notification(TenantAccountModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=("tenant_id", "account", "channel", "dedup_key"), name="unique_notification_effect"
+                fields=("tenant_id", "account", "channel", "dedup_key"),
+                name="unique_notification_effect",
             )
         ]
 
@@ -276,18 +356,27 @@ class NotificationPreference(TenantAccountModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=("tenant_id", "account", "category", "channel"), name="unique_notification_preference"
+                fields=("tenant_id", "account", "category", "channel"),
+                name="unique_notification_preference",
             )
         ]
 
 
 class OperatorRole(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="operator_roles", on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="operator_roles",
+        on_delete=models.CASCADE,
+    )
     tenant_id = models.CharField(max_length=120, db_index=True)
     role = models.CharField(max_length=40)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("user", "tenant_id", "role"), name="unique_operator_role")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "tenant_id", "role"), name="unique_operator_role"
+            )
+        ]
 
 
 class OperatorActionRequest(ImmutableModel):
@@ -296,13 +385,19 @@ class OperatorActionRequest(ImmutableModel):
     action_type = models.CharField(max_length=64)
     target_ref = models.CharField(max_length=128)
     requested_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name="operator_requests", on_delete=models.PROTECT
+        settings.AUTH_USER_MODEL,
+        related_name="operator_requests",
+        on_delete=models.PROTECT,
     )
     requested_at = models.DateTimeField(auto_now_add=True)
     reason = models.CharField(max_length=500)
     status = models.CharField(max_length=16, default="PENDING")
     approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, related_name="operator_approvals", on_delete=models.PROTECT
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="operator_approvals",
+        on_delete=models.PROTECT,
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     executed_at = models.DateTimeField(null=True, blank=True)
@@ -312,7 +407,9 @@ class OperatorActionRequest(ImmutableModel):
 class AuditEvent(ImmutableModel):
     audit_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     tenant_id = models.CharField(max_length=120, db_index=True)
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT
+    )
     role = models.CharField(max_length=40, blank=True)
     action = models.CharField(max_length=64)
     target = models.CharField(max_length=128)
@@ -344,4 +441,20 @@ class ProcessedEvent(models.Model):
     processed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("event_id", "consumer"), name="unique_inbox_effect")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("event_id", "consumer"), name="unique_inbox_effect"
+            )
+        ]
+
+
+class ReconciliationCheck(models.Model):
+    check_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    tenant_id = models.CharField(max_length=120, db_index=True)
+    domain = models.CharField(max_length=24)
+    status = models.CharField(max_length=16)
+    checked_at = models.DateTimeField(auto_now_add=True)
+    details_safe = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ("-checked_at",)

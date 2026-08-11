@@ -13,10 +13,12 @@ urlpatterns = [
     path("reports/statements", views.StatementList.as_view()),
     path("reports/exports", views.ReportJobListCreate.as_view()),
     path("privacy/exports", views.PrivacyExportListCreate.as_view()),
+    path("privacy/deletion-requests", views.AccountDeletionListCreate.as_view()),
     path("notifications/", views.NotificationList.as_view()),
     path("notifications/<uuid:notification_id>/read", views.NotificationRead.as_view()),
     path("notifications/read-all", views.NotificationReadAll.as_view()),
     path("notifications/preferences", views.PreferenceList.as_view()),
     path("security/sessions", views.SessionList.as_view()),
     path("security/sessions/<uuid:session_id>/revoke", views.SessionRevoke.as_view()),
+    path("security/sessions/revoke-others", views.SessionRevokeOthers.as_view()),
 ]

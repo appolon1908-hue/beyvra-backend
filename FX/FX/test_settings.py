@@ -1,3 +1,5 @@
+import os
+
 from .settings import *  # noqa: F403
 
 DATABASES = {
@@ -6,6 +8,18 @@ DATABASES = {
         "NAME": BASE_DIR / "test.sqlite3",  # noqa: F405
     }
 }
+
+if os.getenv("TEST_POSTGRES") == "1":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ["DB_NAME"],
+            "USER": os.environ["DB_USER"],
+            "PASSWORD": os.environ["DB_PASSWORD"],
+            "HOST": os.environ["DB_HOST"],
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
+    }
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}

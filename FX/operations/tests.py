@@ -9,8 +9,11 @@ from rest_framework.test import APIClient
 from users.models import User
 
 from .models import (
+    AccountDeletionRequest,
     AccountFreeze,
+    AccountSession,
     AuditEvent,
+    LegalHold,
     Notification,
     OperatorActionRequest,
     OperatorRole,
@@ -47,7 +50,9 @@ class FraudAuthorityTests(TestCase):
         self.actor = user("security@example.test", "+10000000002", staff=True)
 
     def test_risk_decision_is_deterministic(self):
-        decision = evaluate_account_risk(tenant_id="tenant-a", account=self.account, signals=["NEW_DEVICE"])
+        decision = evaluate_account_risk(
+            tenant_id="tenant-a", account=self.account, signals=["NEW_DEVICE"]
+        )
         self.assertEqual(decision.decision, "STEP_UP")
         self.assertEqual(decision.reason_codes, ("NEW_DEVICE",))
 
@@ -59,9 +64,16 @@ class FraudAuthorityTests(TestCase):
             level="FULL",
             reason_code="ACCOUNT_REVIEW_REQUIRED",
         )
-        self.assertEqual(evaluate_account_risk(tenant_id="tenant-a", account=self.account, signals=[]).decision, "DENY")
+        self.assertEqual(
+            evaluate_account_risk(
+                tenant_id="tenant-a", account=self.account, signals=[]
+            ).decision,
+            "DENY",
+        )
         with self.assertRaisesRegex(PermissionError, "ACCOUNT_FROZEN"):
-            assert_sensitive_mutation_allowed(tenant_id="tenant-a", account=self.account, action="trading")
+            assert_sensitive_mutation_allowed(
+                tenant_id="tenant-a", account=self.account, action="trading"
+            )
 
     def test_partial_freeze_blocks_withdrawal(self):
         AccountFreeze.objects.create(
@@ -72,7 +84,9 @@ class FraudAuthorityTests(TestCase):
             reason_code="HIGH_RISK_ACTION",
         )
         with self.assertRaises(PermissionError):
-            assert_sensitive_mutation_allowed(tenant_id="tenant-a", account=self.account, action="withdrawal")
+            assert_sensitive_mutation_allowed(
+                tenant_id="tenant-a", account=self.account, action="withdrawal"
+            )
 
 
 class TenantIsolationApiTests(TestCase):
@@ -82,14 +96,21 @@ class TenantIsolationApiTests(TestCase):
         self.client = APIClient()
 
     def test_support_case_idor_returns_safe_not_found(self):
-        case = SupportCase.objects.create(tenant_id="b", account=self.b, category="OTHER", safe_summary="private")
+        case = SupportCase.objects.create(
+            tenant_id="b", account=self.b, category="OTHER", safe_summary="private"
+        )
         self.client.force_authenticate(self.a)
         response = self.client.get(f"/api/v1/support/cases/{case.pk}")
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json(), {"code": "RESOURCE_NOT_FOUND", "message": "Resource not found."})
+        self.assertEqual(
+            response.json(),
+            {"code": "RESOURCE_NOT_FOUND", "message": "Resource not found."},
+        )
 
     def test_internal_notes_never_reach_customer_timeline(self):
-        case = SupportCase.objects.create(tenant_id="a", account=self.a, category="SECURITY", safe_summary="help")
+        case = SupportCase.objects.create(
+            tenant_id="a", account=self.a, category="SECURITY", safe_summary="help"
+        )
         SupportCaseEvent.objects.create(
             tenant_id="a",
             account=self.a,
@@ -110,7 +131,9 @@ class TenantIsolationApiTests(TestCase):
         )
         self.client.force_authenticate(self.a)
         body = self.client.get(f"/api/v1/support/cases/{case.pk}").json()
-        self.assertEqual([event["body_safe"] for event in body["timeline"]], ["public update"])
+        self.assertEqual(
+            [event["body_safe"] for event in body["timeline"]], ["public update"]
+        )
 
     def test_notification_idor_cannot_mark_read(self):
         notification = Notification.objects.create(
@@ -156,6 +179,45 @@ class TenantIsolationApiTests(TestCase):
         self.assertEqual(results[0]["amount"], "0.123456789012000000")
         self.assertTrue(results[0]["simulation"])
 
+    def test_privacy_deletion_is_idempotent_and_hold_safe(self):
+        LegalHold.objects.create(
+            tenant_id="a", account=self.a, reason="fixture", created_by=self.a
+        )
+        self.client.force_authenticate(self.a)
+        headers = {"HTTP_IDEMPOTENCY_KEY": "delete-1"}
+        first = self.client.post(
+            "/api/v1/privacy/deletion-requests", {}, format="json", **headers
+        )
+        second = self.client.post(
+            "/api/v1/privacy/deletion-requests", {}, format="json", **headers
+        )
+        self.assertEqual((first.status_code, second.status_code), (201, 200))
+        self.assertTrue(first.json()["blocked_by_legal_hold"])
+        self.assertEqual(AccountDeletionRequest.objects.count(), 1)
+
+    def test_revoke_others_does_not_revoke_current_session(self):
+        current = AccountSession.objects.create(
+            tenant_id="a",
+            account=self.a,
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        other = AccountSession.objects.create(
+            tenant_id="a",
+            account=self.a,
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_authenticate(self.a)
+        response = self.client.post(
+            "/api/v1/security/sessions/revoke-others",
+            {"current_session_id": str(current.pk)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        current.refresh_from_db()
+        other.refresh_from_db()
+        self.assertIsNone(current.revoked_at)
+        self.assertIsNotNone(other.revoked_at)
+
 
 class NotificationAuthorityTests(TestCase):
     def setUp(self):
@@ -189,8 +251,16 @@ class NotificationAuthorityTests(TestCase):
     def test_inbox_consumes_once(self):
         effects = []
         event_id = uuid.uuid4()
-        self.assertTrue(consume_once(event_id=event_id, consumer="test", effect=lambda: effects.append(1)))
-        self.assertFalse(consume_once(event_id=event_id, consumer="test", effect=lambda: effects.append(2)))
+        self.assertTrue(
+            consume_once(
+                event_id=event_id, consumer="test", effect=lambda: effects.append(1)
+            )
+        )
+        self.assertFalse(
+            consume_once(
+                event_id=event_id, consumer="test", effect=lambda: effects.append(2)
+            )
+        )
         self.assertEqual(effects, [1])
 
     def test_retry_is_bounded_and_dead_letters(self):
@@ -205,8 +275,18 @@ class NotificationAuthorityTests(TestCase):
             dedup_key="password:1",
         )
         for _ in range(4):
-            self.assertEqual(record_delivery_failure(notification, transient=True, reason_safe="temporary"), "QUEUED")
-        self.assertEqual(record_delivery_failure(notification, transient=True, reason_safe="temporary"), "FAILED")
+            self.assertEqual(
+                record_delivery_failure(
+                    notification, transient=True, reason_safe="temporary"
+                ),
+                "QUEUED",
+            )
+        self.assertEqual(
+            record_delivery_failure(
+                notification, transient=True, reason_safe="temporary"
+            ),
+            "FAILED",
+        )
         self.assertEqual(notification.attempts, 5)
 
 
@@ -214,7 +294,9 @@ class OperatorAuthorityTests(TestCase):
     def setUp(self):
         self.maker = user("maker@example.test", "+10000000031", staff=True)
         self.checker = user("checker@example.test", "+10000000032", staff=True)
-        OperatorRole.objects.create(user=self.checker, tenant_id="tenant-a", role="security_manager")
+        OperatorRole.objects.create(
+            user=self.checker, tenant_id="tenant-a", role="security_manager"
+        )
 
     def action(self):
         return OperatorActionRequest.objects.create(
@@ -229,24 +311,83 @@ class OperatorAuthorityTests(TestCase):
     def test_self_approval_is_forbidden(self):
         action = self.action()
         with self.assertRaisesRegex(PermissionError, "SELF_APPROVAL_FORBIDDEN"):
-            approve_operator_request(request_id=action.pk, approver=self.maker, approver_roles={"security_manager"})
+            approve_operator_request(
+                request_id=action.pk,
+                approver=self.maker,
+                approver_roles={"security_manager"},
+            )
 
     def test_independent_manager_can_approve_once(self):
         action = self.action()
         approved = approve_operator_request(
-            request_id=action.pk, approver=self.checker, approver_roles={"security_manager"}
+            request_id=action.pk,
+            approver=self.checker,
+            approver_roles={"security_manager"},
         )
         self.assertEqual(approved.status, "APPROVED")
         with self.assertRaises(PermissionError):
-            approve_operator_request(request_id=action.pk, approver=self.checker, approver_roles={"security_manager"})
+            approve_operator_request(
+                request_id=action.pk,
+                approver=self.checker,
+                approver_roles={"security_manager"},
+            )
 
     def test_audit_is_immutable(self):
-        audit = AuditEvent.objects.create(tenant_id="tenant-a", actor=self.checker, action="TEST", target="safe")
+        audit = AuditEvent.objects.create(
+            tenant_id="tenant-a", actor=self.checker, action="TEST", target="safe"
+        )
         audit.reason = "mutated"
         with self.assertRaises(ValidationError):
             audit.save()
         with self.assertRaises(ValidationError):
             audit.delete()
+
+    def test_support_agent_can_escalate_but_customer_cannot_use_operator_api(self):
+        account = user("supported@example.test", "+10000000033")
+        support = user("support@example.test", "+10000000034", staff=True)
+        OperatorRole.objects.create(
+            user=support, tenant_id="tenant-a", role="support_agent"
+        )
+        case = SupportCase.objects.create(
+            tenant_id="tenant-a",
+            account=account,
+            category="SECURITY",
+            safe_summary="help",
+        )
+        client = APIClient()
+        client.force_authenticate(account)
+        self.assertEqual(
+            client.post(
+                f"/api/internal/v1/support/cases/{case.pk}/events", {}
+            ).status_code,
+            403,
+        )
+        client.force_authenticate(support)
+        response = client.post(
+            f"/api/internal/v1/support/cases/{case.pk}/events",
+            {
+                "event_type": "ESCALATED",
+                "team": "SECURITY",
+                "reason": "security review",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        case.refresh_from_db()
+        self.assertEqual((case.status, case.assigned_team), ("ESCALATED", "SECURITY"))
+
+    def test_wrong_tenant_account_cannot_be_frozen(self):
+        outsider = user("outsider@example.test", "+10000000035", brand="tenant-b")
+        client = APIClient()
+        client.force_authenticate(self.checker)
+        response = client.post(
+            f"/api/internal/v1/accounts/{outsider.pk}/freeze",
+            {"level": "FULL"},
+            format="json",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(AccountFreeze.objects.filter(account=outsider).exists())
 
 
 class ExportSafetyTests(TestCase):
