@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   secrets:
@@ -21,6 +22,20 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: beyvra_ci
+          POSTGRES_USER: beyvra_ci
+          POSTGRES_PASSWORD: ci-only-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beyvra_ci -d beyvra_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -35,7 +50,7 @@ jobs:
       - name: Run Django checks and security regression tests
         working-directory: FX
         env:
-          DJANGO_SETTINGS_MODULE: FX.test_settings
+          DJANGO_SETTINGS_MODULE: FX.financial_test_settings
           SECRET_KEY: ci-only-secret
           DEBUG: "0"
           ALLOWED_HOSTS: '["localhost","testserver"]'
@@ -44,9 +59,15 @@ jobs:
           REDIS_PORT: "6379"
           REDIS_PASSWORD: ci-only-password
           REDIS_DATABASE: "0"
+          DB_NAME: beyvra_ci
+          DB_USER: beyvra_ci
+          DB_PASSWORD: ci-only-postgres-password
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          TEST_DB_NAME: test_beyvra_ci
         run: |
           python manage.py check --deploy
-          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
+          python manage.py test financial_boundary financial_client real_wallet wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies
