@@ -161,6 +161,18 @@ class SimulatedTradingE2ETests(TestCase):
         sell = self.post_order({**self.payload, "side": "SELL", "quantity": "1"})
         self.assertEqual(sell.status_code, 409); self.assertEqual(TradingOrder.objects.count(), 0)
 
+    def test_portfolio_is_canonical_and_simulation_only(self):
+        response = self.client.get("/api/v1/trading/portfolio", **self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["simulation"])
+        self.assertIsNone(response.json()["margin_if_applicable"])
+
+    def test_replace_fails_closed_until_provider_capability_is_certified(self):
+        order_id = self.post_order().json()["id"]
+        response = self.client.post(f"/api/v1/trading/orders/{order_id}/replace", {"quantity": "2"}, format="json", **self.headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "CAPABILITY_UNSUPPORTED")
+
 
 class CompleteTransitionMatrixTests(TestCase):
     def test_every_state_pair_matches_the_declared_matrix(self):
