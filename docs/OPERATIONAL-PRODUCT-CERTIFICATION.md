@@ -8,7 +8,7 @@
 | Frontend | `/root/front` | `feat/compliance-account-state-readiness` | `d6c9279982c39c722791965c8aa4490fa76b1316` | `https://bitbucket.org/tradx2025/front.git` | pre-existing compliance changes preserved |
 | Financial Service | `/root/github-projects/codestra-financial-service` | `feat/financial-boundary-foundation` | `e27b9f67efca3dde5cb295712cb556133e4c00b3` | `https://github.com/Codestra-SRL/codestra-financial-service.git` | read only |
 
-Mission worktrees are `/root/beyvra-operational-backend` and `/root/beyvra-operational-frontend`. No staging domain or running staging image was discoverable from the candidates; no deployment was attempted. The backup is `/root/backups/beyvra-operational-product-readiness-20260811T081826Z/`, with git bundles and SHA256 manifest. `BACKUP=PASS`; `ROLLBACK_AVAILABLE=YES`.
+Mission worktrees are `/root/beyvra-operational-backend` and `/root/beyvra-operational-frontend`. The observed staging images were backend `beyvra-backend-staging:b07a04fdde91b9c5eb6e3f12a80e212bd30aa305` (`sha256:e2a83547...`) and frontend `beyvra-frontend-staging:d6c9279982c39c722791965c8aa4490fa76b1316` (`sha256:a0497dd2...`). No staging domain was established and no deployment was attempted. The backup is `/root/backups/beyvra-operational-product-readiness-20260811T081826Z/`, with git bundles and SHA256 manifest. `BACKUP=PASS`; `ROLLBACK_AVAILABLE=YES`.
 
 ## Safety state
 
