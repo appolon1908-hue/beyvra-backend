@@ -106,6 +106,45 @@ class FinancialProjectionCursor(models.Model):
         ]
 
 
+class Destination(models.Model):
+    class Type(models.TextChoices):
+        CRYPTO = "CRYPTO"
+        FIAT = "FIAT"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        VERIFIED = "VERIFIED"
+        LOCKED = "LOCKED"
+        REVOKED = "REVOKED"
+
+    destination_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_ref = models.UUIDField()
+    account_ref = models.UUIDField()
+    owner_ref = models.PositiveBigIntegerField()
+    type = models.CharField(max_length=12, choices=Type.choices)
+    asset = models.CharField(max_length=12)
+    network = models.CharField(max_length=32)
+    masked_display = models.CharField(max_length=96)
+    destination_fingerprint = models.CharField(max_length=64)
+    beneficiary_ref = models.UUIDField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    cooldown_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "financial_destinations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant_ref", "account_ref", "type", "network", "destination_fingerprint"],
+                name="financial_destination_scope_unique",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["tenant_ref", "owner_ref", "status"], name="financial_dest_owner_idx"),
+        ]
+
+
 class FinancialIncident(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     severity = models.CharField(max_length=16)

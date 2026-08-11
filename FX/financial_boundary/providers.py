@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from django.conf import settings
+
 
 class ProviderDenied(PermissionError):
     code = "PROVIDER_OPERATION_DENIED"
@@ -43,6 +45,7 @@ class PaymentProvider(Protocol):
 
 @dataclass(frozen=True)
 class ProviderAuthorization:
+    provider_type: str = ""
     provider_enabled: bool = False
     environment_approved: bool = False
     operation_allowed: bool = False
@@ -52,7 +55,16 @@ class ProviderAuthorization:
 
 
 def guard_outbound(authority: ProviderAuthorization):
-    if not all(vars(authority).values()):
+    activation = {
+        "CUSTODY": getattr(settings, "CUSTODY_PROVIDER_ACTIVATED", False),
+        "PAYMENT": getattr(settings, "PAYMENT_PROVIDER_ACTIVATED", False),
+    }.get(authority.provider_type, False)
+    approvals = (
+        authority.provider_enabled, authority.environment_approved,
+        authority.operation_allowed, authority.compliance_approved,
+        authority.financial_approved, authority.feature_enabled,
+    )
+    if not getattr(settings, "REAL_MONEY_ENABLED", False) or not activation or not all(approvals):
         raise ProviderDenied("provider operation denied")
     return True
 

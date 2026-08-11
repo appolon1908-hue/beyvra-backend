@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from financial_boundary.contracts import (
     ContractError, DEPOSIT_TRANSITIONS, WITHDRAWAL_TRANSITIONS,
@@ -76,6 +76,21 @@ class ProviderAndReconciliationTests(SimpleTestCase):
     def test_outbound_guard_denies_every_incomplete_authority(self):
         with self.assertRaises(ProviderDenied): guard_outbound(ProviderAuthorization())
         with self.assertRaises(ProviderDenied): DisabledProvider().submit_withdrawal({})
+
+    @override_settings(
+        REAL_MONEY_ENABLED=False,
+        CUSTODY_PROVIDER_ACTIVATED=False,
+        PAYMENT_PROVIDER_ACTIVATED=False,
+    )
+    def test_outbound_guard_cannot_be_enabled_by_requester_supplied_approvals(self):
+        approvals = dict(
+            provider_enabled=True, environment_approved=True, operation_allowed=True,
+            compliance_approved=True, financial_approved=True, feature_enabled=True,
+        )
+        with self.assertRaises(ProviderDenied):
+            guard_outbound(ProviderAuthorization(provider_type="CUSTODY", **approvals))
+        with self.assertRaises(ProviderDenied):
+            guard_outbound(ProviderAuthorization(provider_type="PAYMENT", **approvals))
 
     def test_reconciliation_is_read_only_and_detects_disagreement(self):
         application = [{"reference": "one", "state": "PENDING"}]

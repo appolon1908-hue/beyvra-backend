@@ -13,6 +13,8 @@ Live discovery date: 2026-08-11 UTC. Candidate: `appolon1908-hue/backend`, branc
 | Provider adapters | `real_wallet.providers`, `financial_boundary.providers` | SIMULATED / CANONICAL | Disabled by default; deterministic sandbox only in tests |
 | Reconciliation | `financial_boundary.reconciliation` | CANONICAL | Read-only, ten disagreement types |
 | Inbox/dead-letter/incidents | `financial_boundary.models` | CANONICAL | Application metadata only, no balances/ledger |
+| Destination metadata | `financial_boundary.destinations` | CANONICAL | Tenant/account/owner scoped; masked + keyed fingerprint only; no raw destination |
+| Future provider webhooks | `financial_boundary.webhooks` | CANONICAL | Signature/replay/identity verified; inbox-idempotent; no provider activation |
 | Frontend wallet hooks | `src/api/wallet` | LEGACY / SIMULATED | Application API only; financial UX blocks real actions |
 | Admin wallet approvals | `real_wallet.views` | LEGACY | Quarantined; cannot activate canonical flow |
 
