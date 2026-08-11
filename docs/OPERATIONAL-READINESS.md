@@ -22,8 +22,10 @@ expose no host ports and Prometheus remains on internal Docker networks. Public
 
 The isolated 10,000-workflow profile completed with zero errors and reconciliation
 PASS, but order p95 was 2532.9 ms. Capacity certification therefore recommends no
-more than 10 concurrent simulated workflow workers until a tuned retest passes the
-750 ms target. Repository-wide mypy passes 388 non-migration modules under a
+more than 10 concurrent simulated workflow workers. A subsequent 1,000-workflow
+concurrency-10 retest passed at 534.1 ms
+order p95 with zero errors and reconciliation PASS, validating that guardrail for
+isolated workloads. Repository-wide mypy passes 388 non-migration modules under a
 documented legacy diagnostic ratchet.
 
 Remaining gates: merge only through protected review, apply the reconciliation

@@ -8,6 +8,7 @@ These results are not production capacity claims.
 |---|---:|---:|---:|---:|---:|---:|
 | 100 workflows | 10 | 100 | 0 | 17.50/s | 580.9/789.7 ms | 621.9/770.5 ms |
 | 1,000 workflows | 20 | 1,000 | 0 | 29.30/s | 703.6/1034.0 ms | 725.4/1036.9 ms |
+| 1,000 guardrail retest | 10 | 1,000 | 0 | 20.79/s | 534.1/782.1 ms | 552.0/699.7 ms |
 | 10,000 workflows | 20 | 10,000 | 0 | 19.71/s | 2532.9/3646.9 ms | 2673.3/3859.5 ms |
 
 The mix exercised preview, create, full fill, partial fill, cancel, reservation,
@@ -29,6 +30,13 @@ PostgreSQL peaked at 27 of 100 sessions in the samples (27% occupancy, 73%
 connection headroom). These sampled—not continuous—peaks on a 62.6 GiB host are
 not production capacity evidence.
 
+The post-approval guardrail retest ran 1,000 workflows at concurrency 10 in
+48.098 seconds with zero errors. Order/outbox p50/p95/p99 was
+194.0/534.1/782.1 ms, execution/settlement was 193.9/552.0/699.7 ms, and preview
+was 12.4/35.4/45.0 ms. Reconciliation again passed 11 applicable checks with no
+violations. Sampled utilization was 93.9% runner CPU, 65.2% PostgreSQL CPU, and
+17/100 PostgreSQL sessions.
+
 | Realtime clients | Connected | Failures/gaps | Connect p95/p99 |
 |---:|---:|---:|---:|
 | 100 | 100 | 0/0 | 89.6/90.8 ms |
@@ -38,8 +46,9 @@ not production capacity evidence.
 Likely bottleneck: serialized account/reservation/position locks and PostgreSQL CPU,
 not connection capacity. The 10,000 batch at concurrency 20 breached the initial
 750 ms order p95 target despite zero errors. Recommended initial staging guardrail
-is <=10 concurrent simulated workflow workers, with a controlled test required before
-raising it, and <=500 new realtime connections in a burst. Treat sustained order p95
+is <=10 concurrent simulated workflow workers, now validated below the 750 ms p95
+target for a 1,000-workflow batch, and <=500 new realtime connections in a burst.
+Treat sustained order p95
 >750 ms, p99 >1 s, any error, or growing outbox/consumer lag as unsafe. Private
 node/cAdvisor/PostgreSQL/Redis/NATS scraping is now deployed; future runs should use
 continuous Prometheus range data rather than sampled peaks.
