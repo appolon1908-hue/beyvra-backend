@@ -1,6 +1,6 @@
 # Disaster-recovery certification result
 
-Run date: 2026-08-11 UTC. Starting head: `4d369df1363174cc1088728d3a006ccce840487d`. Scope: disposable, internal-network resources only.
+Run date: 2026-08-11 UTC. Starting head for this refresh: `cd717f25f9041a3299ca3e31b5a730ba5d96d34d`. Scope: disposable, internal-network resources only.
 
 ## Proven
 
@@ -12,7 +12,9 @@ Run date: 2026-08-11 UTC. Starting head: `4d369df1363174cc1088728d3a006ccce84048
 - A restored pending application outbox row published through JetStream. An unacknowledged durable-consumer delivery survived the NATS restart, redelivered, acknowledged, and the stream retained exactly one business event.
 - The actual Django migration ledger was backed up and restored. The restored application passed system checks and both liveness/readiness endpoints.
 - A failed transactional migration candidate left no partial relation. A missing required secret failed closed and the known-good application configuration recovered.
+- Corrupted Compose and NATS configuration copies were rejected by their native validators before activation; the known-good Compose configuration remained valid.
 - Pre-backup audit rows survived, audit mutation was rejected by the restored trigger, and a post-restore event appended.
+- Nineteen restored-system simulation-order and `/ws/v2/` contract tests passed, covering preview safety, full/partial fill accounting, cancellation/reservation release, concurrency, tenant isolation and realtime protocol behavior.
 - Real/external/money flags were fail-closed at the verifier boundary; no production or Financial Service connection was used.
 - RPO target 300 seconds; deterministic fixture RPO observed 0 seconds. RTO target 1800 seconds; the final exact-tree measurement is recorded in `latest/results.env`.
 - Gitleaks found zero current-source secrets. Filesystem dependency scan found zero known vulnerabilities. Filesystem and application-image CycloneDX SBOMs were generated.
@@ -22,7 +24,8 @@ Run date: 2026-08-11 UTC. Starting head: `4d369df1363174cc1088728d3a006ccce84048
 ## Not certified / blockers
 
 - PITR has no WAL archive configuration and is a documented gap.
-- No authorized live staging endpoint/deployment controller or frontend checkout was provided, so frontend reconnect/snapshot gap recovery, a real staging rollout rollback, runtime performance, Prometheus targets, Grafana and loaded-alert runtime state were not tested. The disposable backend host rebuild and controlled bad-config rollback passed, but do not establish production commitments.
+- The current-tree Gitleaks gate is clean. A separate history-inclusive scan reported 13 generic-key candidates in earlier commits; repository owners must audit and, if genuine, revoke them and rewrite history under an approved process.
+- No authorized live staging deployment controller or frontend runtime was placed in scope, so browser reconnect/snapshot gap recovery, a true staging image rollout rollback, runtime performance, Prometheus targets, Grafana and loaded-alert runtime state were not tested. The disposable backend host rebuild and controlled bad-config rollback passed, but do not establish production commitments.
 - Backup encryption at rest and external backup-store ACLs cannot be inferred from a repository-only disposable file. Local artifact permissions were `0700/0600`, with no published backup.
 
 `FINAL_STATUS=BLOCKED` only on the remaining environment-dependent frontend, realtime-gap, live monitoring/performance and true staging rollback drills. All repository-local and disposable-backend gates now pass; no critical container finding remains.

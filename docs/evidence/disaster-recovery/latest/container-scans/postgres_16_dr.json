@@ -3,9 +3,9 @@
   "Trivy": {
     "Version": "0.72.0"
   },
-  "ReportID": "019fefeb-3d85-7842-a600-40cfe327b1d4",
-  "CreatedAt": "2026-08-11T08:23:19.173542881Z",
-  "ArtifactID": "sha256:1f893fbce8bfeca122b24c54eceaf970048d95c6ddd2417f8eb3a64a0c950aee",
+  "ReportID": "019ff1f0-3e48-75c8-9add-9feab942d40f",
+  "CreatedAt": "2026-08-11T17:48:01.480381215Z",
+  "ArtifactID": "sha256:2311d67902b14cb96c55d6ce967787943efb582580f0ee285b9750e572812c9c",
   "ArtifactName": "beyvra-postgres16-dr-source:local",
   "ArtifactType": "container_image",
   "Metadata": {
@@ -14,7 +14,7 @@
       "Family": "alpine",
       "Name": "3.24.1"
     },
-    "ImageID": "sha256:ee666a2e269c7bff11544f368def4664af1fe42f492d1f714a8387f58a5d8a25",
+    "ImageID": "sha256:c8da4e5acf1e6f81cdabe9f1a3828cf48c1d977c6e095b2f463a46778310586a",
     "DiffIDs": [
       "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
       "sha256:b6c90c2b6a3cfed2b6d81db0a2f033ecac01c90688208cca5fd228a77042b0ea",
@@ -33,7 +33,7 @@
       "beyvra-postgres16-dr-source:local"
     ],
     "RepoDigests": [
-      "beyvra-postgres16-dr-source@sha256:ee666a2e269c7bff11544f368def4664af1fe42f492d1f714a8387f58a5d8a25"
+      "beyvra-postgres16-dr-source@sha256:c8da4e5acf1e6f81cdabe9f1a3828cf48c1d977c6e095b2f463a46778310586a"
     ],
     "Reference": "beyvra-postgres16-dr-source:local",
     "ImageConfig": {
@@ -233,7 +233,7 @@
           "PGDATA=/tmp/pgdata"
         ],
         "Labels": {
-          "com.docker.compose.project": "beyvra-dr-completion",
+          "com.docker.compose.project": "beyvra-dr-final-20260811",
           "com.docker.compose.service": "source-db",
           "com.docker.compose.version": "2.40.3"
         },

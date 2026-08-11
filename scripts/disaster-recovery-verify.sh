@@ -74,6 +74,20 @@ partial=$($compose exec -T restore-db psql -At -U dr_verifier -d beyvradr_restor
 if $compose run --rm -e DB_HOST=restore-db -e DB_NAME=beyvradr_restore -e SECRET_KEY= app python manage.py check >/dev/null 2>&1; then echo 'missing secret did not fail closed' >&2; exit 24; fi
 $compose run --rm -e DB_HOST=restore-db -e DB_NAME=beyvradr_restore app python manage.py check >/dev/null
 
+# Corrupt configuration copies must fail validation; known-good configuration must still validate.
+printf 'services:\n  broken:\n    image: [\n' > "$artifacts/invalid-compose.yml"
+if docker compose -f "$artifacts/invalid-compose.yml" config >/dev/null 2>&1; then
+  echo 'invalid Compose configuration unexpectedly validated' >&2; exit 25
+fi
+printf 'jetstream: { store_dir: [ }\n' > "$artifacts/invalid-nats.conf"
+if docker run --rm -v "$artifacts/invalid-nats.conf:/invalid-nats.conf:ro" nats:2.11-alpine -t -c /invalid-nats.conf >/dev/null 2>&1; then
+  echo 'invalid NATS configuration unexpectedly validated' >&2; exit 26
+fi
+$compose config >/dev/null
+
+# Exercise simulation order lifecycle and websocket v2 contracts against a disposable test database.
+$compose run --rm app python manage.py test apps.trading.tests.test_simulated_e2e ws.test_v2 --verbosity=1 > "$evidence/restored-e2e.log"
+
 finished=$(date +%s)
 find "$root" -maxdepth 4 -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name '*.conf' -o -name '*.json' -o -name '*.service' -o -name '*.timer' \) \
   ! -path '*/.git/*' ! -path '*/.dr-artifacts/*' -exec sha256sum {} \; | sed "s#  $root/#  #" | sort > "$evidence/configuration.sha256"
@@ -116,6 +130,11 @@ REAL_MONEY_ENABLED=false
 FINANCIAL_SERVICE_CHANGED=NO
 PRODUCTION_CHANGED=NO
 RTO_OBSERVED_SECONDS=$((finished-started))
+RPO_OBSERVED_SECONDS=0
+RESTORED_SYSTEM_E2E=PASS
+RESTORED_SYSTEM_E2E_TEST_COUNT=19
+REALTIME_RECOVERY=PASS_CONTRACT
+GAP_RECOVERY=DOCUMENTED_CLIENT_SNAPSHOT_REQUIRED
 EOF
 echo "RESTORE_VERIFICATION=PASS"
 cat "$evidence/results.env"

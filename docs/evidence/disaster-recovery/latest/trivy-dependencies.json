@@ -3,8 +3,8 @@
   "Trivy": {
     "Version": "0.72.0"
   },
-  "ReportID": "019fefd8-d9bb-7cbd-a699-ddae0459417d",
-  "CreatedAt": "2026-08-11T08:03:13.979836291Z",
+  "ReportID": "019ff1ef-bb71-7dea-885a-eb8e6e6f5d3a",
+  "CreatedAt": "2026-08-11T17:47:27.985913286Z",
   "ArtifactName": ".",
   "ArtifactType": "filesystem",
   "Results": [
@@ -659,6 +659,33 @@
           "AnalyzedBy": "pip"
         }
       ]
+    },
+    {
+      "Target": "FX/Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 20,
+        "Failures": 0
+      }
+    },
+    {
+      "Target": "nginx/Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 20,
+        "Failures": 0
+      }
+    },
+    {
+      "Target": "recovery/postgres.Dockerfile",
+      "Class": "config",
+      "Type": "dockerfile",
+      "MisconfSummary": {
+        "Successes": 20,
+        "Failures": 0
+      }
     }
   ]
 }

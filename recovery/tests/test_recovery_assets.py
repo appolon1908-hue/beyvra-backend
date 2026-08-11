@@ -38,6 +38,17 @@ class RecoveryAssetsTests(unittest.TestCase):
         for name in ("BeyvraBackupStale", "BeyvraBackupFailed", "BeyvraBackupChecksumFailed", "BeyvraRestoreVerificationStale"):
             self.assertIn(name, alerts)
 
+    def test_verifier_rejects_corrupt_compose_and_nats_configuration(self):
+        verifier = (ROOT / "scripts/disaster-recovery-verify.sh").read_text()
+        self.assertIn("invalid Compose configuration unexpectedly validated", verifier)
+        self.assertIn("invalid NATS configuration unexpectedly validated", verifier)
+        self.assertIn("nats:2.11-alpine -t -c", verifier)
+
+    def test_verifier_runs_restored_simulation_and_realtime_contracts(self):
+        verifier = (ROOT / "scripts/disaster-recovery-verify.sh").read_text()
+        self.assertIn("apps.trading.tests.test_simulated_e2e ws.test_v2", verifier)
+        self.assertIn("RESTORED_SYSTEM_E2E=PASS", verifier)
+
 
 if __name__ == "__main__":
     unittest.main()

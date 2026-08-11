@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:4c1db965-edf4-4334-8c0a-3ed2bc59c88f",
+  "serialNumber": "urn:uuid:6d85c5b3-2054-4b36-92a0-9668b8c4febe",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-08-11T08:03:14+00:00",
+    "timestamp": "2026-08-11T17:47:27+00:00",
     "tools": {
       "components": [
         {
@@ -20,7 +20,7 @@
       ]
     },
     "component": {
-      "bom-ref": "97636203-c5bb-45e9-8d54-2608e4ee0caa",
+      "bom-ref": "bab753f4-fced-40aa-9053-6bbcfd5a7231",
       "type": "application",
       "name": ".",
       "properties": [
@@ -33,7 +33,7 @@
   },
   "components": [
     {
-      "bom-ref": "4ef84e71-8012-45b2-b4db-5d972f07d5b3",
+      "bom-ref": "97265345-1d49-4544-ba41-f4b2352b1631",
       "type": "application",
       "name": "FX/requirements.txt",
       "properties": [
@@ -609,7 +609,7 @@
   ],
   "dependencies": [
     {
-      "ref": "4ef84e71-8012-45b2-b4db-5d972f07d5b3",
+      "ref": "97265345-1d49-4544-ba41-f4b2352b1631",
       "dependsOn": [
         "pkg:pypi/adyen@12.3.0",
         "pkg:pypi/aiohttp@3.14.3",
@@ -657,9 +657,9 @@
       ]
     },
     {
-      "ref": "97636203-c5bb-45e9-8d54-2608e4ee0caa",
+      "ref": "bab753f4-fced-40aa-9053-6bbcfd5a7231",
       "dependsOn": [
-        "4ef84e71-8012-45b2-b4db-5d972f07d5b3"
+        "97265345-1d49-4544-ba41-f4b2352b1631"
       ]
     },
     {
