@@ -48,6 +48,7 @@ from .serializers import (
     SupportCaseSerializer,
     SupportMessageSerializer,
     TransactionSerializer,
+    TransactionQuerySerializer,
 )
 from .services import (
     REAL_FEATURE_FLAGS,
@@ -144,15 +145,20 @@ class SupportMessageCreate(TenantMixin, APIView):
 class TransactionList(TenantMixin, generics.ListAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = TransactionSerializer
+    history_type = None
 
     def get_queryset(self):
+        query = TransactionQuerySerializer(data=self.request.query_params)
+        query.is_valid(raise_exception=True)
         qs = TransactionHistoryEntry.objects.filter(
             tenant_id=self.tenant_id(), account=self.request.user
         )
-        if self.request.query_params.get("date_from"):
-            qs = qs.filter(occurred_at__gte=self.request.query_params["date_from"])
-        if self.request.query_params.get("date_to"):
-            qs = qs.filter(occurred_at__lte=self.request.query_params["date_to"])
+        if self.history_type:
+            qs = qs.filter(type=self.history_type)
+        if query.validated_data.get("date_from"):
+            qs = qs.filter(occurred_at__gte=query.validated_data["date_from"])
+        if query.validated_data.get("date_to"):
+            qs = qs.filter(occurred_at__lte=query.validated_data["date_to"])
         return qs
 
 

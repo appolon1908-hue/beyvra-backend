@@ -69,6 +69,19 @@ class TransactionSerializer(serializers.ModelSerializer):
         exclude = ("tenant_id", "account")
 
 
+class TransactionQuerySerializer(serializers.Serializer):
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+
+    def validate(self, attrs):
+        if attrs.get("date_from") and attrs.get("date_to"):
+            if attrs["date_from"] > attrs["date_to"]:
+                raise serializers.ValidationError(
+                    {"date_to": "The end of the range must not precede the start."}
+                )
+        return attrs
+
+
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification

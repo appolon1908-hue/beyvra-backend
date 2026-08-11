@@ -194,6 +194,35 @@ class TenantIsolationApiTests(TestCase):
         self.assertEqual(results[0]["amount"], "0.123456789012000000")
         self.assertTrue(results[0]["simulation"])
 
+    def test_report_routes_enforce_canonical_history_type(self):
+        now = timezone.now()
+        for history_type in ("TRADE", "FEE"):
+            TransactionHistoryEntry.objects.create(
+                tenant_id="a",
+                account=self.a,
+                type=history_type,
+                asset="BTC",
+                amount=Decimal("1"),
+                fee=Decimal("0.01"),
+                status="SETTLED",
+                occurred_at=now,
+                source_ref=f"sim-{history_type.lower()}",
+            )
+        self.client.force_authenticate(self.a)
+        trades = self.client.get("/api/v1/reports/trades").json()["results"]
+        fees = self.client.get("/api/v1/reports/fees").json()["results"]
+        self.assertEqual([entry["type"] for entry in trades], ["TRADE"])
+        self.assertEqual([entry["type"] for entry in fees], ["FEE"])
+
+    def test_report_date_range_is_validated_safely(self):
+        self.client.force_authenticate(self.a)
+        response = self.client.get(
+            "/api/v1/reports/activity",
+            {"date_from": "2026-08-02T00:00:00Z", "date_to": "2026-08-01T00:00:00Z"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "INVALID_REQUEST")
+
     def test_privacy_deletion_is_idempotent_and_hold_safe(self):
         LegalHold.objects.create(
             tenant_id="a", account=self.a, reason="fixture", created_by=self.a
