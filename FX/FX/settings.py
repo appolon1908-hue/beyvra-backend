@@ -374,6 +374,7 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
     ]
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         "anon": os.getenv("ANON_RATE_LIMIT", "30/minute"),
@@ -386,6 +387,11 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
         "webhook_test": "5/minute",
         "webhook_retry": "10/hour",
         "guest_demo": "5/hour",
+        "login": os.getenv("LOGIN_RATE_LIMIT", "10/minute"),
+        "password_reset": os.getenv("PASSWORD_RESET_RATE_LIMIT", "5/hour"),
+        "mfa_verify": os.getenv("MFA_VERIFY_RATE_LIMIT", "10/minute"),
+        "order_preview": os.getenv("ORDER_PREVIEW_RATE_LIMIT", "120/minute"),
+        "order_create": os.getenv("ORDER_CREATE_RATE_LIMIT", "60/minute"),
     }
 
 # Simple-jwt

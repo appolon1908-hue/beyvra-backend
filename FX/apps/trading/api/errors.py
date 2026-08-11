@@ -16,4 +16,4 @@ MESSAGES = {
 
 
 def error_response(request, code, status_code, details=None):
-    return Response({"error": {"code": code, "message": MESSAGES.get(code, code.replace("_", " ").title()), "request_id": request.headers.get("X-Request-ID", ""), "details": details or {}}}, status=status_code)
+    return Response({"error": {"code": code, "message": MESSAGES.get(code, "The request could not be completed."), "details": details or {}}}, status=status_code)

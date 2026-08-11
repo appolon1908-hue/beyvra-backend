@@ -21,6 +21,7 @@ def _failure(request, error):
 
 class OrderCollectionView(APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "order_create"
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
         orders = TradingOrder.objects.filter(subject_ref=str(request.user.pk), tenant_ref="default", simulation=True).order_by("-created_at")
@@ -30,7 +31,7 @@ class OrderCollectionView(APIView):
         key = request.headers.get("Idempotency-Key")
         if not key: return error_response(request, "VALIDATION_ERROR", 422)
         try:
-            body, status = create(request.user, request.data, key)
+            body, status = create(request.user, request.data, key, getattr(request,"correlation_id",None))
             return Response(body, status=status)
         except (ValueError, SimulationFinancialError, IdempotencyConflict) as error:
             return _failure(request, error)
@@ -38,6 +39,7 @@ class OrderCollectionView(APIView):
 
 class OrderPreviewView(APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "order_preview"
     def post(self, request):
         if blocked := _guard(request): return blocked
         try: return Response(preview(request.user, request.data))

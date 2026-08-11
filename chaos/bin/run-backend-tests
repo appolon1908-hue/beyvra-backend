@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+IMAGE=${BACKEND_TEST_IMAGE:-beyvra-backend-staging:b07a04fdde91b9c5eb6e3f12a80e212bd30aa305}
+cleanup(){ "$ROOT/chaos/bin/chaos-harness" down >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+"$ROOT/chaos/bin/chaos-harness" up >/dev/null
+docker run --rm --network beyvara-chaos_chaos -v "$ROOT/FX:/work:ro" -w /work \
+ -e SECRET_KEY=isolated-test-only -e ALLOWED_HOSTS='["testserver","localhost"]' -e CSRF_TRUSTED_ORIGINS='["http://localhost"]' -e DEPLOYMENT_ENV=test -e DEBUG=false \
+ -e DB_NAME=chaos -e DB_USER=chaos -e DB_PASSWORD=chaos-disposable-only -e DB_HOST=postgres -e DB_PORT=5432 -e TEST_DB_NAME=test_chaos \
+ -e REDIS_HOST=redis -e REDIS_PORT=6379 -e REDIS_PASSWORD='' -e REDIS_DATABASE=0 -e REDIS_POOL_MAX_CONNECTIONS=50 -e REDIS_EXPIRE_KEY=30 \
+ -e SIMULATED_TRADING_ENABLED=true -e REAL_TRADING_ENABLED=false -e EXTERNAL_EXECUTION_ENABLED=false -e REAL_MONEY_ENABLED=false \
+ -e REAL_DEPOSITS_ENABLED=false -e REAL_WITHDRAWALS_ENABLED=false -e REAL_INTERNAL_TRANSFERS_ENABLED=false -e NATS_JETSTREAM_ENABLED=false \
+ "$IMAGE" python manage.py test "$@"

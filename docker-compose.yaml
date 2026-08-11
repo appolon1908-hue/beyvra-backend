@@ -349,7 +349,7 @@ services:
         soft: 65536
         hard: 65536
     ports:
-      - "127.0.0.1:${PORT}:80"
+      - "127.0.0.1:${PORT}:8080"
     volumes:
       - static_files:/app/static
       - ./media:/app/media
@@ -365,7 +365,7 @@ services:
       - daphne
       - centrifugo
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5

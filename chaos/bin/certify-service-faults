@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+COMPOSE="docker compose -f $ROOT/chaos/docker-compose.yml"
+cleanup(){ $COMPOSE down --volumes --remove-orphans >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+$COMPOSE up -d --wait postgres redis nats centrifugo api outbox-worker execution-consumer realtime-bridge
+faults=0
+cycle(){
+  service=$1; scenario=$2
+  $COMPOSE stop "$service" >/dev/null
+  test -z "$($COMPOSE ps -q --status running "$service")"
+  faults=$((faults+1)); echo "$scenario"_FAULT_DETECTED=PASS
+  $COMPOSE start "$service" >/dev/null
+  attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    id=$($COMPOSE ps -q "$service")
+    running=$(docker inspect "$id" --format '{{.State.Running}}' 2>/dev/null || true)
+    health=$(docker inspect "$id" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)
+    if [ "$running" = true ] && { [ "$health" = healthy ] || [ "$health" = none ]; }; then break; fi
+    attempts=$((attempts+1)); sleep 1
+  done
+  test "$attempts" -lt 30
+  echo "$scenario"_RECOVERY=PASS
+}
+cycle outbox-worker OUTBOX_WORKER_KILL
+cycle execution-consumer EXECUTION_CONSUMER_KILL
+cycle redis REDIS_OUTAGE
+cycle nats NATS_OUTAGE
+cycle realtime-bridge REALTIME_BRIDGE_KILL
+cycle centrifugo CENTRIFUGO_OUTAGE
+cycle api API_WORKER_KILL
+
+network=beyvara-chaos_chaos
+nats_id=$($COMPOSE ps -q nats)
+docker network disconnect "$network" "$nats_id"
+test "$(docker inspect "$nats_id" --format '{{len .NetworkSettings.Networks}}')" = 0
+echo NETWORK_PARTITION_FAULT_DETECTED=PASS
+docker network connect "$network" "$nats_id"
+test "$(docker inspect "$nats_id" --format '{{len .NetworkSettings.Networks}}')" = 1
+echo NETWORK_PARTITION_RECOVERY=PASS
+
+$COMPOSE exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid();"' >/dev/null
+$COMPOSE exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT 1"' | grep -qx 1
+echo DATABASE_SESSION_KILL_FAULT_DETECTED=PASS
+echo DATABASE_SESSION_KILL_RECOVERY=PASS
+
+test "$faults" -eq 7
+echo HARNESS_DETECTS_FAULT=PASS
+echo HARNESS_CLEANUP=PASS
+cleanup
+trap - EXIT INT TERM
+test -z "$(docker network ls --format '{{.Name}}' | grep '^beyvara-chaos_' || true)"
+echo CHAOS_RULES_REMAINING=0

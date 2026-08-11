@@ -11,6 +11,7 @@ case "${1:-}" in
     $COMPOSE up -d --wait postgres redis nats centrifugo
     $COMPOSE run --rm runner
     ;;
+  certify-services) "$ROOT/chaos/bin/certify-service-faults" ;;
   scenario) BEYVRA_CHAOS_ISOLATED=1 PYTHONPATH="$ROOT" python3 -m chaos.harness "${2:?scenario required}" ;;
-  *) echo "usage: $0 {up|down|certify|scenario NAME}" >&2; exit 2 ;;
+  *) echo "usage: $0 {up|down|certify|certify-services|scenario NAME}" >&2; exit 2 ;;
 esac
