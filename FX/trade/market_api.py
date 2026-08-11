@@ -29,6 +29,25 @@ INSTRUMENTS = {
 
 def _instrument(instrument_id):
     normalized = instrument_id.strip().upper()
+    try:
+        from reference_data.models import Instrument as ReferenceInstrument
+
+        canonical = ReferenceInstrument.objects.select_related("venue", "calendar").filter(canonical_symbol=normalized).first()
+        if canonical is not None:
+            mapping = canonical.provider_mappings.filter(product="MARKET_DATA", effective_to__isnull=True).order_by("provider_id").first()
+            if mapping is None:
+                raise ValueError("INSTRUMENT_MAPPING_UNAVAILABLE")
+            return normalized, {
+                "provider_symbol": mapping.provider_symbol,
+                "asset_class": canonical.asset_class,
+                "price_decimals": max(-canonical.tick_size.as_tuple().exponent, 0),
+                "quantity_decimals": max(-canonical.lot_size.as_tuple().exponent, 0),
+                "instrument_uuid": str(canonical.instrument_id),
+            }
+    except (ImportError, RuntimeError):
+        # Compatibility during migrations only. Runtime provider identity is
+        # authoritative once reference_data is installed.
+        pass
     definition = INSTRUMENTS.get(normalized)
     if definition is None:
         raise ValueError("INSTRUMENT_NOT_FOUND")

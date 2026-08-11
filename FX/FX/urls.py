@@ -56,6 +56,7 @@ urlpatterns = [
     # Separate real-wallet boundary. Every real-value feature is disabled by
     # default and never falls back to the demo wallet.
     path("api/v1/", include("real_wallet.urls")),
+    path("api/v1/", include("reference_data.urls")),
     path("api/v1/", include("trade.market_urls")),
     path("api/v1/trading/", include("apps.trading.api.urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),

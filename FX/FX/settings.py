@@ -174,6 +174,7 @@ INSTALLED_APPS = [
     "real_wallet",
     "provider_governance",
     "financial_client",
+    "reference_data",
     "apps.foundation",
     "apps.trading",
     "apps.compliance",

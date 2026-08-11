@@ -67,6 +67,7 @@ jobs:
           python manage.py makemigrations --check --dry-run
           python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
           python manage.py test news_app.test_phase5_contracts ws.test_v2
+          python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
