@@ -51,7 +51,9 @@ class PrivateWalletsApiTests(TestCase):
 
     def test_retrieve_wallets(self):
         """Test retrieving a list of wallets."""
-        Wallet.objects.create(user=self.user, name="primary", currency=self.currency)
+        Wallet.objects.create(
+            user=self.user, name="primary", currency=self.currency, is_real=False
+        )
 
         res = self.client.get(WALLETS_URL)
 
@@ -63,9 +65,11 @@ class PrivateWalletsApiTests(TestCase):
     def test_wallets_limited_to_user(self):
         """Test list of wallets is limited to authenticated user."""
         user2 = create_user(email="user2@example.com")
-        Wallet.objects.create(user=user2, name="other", currency=self.currency)
+        Wallet.objects.create(
+            user=user2, name="other", currency=self.currency, is_real=False
+        )
         wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency
+            user=self.user, name="primary", currency=self.currency, is_real=False
         )
 
         res = self.client.get(WALLETS_URL)
@@ -78,7 +82,7 @@ class PrivateWalletsApiTests(TestCase):
     def test_get_wallet_details(self):
         """Test retrieving a wallet details."""
         wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency
+            user=self.user, name="primary", currency=self.currency, is_real=False
         )
 
         url = detail_url(str(wallet.id))
@@ -90,11 +94,13 @@ class PrivateWalletsApiTests(TestCase):
 
     def test_get_other_users_wallet_details_fails(self):
         """Test retrieving a wallet details."""
-        Wallet.objects.create(user=self.user, name="primary", currency=self.currency)
+        Wallet.objects.create(
+            user=self.user, name="primary", currency=self.currency, is_real=False
+        )
 
         user2 = create_user(email="user2@example.com")
         wallet2 = Wallet.objects.create(
-            user=user2, name="other", currency=self.currency
+            user=user2, name="other", currency=self.currency, is_real=False
         )
 
         url = detail_url(str(wallet2.id))
@@ -113,7 +119,9 @@ class PrivateWalletsApiTests(TestCase):
 
     def test_create_wallet_with_same_name_fails(self):
         """Wallet names are unique per user."""
-        Wallet.objects.create(user=self.user, name="primary", currency=self.currency)
+        Wallet.objects.create(
+            user=self.user, name="primary", currency=self.currency, is_real=False
+        )
 
         payload = {"name": "primary", "currency": self.currency.id}
         res = self.client.post(WALLETS_URL, payload)
@@ -147,7 +155,7 @@ class PrivateWalletsApiTests(TestCase):
 
     def test_update_wallet_name_is_owner_scoped(self):
         wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency
+            user=self.user, name="primary", currency=self.currency, is_real=False
         )
         payload = {"name": "renamed"}
 
@@ -160,7 +168,7 @@ class PrivateWalletsApiTests(TestCase):
     def test_delete_wallet_not_permitted(self):
         """Test deleting a wallet."""
         wallet = Wallet.objects.create(
-            user=self.user, name="primary", currency=self.currency
+            user=self.user, name="primary", currency=self.currency, is_real=False
         )
 
         url = detail_url(str(wallet.id))

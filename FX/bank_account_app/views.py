@@ -11,6 +11,19 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from users.models import User
 from drf_spectacular.utils import extend_schema
+from rest_framework.exceptions import ValidationError
+
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
+
+
+def deny_withdrawal_mutation(user):
+    try:
+        assert_sensitive_mutation_allowed(
+            tenant_id=tenant_for(user), account=user, action="withdrawal"
+        )
+    except PermissionError as exc:
+        raise ValidationError("ACCOUNT_FROZEN") from exc
+    raise ValidationError("Real-money trading is disabled in this environment.")
 
 class BankAccountView(APIView):
     """ APIs to get, create, update and delete a bank account for a user. """
@@ -103,6 +116,7 @@ class WithdrawalRequestView(APIView):
         responses={201: WithdrawalRequestSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        deny_withdrawal_mutation(request.user)
         try:
             bank_account = BankAccount.objects.filter(
                 bank_name=request.data['bank_name'],
@@ -126,6 +140,7 @@ class WithdrawalRequestView(APIView):
         responses={201: WithdrawalRequestSerializer, 400: 'Bad Request'},
     )
     def patch(self, request):
+        deny_withdrawal_mutation(request.user)
         try:
             withdrawal_id = request.data.get('withdrawal_id', None)
             if not withdrawal_id:

@@ -28,7 +28,7 @@ class WalletTransferSecurityTests(TestCase):
         )
         self.client = APIClient()
 
-    def test_cannot_transfer_from_another_users_wallet(self):
+    def test_transfer_route_is_fail_closed_before_wallet_lookup(self):
         self.client.force_authenticate(self.attacker)
         response = self.client.post(
             f"/api/wallet/wallets/{self.source.id}/transfer/",
@@ -37,13 +37,14 @@ class WalletTransferSecurityTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
         self.source.refresh_from_db()
         self.target.refresh_from_db()
         self.assertEqual(self.source.balance, Decimal("100.00"))
         self.assertEqual(self.target.balance, Decimal("0.00"))
 
-    def test_owner_transfer_updates_both_balances_once(self):
+    def test_owner_transfer_is_disabled_without_balance_mutation(self):
         self.client.force_authenticate(self.user)
         response = self.client.post(
             f"/api/wallet/wallets/{self.source.id}/transfer/",
@@ -52,8 +53,9 @@ class WalletTransferSecurityTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
         self.source.refresh_from_db()
         self.target.refresh_from_db()
-        self.assertEqual(self.source.balance, Decimal("90.00"))
-        self.assertEqual(self.target.balance, Decimal("10.00"))
+        self.assertEqual(self.source.balance, Decimal("100.00"))
+        self.assertEqual(self.target.balance, Decimal("0.00"))

@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
 from bank_account_app.models import WithdrawalRequest
 from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate
 from wallet.permissions import IsOwner
@@ -38,6 +40,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def enforce_wallet_mutation_authority(user, action):
+    try:
+        assert_sensitive_mutation_allowed(
+            tenant_id=tenant_for(user), account=user, action=action
+        )
+    except PermissionError as exc:
+        raise ValidationError("ACCOUNT_FROZEN") from exc
+
+
 class CurrencyList(generics.ListAPIView):
     queryset = Currency.objects.all().order_by("name")
     serializer_class = CurrencySerializer
@@ -45,7 +56,7 @@ class CurrencyList(generics.ListAPIView):
 
 class WalletListCreateView(generics.ListCreateAPIView):
     queryset = Wallet.objects.select_related("currency").filter(
-        is_archived=False).order_by("-created_at")
+        is_archived=False, is_real=False).order_by("-created_at")
     serializer_class = WalletListSerializer
     permission_classes = [IsAuthenticated, IsOwner]
 
@@ -62,7 +73,7 @@ class WalletListCreateView(generics.ListCreateAPIView):
 
 
 class WalletDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Wallet.objects.filter(is_archived=False)
+    queryset = Wallet.objects.filter(is_archived=False, is_real=False)
     serializer_class = WalletDetailSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
@@ -82,10 +93,13 @@ class WalletDetailView(generics.RetrieveUpdateAPIView):
 
 
 class WalletRefillView(generics.RetrieveAPIView):
-    queryset = Wallet.objects.filter(is_archived=False)
+    queryset = Wallet.objects.filter(is_archived=False, is_real=False)
     serializer_class = WalletDetailSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -98,10 +112,13 @@ class WalletRefillView(generics.RetrieveAPIView):
 
 
 class WalletArchiveView(generics.GenericAPIView):
-    queryset = Wallet.objects.all()
+    queryset = Wallet.objects.filter(is_real=False)
     serializer_class = WalletArchivedSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -182,7 +199,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         wallet_id = self.request.query_params.get("wallet_id")
 
         queryset = self.queryset
-        queryset = queryset.filter(wallet__user=self.request.user)
+        queryset = queryset.filter(wallet__user=self.request.user, wallet__is_real=False)
 
         if date_from:
             queryset = queryset.filter(created_at__date__gte=date_from)
@@ -216,6 +233,8 @@ class DepositToWalletView(APIView):
     serializer_class = DepositSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "deposit")
+        raise ValidationError("Real-money trading is disabled in this environment.")
         # Input Validations:
         try:
             wallet = Wallet.objects.get(id=wallet_id)
@@ -304,6 +323,8 @@ class WithdrawFromWalletView(APIView):
     serializer_class = WithdrawSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "withdrawal")
+        raise ValidationError("Real-money trading is disabled in this environment.")
         # Validate the incoming data using the serializer
         serializer = WithdrawSerializer(data=request.data)
         if not serializer.is_valid():
@@ -396,6 +417,8 @@ class TransferFromWalletView(APIView):
     serializer_class = TransferSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "transfer")
+        raise ValidationError("Real-money trading is disabled in this environment.")
         # Validate the incoming data using the serializer
         serializer = TransferSerializer(data=request.data)
         if not serializer.is_valid():

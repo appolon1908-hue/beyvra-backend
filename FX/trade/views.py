@@ -1,4 +1,7 @@
 from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
+
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
 
 from .models import Asset, Trade
 from .serializers import AssetSerializer, TradeSerializer
@@ -21,3 +24,14 @@ class TradeListCreateView(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def perform_create(self, serializer):
+        try:
+            assert_sensitive_mutation_allowed(
+                tenant_id=tenant_for(self.request.user),
+                account=self.request.user,
+                action="trading",
+            )
+        except PermissionError as exc:
+            raise ValidationError("ACCOUNT_FROZEN") from exc
+        serializer.save()

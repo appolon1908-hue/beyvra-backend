@@ -20,6 +20,12 @@ def BeyvraErrorMapper(exc, context):  # noqa: N802 - public error-contract name
             "message": "This feature is currently unavailable.",
         }
         return response
+    if "ACCOUNT_FROZEN" in str(getattr(exc, "detail", "")):
+        response.data = {
+            "code": "ACCOUNT_FROZEN",
+            "message": "This account is temporarily restricted.",
+        }
+        return response
     code, message = SAFE_MESSAGES.get(
         response.status_code, ("REQUEST_FAILED", "The request could not be completed.")
     )
