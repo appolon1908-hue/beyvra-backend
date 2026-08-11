@@ -3,18 +3,18 @@
   "Trivy": {
     "Version": "0.72.0"
   },
-  "ReportID": "019fefd9-337b-78c7-9a33-ebb3d49641cc",
-  "CreatedAt": "2026-08-11T08:03:36.955576617Z",
-  "ArtifactID": "sha256:48aff3b14e5f439eb1b0b083151e67e65a90f11af916a80d7f01f240b15c322f",
-  "ArtifactName": "postgres:16-alpine",
+  "ReportID": "019fefeb-3d85-7842-a600-40cfe327b1d4",
+  "CreatedAt": "2026-08-11T08:23:19.173542881Z",
+  "ArtifactID": "sha256:1f893fbce8bfeca122b24c54eceaf970048d95c6ddd2417f8eb3a64a0c950aee",
+  "ArtifactName": "beyvra-postgres16-dr-source:local",
   "ArtifactType": "container_image",
   "Metadata": {
-    "Size": 297029120,
+    "Size": 297032192,
     "OS": {
       "Family": "alpine",
       "Name": "3.24.1"
     },
-    "ImageID": "sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+    "ImageID": "sha256:ee666a2e269c7bff11544f368def4664af1fe42f492d1f714a8387f58a5d8a25",
     "DiffIDs": [
       "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
       "sha256:b6c90c2b6a3cfed2b6d81db0a2f033ecac01c90688208cca5fd228a77042b0ea",
@@ -26,18 +26,19 @@
       "sha256:68928ffa1a8571d6557a64d5af00c07c472affce10e2731e131ac3db9a75c408",
       "sha256:669aefeaf94735baa6d4986651565db5537f98ce817a4896baabdca49b0b0768",
       "sha256:41604a050d67b54a297a0deeaea23299ed80965b4cd95d8c860f09a46d962841",
-      "sha256:05b9f8247eef1547e6f125f10fba9b76ef6a7388826f6f6ff6d476016ca87b77"
+      "sha256:05b9f8247eef1547e6f125f10fba9b76ef6a7388826f6f6ff6d476016ca87b77",
+      "sha256:75d6bc0b31401495b655fd8240a946c31850a2f14d8ba5c0f0e9834604d1f233"
     ],
     "RepoTags": [
-      "postgres:16-alpine"
+      "beyvra-postgres16-dr-source:local"
     ],
     "RepoDigests": [
-      "postgres@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
+      "beyvra-postgres16-dr-source@sha256:ee666a2e269c7bff11544f368def4664af1fe42f492d1f714a8387f58a5d8a25"
     ],
-    "Reference": "postgres:16-alpine",
+    "Reference": "beyvra-postgres16-dr-source:local",
     "ImageConfig": {
       "architecture": "amd64",
-      "created": "2026-07-07T17:47:20.839800572Z",
+      "created": "2026-08-11T08:08:17.100232426Z",
       "history": [
         {
           "created": "2026-06-16T00:01:29Z",
@@ -171,6 +172,29 @@
           "created_by": "CMD [\"postgres\"]",
           "comment": "buildkit.dockerfile.v0",
           "empty_layer": true
+        },
+        {
+          "created": "2026-08-11T08:08:17Z",
+          "created_by": "USER root",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-11T08:08:17Z",
+          "created_by": "RUN /bin/sh -c rm -f /usr/local/bin/gosu # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-11T08:08:17Z",
+          "created_by": "ENV PGDATA=/tmp/pgdata",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-11T08:08:17Z",
+          "created_by": "USER postgres",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
         }
       ],
       "os": "linux",
@@ -187,7 +211,8 @@
           "sha256:68928ffa1a8571d6557a64d5af00c07c472affce10e2731e131ac3db9a75c408",
           "sha256:669aefeaf94735baa6d4986651565db5537f98ce817a4896baabdca49b0b0768",
           "sha256:41604a050d67b54a297a0deeaea23299ed80965b4cd95d8c860f09a46d962841",
-          "sha256:05b9f8247eef1547e6f125f10fba9b76ef6a7388826f6f6ff6d476016ca87b77"
+          "sha256:05b9f8247eef1547e6f125f10fba9b76ef6a7388826f6f6ff6d476016ca87b77",
+          "sha256:75d6bc0b31401495b655fd8240a946c31850a2f14d8ba5c0f0e9834604d1f233"
         ]
       },
       "config": {
@@ -205,8 +230,14 @@
           "PG_VERSION=16.14",
           "PG_SHA256=f6d077142737920858ce958ccdb75c6ee137a63b5b0853c70693d401ac7e3471",
           "DOCKER_PG_LLVM_DEPS=llvm21-dev \t\tclang21",
-          "PGDATA=/var/lib/postgresql/data"
+          "PGDATA=/tmp/pgdata"
         ],
+        "Labels": {
+          "com.docker.compose.project": "beyvra-dr-completion",
+          "com.docker.compose.service": "source-db",
+          "com.docker.compose.version": "2.40.3"
+        },
+        "User": "postgres",
         "Volumes": {
           "/var/lib/postgresql/data": {}
         },
@@ -272,12 +303,17 @@
         "Size": 3072,
         "Digest": "sha256:cc7fa208b8a739a2259173985b8977135a0351f227a6f6d562ba7b268414f6fb",
         "DiffID": "sha256:05b9f8247eef1547e6f125f10fba9b76ef6a7388826f6f6ff6d476016ca87b77"
+      },
+      {
+        "Size": 3072,
+        "Digest": "sha256:8054609259cbeaa878e9a446263c7996d28820b97e0c30744228d3ee1bc6dfdf",
+        "DiffID": "sha256:75d6bc0b31401495b655fd8240a946c31850a2f14d8ba5c0f0e9834604d1f233"
       }
     ]
   },
   "Results": [
     {
-      "Target": "postgres:16-alpine (alpine 3.24.1)",
+      "Target": "beyvra-postgres16-dr-source:local (alpine 3.24.1)",
       "Class": "os-pkgs",
       "Type": "alpine",
       "Packages": [
@@ -2438,164 +2474,6 @@
             "usr/lib/libzstd.so.1.5.7"
           ],
           "AnalyzedBy": "apk"
-        }
-      ]
-    },
-    {
-      "Target": "usr/local/bin/gosu",
-      "Class": "lang-pkgs",
-      "Type": "gobinary",
-      "Packages": [
-        {
-          "ID": "github.com/tianon/gosu@v1.19.0",
-          "Name": "github.com/tianon/gosu",
-          "Identifier": {
-            "PURL": "pkg:golang/github.com/tianon/gosu@v1.19.0",
-            "UID": "1057a82ec313601"
-          },
-          "Version": "v1.19.0",
-          "Relationship": "root",
-          "DependsOn": [
-            "github.com/moby/sys/user@v0.1.0",
-            "golang.org/x/sys@v0.1.0",
-            "stdlib@v1.24.6"
-          ],
-          "Layer": {
-            "Digest": "sha256:2d3064b8615b03f3d535e4382404cbecb1ecf715b1b04bc1f43d2f62477ad34a",
-            "DiffID": "sha256:7b46aee4dcb8bca869a7ee47e0e969fda37b222f4f95e450d146f7ff852c9e4d"
-          },
-          "AnalyzedBy": "gobinary"
-        },
-        {
-          "ID": "stdlib@v1.24.6",
-          "Name": "stdlib",
-          "Identifier": {
-            "PURL": "pkg:golang/stdlib@v1.24.6",
-            "UID": "5a9b484fa87e1a00"
-          },
-          "Version": "v1.24.6",
-          "Relationship": "direct",
-          "Layer": {
-            "Digest": "sha256:2d3064b8615b03f3d535e4382404cbecb1ecf715b1b04bc1f43d2f62477ad34a",
-            "DiffID": "sha256:7b46aee4dcb8bca869a7ee47e0e969fda37b222f4f95e450d146f7ff852c9e4d"
-          },
-          "AnalyzedBy": "gobinary"
-        },
-        {
-          "ID": "github.com/moby/sys/user@v0.1.0",
-          "Name": "github.com/moby/sys/user",
-          "Identifier": {
-            "PURL": "pkg:golang/github.com/moby/sys/user@v0.1.0",
-            "UID": "cfd815b74e215fdf"
-          },
-          "Version": "v0.1.0",
-          "Layer": {
-            "Digest": "sha256:2d3064b8615b03f3d535e4382404cbecb1ecf715b1b04bc1f43d2f62477ad34a",
-            "DiffID": "sha256:7b46aee4dcb8bca869a7ee47e0e969fda37b222f4f95e450d146f7ff852c9e4d"
-          },
-          "AnalyzedBy": "gobinary"
-        },
-        {
-          "ID": "golang.org/x/sys@v0.1.0",
-          "Name": "golang.org/x/sys",
-          "Identifier": {
-            "PURL": "pkg:golang/golang.org/x/sys@v0.1.0",
-            "UID": "11ab2e48c80f8e7d"
-          },
-          "Version": "v0.1.0",
-          "Layer": {
-            "Digest": "sha256:2d3064b8615b03f3d535e4382404cbecb1ecf715b1b04bc1f43d2f62477ad34a",
-            "DiffID": "sha256:7b46aee4dcb8bca869a7ee47e0e969fda37b222f4f95e450d146f7ff852c9e4d"
-          },
-          "AnalyzedBy": "gobinary"
-        }
-      ],
-      "Vulnerabilities": [
-        {
-          "VulnerabilityID": "CVE-2025-68121",
-          "VendorIDs": [
-            "GO-2026-4337"
-          ],
-          "PkgID": "stdlib@v1.24.6",
-          "PkgName": "stdlib",
-          "PkgIdentifier": {
-            "PURL": "pkg:golang/stdlib@v1.24.6",
-            "UID": "5a9b484fa87e1a00"
-          },
-          "InstalledVersion": "v1.24.6",
-          "FixedVersion": "1.24.13, 1.25.7, 1.26.0-rc.3",
-          "Status": "fixed",
-          "Layer": {
-            "Digest": "sha256:2d3064b8615b03f3d535e4382404cbecb1ecf715b1b04bc1f43d2f62477ad34a",
-            "DiffID": "sha256:7b46aee4dcb8bca869a7ee47e0e969fda37b222f4f95e450d146f7ff852c9e4d"
-          },
-          "SeveritySource": "nvd",
-          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-68121",
-          "DataSource": {
-            "ID": "govulndb",
-            "Name": "The Go Vulnerability Database",
-            "URL": "https://pkg.go.dev/vuln/"
-          },
-          "Fingerprint": "sha256:cf19b56334db90ecbbf3be7a9953ca45724117b2e458c1a9f4b007d0da174652",
-          "Title": "crypto/tls: crypto/tls: Incorrect certificate validation during TLS session resumption",
-          "Description": "During session resumption in crypto/tls, if the underlying Config has its ClientCAs or RootCAs fields mutated between the initial handshake and the resumed handshake, the resumed handshake may succeed when it should have failed. This may happen when a user calls Config.Clone and mutates the returned Config, or uses Config.GetConfigForClient. This can cause a client to resume a session with a server that it would not have resumed with during the initial handshake, or cause a server to resume a session with a client that it would not have resumed with during the initial handshake.",
-          "Severity": "CRITICAL",
-          "CweIDs": [
-            "CWE-295"
-          ],
-          "VendorSeverity": {
-            "alma": 3,
-            "amazon": 2,
-            "azure": 2,
-            "bitnami": 4,
-            "cbl-mariner": 2,
-            "nvd": 4,
-            "oracle-oval": 3,
-            "photon": 4,
-            "redhat": 2,
-            "rocky": 3,
-            "ubuntu": 2
-          },
-          "CVSS": {
-            "bitnami": {
-              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-              "V3Score": 10
-            },
-            "nvd": {
-              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
-              "V3Score": 10
-            },
-            "redhat": {
-              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
-              "V3Score": 7.4
-            }
-          },
-          "References": [
-            "https://access.redhat.com/errata/RHSA-2026:3336",
-            "https://access.redhat.com/security/cve/CVE-2025-68121",
-            "https://bugzilla.redhat.com/2418462",
-            "https://bugzilla.redhat.com/2434431",
-            "https://bugzilla.redhat.com/2434432",
-            "https://bugzilla.redhat.com/2437111",
-            "https://bugzilla.redhat.com/show_bug.cgi?id=2434432",
-            "https://bugzilla.redhat.com/show_bug.cgi?id=2437111",
-            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-61726",
-            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2025-68121",
-            "https://errata.almalinux.org/10/ALSA-2026-3336.html",
-            "https://errata.rockylinux.org/RLSA-2026:4177",
-            "https://github.com/golang/go/issues/77113",
-            "https://go.dev/cl/737700",
-            "https://go.dev/issue/77217",
-            "https://groups.google.com/g/golang-announce/c/K09ubi9FQFk",
-            "https://groups.google.com/g/golang-announce/c/Vd2tYVM8eUc",
-            "https://linux.oracle.com/cve/CVE-2025-68121.html",
-            "https://linux.oracle.com/errata/ELSA-2026-5146.html",
-            "https://nvd.nist.gov/vuln/detail/CVE-2025-68121",
-            "https://pkg.go.dev/vuln/GO-2026-4337",
-            "https://www.cve.org/CVERecord?id=CVE-2025-68121"
-          ],
-          "PublishedDate": "2026-02-05T18:16:10.857Z",
-          "LastModifiedDate": "2026-06-17T09:58:33.833Z"
         }
       ]
     }

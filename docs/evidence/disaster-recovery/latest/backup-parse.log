@@ -1,7 +1,7 @@
 ;
-; Archive created at 2026-08-11 08:02:55 UTC
+; Archive created at 2026-08-11 08:20:50 UTC
 ;     dbname: beyvradr
-;     TOC Entries: 49
+;     TOC Entries: 1111
 ;     Compression: gzip
 ;     Dump Version: 1.15-0
 ;     Format: CUSTOM
@@ -13,48 +13,1110 @@
 ;
 ; Selected TOC Entries:
 ;
-227; 1255 16494 FUNCTION public reject_audit_mutation() dr_verifier
-224; 1259 16477 TABLE public audit_events dr_verifier
-216; 1259 16393 TABLE public orders dr_verifier
-222; 1259 16462 TABLE public outbox_events dr_verifier
-220; 1259 16446 TABLE public positions dr_verifier
-223; 1259 16470 TABLE public processed_events dr_verifier
-226; 1259 16486 TABLE public reconciliation_records dr_verifier
-225; 1259 16485 SEQUENCE public reconciliation_records_id_seq dr_verifier
-219; 1259 16431 TABLE public reservations dr_verifier
-215; 1259 16385 TABLE public schema_migrations dr_verifier
-218; 1259 16419 TABLE public settlements dr_verifier
-221; 1259 16453 TABLE public simulated_accounts dr_verifier
-217; 1259 16404 TABLE public trades dr_verifier
-3540; 0 16477 TABLE DATA public audit_events dr_verifier
-3532; 0 16393 TABLE DATA public orders dr_verifier
-3538; 0 16462 TABLE DATA public outbox_events dr_verifier
-3536; 0 16446 TABLE DATA public positions dr_verifier
-3539; 0 16470 TABLE DATA public processed_events dr_verifier
-3542; 0 16486 TABLE DATA public reconciliation_records dr_verifier
-3535; 0 16431 TABLE DATA public reservations dr_verifier
-3531; 0 16385 TABLE DATA public schema_migrations dr_verifier
-3534; 0 16419 TABLE DATA public settlements dr_verifier
-3537; 0 16453 TABLE DATA public simulated_accounts dr_verifier
-3533; 0 16404 TABLE DATA public trades dr_verifier
-3549; 0 0 SEQUENCE SET public reconciliation_records_id_seq dr_verifier
-3381; 2606 16484 CONSTRAINT public audit_events audit_events_pkey dr_verifier
-3357; 2606 16403 CONSTRAINT public orders orders_pkey dr_verifier
-3376; 2606 16469 CONSTRAINT public outbox_events outbox_events_pkey dr_verifier
-3372; 2606 16452 CONSTRAINT public positions positions_pkey dr_verifier
-3379; 2606 16476 CONSTRAINT public processed_events processed_events_pkey dr_verifier
-3383; 2606 16493 CONSTRAINT public reconciliation_records reconciliation_records_pkey dr_verifier
-3368; 2606 16440 CONSTRAINT public reservations reservations_order_id_key dr_verifier
-3370; 2606 16438 CONSTRAINT public reservations reservations_pkey dr_verifier
-3355; 2606 16392 CONSTRAINT public schema_migrations schema_migrations_pkey dr_verifier
-3364; 2606 16423 CONSTRAINT public settlements settlements_pkey dr_verifier
-3366; 2606 16425 CONSTRAINT public settlements settlements_trade_id_key dr_verifier
-3374; 2606 16461 CONSTRAINT public simulated_accounts simulated_accounts_pkey dr_verifier
-3360; 2606 16413 CONSTRAINT public trades trades_execution_id_key dr_verifier
-3362; 2606 16411 CONSTRAINT public trades trades_pkey dr_verifier
-3358; 1259 16496 INDEX public orders_tenant_state_idx dr_verifier
-3377; 1259 16497 INDEX public outbox_pending_idx dr_verifier
-3387; 2620 16495 TRIGGER public audit_events audit_no_update dr_verifier
-3386; 2606 16441 FK CONSTRAINT public reservations reservations_order_id_fkey dr_verifier
-3385; 2606 16426 FK CONSTRAINT public settlements settlements_trade_id_fkey dr_verifier
-3384; 2606 16414 FK CONSTRAINT public trades trades_order_id_fkey dr_verifier
+440; 1255 16939 FUNCTION public foundation_reject_audit_mutation() dr_verifier
+453; 1255 17552 FUNCTION public provider_governance_guard_approval() dr_verifier
+454; 1255 17554 FUNCTION public provider_governance_guard_audit() dr_verifier
+455; 1255 17890 FUNCTION public real_wallet_reject_posted_entry_mutation() dr_verifier
+441; 1255 19107 FUNCTION public reject_audit_mutation() dr_verifier
+437; 1259 19090 TABLE public audit_events dr_verifier
+222; 1259 16408 TABLE public auth_group dr_verifier
+221; 1259 16407 SEQUENCE public auth_group_id_seq dr_verifier
+224; 1259 16416 TABLE public auth_group_permissions dr_verifier
+223; 1259 16415 SEQUENCE public auth_group_permissions_id_seq dr_verifier
+220; 1259 16402 TABLE public auth_permission dr_verifier
+219; 1259 16401 SEQUENCE public auth_permission_id_seq dr_verifier
+242; 1259 16658 TABLE public bank_account_app_bankaccount dr_verifier
+241; 1259 16657 SEQUENCE public bank_account_app_bankaccount_id_seq dr_verifier
+244; 1259 16668 TABLE public bank_account_app_withdrawalrequest dr_verifier
+243; 1259 16667 SEQUENCE public bank_account_app_withdrawalrequest_id_seq dr_verifier
+246; 1259 16760 TABLE public canonical_trading_riskdecision dr_verifier
+247; 1259 16769 TABLE public canonical_trading_simulatedaccount dr_verifier
+249; 1259 16783 TABLE public canonical_trading_simulatedposition dr_verifier
+248; 1259 16776 TABLE public canonical_trading_simulatedreservation dr_verifier
+250; 1259 16790 TABLE public canonical_trading_simulatedtrade dr_verifier
+245; 1259 16753 TABLE public canonical_trading_tradingorder dr_verifier
+234; 1259 16517 TABLE public django_admin_log dr_verifier
+233; 1259 16516 SEQUENCE public django_admin_log_id_seq dr_verifier
+261; 1259 16878 TABLE public django_celery_beat_clockedschedule dr_verifier
+260; 1259 16877 SEQUENCE public django_celery_beat_clockedschedule_id_seq dr_verifier
+252; 1259 16817 TABLE public django_celery_beat_crontabschedule dr_verifier
+251; 1259 16816 SEQUENCE public django_celery_beat_crontabschedule_id_seq dr_verifier
+254; 1259 16823 TABLE public django_celery_beat_intervalschedule dr_verifier
+253; 1259 16822 SEQUENCE public django_celery_beat_intervalschedule_id_seq dr_verifier
+256; 1259 16829 TABLE public django_celery_beat_periodictask dr_verifier
+255; 1259 16828 SEQUENCE public django_celery_beat_periodictask_id_seq dr_verifier
+257; 1259 16839 TABLE public django_celery_beat_periodictasks dr_verifier
+259; 1259 16858 TABLE public django_celery_beat_solarschedule dr_verifier
+258; 1259 16857 SEQUENCE public django_celery_beat_solarschedule_id_seq dr_verifier
+218; 1259 16394 TABLE public django_content_type dr_verifier
+217; 1259 16393 SEQUENCE public django_content_type_id_seq dr_verifier
+216; 1259 16386 TABLE public django_migrations dr_verifier
+215; 1259 16385 SEQUENCE public django_migrations_id_seq dr_verifier
+395; 1259 18509 TABLE public django_session dr_verifier
+285; 1259 17143 TABLE public economic_calendar_events dr_verifier
+268; 1259 16921 TABLE public foundation_applicationauditevent dr_verifier
+267; 1259 16911 TABLE public foundation_idempotencyrecord dr_verifier
+266; 1259 16910 SEQUENCE public foundation_idempotencyrecord_id_seq dr_verifier
+263; 1259 16891 TABLE public foundation_outboxevent dr_verifier
+262; 1259 16890 SEQUENCE public foundation_outboxevent_id_seq dr_verifier
+265; 1259 16903 TABLE public foundation_processedevent dr_verifier
+264; 1259 16902 SEQUENCE public foundation_processedevent_id_seq dr_verifier
+270; 1259 16929 TABLE public foundation_tradingcontrol dr_verifier
+269; 1259 16928 SEQUENCE public foundation_tradingcontrol_id_seq dr_verifier
+274; 1259 16958 TABLE public integrations_crmconnection dr_verifier
+272; 1259 16946 TABLE public integrations_demoaccount dr_verifier
+281; 1259 16999 TABLE public integrations_demoledgerentry dr_verifier
+283; 1259 17010 TABLE public integrations_externalidentity dr_verifier
+282; 1259 17009 SEQUENCE public integrations_externalidentity_id_seq dr_verifier
+273; 1259 16951 TABLE public integrations_integrationauditevent dr_verifier
+271; 1259 16941 TABLE public integrations_organization dr_verifier
+276; 1259 16966 TABLE public integrations_organizationmembership dr_verifier
+275; 1259 16965 SEQUENCE public integrations_organizationmembership_id_seq dr_verifier
+277; 1259 16971 TABLE public integrations_servicetoken dr_verifier
+278; 1259 16980 TABLE public integrations_userimport dr_verifier
+280; 1259 16991 TABLE public integrations_userimportrow dr_verifier
+279; 1259 16990 SEQUENCE public integrations_userimportrow_id_seq dr_verifier
+284; 1259 17134 TABLE public news_articles dr_verifier
+289; 1259 17205 TABLE public notifications_adminnotifications dr_verifier
+290; 1259 17222 TABLE public notifications_notificationevent dr_verifier
+286; 1259 17170 TABLE public notifications_notifications dr_verifier
+288; 1259 17194 TABLE public notifications_useralerts dr_verifier
+287; 1259 17177 TABLE public notifications_usernotifications dr_verifier
+292; 1259 17243 TABLE public notifications_webhookdelivery dr_verifier
+291; 1259 17236 TABLE public notifications_webhooksubscription dr_verifier
+429; 1259 19006 TABLE public orders dr_verifier
+435; 1259 19075 TABLE public outbox_events dr_verifier
+300; 1259 17326 TABLE public payments_payment dr_verifier
+299; 1259 17325 SEQUENCE public payments_payment_id_seq dr_verifier
+294; 1259 17303 TABLE public payments_paymentmethod dr_verifier
+293; 1259 17302 SEQUENCE public payments_paymentmethod_id_seq dr_verifier
+296; 1259 17314 TABLE public payments_paymentsprovider dr_verifier
+295; 1259 17313 SEQUENCE public payments_paymentsprovider_id_seq dr_verifier
+298; 1259 17320 TABLE public payments_paymentsprovider_supported_currencies dr_verifier
+297; 1259 17319 SEQUENCE public payments_paymentsprovider_supported_currencies_id_seq dr_verifier
+302; 1259 17381 TABLE public portfolio_asset dr_verifier
+301; 1259 17380 SEQUENCE public portfolio_asset_id_seq dr_verifier
+304; 1259 17399 TABLE public portfolio_assetbalance dr_verifier
+303; 1259 17398 SEQUENCE public portfolio_assetbalance_id_seq dr_verifier
+306; 1259 17407 TABLE public portfolio_assetprofitloss dr_verifier
+305; 1259 17406 SEQUENCE public portfolio_assetprofitloss_id_seq dr_verifier
+308; 1259 17425 TABLE public portfolio_assettype dr_verifier
+307; 1259 17424 SEQUENCE public portfolio_assettype_id_seq dr_verifier
+433; 1259 19059 TABLE public positions dr_verifier
+436; 1259 19083 TABLE public processed_events dr_verifier
+312; 1259 17455 TABLE public provider_governance_audit dr_verifier
+311; 1259 17454 SEQUENCE public provider_governance_audit_id_seq dr_verifier
+314; 1259 17461 TABLE public provider_governance_licenses dr_verifier
+313; 1259 17460 SEQUENCE public provider_governance_licenses_id_seq dr_verifier
+316; 1259 17469 TABLE public provider_governance_provider_approvals dr_verifier
+315; 1259 17468 SEQUENCE public provider_governance_provider_approvals_id_seq dr_verifier
+310; 1259 17447 TABLE public provider_governance_providers dr_verifier
+309; 1259 17446 SEQUENCE public provider_governance_providers_id_seq dr_verifier
+341; 1259 18028 TABLE public real_compliance_profiles dr_verifier
+344; 1259 18047 TABLE public real_compliance_restrictions dr_verifier
+345; 1259 18052 TABLE public real_compliance_transaction_screenings dr_verifier
+325; 1259 17609 TABLE public real_eventing_outbox dr_verifier
+334; 1259 17898 TABLE public real_integration_provider_connections dr_verifier
+346; 1259 18100 TABLE public real_integration_provider_webhook_receipts dr_verifier
+333; 1259 17892 TABLE public real_integration_webhook_deliveries dr_verifier
+336; 1259 17912 TABLE public real_integration_webhook_events dr_verifier
+338; 1259 17931 TABLE public real_integration_webhook_secret_versions dr_verifier
+337; 1259 17924 TABLE public real_integration_webhook_subscriptions dr_verifier
+322; 1259 17592 TABLE public real_ledger_accounts dr_verifier
+324; 1259 17604 TABLE public real_ledger_entries dr_verifier
+329; 1259 17635 TABLE public real_ledger_holds dr_verifier
+323; 1259 17597 TABLE public real_ledger_transactions dr_verifier
+343; 1259 18042 TABLE public real_reconciliation_items dr_verifier
+342; 1259 18035 TABLE public real_reconciliation_runs dr_verifier
+320; 1259 17579 TABLE public real_wallet_asset_networks dr_verifier
+317; 1259 17559 TABLE public real_wallet_assets dr_verifier
+321; 1259 17585 TABLE public real_wallet_audit_events dr_verifier
+330; 1259 17640 TABLE public real_wallet_balances dr_verifier
+328; 1259 17628 TABLE public real_wallet_deposits dr_verifier
+318; 1259 17567 TABLE public real_wallet_feature_flags dr_verifier
+332; 1259 17654 TABLE public real_wallet_idempotency dr_verifier
+319; 1259 17572 TABLE public real_wallet_networks dr_verifier
+327; 1259 17623 TABLE public real_wallet_transfers dr_verifier
+326; 1259 17618 TABLE public real_wallet_wallets dr_verifier
+335; 1259 17905 TABLE public real_wallet_webhookattempt dr_verifier
+339; 1259 17982 TABLE public real_wallet_withdrawal_addresses dr_verifier
+340; 1259 18007 TABLE public real_wallet_withdrawal_approvals dr_verifier
+331; 1259 17645 TABLE public real_wallet_withdrawals dr_verifier
+439; 1259 19099 TABLE public reconciliation_records dr_verifier
+438; 1259 19098 SEQUENCE public reconciliation_records_id_seq dr_verifier
+348; 1259 18116 TABLE public reporting_report dr_verifier
+347; 1259 18115 SEQUENCE public reporting_report_id_seq dr_verifier
+350; 1259 18122 TABLE public reporting_revenue dr_verifier
+349; 1259 18121 SEQUENCE public reporting_revenue_id_seq dr_verifier
+358; 1259 18165 TABLE public reporting_systemhealth dr_verifier
+357; 1259 18164 SEQUENCE public reporting_systemhealth_id_seq dr_verifier
+352; 1259 18128 TABLE public reporting_trade dr_verifier
+351; 1259 18127 SEQUENCE public reporting_trade_id_seq dr_verifier
+354; 1259 18134 TABLE public reporting_transaction dr_verifier
+353; 1259 18133 SEQUENCE public reporting_transaction_id_seq dr_verifier
+356; 1259 18140 TABLE public reporting_useractivity dr_verifier
+355; 1259 18139 SEQUENCE public reporting_useractivity_id_seq dr_verifier
+432; 1259 19044 TABLE public reservations dr_verifier
+428; 1259 18998 TABLE public schema_migrations dr_verifier
+360; 1259 18211 TABLE public security_adminroles dr_verifier
+359; 1259 18210 SEQUENCE public security_adminroles_id_seq dr_verifier
+394; 1259 18504 TABLE public security_anomalycheckschedule dr_verifier
+393; 1259 18503 SEQUENCE public security_anomalycheckschedule_id_seq dr_verifier
+390; 1259 18458 TABLE public security_countryblacklist dr_verifier
+389; 1259 18457 SEQUENCE public security_countryblacklist_id_seq dr_verifier
+368; 1259 18286 TABLE public security_countrywhitelist dr_verifier
+367; 1259 18285 SEQUENCE public security_countrywhitelist_id_seq dr_verifier
+362; 1259 18219 TABLE public security_encryptionkeys dr_verifier
+361; 1259 18218 SEQUENCE public security_encryptionkeys_id_seq dr_verifier
+382; 1259 18393 TABLE public security_ipblacklist dr_verifier
+381; 1259 18392 SEQUENCE public security_ipblacklist_id_seq dr_verifier
+372; 1259 18300 TABLE public security_iprestrictions dr_verifier
+392; 1259 18464 TABLE public security_iprestrictions_country_blacklist dr_verifier
+391; 1259 18463 SEQUENCE public security_iprestrictions_country_blacklist_id_seq dr_verifier
+374; 1259 18308 TABLE public security_iprestrictions_country_whitelist dr_verifier
+373; 1259 18307 SEQUENCE public security_iprestrictions_country_whitelist_id_seq dr_verifier
+371; 1259 18299 SEQUENCE public security_iprestrictions_id_seq dr_verifier
+384; 1259 18401 TABLE public security_iprestrictions_ip_blacklist dr_verifier
+383; 1259 18400 SEQUENCE public security_iprestrictions_ip_blacklist_id_seq dr_verifier
+376; 1259 18314 TABLE public security_iprestrictions_ip_whitelist dr_verifier
+375; 1259 18313 SEQUENCE public security_iprestrictions_ip_whitelist_id_seq dr_verifier
+388; 1259 18447 TABLE public security_iprestrictions_user_ip_blacklist dr_verifier
+387; 1259 18446 SEQUENCE public security_iprestrictions_user_ip_blacklist_id_seq dr_verifier
+370; 1259 18292 TABLE public security_ipwhitelist dr_verifier
+369; 1259 18291 SEQUENCE public security_ipwhitelist_id_seq dr_verifier
+378; 1259 18320 TABLE public security_passwordpolicy dr_verifier
+377; 1259 18319 SEQUENCE public security_passwordpolicy_id_seq dr_verifier
+364; 1259 18225 TABLE public security_securityincident dr_verifier
+363; 1259 18224 SEQUENCE public security_securityincident_id_seq dr_verifier
+380; 1259 18330 TABLE public security_twofactorauth dr_verifier
+379; 1259 18329 SEQUENCE public security_twofactorauth_id_seq dr_verifier
+366; 1259 18233 TABLE public security_useractivity dr_verifier
+365; 1259 18232 SEQUENCE public security_useractivity_id_seq dr_verifier
+386; 1259 18407 TABLE public security_useripblacklist dr_verifier
+385; 1259 18406 SEQUENCE public security_useripblacklist_id_seq dr_verifier
+431; 1259 19032 TABLE public settlements dr_verifier
+434; 1259 19066 TABLE public simulated_accounts dr_verifier
+396; 1259 18518 TABLE public tickets_supportticket dr_verifier
+398; 1259 18541 TABLE public token_blacklist_blacklistedtoken dr_verifier
+397; 1259 18540 SEQUENCE public token_blacklist_blacklistedtoken_id_seq dr_verifier
+400; 1259 18547 TABLE public token_blacklist_outstandingtoken dr_verifier
+399; 1259 18546 SEQUENCE public token_blacklist_outstandingtoken_id_seq dr_verifier
+408; 1259 18654 TABLE public trade_asset dr_verifier
+407; 1259 18653 SEQUENCE public trade_asset_id_seq dr_verifier
+404; 1259 18638 TABLE public trade_tradecategory dr_verifier
+403; 1259 18637 SEQUENCE public trade_assetcategory_id_seq dr_verifier
+406; 1259 18646 TABLE public trade_assettype dr_verifier
+405; 1259 18645 SEQUENCE public trade_assettype_id_seq dr_verifier
+416; 1259 18780 TABLE public trade_demoeventoutbox dr_verifier
+415; 1259 18779 SEQUENCE public trade_demoeventoutbox_sequence_seq dr_verifier
+414; 1259 18750 TABLE public trade_demoledgerentry dr_verifier
+413; 1259 18749 SEQUENCE public trade_demoledgerentry_id_seq dr_verifier
+412; 1259 18736 TABLE public trade_marketcandle dr_verifier
+411; 1259 18735 SEQUENCE public trade_marketcandle_id_seq dr_verifier
+410; 1259 18664 TABLE public trade_trade dr_verifier
+409; 1259 18663 SEQUENCE public trade_trade_id_seq dr_verifier
+430; 1259 19017 TABLE public trades dr_verifier
+427; 1259 18965 TABLE public users_demolegalacceptance dr_verifier
+426; 1259 18964 SEQUENCE public users_demolegalacceptance_id_seq dr_verifier
+424; 1259 18922 TABLE public users_emailverificationchallenge dr_verifier
+418; 1259 18826 TABLE public users_kyc dr_verifier
+417; 1259 18825 SEQUENCE public users_kyc_id_seq dr_verifier
+420; 1259 18838 TABLE public users_kycfile dr_verifier
+419; 1259 18837 SEQUENCE public users_kycfile_id_seq dr_verifier
+423; 1259 18915 TABLE public users_pendingregistration dr_verifier
+232; 1259 16474 TABLE public users_phoneverificationcode dr_verifier
+231; 1259 16473 SEQUENCE public users_phoneverificationcode_id_seq dr_verifier
+425; 1259 18932 TABLE public users_transactionalemailoutbox dr_verifier
+226; 1259 16448 TABLE public users_user dr_verifier
+228; 1259 16462 TABLE public users_user_groups dr_verifier
+227; 1259 16461 SEQUENCE public users_user_groups_id_seq dr_verifier
+225; 1259 16447 SEQUENCE public users_user_id_seq dr_verifier
+230; 1259 16468 TABLE public users_user_user_permissions dr_verifier
+229; 1259 16467 SEQUENCE public users_user_user_permissions_id_seq dr_verifier
+422; 1259 18885 TABLE public users_userdeviceinfo dr_verifier
+421; 1259 18884 SEQUENCE public users_userdeviceinfo_id_seq dr_verifier
+240; 1259 16581 TABLE public wallet_currency dr_verifier
+239; 1259 16580 SEQUENCE public wallet_currency_id_seq dr_verifier
+402; 1259 18612 TABLE public wallet_manualbalanceupdate dr_verifier
+401; 1259 18611 SEQUENCE public wallet_manualbalanceupdate_id_seq dr_verifier
+238; 1259 16552 TABLE public wallet_transaction dr_verifier
+237; 1259 16551 SEQUENCE public wallet_transaction_id_seq dr_verifier
+236; 1259 16546 TABLE public wallet_wallet dr_verifier
+235; 1259 16545 SEQUENCE public wallet_wallet_id_seq dr_verifier
+5290; 0 19090 TABLE DATA public audit_events dr_verifier
+5075; 0 16408 TABLE DATA public auth_group dr_verifier
+5077; 0 16416 TABLE DATA public auth_group_permissions dr_verifier
+5073; 0 16402 TABLE DATA public auth_permission dr_verifier
+5095; 0 16658 TABLE DATA public bank_account_app_bankaccount dr_verifier
+5097; 0 16668 TABLE DATA public bank_account_app_withdrawalrequest dr_verifier
+5099; 0 16760 TABLE DATA public canonical_trading_riskdecision dr_verifier
+5100; 0 16769 TABLE DATA public canonical_trading_simulatedaccount dr_verifier
+5102; 0 16783 TABLE DATA public canonical_trading_simulatedposition dr_verifier
+5101; 0 16776 TABLE DATA public canonical_trading_simulatedreservation dr_verifier
+5103; 0 16790 TABLE DATA public canonical_trading_simulatedtrade dr_verifier
+5098; 0 16753 TABLE DATA public canonical_trading_tradingorder dr_verifier
+5087; 0 16517 TABLE DATA public django_admin_log dr_verifier
+5114; 0 16878 TABLE DATA public django_celery_beat_clockedschedule dr_verifier
+5105; 0 16817 TABLE DATA public django_celery_beat_crontabschedule dr_verifier
+5107; 0 16823 TABLE DATA public django_celery_beat_intervalschedule dr_verifier
+5109; 0 16829 TABLE DATA public django_celery_beat_periodictask dr_verifier
+5110; 0 16839 TABLE DATA public django_celery_beat_periodictasks dr_verifier
+5112; 0 16858 TABLE DATA public django_celery_beat_solarschedule dr_verifier
+5071; 0 16394 TABLE DATA public django_content_type dr_verifier
+5069; 0 16386 TABLE DATA public django_migrations dr_verifier
+5248; 0 18509 TABLE DATA public django_session dr_verifier
+5138; 0 17143 TABLE DATA public economic_calendar_events dr_verifier
+5121; 0 16921 TABLE DATA public foundation_applicationauditevent dr_verifier
+5120; 0 16911 TABLE DATA public foundation_idempotencyrecord dr_verifier
+5116; 0 16891 TABLE DATA public foundation_outboxevent dr_verifier
+5118; 0 16903 TABLE DATA public foundation_processedevent dr_verifier
+5123; 0 16929 TABLE DATA public foundation_tradingcontrol dr_verifier
+5127; 0 16958 TABLE DATA public integrations_crmconnection dr_verifier
+5125; 0 16946 TABLE DATA public integrations_demoaccount dr_verifier
+5134; 0 16999 TABLE DATA public integrations_demoledgerentry dr_verifier
+5136; 0 17010 TABLE DATA public integrations_externalidentity dr_verifier
+5126; 0 16951 TABLE DATA public integrations_integrationauditevent dr_verifier
+5124; 0 16941 TABLE DATA public integrations_organization dr_verifier
+5129; 0 16966 TABLE DATA public integrations_organizationmembership dr_verifier
+5130; 0 16971 TABLE DATA public integrations_servicetoken dr_verifier
+5131; 0 16980 TABLE DATA public integrations_userimport dr_verifier
+5133; 0 16991 TABLE DATA public integrations_userimportrow dr_verifier
+5137; 0 17134 TABLE DATA public news_articles dr_verifier
+5142; 0 17205 TABLE DATA public notifications_adminnotifications dr_verifier
+5143; 0 17222 TABLE DATA public notifications_notificationevent dr_verifier
+5139; 0 17170 TABLE DATA public notifications_notifications dr_verifier
+5141; 0 17194 TABLE DATA public notifications_useralerts dr_verifier
+5140; 0 17177 TABLE DATA public notifications_usernotifications dr_verifier
+5145; 0 17243 TABLE DATA public notifications_webhookdelivery dr_verifier
+5144; 0 17236 TABLE DATA public notifications_webhooksubscription dr_verifier
+5282; 0 19006 TABLE DATA public orders dr_verifier
+5288; 0 19075 TABLE DATA public outbox_events dr_verifier
+5153; 0 17326 TABLE DATA public payments_payment dr_verifier
+5147; 0 17303 TABLE DATA public payments_paymentmethod dr_verifier
+5149; 0 17314 TABLE DATA public payments_paymentsprovider dr_verifier
+5151; 0 17320 TABLE DATA public payments_paymentsprovider_supported_currencies dr_verifier
+5155; 0 17381 TABLE DATA public portfolio_asset dr_verifier
+5157; 0 17399 TABLE DATA public portfolio_assetbalance dr_verifier
+5159; 0 17407 TABLE DATA public portfolio_assetprofitloss dr_verifier
+5161; 0 17425 TABLE DATA public portfolio_assettype dr_verifier
+5286; 0 19059 TABLE DATA public positions dr_verifier
+5289; 0 19083 TABLE DATA public processed_events dr_verifier
+5165; 0 17455 TABLE DATA public provider_governance_audit dr_verifier
+5167; 0 17461 TABLE DATA public provider_governance_licenses dr_verifier
+5169; 0 17469 TABLE DATA public provider_governance_provider_approvals dr_verifier
+5163; 0 17447 TABLE DATA public provider_governance_providers dr_verifier
+5194; 0 18028 TABLE DATA public real_compliance_profiles dr_verifier
+5197; 0 18047 TABLE DATA public real_compliance_restrictions dr_verifier
+5198; 0 18052 TABLE DATA public real_compliance_transaction_screenings dr_verifier
+5178; 0 17609 TABLE DATA public real_eventing_outbox dr_verifier
+5187; 0 17898 TABLE DATA public real_integration_provider_connections dr_verifier
+5199; 0 18100 TABLE DATA public real_integration_provider_webhook_receipts dr_verifier
+5186; 0 17892 TABLE DATA public real_integration_webhook_deliveries dr_verifier
+5189; 0 17912 TABLE DATA public real_integration_webhook_events dr_verifier
+5191; 0 17931 TABLE DATA public real_integration_webhook_secret_versions dr_verifier
+5190; 0 17924 TABLE DATA public real_integration_webhook_subscriptions dr_verifier
+5175; 0 17592 TABLE DATA public real_ledger_accounts dr_verifier
+5177; 0 17604 TABLE DATA public real_ledger_entries dr_verifier
+5182; 0 17635 TABLE DATA public real_ledger_holds dr_verifier
+5176; 0 17597 TABLE DATA public real_ledger_transactions dr_verifier
+5196; 0 18042 TABLE DATA public real_reconciliation_items dr_verifier
+5195; 0 18035 TABLE DATA public real_reconciliation_runs dr_verifier
+5173; 0 17579 TABLE DATA public real_wallet_asset_networks dr_verifier
+5170; 0 17559 TABLE DATA public real_wallet_assets dr_verifier
+5174; 0 17585 TABLE DATA public real_wallet_audit_events dr_verifier
+5183; 0 17640 TABLE DATA public real_wallet_balances dr_verifier
+5181; 0 17628 TABLE DATA public real_wallet_deposits dr_verifier
+5171; 0 17567 TABLE DATA public real_wallet_feature_flags dr_verifier
+5185; 0 17654 TABLE DATA public real_wallet_idempotency dr_verifier
+5172; 0 17572 TABLE DATA public real_wallet_networks dr_verifier
+5180; 0 17623 TABLE DATA public real_wallet_transfers dr_verifier
+5179; 0 17618 TABLE DATA public real_wallet_wallets dr_verifier
+5188; 0 17905 TABLE DATA public real_wallet_webhookattempt dr_verifier
+5192; 0 17982 TABLE DATA public real_wallet_withdrawal_addresses dr_verifier
+5193; 0 18007 TABLE DATA public real_wallet_withdrawal_approvals dr_verifier
+5184; 0 17645 TABLE DATA public real_wallet_withdrawals dr_verifier
+5292; 0 19099 TABLE DATA public reconciliation_records dr_verifier
+5201; 0 18116 TABLE DATA public reporting_report dr_verifier
+5203; 0 18122 TABLE DATA public reporting_revenue dr_verifier
+5211; 0 18165 TABLE DATA public reporting_systemhealth dr_verifier
+5205; 0 18128 TABLE DATA public reporting_trade dr_verifier
+5207; 0 18134 TABLE DATA public reporting_transaction dr_verifier
+5209; 0 18140 TABLE DATA public reporting_useractivity dr_verifier
+5285; 0 19044 TABLE DATA public reservations dr_verifier
+5281; 0 18998 TABLE DATA public schema_migrations dr_verifier
+5213; 0 18211 TABLE DATA public security_adminroles dr_verifier
+5247; 0 18504 TABLE DATA public security_anomalycheckschedule dr_verifier
+5243; 0 18458 TABLE DATA public security_countryblacklist dr_verifier
+5221; 0 18286 TABLE DATA public security_countrywhitelist dr_verifier
+5215; 0 18219 TABLE DATA public security_encryptionkeys dr_verifier
+5235; 0 18393 TABLE DATA public security_ipblacklist dr_verifier
+5225; 0 18300 TABLE DATA public security_iprestrictions dr_verifier
+5245; 0 18464 TABLE DATA public security_iprestrictions_country_blacklist dr_verifier
+5227; 0 18308 TABLE DATA public security_iprestrictions_country_whitelist dr_verifier
+5237; 0 18401 TABLE DATA public security_iprestrictions_ip_blacklist dr_verifier
+5229; 0 18314 TABLE DATA public security_iprestrictions_ip_whitelist dr_verifier
+5241; 0 18447 TABLE DATA public security_iprestrictions_user_ip_blacklist dr_verifier
+5223; 0 18292 TABLE DATA public security_ipwhitelist dr_verifier
+5231; 0 18320 TABLE DATA public security_passwordpolicy dr_verifier
+5217; 0 18225 TABLE DATA public security_securityincident dr_verifier
+5233; 0 18330 TABLE DATA public security_twofactorauth dr_verifier
+5219; 0 18233 TABLE DATA public security_useractivity dr_verifier
+5239; 0 18407 TABLE DATA public security_useripblacklist dr_verifier
+5284; 0 19032 TABLE DATA public settlements dr_verifier
+5287; 0 19066 TABLE DATA public simulated_accounts dr_verifier
+5249; 0 18518 TABLE DATA public tickets_supportticket dr_verifier
+5251; 0 18541 TABLE DATA public token_blacklist_blacklistedtoken dr_verifier
+5253; 0 18547 TABLE DATA public token_blacklist_outstandingtoken dr_verifier
+5261; 0 18654 TABLE DATA public trade_asset dr_verifier
+5259; 0 18646 TABLE DATA public trade_assettype dr_verifier
+5269; 0 18780 TABLE DATA public trade_demoeventoutbox dr_verifier
+5267; 0 18750 TABLE DATA public trade_demoledgerentry dr_verifier
+5265; 0 18736 TABLE DATA public trade_marketcandle dr_verifier
+5263; 0 18664 TABLE DATA public trade_trade dr_verifier
+5257; 0 18638 TABLE DATA public trade_tradecategory dr_verifier
+5283; 0 19017 TABLE DATA public trades dr_verifier
+5280; 0 18965 TABLE DATA public users_demolegalacceptance dr_verifier
+5277; 0 18922 TABLE DATA public users_emailverificationchallenge dr_verifier
+5271; 0 18826 TABLE DATA public users_kyc dr_verifier
+5273; 0 18838 TABLE DATA public users_kycfile dr_verifier
+5276; 0 18915 TABLE DATA public users_pendingregistration dr_verifier
+5085; 0 16474 TABLE DATA public users_phoneverificationcode dr_verifier
+5278; 0 18932 TABLE DATA public users_transactionalemailoutbox dr_verifier
+5079; 0 16448 TABLE DATA public users_user dr_verifier
+5081; 0 16462 TABLE DATA public users_user_groups dr_verifier
+5083; 0 16468 TABLE DATA public users_user_user_permissions dr_verifier
+5275; 0 18885 TABLE DATA public users_userdeviceinfo dr_verifier
+5093; 0 16581 TABLE DATA public wallet_currency dr_verifier
+5255; 0 18612 TABLE DATA public wallet_manualbalanceupdate dr_verifier
+5091; 0 16552 TABLE DATA public wallet_transaction dr_verifier
+5089; 0 16546 TABLE DATA public wallet_wallet dr_verifier
+5299; 0 0 SEQUENCE SET public auth_group_id_seq dr_verifier
+5300; 0 0 SEQUENCE SET public auth_group_permissions_id_seq dr_verifier
+5301; 0 0 SEQUENCE SET public auth_permission_id_seq dr_verifier
+5302; 0 0 SEQUENCE SET public bank_account_app_bankaccount_id_seq dr_verifier
+5303; 0 0 SEQUENCE SET public bank_account_app_withdrawalrequest_id_seq dr_verifier
+5304; 0 0 SEQUENCE SET public django_admin_log_id_seq dr_verifier
+5305; 0 0 SEQUENCE SET public django_celery_beat_clockedschedule_id_seq dr_verifier
+5306; 0 0 SEQUENCE SET public django_celery_beat_crontabschedule_id_seq dr_verifier
+5307; 0 0 SEQUENCE SET public django_celery_beat_intervalschedule_id_seq dr_verifier
+5308; 0 0 SEQUENCE SET public django_celery_beat_periodictask_id_seq dr_verifier
+5309; 0 0 SEQUENCE SET public django_celery_beat_solarschedule_id_seq dr_verifier
+5310; 0 0 SEQUENCE SET public django_content_type_id_seq dr_verifier
+5311; 0 0 SEQUENCE SET public django_migrations_id_seq dr_verifier
+5312; 0 0 SEQUENCE SET public foundation_idempotencyrecord_id_seq dr_verifier
+5313; 0 0 SEQUENCE SET public foundation_outboxevent_id_seq dr_verifier
+5314; 0 0 SEQUENCE SET public foundation_processedevent_id_seq dr_verifier
+5315; 0 0 SEQUENCE SET public foundation_tradingcontrol_id_seq dr_verifier
+5316; 0 0 SEQUENCE SET public integrations_externalidentity_id_seq dr_verifier
+5317; 0 0 SEQUENCE SET public integrations_organizationmembership_id_seq dr_verifier
+5318; 0 0 SEQUENCE SET public integrations_userimportrow_id_seq dr_verifier
+5319; 0 0 SEQUENCE SET public payments_payment_id_seq dr_verifier
+5320; 0 0 SEQUENCE SET public payments_paymentmethod_id_seq dr_verifier
+5321; 0 0 SEQUENCE SET public payments_paymentsprovider_id_seq dr_verifier
+5322; 0 0 SEQUENCE SET public payments_paymentsprovider_supported_currencies_id_seq dr_verifier
+5323; 0 0 SEQUENCE SET public portfolio_asset_id_seq dr_verifier
+5324; 0 0 SEQUENCE SET public portfolio_assetbalance_id_seq dr_verifier
+5325; 0 0 SEQUENCE SET public portfolio_assetprofitloss_id_seq dr_verifier
+5326; 0 0 SEQUENCE SET public portfolio_assettype_id_seq dr_verifier
+5327; 0 0 SEQUENCE SET public provider_governance_audit_id_seq dr_verifier
+5328; 0 0 SEQUENCE SET public provider_governance_licenses_id_seq dr_verifier
+5329; 0 0 SEQUENCE SET public provider_governance_provider_approvals_id_seq dr_verifier
+5330; 0 0 SEQUENCE SET public provider_governance_providers_id_seq dr_verifier
+5331; 0 0 SEQUENCE SET public reconciliation_records_id_seq dr_verifier
+5332; 0 0 SEQUENCE SET public reporting_report_id_seq dr_verifier
+5333; 0 0 SEQUENCE SET public reporting_revenue_id_seq dr_verifier
+5334; 0 0 SEQUENCE SET public reporting_systemhealth_id_seq dr_verifier
+5335; 0 0 SEQUENCE SET public reporting_trade_id_seq dr_verifier
+5336; 0 0 SEQUENCE SET public reporting_transaction_id_seq dr_verifier
+5337; 0 0 SEQUENCE SET public reporting_useractivity_id_seq dr_verifier
+5338; 0 0 SEQUENCE SET public security_adminroles_id_seq dr_verifier
+5339; 0 0 SEQUENCE SET public security_anomalycheckschedule_id_seq dr_verifier
+5340; 0 0 SEQUENCE SET public security_countryblacklist_id_seq dr_verifier
+5341; 0 0 SEQUENCE SET public security_countrywhitelist_id_seq dr_verifier
+5342; 0 0 SEQUENCE SET public security_encryptionkeys_id_seq dr_verifier
+5343; 0 0 SEQUENCE SET public security_ipblacklist_id_seq dr_verifier
+5344; 0 0 SEQUENCE SET public security_iprestrictions_country_blacklist_id_seq dr_verifier
+5345; 0 0 SEQUENCE SET public security_iprestrictions_country_whitelist_id_seq dr_verifier
+5346; 0 0 SEQUENCE SET public security_iprestrictions_id_seq dr_verifier
+5347; 0 0 SEQUENCE SET public security_iprestrictions_ip_blacklist_id_seq dr_verifier
+5348; 0 0 SEQUENCE SET public security_iprestrictions_ip_whitelist_id_seq dr_verifier
+5349; 0 0 SEQUENCE SET public security_iprestrictions_user_ip_blacklist_id_seq dr_verifier
+5350; 0 0 SEQUENCE SET public security_ipwhitelist_id_seq dr_verifier
+5351; 0 0 SEQUENCE SET public security_passwordpolicy_id_seq dr_verifier
+5352; 0 0 SEQUENCE SET public security_securityincident_id_seq dr_verifier
+5353; 0 0 SEQUENCE SET public security_twofactorauth_id_seq dr_verifier
+5354; 0 0 SEQUENCE SET public security_useractivity_id_seq dr_verifier
+5355; 0 0 SEQUENCE SET public security_useripblacklist_id_seq dr_verifier
+5356; 0 0 SEQUENCE SET public token_blacklist_blacklistedtoken_id_seq dr_verifier
+5357; 0 0 SEQUENCE SET public token_blacklist_outstandingtoken_id_seq dr_verifier
+5358; 0 0 SEQUENCE SET public trade_asset_id_seq dr_verifier
+5359; 0 0 SEQUENCE SET public trade_assetcategory_id_seq dr_verifier
+5360; 0 0 SEQUENCE SET public trade_assettype_id_seq dr_verifier
+5361; 0 0 SEQUENCE SET public trade_demoeventoutbox_sequence_seq dr_verifier
+5362; 0 0 SEQUENCE SET public trade_demoledgerentry_id_seq dr_verifier
+5363; 0 0 SEQUENCE SET public trade_marketcandle_id_seq dr_verifier
+5364; 0 0 SEQUENCE SET public trade_trade_id_seq dr_verifier
+5365; 0 0 SEQUENCE SET public users_demolegalacceptance_id_seq dr_verifier
+5366; 0 0 SEQUENCE SET public users_kyc_id_seq dr_verifier
+5367; 0 0 SEQUENCE SET public users_kycfile_id_seq dr_verifier
+5368; 0 0 SEQUENCE SET public users_phoneverificationcode_id_seq dr_verifier
+5369; 0 0 SEQUENCE SET public users_user_groups_id_seq dr_verifier
+5370; 0 0 SEQUENCE SET public users_user_id_seq dr_verifier
+5371; 0 0 SEQUENCE SET public users_user_user_permissions_id_seq dr_verifier
+5372; 0 0 SEQUENCE SET public users_userdeviceinfo_id_seq dr_verifier
+5373; 0 0 SEQUENCE SET public wallet_currency_id_seq dr_verifier
+5374; 0 0 SEQUENCE SET public wallet_manualbalanceupdate_id_seq dr_verifier
+5375; 0 0 SEQUENCE SET public wallet_transaction_id_seq dr_verifier
+5376; 0 0 SEQUENCE SET public wallet_wallet_id_seq dr_verifier
+4738; 2606 19097 CONSTRAINT public audit_events audit_events_pkey dr_verifier
+4041; 2606 16445 CONSTRAINT public auth_group auth_group_name_key dr_verifier
+4046; 2606 16431 CONSTRAINT public auth_group_permissions auth_group_permissions_group_id_permission_id_0cd325b0_uniq dr_verifier
+4049; 2606 16420 CONSTRAINT public auth_group_permissions auth_group_permissions_pkey dr_verifier
+4043; 2606 16412 CONSTRAINT public auth_group auth_group_pkey dr_verifier
+4036; 2606 16422 CONSTRAINT public auth_permission auth_permission_content_type_id_codename_01ab375a_uniq dr_verifier
+4038; 2606 16406 CONSTRAINT public auth_permission auth_permission_pkey dr_verifier
+4105; 2606 16666 CONSTRAINT public bank_account_app_bankaccount bank_account_app_bankaccount_account_number_key dr_verifier
+4107; 2606 16664 CONSTRAINT public bank_account_app_bankaccount bank_account_app_bankaccount_pkey dr_verifier
+4113; 2606 16674 CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_withdrawalrequest_pkey dr_verifier
+4117; 2606 16676 CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_withdrawalrequest_withdrawal_id_key dr_verifier
+4245; 2606 17151 CONSTRAINT public economic_calendar_events calendar_provider_event_unique dr_verifier
+4121; 2606 16766 CONSTRAINT public canonical_trading_riskdecision canonical_trading_riskdecision_pkey dr_verifier
+4123; 2606 16773 CONSTRAINT public canonical_trading_simulatedaccount canonical_trading_simulatedaccount_pkey dr_verifier
+4133; 2606 16787 CONSTRAINT public canonical_trading_simulatedposition canonical_trading_simulatedposition_pkey dr_verifier
+4128; 2606 16782 CONSTRAINT public canonical_trading_simulatedreservation canonical_trading_simulatedreservation_order_id_key dr_verifier
+4130; 2606 16780 CONSTRAINT public canonical_trading_simulatedreservation canonical_trading_simulatedreservation_pkey dr_verifier
+4138; 2606 16796 CONSTRAINT public canonical_trading_simulatedtrade canonical_trading_simulatedtrade_execution_id_key dr_verifier
+4141; 2606 16794 CONSTRAINT public canonical_trading_simulatedtrade canonical_trading_simulatedtrade_pkey dr_verifier
+4119; 2606 16759 CONSTRAINT public canonical_trading_tradingorder canonical_trading_tradingorder_pkey dr_verifier
+4078; 2606 16524 CONSTRAINT public django_admin_log django_admin_log_pkey dr_verifier
+4162; 2606 16882 CONSTRAINT public django_celery_beat_clockedschedule django_celery_beat_clockedschedule_pkey dr_verifier
+4143; 2606 16821 CONSTRAINT public django_celery_beat_crontabschedule django_celery_beat_crontabschedule_pkey dr_verifier
+4145; 2606 16827 CONSTRAINT public django_celery_beat_intervalschedule django_celery_beat_intervalschedule_pkey dr_verifier
+4151; 2606 16838 CONSTRAINT public django_celery_beat_periodictask django_celery_beat_periodictask_name_key dr_verifier
+4153; 2606 16836 CONSTRAINT public django_celery_beat_periodictask django_celery_beat_periodictask_pkey dr_verifier
+4156; 2606 16843 CONSTRAINT public django_celery_beat_periodictasks django_celery_beat_periodictasks_pkey dr_verifier
+4158; 2606 16870 CONSTRAINT public django_celery_beat_solarschedule django_celery_beat_solar_event_latitude_longitude_ba64999a_uniq dr_verifier
+4160; 2606 16862 CONSTRAINT public django_celery_beat_solarschedule django_celery_beat_solarschedule_pkey dr_verifier
+4031; 2606 16400 CONSTRAINT public django_content_type django_content_type_app_label_model_76bd3d3b_uniq dr_verifier
+4033; 2606 16398 CONSTRAINT public django_content_type django_content_type_pkey dr_verifier
+4029; 2606 16392 CONSTRAINT public django_migrations django_migrations_pkey dr_verifier
+4613; 2606 18515 CONSTRAINT public django_session django_session_pkey dr_verifier
+4249; 2606 17149 CONSTRAINT public economic_calendar_events economic_calendar_events_pkey dr_verifier
+4177; 2606 16927 CONSTRAINT public foundation_applicationauditevent foundation_applicationauditevent_pkey dr_verifier
+4173; 2606 16918 CONSTRAINT public foundation_idempotencyrecord foundation_idempotencyrecord_pkey dr_verifier
+4164; 2606 16901 CONSTRAINT public foundation_outboxevent foundation_outboxevent_event_id_key dr_verifier
+4166; 2606 16899 CONSTRAINT public foundation_outboxevent foundation_outboxevent_pkey dr_verifier
+4169; 2606 16907 CONSTRAINT public foundation_processedevent foundation_processedevent_pkey dr_verifier
+4179; 2606 16935 CONSTRAINT public foundation_tradingcontrol foundation_tradingcontrol_pkey dr_verifier
+4175; 2606 16920 CONSTRAINT public foundation_idempotencyrecord idempotency_scope_unique dr_verifier
+4197; 2606 16964 CONSTRAINT public integrations_crmconnection integrations_crmconnection_pkey dr_verifier
+4186; 2606 16950 CONSTRAINT public integrations_demoaccount integrations_demoaccount_pkey dr_verifier
+4225; 2606 17004 CONSTRAINT public integrations_demoledgerentry integrations_demoledgerentry_pkey dr_verifier
+4228; 2606 17006 CONSTRAINT public integrations_demoledgerentry integrations_demoledgerentry_reference_key dr_verifier
+4233; 2606 17014 CONSTRAINT public integrations_externalidentity integrations_externalidentity_pkey dr_verifier
+4193; 2606 16957 CONSTRAINT public integrations_integrationauditevent integrations_integrationauditevent_pkey dr_verifier
+4183; 2606 16945 CONSTRAINT public integrations_organization integrations_organization_pkey dr_verifier
+4200; 2606 16970 CONSTRAINT public integrations_organizationmembership integrations_organizationmembership_pkey dr_verifier
+4207; 2606 16977 CONSTRAINT public integrations_servicetoken integrations_servicetoken_pkey dr_verifier
+4210; 2606 16979 CONSTRAINT public integrations_servicetoken integrations_servicetoken_token_hash_key dr_verifier
+4214; 2606 16989 CONSTRAINT public integrations_userimport integrations_userimport_pkey dr_verifier
+4219; 2606 16998 CONSTRAINT public integrations_userimportrow integrations_userimportrow_pkey dr_verifier
+4240; 2606 17140 CONSTRAINT public news_articles news_articles_pkey dr_verifier
+4243; 2606 17142 CONSTRAINT public news_articles news_provider_article_unique dr_verifier
+4264; 2606 17209 CONSTRAINT public notifications_adminnotifications notifications_adminnotifications_pkey dr_verifier
+4268; 2606 17228 CONSTRAINT public notifications_notificationevent notifications_notificationevent_pkey dr_verifier
+4251; 2606 17176 CONSTRAINT public notifications_notifications notifications_notifications_pkey dr_verifier
+4259; 2606 17198 CONSTRAINT public notifications_useralerts notifications_useralerts_pkey dr_verifier
+4255; 2606 17181 CONSTRAINT public notifications_usernotifications notifications_usernotifications_pkey dr_verifier
+4280; 2606 17251 CONSTRAINT public notifications_webhookdelivery notifications_webhookdelivery_pkey dr_verifier
+4272; 2606 17242 CONSTRAINT public notifications_webhooksubscription notifications_webhooksubscription_pkey dr_verifier
+4189; 2606 17018 CONSTRAINT public integrations_demoaccount one_demo_account_per_user_org dr_verifier
+4230; 2606 17008 CONSTRAINT public integrations_demoledgerentry one_demo_initial_credit dr_verifier
+4715; 2606 19016 CONSTRAINT public orders orders_pkey dr_verifier
+4734; 2606 19082 CONSTRAINT public outbox_events outbox_events_pkey dr_verifier
+4298; 2606 17334 CONSTRAINT public payments_payment payments_payment_payment_id_key dr_verifier
+4300; 2606 17332 CONSTRAINT public payments_payment payments_payment_pkey dr_verifier
+4304; 2606 17336 CONSTRAINT public payments_payment payments_payment_reference_key dr_verifier
+4286; 2606 17311 CONSTRAINT public payments_paymentmethod payments_paymentmethod_name_key dr_verifier
+4288; 2606 17309 CONSTRAINT public payments_paymentmethod payments_paymentmethod_pkey dr_verifier
+4292; 2606 17338 CONSTRAINT public payments_paymentsprovider_supported_currencies payments_paymentsprovide_paymentsprovider_id_curr_a3cf4774_uniq dr_verifier
+4290; 2606 17318 CONSTRAINT public payments_paymentsprovider payments_paymentsprovider_pkey dr_verifier
+4296; 2606 17324 CONSTRAINT public payments_paymentsprovider_supported_currencies payments_paymentsprovider_supported_currencies_pkey dr_verifier
+4311; 2606 17387 CONSTRAINT public portfolio_asset portfolio_asset_pkey dr_verifier
+4314; 2606 17405 CONSTRAINT public portfolio_assetbalance portfolio_assetbalance_asset_id_key dr_verifier
+4316; 2606 17403 CONSTRAINT public portfolio_assetbalance portfolio_assetbalance_pkey dr_verifier
+4318; 2606 17413 CONSTRAINT public portfolio_assetprofitloss portfolio_assetprofitloss_asset_id_key dr_verifier
+4320; 2606 17411 CONSTRAINT public portfolio_assetprofitloss portfolio_assetprofitloss_pkey dr_verifier
+4324; 2606 17429 CONSTRAINT public portfolio_assettype portfolio_assettype_pkey dr_verifier
+4729; 2606 19065 CONSTRAINT public positions positions_pkey dr_verifier
+4171; 2606 16909 CONSTRAINT public foundation_processedevent processed_event_consumer_unique dr_verifier
+4736; 2606 19089 CONSTRAINT public processed_events processed_events_pkey dr_verifier
+4344; 2606 17547 CONSTRAINT public provider_governance_provider_approvals provider_approval_version_unique dr_verifier
+4332; 2606 17526 CONSTRAINT public provider_governance_audit provider_governance_audit_audit_event_id_key dr_verifier
+4335; 2606 17459 CONSTRAINT public provider_governance_audit provider_governance_audit_pkey dr_verifier
+4339; 2606 17467 CONSTRAINT public provider_governance_licenses provider_governance_licenses_license_reference_key dr_verifier
+4341; 2606 17465 CONSTRAINT public provider_governance_licenses provider_governance_licenses_pkey dr_verifier
+4348; 2606 17510 CONSTRAINT public provider_governance_provider_approvals provider_governance_provider_approva_supersedes_approval_id_key dr_verifier
+4350; 2606 17477 CONSTRAINT public provider_governance_provider_approvals provider_governance_provider_approvals_approval_reference_key dr_verifier
+4353; 2606 17475 CONSTRAINT public provider_governance_provider_approvals provider_governance_provider_approvals_pkey dr_verifier
+4326; 2606 17451 CONSTRAINT public provider_governance_providers provider_governance_providers_pkey dr_verifier
+4329; 2606 17453 CONSTRAINT public provider_governance_providers provider_governance_providers_provider_id_key dr_verifier
+4487; 2606 18032 CONSTRAINT public real_compliance_profiles real_compliance_profiles_pkey dr_verifier
+4489; 2606 18034 CONSTRAINT public real_compliance_profiles real_compliance_profiles_tenant_id_key dr_verifier
+4497; 2606 18051 CONSTRAINT public real_compliance_restrictions real_compliance_restrictions_pkey dr_verifier
+4502; 2606 18058 CONSTRAINT public real_compliance_transaction_screenings real_compliance_transaction_screenings_pkey dr_verifier
+4413; 2606 17677 CONSTRAINT public real_wallet_deposits real_deposit_chain_event_unique dr_verifier
+4396; 2606 17617 CONSTRAINT public real_eventing_outbox real_eventing_outbox_pkey dr_verifier
+4421; 2606 17679 CONSTRAINT public real_ledger_holds real_hold_idempotency_unique dr_verifier
+4443; 2606 17663 CONSTRAINT public real_wallet_idempotency real_idempotency_scope_unique dr_verifier
+4455; 2606 17904 CONSTRAINT public real_integration_provider_connections real_integration_provider_connections_pkey dr_verifier
+4506; 2606 18106 CONSTRAINT public real_integration_provider_webhook_receipts real_integration_provider_webhook_receipts_pkey dr_verifier
+4450; 2606 17897 CONSTRAINT public real_integration_webhook_deliveries real_integration_webhook_deliveries_pkey dr_verifier
+4461; 2606 17918 CONSTRAINT public real_integration_webhook_events real_integration_webhook_events_pkey dr_verifier
+4470; 2606 17938 CONSTRAINT public real_integration_webhook_secret_versions real_integration_webhook_secret_versions_pkey dr_verifier
+4466; 2606 17930 CONSTRAINT public real_integration_webhook_subscriptions real_integration_webhook_subscriptions_pkey dr_verifier
+4379; 2606 17665 CONSTRAINT public real_ledger_accounts real_ledger_account_unique dr_verifier
+4382; 2606 17596 CONSTRAINT public real_ledger_accounts real_ledger_accounts_pkey dr_verifier
+4393; 2606 17608 CONSTRAINT public real_ledger_entries real_ledger_entries_pkey dr_verifier
+4424; 2606 17639 CONSTRAINT public real_ledger_holds real_ledger_holds_pkey dr_verifier
+4385; 2606 17667 CONSTRAINT public real_ledger_transactions real_ledger_idempotency_unique dr_verifier
+4387; 2606 17603 CONSTRAINT public real_ledger_transactions real_ledger_transactions_pkey dr_verifier
+4508; 2606 18108 CONSTRAINT public real_integration_provider_webhook_receipts real_provider_event_unique dr_verifier
+4494; 2606 18046 CONSTRAINT public real_reconciliation_items real_reconciliation_items_pkey dr_verifier
+4491; 2606 18041 CONSTRAINT public real_reconciliation_runs real_reconciliation_runs_pkey dr_verifier
+4405; 2606 17674 CONSTRAINT public real_wallet_transfers real_transfer_idempotency_unique dr_verifier
+4369; 2606 17670 CONSTRAINT public real_wallet_asset_networks real_wallet_asset_network_unique dr_verifier
+4373; 2606 17584 CONSTRAINT public real_wallet_asset_networks real_wallet_asset_networks_pkey dr_verifier
+4356; 2606 17564 CONSTRAINT public real_wallet_assets real_wallet_assets_pkey dr_verifier
+4359; 2606 17566 CONSTRAINT public real_wallet_assets real_wallet_assets_symbol_key dr_verifier
+4376; 2606 17591 CONSTRAINT public real_wallet_audit_events real_wallet_audit_events_pkey dr_verifier
+4428; 2606 17682 CONSTRAINT public real_wallet_balances real_wallet_balance_unique dr_verifier
+4431; 2606 17644 CONSTRAINT public real_wallet_balances real_wallet_balances_pkey dr_verifier
+4417; 2606 17634 CONSTRAINT public real_wallet_deposits real_wallet_deposits_pkey dr_verifier
+4362; 2606 17571 CONSTRAINT public real_wallet_feature_flags real_wallet_feature_flags_pkey dr_verifier
+4446; 2606 17661 CONSTRAINT public real_wallet_idempotency real_wallet_idempotency_pkey dr_verifier
+4365; 2606 17578 CONSTRAINT public real_wallet_networks real_wallet_networks_code_key dr_verifier
+4367; 2606 17576 CONSTRAINT public real_wallet_networks real_wallet_networks_pkey dr_verifier
+4399; 2606 17672 CONSTRAINT public real_wallet_wallets real_wallet_owner_unique dr_verifier
+4409; 2606 17627 CONSTRAINT public real_wallet_transfers real_wallet_transfers_pkey dr_verifier
+4402; 2606 17622 CONSTRAINT public real_wallet_wallets real_wallet_wallets_pkey dr_verifier
+4459; 2606 17911 CONSTRAINT public real_wallet_webhookattempt real_wallet_webhookattempt_pkey dr_verifier
+4475; 2606 17986 CONSTRAINT public real_wallet_withdrawal_addresses real_wallet_withdrawal_addresses_pkey dr_verifier
+4482; 2606 18013 CONSTRAINT public real_wallet_withdrawal_approvals real_wallet_withdrawal_approvals_pkey dr_verifier
+4435; 2606 17653 CONSTRAINT public real_wallet_withdrawals real_wallet_withdrawals_hold_id_key dr_verifier
+4437; 2606 17651 CONSTRAINT public real_wallet_withdrawals real_wallet_withdrawals_pkey dr_verifier
+4453; 2606 17949 CONSTRAINT public real_integration_webhook_deliveries real_webhook_delivery_unique dr_verifier
+4464; 2606 17945 CONSTRAINT public real_integration_webhook_events real_webhook_event_unique dr_verifier
+4472; 2606 17947 CONSTRAINT public real_integration_webhook_secret_versions real_webhook_secret_key_unique dr_verifier
+4479; 2606 17988 CONSTRAINT public real_wallet_withdrawal_addresses real_withdrawal_address_unique dr_verifier
+4485; 2606 18015 CONSTRAINT public real_wallet_withdrawal_approvals real_withdrawal_approval_unique dr_verifier
+4441; 2606 17688 CONSTRAINT public real_wallet_withdrawals real_withdrawal_idempotency_unique dr_verifier
+4740; 2606 19106 CONSTRAINT public reconciliation_records reconciliation_records_pkey dr_verifier
+4510; 2606 18120 CONSTRAINT public reporting_report reporting_report_pkey dr_verifier
+4514; 2606 18126 CONSTRAINT public reporting_revenue reporting_revenue_pkey dr_verifier
+4537; 2606 18171 CONSTRAINT public reporting_systemhealth reporting_systemhealth_pkey dr_verifier
+4520; 2606 18132 CONSTRAINT public reporting_trade reporting_trade_pkey dr_verifier
+4528; 2606 18138 CONSTRAINT public reporting_transaction reporting_transaction_pkey dr_verifier
+4533; 2606 18144 CONSTRAINT public reporting_useractivity reporting_useractivity_pkey dr_verifier
+4535; 2606 18146 CONSTRAINT public reporting_useractivity reporting_useractivity_user_id_key dr_verifier
+4725; 2606 19053 CONSTRAINT public reservations reservations_order_id_key dr_verifier
+4727; 2606 19051 CONSTRAINT public reservations reservations_pkey dr_verifier
+4712; 2606 19005 CONSTRAINT public schema_migrations schema_migrations_pkey dr_verifier
+4540; 2606 18217 CONSTRAINT public security_adminroles security_adminroles_pkey dr_verifier
+4610; 2606 18508 CONSTRAINT public security_anomalycheckschedule security_anomalycheckschedule_pkey dr_verifier
+4602; 2606 18462 CONSTRAINT public security_countryblacklist security_countryblacklist_pkey dr_verifier
+4553; 2606 18290 CONSTRAINT public security_countrywhitelist security_countrywhitelist_pkey dr_verifier
+4542; 2606 18223 CONSTRAINT public security_encryptionkeys security_encryptionkeys_pkey dr_verifier
+4583; 2606 18399 CONSTRAINT public security_ipblacklist security_ipblacklist_pkey dr_verifier
+4562; 2606 18355 CONSTRAINT public security_iprestrictions_country_whitelist security_iprestrictions__iprestrictions_id_countr_5d9aa96e_uniq dr_verifier
+4604; 2606 18490 CONSTRAINT public security_iprestrictions_country_blacklist security_iprestrictions__iprestrictions_id_countr_aef1b7c6_uniq dr_verifier
+4585; 2606 18421 CONSTRAINT public security_iprestrictions_ip_blacklist security_iprestrictions__iprestrictions_id_ipblac_de60fc98_uniq dr_verifier
+4568; 2606 18369 CONSTRAINT public security_iprestrictions_ip_whitelist security_iprestrictions__iprestrictions_id_ipwhit_cd1928f8_uniq dr_verifier
+4595; 2606 18470 CONSTRAINT public security_iprestrictions_user_ip_blacklist security_iprestrictions__iprestrictions_id_userip_cf651956_uniq dr_verifier
+4558; 2606 18306 CONSTRAINT public security_iprestrictions security_iprestrictions_admin_id_key dr_verifier
+4608; 2606 18468 CONSTRAINT public security_iprestrictions_country_blacklist security_iprestrictions_country_blacklist_pkey dr_verifier
+4566; 2606 18312 CONSTRAINT public security_iprestrictions_country_whitelist security_iprestrictions_country_whitelist_pkey dr_verifier
+4589; 2606 18405 CONSTRAINT public security_iprestrictions_ip_blacklist security_iprestrictions_ip_blacklist_pkey dr_verifier
+4572; 2606 18318 CONSTRAINT public security_iprestrictions_ip_whitelist security_iprestrictions_ip_whitelist_pkey dr_verifier
+4560; 2606 18304 CONSTRAINT public security_iprestrictions security_iprestrictions_pkey dr_verifier
+4599; 2606 18451 CONSTRAINT public security_iprestrictions_user_ip_blacklist security_iprestrictions_user_ip_blacklist_pkey dr_verifier
+4556; 2606 18298 CONSTRAINT public security_ipwhitelist security_ipwhitelist_pkey dr_verifier
+4574; 2606 18328 CONSTRAINT public security_passwordpolicy security_passwordpolicy_admin_id_key dr_verifier
+4576; 2606 18326 CONSTRAINT public security_passwordpolicy security_passwordpolicy_pkey dr_verifier
+4546; 2606 18231 CONSTRAINT public security_securityincident security_securityincident_pkey dr_verifier
+4578; 2606 18336 CONSTRAINT public security_twofactorauth security_twofactorauth_admin_id_key dr_verifier
+4580; 2606 18334 CONSTRAINT public security_twofactorauth security_twofactorauth_pkey dr_verifier
+4549; 2606 18239 CONSTRAINT public security_useractivity security_useractivity_pkey dr_verifier
+4592; 2606 18413 CONSTRAINT public security_useripblacklist security_useripblacklist_pkey dr_verifier
+4721; 2606 19036 CONSTRAINT public settlements settlements_pkey dr_verifier
+4723; 2606 19038 CONSTRAINT public settlements settlements_trade_id_key dr_verifier
+4731; 2606 19074 CONSTRAINT public simulated_accounts simulated_accounts_pkey dr_verifier
+4125; 2606 16775 CONSTRAINT public canonical_trading_simulatedaccount simulation_account_scope_unique dr_verifier
+4135; 2606 16789 CONSTRAINT public canonical_trading_simulatedposition simulation_position_unique dr_verifier
+4617; 2606 18522 CONSTRAINT public tickets_supportticket tickets_supportticket_pkey dr_verifier
+4620; 2606 18579 CONSTRAINT public token_blacklist_blacklistedtoken token_blacklist_blacklistedtoken_pkey dr_verifier
+4622; 2606 18600 CONSTRAINT public token_blacklist_blacklistedtoken token_blacklist_blacklistedtoken_token_id_key dr_verifier
+4625; 2606 18570 CONSTRAINT public token_blacklist_outstandingtoken token_blacklist_outstandingtoken_jti_hex_d9bdf6f7_uniq dr_verifier
+4627; 2606 18588 CONSTRAINT public token_blacklist_outstandingtoken token_blacklist_outstandingtoken_pkey dr_verifier
+4646; 2606 18660 CONSTRAINT public trade_asset trade_asset_name_key dr_verifier
+4648; 2606 18658 CONSTRAINT public trade_asset trade_asset_pkey dr_verifier
+4651; 2606 18662 CONSTRAINT public trade_asset trade_asset_symbol_key dr_verifier
+4635; 2606 18644 CONSTRAINT public trade_tradecategory trade_assetcategory_name_key dr_verifier
+4637; 2606 18642 CONSTRAINT public trade_tradecategory trade_assetcategory_pkey dr_verifier
+4640; 2606 18652 CONSTRAINT public trade_assettype trade_assettype_name_key dr_verifier
+4642; 2606 18650 CONSTRAINT public trade_assettype trade_assettype_pkey dr_verifier
+4678; 2606 18790 CONSTRAINT public trade_demoeventoutbox trade_demoeventoutbox_event_id_key dr_verifier
+4681; 2606 18788 CONSTRAINT public trade_demoeventoutbox trade_demoeventoutbox_pkey dr_verifier
+4670; 2606 18758 CONSTRAINT public trade_demoledgerentry trade_demoledgerentry_idempotency_key_key dr_verifier
+4672; 2606 18756 CONSTRAINT public trade_demoledgerentry trade_demoledgerentry_pkey dr_verifier
+4665; 2606 18740 CONSTRAINT public trade_marketcandle trade_marketcandle_pkey dr_verifier
+4656; 2606 18747 CONSTRAINT public trade_trade trade_trade_idempotency_key_key dr_verifier
+4659; 2606 18668 CONSTRAINT public trade_trade trade_trade_pkey dr_verifier
+4661; 2606 18670 CONSTRAINT public trade_trade trade_trade_transaction_id_key dr_verifier
+4717; 2606 19026 CONSTRAINT public trades trades_execution_id_key dr_verifier
+4719; 2606 19024 CONSTRAINT public trades trades_pkey dr_verifier
+4181; 2606 16937 CONSTRAINT public foundation_tradingcontrol trading_control_scope_unique dr_verifier
+4236; 2606 17016 CONSTRAINT public integrations_externalidentity unique_external_identity dr_verifier
+4216; 2606 17022 CONSTRAINT public integrations_userimport unique_import_idempotency dr_verifier
+4222; 2606 17024 CONSTRAINT public integrations_userimportrow unique_import_row dr_verifier
+4667; 2606 18742 CONSTRAINT public trade_marketcandle unique_market_candle dr_verifier
+4203; 2606 17020 CONSTRAINT public integrations_organizationmembership unique_org_membership dr_verifier
+4275; 2606 17287 CONSTRAINT public notifications_webhooksubscription unique_org_webhook_url dr_verifier
+4277; 2606 17253 CONSTRAINT public notifications_webhooksubscription unique_user_webhook_url dr_verifier
+4283; 2606 17255 CONSTRAINT public notifications_webhookdelivery unique_webhook_event_delivery dr_verifier
+4709; 2606 18971 CONSTRAINT public users_demolegalacceptance users_demolegalacceptance_pkey dr_verifier
+4701; 2606 18931 CONSTRAINT public users_emailverificationchallenge users_emailverificationchallenge_pkey dr_verifier
+4686; 2606 18834 CONSTRAINT public users_kyc users_kyc_id_number_key dr_verifier
+4688; 2606 18832 CONSTRAINT public users_kyc users_kyc_pkey dr_verifier
+4690; 2606 18836 CONSTRAINT public users_kyc users_kyc_user_id_key dr_verifier
+4693; 2606 18842 CONSTRAINT public users_kycfile users_kycfile_pkey dr_verifier
+4699; 2606 18921 CONSTRAINT public users_pendingregistration users_pendingregistration_pkey dr_verifier
+4073; 2606 16478 CONSTRAINT public users_phoneverificationcode users_phoneverificationcode_pkey dr_verifier
+4075; 2606 16480 CONSTRAINT public users_phoneverificationcode users_phoneverificationcode_user_id_key dr_verifier
+4705; 2606 18941 CONSTRAINT public users_transactionalemailoutbox users_transactionalemailoutbox_idempotency_key_key dr_verifier
+4707; 2606 18939 CONSTRAINT public users_transactionalemailoutbox users_transactionalemailoutbox_pkey dr_verifier
+4052; 2606 16456 CONSTRAINT public users_user users_user_email_key dr_verifier
+4062; 2606 16466 CONSTRAINT public users_user_groups users_user_groups_pkey dr_verifier
+4065; 2606 16484 CONSTRAINT public users_user_groups users_user_groups_user_id_group_id_b88eab82_uniq dr_verifier
+4055; 2606 16458 CONSTRAINT public users_user users_user_phone_number_key dr_verifier
+4057; 2606 16454 CONSTRAINT public users_user users_user_pkey dr_verifier
+4059; 2606 18812 CONSTRAINT public users_user users_user_trader_id_key dr_verifier
+4068; 2606 16472 CONSTRAINT public users_user_user_permissions users_user_user_permissions_pkey dr_verifier
+4071; 2606 16498 CONSTRAINT public users_user_user_permissions users_user_user_permissions_user_id_permission_id_43338c45_uniq dr_verifier
+4695; 2606 18891 CONSTRAINT public users_userdeviceinfo users_userdeviceinfo_pkey dr_verifier
+4094; 2606 16652 CONSTRAINT public wallet_currency wallet_currency_longer_name_key dr_verifier
+4097; 2606 16655 CONSTRAINT public wallet_currency wallet_currency_name_key dr_verifier
+4099; 2606 16585 CONSTRAINT public wallet_currency wallet_currency_pkey dr_verifier
+4102; 2606 16589 CONSTRAINT public wallet_currency wallet_currency_symbol_key dr_verifier
+4631; 2606 18618 CONSTRAINT public wallet_manualbalanceupdate wallet_manualbalanceupdate_pkey dr_verifier
+4088; 2606 16558 CONSTRAINT public wallet_transaction wallet_transaction_pkey dr_verifier
+4090; 2606 16650 CONSTRAINT public wallet_transaction wallet_transaction_transaction_id_key dr_verifier
+4083; 2606 16550 CONSTRAINT public wallet_wallet wallet_wallet_pkey dr_verifier
+4086; 2606 18979 CONSTRAINT public wallet_wallet wallet_wallet_user_id_organization_id_name_de4c6482_uniq dr_verifier
+4039; 1259 16446 INDEX public auth_group_name_a6ea08ec_like dr_verifier
+4044; 1259 16442 INDEX public auth_group_permissions_group_id_b120cbf9 dr_verifier
+4047; 1259 16443 INDEX public auth_group_permissions_permission_id_84c5c92e dr_verifier
+4034; 1259 16428 INDEX public auth_permission_content_type_id_2f476e4b dr_verifier
+4103; 1259 16682 INDEX public bank_account_app_bankaccount_account_number_7d2dea36_like dr_verifier
+4108; 1259 16683 INDEX public bank_account_app_bankaccount_user_id_d25a35bc dr_verifier
+4109; 1259 16709 INDEX public bank_account_app_withdrawalrequest_approved_by_id_4209a7d7 dr_verifier
+4110; 1259 16710 INDEX public bank_account_app_withdrawalrequest_bank_account_id_c224d6d0 dr_verifier
+4111; 1259 16711 INDEX public bank_account_app_withdrawalrequest_currency_id_302ac5f3 dr_verifier
+4114; 1259 16712 INDEX public bank_account_app_withdrawalrequest_user_id_11fa1ff6 dr_verifier
+4115; 1259 16713 INDEX public bank_account_app_withdrawalrequest_wallet_id_0f8dd3ee dr_verifier
+4131; 1259 16808 INDEX public canonical_trading_simulatedposition_account_id_efb3bf7a dr_verifier
+4126; 1259 16802 INDEX public canonical_trading_simulatedreservation_account_id_a9a1daf4 dr_verifier
+4136; 1259 16814 INDEX public canonical_trading_simulatedtrade_execution_id_5700ba79_like dr_verifier
+4139; 1259 16815 INDEX public canonical_trading_simulatedtrade_order_id_abd63c9b dr_verifier
+4675; 1259 18792 INDEX public demo_outbox_account_idx dr_verifier
+4676; 1259 18791 INDEX public demo_outbox_pending_idx dr_verifier
+4076; 1259 16535 INDEX public django_admin_log_content_type_id_c4bce8eb dr_verifier
+4079; 1259 16536 INDEX public django_admin_log_user_id_c564eba6 dr_verifier
+4146; 1259 16888 INDEX public django_celery_beat_periodictask_clocked_id_47a69f82 dr_verifier
+4147; 1259 16855 INDEX public django_celery_beat_periodictask_crontab_id_d3cba168 dr_verifier
+4148; 1259 16856 INDEX public django_celery_beat_periodictask_interval_id_a8ca27da dr_verifier
+4149; 1259 16854 INDEX public django_celery_beat_periodictask_name_265a36b7_like dr_verifier
+4154; 1259 16868 INDEX public django_celery_beat_periodictask_solar_id_a87ce72c dr_verifier
+4611; 1259 18517 INDEX public django_session_expire_date_a5c62663 dr_verifier
+4614; 1259 18516 INDEX public django_session_session_key_c0390e0f_like dr_verifier
+4713; 1259 19109 INDEX public dr_orders_tenant_state_idx dr_verifier
+4732; 1259 19110 INDEX public dr_outbox_pending_idx dr_verifier
+4246; 1259 17155 INDEX public economic_ca_status_21a137_idx dr_verifier
+4247; 1259 17154 INDEX public economic_calendar_events_event_id_4cbfdb75_like dr_verifier
+4194; 1259 17060 INDEX public integrations_crmconnection_organization_id_ceadb4c9 dr_verifier
+4195; 1259 17059 INDEX public integrations_crmconnection_owner_id_c9506cb3 dr_verifier
+4184; 1259 17036 INDEX public integrations_demoaccount_organization_id_15f6d05d dr_verifier
+4187; 1259 17035 INDEX public integrations_demoaccount_user_id_ba9e38c6 dr_verifier
+4223; 1259 17110 INDEX public integrations_demoledgerentry_account_id_01f6feff dr_verifier
+4226; 1259 17109 INDEX public integrations_demoledgerentry_reference_39f91ed9_like dr_verifier
+4231; 1259 17122 INDEX public integrations_externalidentity_organization_id_157ac4a8 dr_verifier
+4234; 1259 17121 INDEX public integrations_externalidentity_user_id_7c17a713 dr_verifier
+4190; 1259 17047 INDEX public integrations_integrationauditevent_actor_id_dc02c0bf dr_verifier
+4191; 1259 17048 INDEX public integrations_integrationauditevent_organization_id_3d290899 dr_verifier
+4198; 1259 17071 INDEX public integrations_organizationmembership_organization_id_f153a712 dr_verifier
+4201; 1259 17072 INDEX public integrations_organizationmembership_user_id_a888a468 dr_verifier
+4204; 1259 17079 INDEX public integrations_servicetoken_organization_id_dc27bc2f dr_verifier
+4205; 1259 17133 INDEX public integrations_servicetoken_owner_id_eaa575cc dr_verifier
+4208; 1259 17078 INDEX public integrations_servicetoken_token_hash_2e117691_like dr_verifier
+4211; 1259 17090 INDEX public integrations_userimport_created_by_id_46c436c4 dr_verifier
+4212; 1259 17091 INDEX public integrations_userimport_organization_id_05788316 dr_verifier
+4217; 1259 17102 INDEX public integrations_userimportrow_import_job_id_46b5eebc dr_verifier
+4220; 1259 17103 INDEX public integrations_userimportrow_user_id_74833c80 dr_verifier
+4237; 1259 17153 INDEX public news_articl_status_bed246_idx dr_verifier
+4238; 1259 17152 INDEX public news_articles_article_id_84929bd0_like dr_verifier
+4241; 1259 17156 INDEX public news_canonical_url_unique dr_verifier
+4265; 1259 17229 INDEX public notificatio_user_id_c2cdbc_idx dr_verifier
+4261; 1259 17220 INDEX public notifications_adminnotifications_admin_id_7058ccad dr_verifier
+4262; 1259 17221 INDEX public notifications_adminnotifications_notification_id_a70615a1 dr_verifier
+4266; 1259 17288 INDEX public notifications_notificationevent_organization_id_80cc0aa9 dr_verifier
+4269; 1259 17235 INDEX public notifications_notificationevent_user_id_4597570d dr_verifier
+4257; 1259 17301 INDEX public notifications_useralerts_organization_id_438d9a91 dr_verifier
+4260; 1259 17204 INDEX public notifications_useralerts_user_id_4fec6070 dr_verifier
+4252; 1259 17187 INDEX public notifications_usernotifications_notification_id_3ea6db0d dr_verifier
+4253; 1259 17300 INDEX public notifications_usernotifications_organization_id_ca29f8eb dr_verifier
+4256; 1259 17193 INDEX public notifications_usernotifications_user_id_2cbbc546 dr_verifier
+4278; 1259 17272 INDEX public notifications_webhookdelivery_event_id_02c237a9 dr_verifier
+4281; 1259 17273 INDEX public notifications_webhookdelivery_subscription_id_ad9732ad dr_verifier
+4270; 1259 17289 INDEX public notifications_webhooksubscription_organization_id_e873d400 dr_verifier
+4273; 1259 17261 INDEX public notifications_webhooksubscription_user_id_27b26d30 dr_verifier
+4167; 1259 16938 INDEX public outbox_pending_idx dr_verifier
+4301; 1259 17369 INDEX public payments_payment_provider_id_b15a014f dr_verifier
+4302; 1259 17366 INDEX public payments_payment_reference_1d502039_like dr_verifier
+4305; 1259 17367 INDEX public payments_payment_user_id_f9db060a dr_verifier
+4306; 1259 17368 INDEX public payments_payment_wallet_id_b5d97d00 dr_verifier
+4284; 1259 17312 INDEX public payments_paymentmethod_name_1e111573_like dr_verifier
+4293; 1259 17350 INDEX public payments_paymentsprovider__currency_id_476a62c6 dr_verifier
+4294; 1259 17349 INDEX public payments_paymentsprovider__paymentsprovider_id_a3fe0820 dr_verifier
+4307; 1259 17430 INDEX public portfolio_asset_asset_type_08f01ec2 dr_verifier
+4308; 1259 17393 INDEX public portfolio_asset_name_cdd67cc9 dr_verifier
+4309; 1259 17394 INDEX public portfolio_asset_name_cdd67cc9_like dr_verifier
+4312; 1259 17397 INDEX public portfolio_asset_user_id_4c9dfdb1 dr_verifier
+4321; 1259 17444 INDEX public portfolio_assettype_name_f48943e4 dr_verifier
+4322; 1259 17445 INDEX public portfolio_assettype_name_f48943e4_like dr_verifier
+4345; 1259 17499 INDEX public provider_go_provide_38c0bb_idx dr_verifier
+4330; 1259 17557 INDEX public provider_governance_audit_approval_id_33e1e98c dr_verifier
+4333; 1259 17558 INDEX public provider_governance_audit_license_id_5b009988 dr_verifier
+4336; 1259 17484 INDEX public provider_governance_audit_provider_id_a62a0de6 dr_verifier
+4337; 1259 17490 INDEX public provider_governance_licenses_license_reference_ab73cea9_like dr_verifier
+4342; 1259 17491 INDEX public provider_governance_licenses_provider_id_876b0ec0 dr_verifier
+4346; 1259 17497 INDEX public provider_governance_prov_approval_reference_7c6d263e_like dr_verifier
+4351; 1259 17556 INDEX public provider_governance_provider_approvals_license_id_2f35e7bf dr_verifier
+4354; 1259 17498 INDEX public provider_governance_provider_approvals_provider_id_5d127dfd dr_verifier
+4327; 1259 17478 INDEX public provider_governance_providers_provider_id_ff8898b4_like dr_verifier
+4498; 1259 18086 INDEX public real_compliance_restrictions_tenant_id_bfe60bbc dr_verifier
+4499; 1259 18087 INDEX public real_compliance_restrictions_wallet_id_78facdbb dr_verifier
+4500; 1259 18098 INDEX public real_compliance_transactio_asset_network_id_0787a8c6 dr_verifier
+4503; 1259 18099 INDEX public real_compliance_transaction_screenings_tenant_id_d641f88a dr_verifier
+4397; 1259 17764 INDEX public real_eventing_outbox_tenant_id_ca3bac02 dr_verifier
+4504; 1259 18114 INDEX public real_integration_provider__connection_id_6bcf830d dr_verifier
+4456; 1259 17955 INDEX public real_integration_provider_connections_tenant_id_85c48ece dr_verifier
+4448; 1259 17968 INDEX public real_integration_webhook_deliveries_event_id_55818a63 dr_verifier
+4451; 1259 17981 INDEX public real_integration_webhook_deliveries_subscription_id_8a97df9a dr_verifier
+4462; 1259 17967 INDEX public real_integration_webhook_events_tenant_id_48fc1003 dr_verifier
+4468; 1259 17980 INDEX public real_integration_webhook_s_subscription_id_575ae483 dr_verifier
+4467; 1259 17974 INDEX public real_integration_webhook_subscriptions_tenant_id_21985a4e dr_verifier
+4380; 1259 17727 INDEX public real_ledger_accounts_asset_id_6a2fd2cc dr_verifier
+4383; 1259 17728 INDEX public real_ledger_accounts_tenant_id_112b10e5 dr_verifier
+4390; 1259 17756 INDEX public real_ledger_entries_account_id_0255b1c2 dr_verifier
+4391; 1259 17757 INDEX public real_ledger_entries_asset_id_b0051028 dr_verifier
+4394; 1259 17758 INDEX public real_ledger_entries_transaction_id_f03222c9 dr_verifier
+4422; 1259 17840 INDEX public real_ledger_holds_asset_network_id_33b1e3a3 dr_verifier
+4425; 1259 17841 INDEX public real_ledger_holds_tenant_id_eba65c12 dr_verifier
+4426; 1259 17842 INDEX public real_ledger_holds_wallet_id_590ac252 dr_verifier
+4388; 1259 17739 INDEX public real_ledger_transactions_reversal_of_id_c8893567 dr_verifier
+4389; 1259 17740 INDEX public real_ledger_transactions_tenant_id_9647118d dr_verifier
+4495; 1259 18075 INDEX public real_reconciliation_items_run_id_81e9900f dr_verifier
+4492; 1259 18069 INDEX public real_reconciliation_runs_tenant_id_3a4e965b dr_verifier
+4370; 1259 17703 INDEX public real_wallet_asset_networks_asset_id_f8d58c1f dr_verifier
+4371; 1259 17704 INDEX public real_wallet_asset_networks_network_id_eb4c4b3a dr_verifier
+4357; 1259 17690 INDEX public real_wallet_assets_symbol_3220ea53_like dr_verifier
+4374; 1259 17715 INDEX public real_wallet_audit_events_actor_id_928e0ff6 dr_verifier
+4377; 1259 17716 INDEX public real_wallet_audit_events_tenant_id_0eb1a303 dr_verifier
+4429; 1259 17853 INDEX public real_wallet_balances_asset_network_id_522c5bf0 dr_verifier
+4432; 1259 17854 INDEX public real_wallet_balances_wallet_id_686256cc dr_verifier
+4414; 1259 17821 INDEX public real_wallet_deposits_asset_network_id_a72b4e5f dr_verifier
+4415; 1259 17823 INDEX public real_wallet_deposits_ledger_transaction_id_204b1fe1 dr_verifier
+4418; 1259 17822 INDEX public real_wallet_deposits_tenant_id_0e3134cd dr_verifier
+4419; 1259 17824 INDEX public real_wallet_deposits_wallet_id_11fe9bfa dr_verifier
+4360; 1259 17691 INDEX public real_wallet_feature_flags_key_29959060_like dr_verifier
+4444; 1259 17888 INDEX public real_wallet_idempotency_actor_id_4fb97c2c dr_verifier
+4447; 1259 17889 INDEX public real_wallet_idempotency_tenant_id_46a90f05 dr_verifier
+4363; 1259 17692 INDEX public real_wallet_networks_code_f6c92444_like dr_verifier
+4406; 1259 17797 INDEX public real_wallet_transfers_asset_network_id_03ed3454 dr_verifier
+4407; 1259 17799 INDEX public real_wallet_transfers_destination_wallet_id_0e02a6c3 dr_verifier
+4410; 1259 17800 INDEX public real_wallet_transfers_source_wallet_id_510259d8 dr_verifier
+4411; 1259 17798 INDEX public real_wallet_transfers_tenant_id_d974930e dr_verifier
+4400; 1259 17775 INDEX public real_wallet_wallets_owner_id_157928b3 dr_verifier
+4403; 1259 17776 INDEX public real_wallet_wallets_tenant_id_784b7f7a dr_verifier
+4457; 1259 17961 INDEX public real_wallet_webhookattempt_delivery_id_71ab4e2b dr_verifier
+4473; 1259 18004 INDEX public real_wallet_withdrawal_addresses_asset_network_id_12852ebb dr_verifier
+4476; 1259 18005 INDEX public real_wallet_withdrawal_addresses_tenant_id_dcc5e02c dr_verifier
+4477; 1259 18006 INDEX public real_wallet_withdrawal_addresses_wallet_id_8d3bf5e3 dr_verifier
+4480; 1259 18026 INDEX public real_wallet_withdrawal_approvals_approver_id_a66c9ded dr_verifier
+4483; 1259 18027 INDEX public real_wallet_withdrawal_approvals_withdrawal_id_2c9aa6c4 dr_verifier
+4433; 1259 17875 INDEX public real_wallet_withdrawals_asset_network_id_bd2b91bb dr_verifier
+4438; 1259 17876 INDEX public real_wallet_withdrawals_tenant_id_da4be368 dr_verifier
+4439; 1259 17877 INDEX public real_wallet_withdrawals_wallet_id_2ab3b904 dr_verifier
+4511; 1259 18182 INDEX public reporting_r_amount_1c71b4_idx dr_verifier
+4512; 1259 18181 INDEX public reporting_r_date_58519e_idx dr_verifier
+4522; 1259 18188 INDEX public reporting_t_amount_2ac527_idx dr_verifier
+4515; 1259 18184 INDEX public reporting_t_asset_0fb2d3_idx dr_verifier
+4523; 1259 18191 INDEX public reporting_t_categor_134c0b_idx dr_verifier
+4524; 1259 18189 INDEX public reporting_t_date_8afaeb_idx dr_verifier
+4516; 1259 18186 INDEX public reporting_t_trade_d_951136_idx dr_verifier
+4517; 1259 18185 INDEX public reporting_t_trade_v_5f8683_idx dr_verifier
+4525; 1259 18190 INDEX public reporting_t_transac_0e8cdf_idx dr_verifier
+4526; 1259 18187 INDEX public reporting_t_user_id_882db1_idx dr_verifier
+4518; 1259 18183 INDEX public reporting_t_user_id_edb2b5_idx dr_verifier
+4521; 1259 18152 INDEX public reporting_trade_user_id_742ce5d9 dr_verifier
+4529; 1259 18158 INDEX public reporting_transaction_user_id_12bca333 dr_verifier
+4530; 1259 18193 INDEX public reporting_u_is_acti_0125da_idx dr_verifier
+4531; 1259 18192 INDEX public reporting_u_user_id_4312f4_idx dr_verifier
+4538; 1259 18257 INDEX public security_adminroles_admin_id_775656d8 dr_verifier
+4600; 1259 18488 INDEX public security_countryblacklist_admin_id_4b6d561d dr_verifier
+4551; 1259 18342 INDEX public security_countrywhitelist_admin_id_1f63e7be dr_verifier
+4543; 1259 18263 INDEX public security_encryptionkeys_user_id_6b29fac3 dr_verifier
+4581; 1259 18419 INDEX public security_ipblacklist_admin_id_67164439 dr_verifier
+4605; 1259 18502 INDEX public security_iprestrictions_co_countryblacklist_id_54317038 dr_verifier
+4563; 1259 18367 INDEX public security_iprestrictions_co_countrywhitelist_id_d65c9b68 dr_verifier
+4606; 1259 18501 INDEX public security_iprestrictions_co_iprestrictions_id_1092ce41 dr_verifier
+4564; 1259 18366 INDEX public security_iprestrictions_co_iprestrictions_id_83ba079d dr_verifier
+4586; 1259 18433 INDEX public security_iprestrictions_ip_blacklist_ipblacklist_id_56965e6d dr_verifier
+4587; 1259 18432 INDEX public security_iprestrictions_ip_blacklist_iprestrictions_id_2ba322dd dr_verifier
+4569; 1259 18380 INDEX public security_iprestrictions_ip_whitelist_iprestrictions_id_24ebd1c6 dr_verifier
+4570; 1259 18381 INDEX public security_iprestrictions_ip_whitelist_ipwhitelist_id_3085347d dr_verifier
+4596; 1259 18481 INDEX public security_iprestrictions_us_iprestrictions_id_8aaa5be5 dr_verifier
+4597; 1259 18482 INDEX public security_iprestrictions_us_useripblacklist_id_7ea47ed1 dr_verifier
+4554; 1259 18348 INDEX public security_ipwhitelist_admin_id_2a099c96 dr_verifier
+4544; 1259 18274 INDEX public security_securityincident_admin_id_954ff949 dr_verifier
+4547; 1259 18275 INDEX public security_securityincident_user_id_5e13e677 dr_verifier
+4550; 1259 18281 INDEX public security_useractivity_user_id_df158ccc dr_verifier
+4590; 1259 18444 INDEX public security_useripblacklist_admin_id_f67cb656 dr_verifier
+4593; 1259 18445 INDEX public security_useripblacklist_user_id_88d1fc15 dr_verifier
+4615; 1259 18538 INDEX public tickets_supportticket_assigned_admin_id_eeef25ff dr_verifier
+4618; 1259 18528 INDEX public tickets_supportticket_user_id_f9af1775 dr_verifier
+4623; 1259 18571 INDEX public token_blacklist_outstandingtoken_jti_hex_d9bdf6f7_like dr_verifier
+4628; 1259 18568 INDEX public token_blacklist_outstandingtoken_user_id_83bc629a dr_verifier
+4643; 1259 18680 INDEX public trade_asset_asset_type_id_5b273e93 dr_verifier
+4644; 1259 18678 INDEX public trade_asset_name_3f4fe7ef_like dr_verifier
+4649; 1259 18679 INDEX public trade_asset_symbol_420b6895_like dr_verifier
+4633; 1259 18671 INDEX public trade_assetcategory_name_49c208d8_like dr_verifier
+4638; 1259 18672 INDEX public trade_assettype_name_7883edc6_like dr_verifier
+4679; 1259 18808 INDEX public trade_demoeventoutbox_organization_id_2ff06a1f dr_verifier
+4682; 1259 18809 INDEX public trade_demoeventoutbox_trade_id_7f1a97c7 dr_verifier
+4683; 1259 18810 INDEX public trade_demoeventoutbox_wallet_id_1473e9f4 dr_verifier
+4668; 1259 18770 INDEX public trade_demoledgerentry_idempotency_key_2e804b1a_like dr_verifier
+4673; 1259 18771 INDEX public trade_demoledgerentry_trade_id_0948acd9 dr_verifier
+4674; 1259 18772 INDEX public trade_demoledgerentry_wallet_id_2fe7181d dr_verifier
+4663; 1259 18743 INDEX public trade_marke_symbol_eb9c9d_idx dr_verifier
+4652; 1259 18701 INDEX public trade_trade_asset_id_e6edf835 dr_verifier
+4653; 1259 18702 INDEX public trade_trade_category_id_415a6b33 dr_verifier
+4654; 1259 18759 INDEX public trade_trade_idempotency_key_37d7ce06_like dr_verifier
+4657; 1259 18778 INDEX public trade_trade_organization_id_83ea663e dr_verifier
+4662; 1259 18715 INDEX public trade_trade_wallet_id_9ce1d5b8 dr_verifier
+4710; 1259 18977 INDEX public users_demolegalacceptance_user_id_fad00265 dr_verifier
+4702; 1259 18961 INDEX public users_emailverificationchallenge_registration_id_76d7ac62 dr_verifier
+4684; 1259 18848 INDEX public users_kyc_id_number_511b1666_like dr_verifier
+4691; 1259 18881 INDEX public users_kycfile_kyc_id_03f19e7e dr_verifier
+4697; 1259 18949 INDEX public users_pendingregistration_activated_user_id_1c451525 dr_verifier
+4703; 1259 18962 INDEX public users_transactionalemailoutbox_idempotency_key_79ab738a_like dr_verifier
+4050; 1259 16481 INDEX public users_user_email_243f6e77_like dr_verifier
+4060; 1259 16496 INDEX public users_user_groups_group_id_9afc8d0e dr_verifier
+4063; 1259 16495 INDEX public users_user_groups_user_id_5f6f5a90 dr_verifier
+4053; 1259 16482 INDEX public users_user_phone_number_aff54ffd_like dr_verifier
+4066; 1259 16510 INDEX public users_user_user_permissions_permission_id_0b93982e dr_verifier
+4069; 1259 16509 INDEX public users_user_user_permissions_user_id_20aca447 dr_verifier
+4696; 1259 18897 INDEX public users_userdeviceinfo_user_id_a226d334 dr_verifier
+4092; 1259 16653 INDEX public wallet_currency_longer_name_fc0c0b31_like dr_verifier
+4095; 1259 16656 INDEX public wallet_currency_name_9801cae0_like dr_verifier
+4100; 1259 16602 INDEX public wallet_currency_symbol_428879e0_like dr_verifier
+4629; 1259 18629 INDEX public wallet_manualbalanceupdate_admin_id_28700dfd dr_verifier
+4632; 1259 18630 INDEX public wallet_manualbalanceupdate_wallet_id_bbba6e64 dr_verifier
+4091; 1259 16579 INDEX public wallet_transaction_wallet_id_a0ff1b17 dr_verifier
+4080; 1259 16638 INDEX public wallet_wallet_currency_id_155af405 dr_verifier
+4081; 1259 18636 INDEX public wallet_wallet_organization_id_09c6ccdc dr_verifier
+4084; 1259 16573 INDEX public wallet_wallet_user_id_8c75caaa dr_verifier
+4924; 2620 19108 TRIGGER public audit_events audit_no_update dr_verifier
+4920; 2620 16940 TRIGGER public foundation_applicationauditevent foundation_audit_append_only dr_verifier
+4922; 2620 17553 TRIGGER public provider_governance_provider_approvals provider_governance_approval_guard dr_verifier
+4921; 2620 17555 TRIGGER public provider_governance_audit provider_governance_audit_guard dr_verifier
+4923; 2620 17891 TRIGGER public real_ledger_entries real_wallet_entry_update_guard dr_verifier
+4742; 2606 16437 FK CONSTRAINT public auth_group_permissions auth_group_permissio_permission_id_84c5c92e_fk_auth_perm dr_verifier
+4743; 2606 16432 FK CONSTRAINT public auth_group_permissions auth_group_permissions_group_id_b120cbf9_fk_auth_group_id dr_verifier
+4741; 2606 16423 FK CONSTRAINT public auth_permission auth_permission_content_type_id_2f476e4b_fk_django_co dr_verifier
+4755; 2606 16677 FK CONSTRAINT public bank_account_app_bankaccount bank_account_app_bankaccount_user_id_d25a35bc_fk_users_user_id dr_verifier
+4756; 2606 16684 FK CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_wit_approved_by_id_4209a7d7_fk_users_use dr_verifier
+4757; 2606 16719 FK CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_wit_bank_account_id_c224d6d0_fk_bank_acco dr_verifier
+4758; 2606 16694 FK CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_wit_currency_id_302ac5f3_fk_wallet_cu dr_verifier
+4759; 2606 16699 FK CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_wit_user_id_11fa1ff6_fk_users_use dr_verifier
+4760; 2606 16724 FK CONSTRAINT public bank_account_app_withdrawalrequest bank_account_app_wit_wallet_id_0f8dd3ee_fk_wallet_wa dr_verifier
+4761; 2606 16797 FK CONSTRAINT public canonical_trading_simulatedreservation canonical_trading_si_account_id_a9a1daf4_fk_canonical dr_verifier
+4762; 2606 16803 FK CONSTRAINT public canonical_trading_simulatedposition canonical_trading_si_account_id_efb3bf7a_fk_canonical dr_verifier
+4763; 2606 16809 FK CONSTRAINT public canonical_trading_simulatedtrade canonical_trading_si_order_id_abd63c9b_fk_canonical dr_verifier
+4749; 2606 16525 FK CONSTRAINT public django_admin_log django_admin_log_content_type_id_c4bce8eb_fk_django_co dr_verifier
+4750; 2606 16530 FK CONSTRAINT public django_admin_log django_admin_log_user_id_c564eba6_fk_users_user_id dr_verifier
+4764; 2606 16883 FK CONSTRAINT public django_celery_beat_periodictask django_celery_beat_p_clocked_id_47a69f82_fk_django_ce dr_verifier
+4765; 2606 16844 FK CONSTRAINT public django_celery_beat_periodictask django_celery_beat_p_crontab_id_d3cba168_fk_django_ce dr_verifier
+4766; 2606 16849 FK CONSTRAINT public django_celery_beat_periodictask django_celery_beat_p_interval_id_a8ca27da_fk_django_ce dr_verifier
+4767; 2606 16863 FK CONSTRAINT public django_celery_beat_periodictask django_celery_beat_p_solar_id_a87ce72c_fk_django_ce dr_verifier
+4772; 2606 17054 FK CONSTRAINT public integrations_crmconnection integrations_crmconn_organization_id_ceadb4c9_fk_integrati dr_verifier
+4773; 2606 17049 FK CONSTRAINT public integrations_crmconnection integrations_crmconnection_owner_id_c9506cb3_fk_users_user_id dr_verifier
+4768; 2606 17030 FK CONSTRAINT public integrations_demoaccount integrations_demoacc_organization_id_15f6d05d_fk_integrati dr_verifier
+4769; 2606 17025 FK CONSTRAINT public integrations_demoaccount integrations_demoaccount_user_id_ba9e38c6_fk_users_user_id dr_verifier
+4782; 2606 17104 FK CONSTRAINT public integrations_demoledgerentry integrations_demoled_account_id_01f6feff_fk_integrati dr_verifier
+4783; 2606 17116 FK CONSTRAINT public integrations_externalidentity integrations_externa_organization_id_157ac4a8_fk_integrati dr_verifier
+4784; 2606 17111 FK CONSTRAINT public integrations_externalidentity integrations_externalidentity_user_id_7c17a713_fk_users_user_id dr_verifier
+4770; 2606 17037 FK CONSTRAINT public integrations_integrationauditevent integrations_integra_actor_id_dc02c0bf_fk_users_use dr_verifier
+4771; 2606 17042 FK CONSTRAINT public integrations_integrationauditevent integrations_integra_organization_id_3d290899_fk_integrati dr_verifier
+4774; 2606 17061 FK CONSTRAINT public integrations_organizationmembership integrations_organiz_organization_id_f153a712_fk_integrati dr_verifier
+4775; 2606 17066 FK CONSTRAINT public integrations_organizationmembership integrations_organiz_user_id_a888a468_fk_users_use dr_verifier
+4776; 2606 17073 FK CONSTRAINT public integrations_servicetoken integrations_service_organization_id_dc27bc2f_fk_integrati dr_verifier
+4777; 2606 17126 FK CONSTRAINT public integrations_servicetoken integrations_servicetoken_owner_id_eaa575cc_fk_users_user_id dr_verifier
+4780; 2606 17092 FK CONSTRAINT public integrations_userimportrow integrations_userimp_import_job_id_46b5eebc_fk_integrati dr_verifier
+4778; 2606 17085 FK CONSTRAINT public integrations_userimport integrations_userimp_organization_id_05788316_fk_integrati dr_verifier
+4779; 2606 17080 FK CONSTRAINT public integrations_userimport integrations_userimport_created_by_id_46c436c4_fk_users_user_id dr_verifier
+4781; 2606 17097 FK CONSTRAINT public integrations_userimportrow integrations_userimportrow_user_id_74833c80_fk_users_user_id dr_verifier
+4790; 2606 17210 FK CONSTRAINT public notifications_adminnotifications notifications_adminn_admin_id_7058ccad_fk_users_use dr_verifier
+4791; 2606 17215 FK CONSTRAINT public notifications_adminnotifications notifications_adminn_notification_id_a70615a1_fk_notificat dr_verifier
+4792; 2606 17276 FK CONSTRAINT public notifications_notificationevent notifications_notifi_organization_id_80cc0aa9_fk_integrati dr_verifier
+4793; 2606 17230 FK CONSTRAINT public notifications_notificationevent notifications_notifi_user_id_4597570d_fk_users_use dr_verifier
+4788; 2606 17295 FK CONSTRAINT public notifications_useralerts notifications_useral_organization_id_438d9a91_fk_integrati dr_verifier
+4789; 2606 17199 FK CONSTRAINT public notifications_useralerts notifications_useralerts_user_id_4fec6070_fk_users_user_id dr_verifier
+4785; 2606 17182 FK CONSTRAINT public notifications_usernotifications notifications_userno_notification_id_3ea6db0d_fk_notificat dr_verifier
+4786; 2606 17290 FK CONSTRAINT public notifications_usernotifications notifications_userno_organization_id_ca29f8eb_fk_integrati dr_verifier
+4787; 2606 17188 FK CONSTRAINT public notifications_usernotifications notifications_userno_user_id_2cbbc546_fk_users_use dr_verifier
+4796; 2606 17262 FK CONSTRAINT public notifications_webhookdelivery notifications_webhoo_event_id_02c237a9_fk_notificat dr_verifier
+4794; 2606 17281 FK CONSTRAINT public notifications_webhooksubscription notifications_webhoo_organization_id_e873d400_fk_integrati dr_verifier
+4797; 2606 17267 FK CONSTRAINT public notifications_webhookdelivery notifications_webhoo_subscription_id_ad9732ad_fk_notificat dr_verifier
+4795; 2606 17256 FK CONSTRAINT public notifications_webhooksubscription notifications_webhoo_user_id_27b26d30_fk_users_use dr_verifier
+4800; 2606 17361 FK CONSTRAINT public payments_payment payments_payment_provider_id_b15a014f_fk_payments_ dr_verifier
+4801; 2606 17351 FK CONSTRAINT public payments_payment payments_payment_user_id_f9db060a_fk_users_user_id dr_verifier
+4802; 2606 17356 FK CONSTRAINT public payments_payment payments_payment_wallet_id_b5d97d00_fk_wallet_wallet_id dr_verifier
+4798; 2606 17344 FK CONSTRAINT public payments_paymentsprovider_supported_currencies payments_paymentspro_currency_id_476a62c6_fk_wallet_cu dr_verifier
+4799; 2606 17339 FK CONSTRAINT public payments_paymentsprovider_supported_currencies payments_paymentspro_paymentsprovider_id_a3fe0820_fk_payments_ dr_verifier
+4803; 2606 17439 FK CONSTRAINT public portfolio_asset portfolio_asset_asset_type_id_83b84051_fk_portfolio dr_verifier
+4804; 2606 17388 FK CONSTRAINT public portfolio_asset portfolio_asset_user_id_4c9dfdb1_fk_users_user_id dr_verifier
+4805; 2606 17414 FK CONSTRAINT public portfolio_assetbalance portfolio_assetbalance_asset_id_35a2c260_fk_portfolio_asset_id dr_verifier
+4806; 2606 17419 FK CONSTRAINT public portfolio_assetprofitloss portfolio_assetprofi_asset_id_395deab3_fk_portfolio dr_verifier
+4807; 2606 17518 FK CONSTRAINT public provider_governance_audit provider_governance__approval_id_33e1e98c_fk_provider_ dr_verifier
+4811; 2606 17504 FK CONSTRAINT public provider_governance_provider_approvals provider_governance__license_id_2f35e7bf_fk_provider_ dr_verifier
+4808; 2606 17534 FK CONSTRAINT public provider_governance_audit provider_governance__license_id_5b009988_fk_provider_ dr_verifier
+4812; 2606 17492 FK CONSTRAINT public provider_governance_provider_approvals provider_governance__provider_id_5d127dfd_fk_provider_ dr_verifier
+4810; 2606 17485 FK CONSTRAINT public provider_governance_licenses provider_governance__provider_id_876b0ec0_fk_provider_ dr_verifier
+4809; 2606 17479 FK CONSTRAINT public provider_governance_audit provider_governance__provider_id_a62a0de6_fk_provider_ dr_verifier
+4813; 2606 17511 FK CONSTRAINT public provider_governance_provider_approvals provider_governance__supersedes_approval__9b85a486_fk_provider_ dr_verifier
+4859; 2606 18059 FK CONSTRAINT public real_compliance_profiles real_compliance_prof_tenant_id_5347b336_fk_integrati dr_verifier
+4862; 2606 18076 FK CONSTRAINT public real_compliance_restrictions real_compliance_rest_tenant_id_bfe60bbc_fk_integrati dr_verifier
+4863; 2606 18081 FK CONSTRAINT public real_compliance_restrictions real_compliance_rest_wallet_id_78facdbb_fk_real_wall dr_verifier
+4864; 2606 18088 FK CONSTRAINT public real_compliance_transaction_screenings real_compliance_tran_asset_network_id_0787a8c6_fk_real_wall dr_verifier
+4865; 2606 18093 FK CONSTRAINT public real_compliance_transaction_screenings real_compliance_tran_tenant_id_d641f88a_fk_integrati dr_verifier
+4825; 2606 17759 FK CONSTRAINT public real_eventing_outbox real_eventing_outbox_tenant_id_ca3bac02_fk_integrati dr_verifier
+4866; 2606 18109 FK CONSTRAINT public real_integration_provider_webhook_receipts real_integration_pro_connection_id_6bcf830d_fk_real_inte dr_verifier
+4849; 2606 17950 FK CONSTRAINT public real_integration_provider_connections real_integration_pro_tenant_id_85c48ece_fk_integrati dr_verifier
+4847; 2606 17919 FK CONSTRAINT public real_integration_webhook_deliveries real_integration_web_event_id_55818a63_fk_real_inte dr_verifier
+4853; 2606 17975 FK CONSTRAINT public real_integration_webhook_secret_versions real_integration_web_subscription_id_575ae483_fk_real_inte dr_verifier
+4848; 2606 17939 FK CONSTRAINT public real_integration_webhook_deliveries real_integration_web_subscription_id_8a97df9a_fk_real_inte dr_verifier
+4852; 2606 17969 FK CONSTRAINT public real_integration_webhook_subscriptions real_integration_web_tenant_id_21985a4e_fk_integrati dr_verifier
+4851; 2606 17962 FK CONSTRAINT public real_integration_webhook_events real_integration_web_tenant_id_48fc1003_fk_integrati dr_verifier
+4818; 2606 17717 FK CONSTRAINT public real_ledger_accounts real_ledger_accounts_asset_id_6a2fd2cc_fk_real_wallet_assets_id dr_verifier
+4819; 2606 17722 FK CONSTRAINT public real_ledger_accounts real_ledger_accounts_tenant_id_112b10e5_fk_integrati dr_verifier
+4822; 2606 17741 FK CONSTRAINT public real_ledger_entries real_ledger_entries_account_id_0255b1c2_fk_real_ledg dr_verifier
+4823; 2606 17746 FK CONSTRAINT public real_ledger_entries real_ledger_entries_asset_id_b0051028_fk_real_wallet_assets_id dr_verifier
+4824; 2606 17751 FK CONSTRAINT public real_ledger_entries real_ledger_entries_transaction_id_f03222c9_fk_real_ledg dr_verifier
+4836; 2606 17825 FK CONSTRAINT public real_ledger_holds real_ledger_holds_asset_network_id_33b1e3a3_fk_real_wall dr_verifier
+4837; 2606 17830 FK CONSTRAINT public real_ledger_holds real_ledger_holds_tenant_id_eba65c12_fk_integrati dr_verifier
+4838; 2606 17835 FK CONSTRAINT public real_ledger_holds real_ledger_holds_wallet_id_590ac252_fk_real_wallet_wallets_id dr_verifier
+4820; 2606 17729 FK CONSTRAINT public real_ledger_transactions real_ledger_transact_reversal_of_id_c8893567_fk_real_ledg dr_verifier
+4821; 2606 17734 FK CONSTRAINT public real_ledger_transactions real_ledger_transact_tenant_id_9647118d_fk_integrati dr_verifier
+4861; 2606 18070 FK CONSTRAINT public real_reconciliation_items real_reconciliation__run_id_81e9900f_fk_real_reco dr_verifier
+4860; 2606 18064 FK CONSTRAINT public real_reconciliation_runs real_reconciliation__tenant_id_3a4e965b_fk_integrati dr_verifier
+4814; 2606 17693 FK CONSTRAINT public real_wallet_asset_networks real_wallet_asset_ne_asset_id_f8d58c1f_fk_real_wall dr_verifier
+4815; 2606 17698 FK CONSTRAINT public real_wallet_asset_networks real_wallet_asset_ne_network_id_eb4c4b3a_fk_real_wall dr_verifier
+4816; 2606 17710 FK CONSTRAINT public real_wallet_audit_events real_wallet_audit_ev_tenant_id_0eb1a303_fk_integrati dr_verifier
+4817; 2606 17705 FK CONSTRAINT public real_wallet_audit_events real_wallet_audit_events_actor_id_928e0ff6_fk_users_user_id dr_verifier
+4839; 2606 17843 FK CONSTRAINT public real_wallet_balances real_wallet_balances_asset_network_id_522c5bf0_fk_real_wall dr_verifier
+4840; 2606 17848 FK CONSTRAINT public real_wallet_balances real_wallet_balances_wallet_id_686256cc_fk_real_wall dr_verifier
+4832; 2606 17801 FK CONSTRAINT public real_wallet_deposits real_wallet_deposits_asset_network_id_a72b4e5f_fk_real_wall dr_verifier
+4833; 2606 17811 FK CONSTRAINT public real_wallet_deposits real_wallet_deposits_ledger_transaction_i_204b1fe1_fk_real_ledg dr_verifier
+4834; 2606 17806 FK CONSTRAINT public real_wallet_deposits real_wallet_deposits_tenant_id_0e3134cd_fk_integrati dr_verifier
+4835; 2606 17816 FK CONSTRAINT public real_wallet_deposits real_wallet_deposits_wallet_id_11fe9bfa_fk_real_wall dr_verifier
+4845; 2606 17883 FK CONSTRAINT public real_wallet_idempotency real_wallet_idempote_tenant_id_46a90f05_fk_integrati dr_verifier
+4846; 2606 17878 FK CONSTRAINT public real_wallet_idempotency real_wallet_idempotency_actor_id_4fb97c2c_fk_users_user_id dr_verifier
+4828; 2606 17777 FK CONSTRAINT public real_wallet_transfers real_wallet_transfer_asset_network_id_03ed3454_fk_real_wall dr_verifier
+4829; 2606 17787 FK CONSTRAINT public real_wallet_transfers real_wallet_transfer_destination_wallet_i_0e02a6c3_fk_real_wall dr_verifier
+4830; 2606 17792 FK CONSTRAINT public real_wallet_transfers real_wallet_transfer_source_wallet_id_510259d8_fk_real_wall dr_verifier
+4831; 2606 17782 FK CONSTRAINT public real_wallet_transfers real_wallet_transfer_tenant_id_d974930e_fk_integrati dr_verifier
+4826; 2606 17765 FK CONSTRAINT public real_wallet_wallets real_wallet_wallets_owner_id_157928b3_fk_users_user_id dr_verifier
+4827; 2606 17770 FK CONSTRAINT public real_wallet_wallets real_wallet_wallets_tenant_id_784b7f7a_fk_integrati dr_verifier
+4850; 2606 17956 FK CONSTRAINT public real_wallet_webhookattempt real_wallet_webhooka_delivery_id_71ab4e2b_fk_real_inte dr_verifier
+4857; 2606 18016 FK CONSTRAINT public real_wallet_withdrawal_approvals real_wallet_withdraw_approver_id_a66c9ded_fk_users_use dr_verifier
+4854; 2606 17989 FK CONSTRAINT public real_wallet_withdrawal_addresses real_wallet_withdraw_asset_network_id_12852ebb_fk_real_wall dr_verifier
+4841; 2606 17855 FK CONSTRAINT public real_wallet_withdrawals real_wallet_withdraw_asset_network_id_bd2b91bb_fk_real_wall dr_verifier
+4842; 2606 17860 FK CONSTRAINT public real_wallet_withdrawals real_wallet_withdraw_hold_id_21d45239_fk_real_ledg dr_verifier
+4843; 2606 17865 FK CONSTRAINT public real_wallet_withdrawals real_wallet_withdraw_tenant_id_da4be368_fk_integrati dr_verifier
+4855; 2606 17994 FK CONSTRAINT public real_wallet_withdrawal_addresses real_wallet_withdraw_tenant_id_dcc5e02c_fk_integrati dr_verifier
+4844; 2606 17870 FK CONSTRAINT public real_wallet_withdrawals real_wallet_withdraw_wallet_id_2ab3b904_fk_real_wall dr_verifier
+4856; 2606 17999 FK CONSTRAINT public real_wallet_withdrawal_addresses real_wallet_withdraw_wallet_id_8d3bf5e3_fk_real_wall dr_verifier
+4858; 2606 18021 FK CONSTRAINT public real_wallet_withdrawal_approvals real_wallet_withdraw_withdrawal_id_2c9aa6c4_fk_real_wall dr_verifier
+4867; 2606 18147 FK CONSTRAINT public reporting_trade reporting_trade_user_id_742ce5d9_fk_users_user_id dr_verifier
+4868; 2606 18153 FK CONSTRAINT public reporting_transaction reporting_transaction_user_id_12bca333_fk_users_user_id dr_verifier
+4869; 2606 18159 FK CONSTRAINT public reporting_useractivity reporting_useractivity_user_id_e6b364d2_fk_users_user_id dr_verifier
+4919; 2606 19054 FK CONSTRAINT public reservations reservations_order_id_fkey dr_verifier
+4870; 2606 18252 FK CONSTRAINT public security_adminroles security_adminroles_admin_id_775656d8_fk_users_user_id dr_verifier
+4891; 2606 18483 FK CONSTRAINT public security_countryblacklist security_countryblacklist_admin_id_4b6d561d_fk_users_user_id dr_verifier
+4875; 2606 18337 FK CONSTRAINT public security_countrywhitelist security_countrywhitelist_admin_id_1f63e7be_fk_users_user_id dr_verifier
+4871; 2606 18258 FK CONSTRAINT public security_encryptionkeys security_encryptionkeys_user_id_6b29fac3_fk_users_user_id dr_verifier
+4884; 2606 18414 FK CONSTRAINT public security_ipblacklist security_ipblacklist_admin_id_67164439_fk_users_user_id dr_verifier
+4892; 2606 18496 FK CONSTRAINT public security_iprestrictions_country_blacklist security_iprestricti_countryblacklist_id_54317038_fk_security_ dr_verifier
+4878; 2606 18361 FK CONSTRAINT public security_iprestrictions_country_whitelist security_iprestricti_countrywhitelist_id_d65c9b68_fk_security_ dr_verifier
+4885; 2606 18427 FK CONSTRAINT public security_iprestrictions_ip_blacklist security_iprestricti_ipblacklist_id_56965e6d_fk_security_ dr_verifier
+4893; 2606 18491 FK CONSTRAINT public security_iprestrictions_country_blacklist security_iprestricti_iprestrictions_id_1092ce41_fk_security_ dr_verifier
+4880; 2606 18370 FK CONSTRAINT public security_iprestrictions_ip_whitelist security_iprestricti_iprestrictions_id_24ebd1c6_fk_security_ dr_verifier
+4886; 2606 18422 FK CONSTRAINT public security_iprestrictions_ip_blacklist security_iprestricti_iprestrictions_id_2ba322dd_fk_security_ dr_verifier
+4879; 2606 18356 FK CONSTRAINT public security_iprestrictions_country_whitelist security_iprestricti_iprestrictions_id_83ba079d_fk_security_ dr_verifier
+4889; 2606 18471 FK CONSTRAINT public security_iprestrictions_user_ip_blacklist security_iprestricti_iprestrictions_id_8aaa5be5_fk_security_ dr_verifier
+4881; 2606 18375 FK CONSTRAINT public security_iprestrictions_ip_whitelist security_iprestricti_ipwhitelist_id_3085347d_fk_security_ dr_verifier
+4890; 2606 18476 FK CONSTRAINT public security_iprestrictions_user_ip_blacklist security_iprestricti_useripblacklist_id_7ea47ed1_fk_security_ dr_verifier
+4877; 2606 18349 FK CONSTRAINT public security_iprestrictions security_iprestrictions_admin_id_82b5e9b4_fk_users_user_id dr_verifier
+4876; 2606 18343 FK CONSTRAINT public security_ipwhitelist security_ipwhitelist_admin_id_2a099c96_fk_users_user_id dr_verifier
+4882; 2606 18382 FK CONSTRAINT public security_passwordpolicy security_passwordpolicy_admin_id_55f3a99d_fk_users_user_id dr_verifier
+4872; 2606 18264 FK CONSTRAINT public security_securityincident security_securityincident_admin_id_954ff949_fk_users_user_id dr_verifier
+4873; 2606 18269 FK CONSTRAINT public security_securityincident security_securityincident_user_id_5e13e677_fk_users_user_id dr_verifier
+4883; 2606 18387 FK CONSTRAINT public security_twofactorauth security_twofactorauth_admin_id_ebbac513_fk_users_user_id dr_verifier
+4874; 2606 18452 FK CONSTRAINT public security_useractivity security_useractivity_user_id_df158ccc_fk_users_user_id dr_verifier
+4887; 2606 18434 FK CONSTRAINT public security_useripblacklist security_useripblacklist_admin_id_f67cb656_fk_users_user_id dr_verifier
+4888; 2606 18439 FK CONSTRAINT public security_useripblacklist security_useripblacklist_user_id_88d1fc15_fk_users_user_id dr_verifier
+4918; 2606 19039 FK CONSTRAINT public settlements settlements_trade_id_fkey dr_verifier
+4894; 2606 18533 FK CONSTRAINT public tickets_supportticket tickets_supportticke_assigned_admin_id_eeef25ff_fk_users_use dr_verifier
+4895; 2606 18523 FK CONSTRAINT public tickets_supportticket tickets_supportticket_user_id_f9af1775_fk_users_user_id dr_verifier
+4896; 2606 18606 FK CONSTRAINT public token_blacklist_blacklistedtoken token_blacklist_blacklistedtoken_token_id_3cc7fe56_fk dr_verifier
+4897; 2606 18572 FK CONSTRAINT public token_blacklist_outstandingtoken token_blacklist_outs_user_id_83bc629a_fk_users_use dr_verifier
+4900; 2606 18673 FK CONSTRAINT public trade_asset trade_asset_asset_type_id_5b273e93_fk_trade_assettype_id dr_verifier
+4908; 2606 18793 FK CONSTRAINT public trade_demoeventoutbox trade_demoeventoutbo_organization_id_2ff06a1f_fk_integrati dr_verifier
+4909; 2606 18798 FK CONSTRAINT public trade_demoeventoutbox trade_demoeventoutbox_trade_id_7f1a97c7_fk_trade_trade_id dr_verifier
+4910; 2606 18803 FK CONSTRAINT public trade_demoeventoutbox trade_demoeventoutbox_wallet_id_1473e9f4_fk_wallet_wallet_id dr_verifier
+4906; 2606 18760 FK CONSTRAINT public trade_demoledgerentry trade_demoledgerentry_trade_id_0948acd9_fk_trade_trade_id dr_verifier
+4907; 2606 18765 FK CONSTRAINT public trade_demoledgerentry trade_demoledgerentry_wallet_id_2fe7181d_fk_wallet_wallet_id dr_verifier
+4901; 2606 18681 FK CONSTRAINT public trade_trade trade_trade_asset_id_e6edf835_fk_trade_asset_id dr_verifier
+4902; 2606 18704 FK CONSTRAINT public trade_trade trade_trade_category_id_415a6b33_fk_trade_tradecategory_id dr_verifier
+4903; 2606 18773 FK CONSTRAINT public trade_trade trade_trade_organization_id_83ea663e_fk_integrati dr_verifier
+4904; 2606 18691 FK CONSTRAINT public trade_trade trade_trade_transaction_id_caa7fd4c_fk_wallet_transaction_id dr_verifier
+4905; 2606 18710 FK CONSTRAINT public trade_trade trade_trade_wallet_id_9ce1d5b8_fk_wallet_wallet_id dr_verifier
+4917; 2606 19027 FK CONSTRAINT public trades trades_order_id_fkey dr_verifier
+4916; 2606 18972 FK CONSTRAINT public users_demolegalacceptance users_demolegalacceptance_user_id_fad00265_fk_users_user_id dr_verifier
+4915; 2606 18955 FK CONSTRAINT public users_emailverificationchallenge users_emailverificat_registration_id_76d7ac62_fk_users_pen dr_verifier
+4911; 2606 18843 FK CONSTRAINT public users_kyc users_kyc_user_id_a2adb5a6_fk_users_user_id dr_verifier
+4912; 2606 18876 FK CONSTRAINT public users_kycfile users_kycfile_kyc_id_03f19e7e_fk_users_kyc_id dr_verifier
+4914; 2606 18944 FK CONSTRAINT public users_pendingregistration users_pendingregistr_activated_user_id_1c451525_fk_users_use dr_verifier
+4748; 2606 16511 FK CONSTRAINT public users_phoneverificationcode users_phoneverificationcode_user_id_00203b8a_fk_users_user_id dr_verifier
+4744; 2606 16490 FK CONSTRAINT public users_user_groups users_user_groups_group_id_9afc8d0e_fk_auth_group_id dr_verifier
+4745; 2606 16485 FK CONSTRAINT public users_user_groups users_user_groups_user_id_5f6f5a90_fk_users_user_id dr_verifier
+4746; 2606 16504 FK CONSTRAINT public users_user_user_permissions users_user_user_perm_permission_id_0b93982e_fk_auth_perm dr_verifier
+4747; 2606 16499 FK CONSTRAINT public users_user_user_permissions users_user_user_permissions_user_id_20aca447_fk_users_user_id dr_verifier
+4913; 2606 18892 FK CONSTRAINT public users_userdeviceinfo users_userdeviceinfo_user_id_a226d334_fk_users_user_id dr_verifier
+4898; 2606 18624 FK CONSTRAINT public wallet_manualbalanceupdate wallet_manualbalance_wallet_id_bbba6e64_fk_wallet_wa dr_verifier
+4899; 2606 18619 FK CONSTRAINT public wallet_manualbalanceupdate wallet_manualbalanceupdate_admin_id_28700dfd_fk_users_user_id dr_verifier
+4754; 2606 16574 FK CONSTRAINT public wallet_transaction wallet_transaction_wallet_id_a0ff1b17_fk_wallet_wallet_id dr_verifier
+4751; 2606 16609 FK CONSTRAINT public wallet_wallet wallet_wallet_currency_id_155af405_fk_wallet_currency_id dr_verifier
+4752; 2606 18631 FK CONSTRAINT public wallet_wallet wallet_wallet_organization_id_09c6ccdc_fk_integrati dr_verifier
+4753; 2606 16567 FK CONSTRAINT public wallet_wallet wallet_wallet_user_id_8c75caaa_fk_users_user_id dr_verifier

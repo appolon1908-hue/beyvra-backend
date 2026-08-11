@@ -23,9 +23,9 @@ class RecoveryAssetsTests(unittest.TestCase):
     def test_network_is_internal_and_images_are_pinned_to_major_minor(self):
         compose = (ROOT / "recovery/docker-compose.yml").read_text()
         self.assertIn("internal: true", compose)
-        self.assertIn("postgres:16-alpine", compose)
+        self.assertIn("recovery/postgres.Dockerfile", compose)
         self.assertIn("redis:7.4-alpine", compose)
-        self.assertIn("nats:2.10-alpine", compose)
+        self.assertIn("nats:2.11-alpine", compose)
 
     def test_authority_and_pitr_gap_are_explicit(self):
         inventory = (ROOT / "docs/DISASTER-RECOVERY-INVENTORY.md").read_text()
@@ -41,4 +41,3 @@ class RecoveryAssetsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

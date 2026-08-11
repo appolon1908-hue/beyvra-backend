@@ -1,0 +1,12 @@
+{
+  "scanner": "trivy 0.72.0",
+  "severity": ["CRITICAL"],
+  "ignore_unfixed": true,
+  "critical_findings": 0,
+  "images": {
+    "beyvra-backend-dr:local": "sha256:54efe89c30fd48ba9ace10f6509fcc70453aa1e94435bf1cb9eab202bb0aeba6",
+    "beyvra-postgres16-dr-source:local": "sha256:ee666a2e269c7bff11544f368def4664af1fe42f492d1f714a8387f58a5d8a25",
+    "nats:2.11-alpine": "sha256:e4bf19f15fd3218814a4e3c9e0064e1334bd8aa20d5984b9f1a0afd084f8cc00",
+    "redis:7.4-alpine": "sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2"
+  }
+}

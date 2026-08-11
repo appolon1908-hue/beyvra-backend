@@ -13,8 +13,8 @@ CREATE TABLE reconciliation_records (id bigint GENERATED ALWAYS AS IDENTITY PRIM
 
 CREATE FUNCTION reject_audit_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit events are append-only'; END $$;
 CREATE TRIGGER audit_no_update BEFORE UPDATE OR DELETE ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation();
-CREATE INDEX orders_tenant_state_idx ON orders (tenant_ref, state);
-CREATE INDEX outbox_pending_idx ON outbox_events (state, event_id);
+CREATE INDEX dr_orders_tenant_state_idx ON orders (tenant_ref, state);
+CREATE INDEX dr_outbox_pending_idx ON outbox_events (state, event_id);
 
 INSERT INTO schema_migrations(name) VALUES ('dr_fixture_v1');
 INSERT INTO orders VALUES ('00000000-0000-4000-8000-000000000001','tenant-a',10,10,'FILLED',now()), ('00000000-0000-4000-8000-000000000002','tenant-b',4,0,'OPEN',now());
@@ -27,4 +27,3 @@ INSERT INTO outbox_events VALUES ('40000000-0000-4000-8000-000000000001','000000
 INSERT INTO processed_events VALUES ('40000000-0000-4000-8000-000000000001','settlement-v1','fixture-hash');
 INSERT INTO audit_events VALUES ('50000000-0000-4000-8000-000000000001','tenant-a','00000000-0000-4000-8000-000000000001','ORDER_FILLED',now()), ('50000000-0000-4000-8000-000000000002','tenant-b','00000000-0000-4000-8000-000000000002','ORDER_ACCEPTED',now());
 COMMIT;
-
