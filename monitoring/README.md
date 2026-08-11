@@ -1,6 +1,6 @@
 # Operational dashboards
 
-Provision six Grafana dashboards from these bounded metric groups:
+Provision the six Grafana dashboard definitions in `dashboards/` from these bounded metric groups:
 
 - **Beyvra / Account Security:** security-event rates by reason/risk, freezes, session revocations, ATO alerts.
 - **Beyvra / Support Operations:** open cases, age, first response, resolution, escalation destination.

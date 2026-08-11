@@ -31,6 +31,15 @@ from .models import (
     SupportCaseEvent,
     TransactionHistoryEntry,
 )
+from .metrics import (
+    privacy_exports_created,
+    report_jobs_created,
+    support_case_age,
+    support_escalations,
+    support_first_response,
+    support_resolution,
+    unauthorized_operator_attempts,
+)
 from .permissions import (
     IsAnyOperator,
     IsManagerOperator,
@@ -281,6 +290,7 @@ class ReportJobListCreate(TenantMixin, generics.ListCreateAPIView):
         if created:
             from .tasks import generate_report_artifact
 
+            report_jobs_created.labels(report_type=job.report_type).inc()
             transaction.on_commit(lambda: generate_report_artifact.delay(str(job.pk)))
         return Response(self.get_serializer(job).data, status=201 if created else 200)
 
@@ -359,6 +369,7 @@ class PrivacyExportListCreate(TenantMixin, generics.ListCreateAPIView):
         if created:
             from .tasks import generate_privacy_export
 
+            privacy_exports_created.inc()
             transaction.on_commit(lambda: generate_privacy_export.delay(str(job.pk)))
         return Response(self.get_serializer(job).data, status=201 if created else 200)
 
@@ -567,7 +578,13 @@ class OperatorApprove(APIView):
             action = approve_operator_request(
                 request_id=request_id, approver=request.user, approver_roles=roles
             )
-        except (PermissionError, OperatorActionRequest.DoesNotExist):
+        except (PermissionError, OperatorActionRequest.DoesNotExist) as exc:
+            action = (
+                "self_approval"
+                if "SELF_APPROVAL_FORBIDDEN" in str(exc)
+                else "approval_denied"
+            )
+            unauthorized_operator_attempts.labels(action=action).inc()
             return Response(
                 {
                     "code": "ACTION_NOT_ALLOWED",
@@ -717,6 +734,37 @@ class OperatorSupportEvent(APIView):
                 )
             case.status, case.assigned_team = "ESCALATED", team
             case.save(update_fields=("status", "assigned_team", "updated_at"))
+            support_escalations.labels(destination=team).inc()
+        elif event_type == "ASSIGNED":
+            assigned_to = get_object_or_404(
+                get_user_model().objects.filter(tenant_account_q(case.tenant_id)),
+                pk=request.data.get("assigned_to"),
+            )
+            if not OperatorRole.objects.filter(
+                user=assigned_to,
+                tenant_id=case.tenant_id,
+                role__in={"support_agent", "support_manager", "platform_admin"},
+            ).exists():
+                raise ValidationError("Invalid support assignee")
+            case.assigned_to = assigned_to
+            case.save(update_fields=("assigned_to", "updated_at"))
+        elif event_type == "STATUS_CHANGED":
+            next_status = request.data.get("status")
+            if next_status not in dict(SupportCase.STATUSES):
+                raise ValidationError("Invalid support status")
+            case.status = next_status
+            case.resolved_at = (
+                timezone.now() if next_status in {"RESOLVED", "CLOSED"} else None
+            )
+            case.save(update_fields=("status", "resolved_at", "updated_at"))
+        elif event_type == "RESOLVED":
+            case.status = "RESOLVED"
+            case.resolved_at = timezone.now()
+            case.save(update_fields=("status", "resolved_at", "updated_at"))
+        elif event_type == "REOPENED":
+            case.status = "OPEN"
+            case.resolved_at = None
+            case.save(update_fields=("status", "resolved_at", "updated_at"))
         visibility = (
             "INTERNAL_NOTE"
             if event_type == "INTERNAL_NOTE"
@@ -731,6 +779,15 @@ class OperatorSupportEvent(APIView):
             body_safe=request.data.get("message", "")[:5000],
             actor=request.user,
         )
+        age_seconds = (timezone.now() - case.created_at).total_seconds()
+        support_case_age.observe(age_seconds)
+        if visibility == "CUSTOMER_VISIBLE_MESSAGE" and not case.timeline.filter(
+            visibility="CUSTOMER_VISIBLE_MESSAGE",
+            actor__is_staff=True,
+        ).exclude(pk=event.pk).exists():
+            support_first_response.observe(age_seconds)
+        if case.status in {"RESOLVED", "CLOSED"}:
+            support_resolution.observe(age_seconds)
         AuditEvent.objects.create(
             tenant_id=case.tenant_id,
             actor=request.user,

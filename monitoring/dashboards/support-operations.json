@@ -1,0 +1,16 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type": "stat", "title": "Open cases", "targets": [{"expr": "beyvra_support_cases_open", "refId": "A"}], "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}},
+    {"type": "timeseries", "title": "Case age and resolution", "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(beyvra_support_case_age_seconds_bucket[15m])))", "refId": "A"}, {"expr": "histogram_quantile(0.95, sum by (le) (rate(beyvra_support_resolution_seconds_bucket[15m])))", "refId": "B"}], "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}},
+    {"type": "timeseries", "title": "Escalations", "targets": [{"expr": "sum by (destination) (rate(beyvra_support_escalations_total[15m]))", "refId": "A"}], "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}}
+  ],
+  "schemaVersion": 39,
+  "tags": ["beyvra", "support"],
+  "templating": {"list": []},
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Beyvra / Support Operations",
+  "uid": "beyvra-support-operations",
+  "version": 1
+}

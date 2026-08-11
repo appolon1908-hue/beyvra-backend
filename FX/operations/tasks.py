@@ -19,6 +19,14 @@ from .models import (
     SupportCaseEvent,
     TransactionHistoryEntry,
 )
+from .metrics import (
+    privacy_export_generation,
+    privacy_exports_completed,
+    privacy_exports_failed,
+    report_generation,
+    report_jobs_completed,
+    report_jobs_failed,
+)
 from .services import csv_safe
 
 
@@ -37,7 +45,12 @@ REPORT_FIELDS = (
 )
 
 
+def metric_report_type(value):
+    return value if value in {"ACTIVITY", "TRANSACTIONS", "TRADE", "FEE"} else "UNKNOWN"
+
+
 def _generate_report_artifact(job_id):
+    started_at = timezone.now()
     with transaction.atomic():
         job = ReportJob.objects.select_for_update().select_related("account").get(
             job_id=job_id
@@ -86,6 +99,11 @@ def _generate_report_artifact(job_id):
             action="REPORT_EXPORTED",
             target=str(job.job_id),
         )
+    report_type = metric_report_type(job.report_type)
+    report_jobs_completed.labels(report_type=report_type).inc()
+    report_generation.labels(report_type=report_type).observe(
+        (timezone.now() - started_at).total_seconds()
+    )
     return "COMPLETED"
 
 
@@ -99,6 +117,13 @@ def generate_report_artifact(self, job_id):
         return _generate_report_artifact(job_id)
     except Exception as exc:
         ReportJob.objects.filter(job_id=job_id).update(status="FAILED")
+        report_type = (
+            ReportJob.objects.filter(job_id=job_id)
+            .values_list("report_type", flat=True)
+            .first()
+            or "UNKNOWN"
+        )
+        report_jobs_failed.labels(report_type=metric_report_type(report_type)).inc()
         if self.request.retries < self.max_retries:
             raise self.retry(
                 exc=exc, countdown=min(2 ** (self.request.retries + 1), 30)
@@ -107,6 +132,7 @@ def generate_report_artifact(self, job_id):
 
 
 def _generate_privacy_export(job_id):
+    started_at = timezone.now()
     with transaction.atomic():
         job = PrivacyExportJob.objects.select_for_update().select_related("account").get(
             job_id=job_id
@@ -196,6 +222,8 @@ def _generate_privacy_export(job_id):
             action="PRIVACY_EXPORT_GENERATED",
             target=str(job.job_id),
         )
+    privacy_exports_completed.inc()
+    privacy_export_generation.observe((timezone.now() - started_at).total_seconds())
     return "COMPLETED"
 
 
@@ -209,6 +237,7 @@ def generate_privacy_export(self, job_id):
         return _generate_privacy_export(job_id)
     except Exception as exc:
         PrivacyExportJob.objects.filter(job_id=job_id).update(status="FAILED")
+        privacy_exports_failed.inc()
         if self.request.retries < self.max_retries:
             raise self.retry(
                 exc=exc, countdown=min(2 ** (self.request.retries + 1), 30)

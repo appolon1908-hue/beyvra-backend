@@ -553,6 +553,49 @@ class OperatorAuthorityTests(TestCase):
         case.refresh_from_db()
         self.assertEqual((case.status, case.assigned_team), ("ESCALATED", "SECURITY"))
 
+    def test_support_assignment_resolution_and_reopen_update_authoritative_case(self):
+        account = user("case-account@example.test", "+10000000039")
+        manager = user("case-manager@example.test", "+10000000040", staff=True)
+        assignee = user("case-assignee@example.test", "+10000000045", staff=True)
+        OperatorRole.objects.create(
+            user=manager, tenant_id="tenant-a", role="support_manager"
+        )
+        OperatorRole.objects.create(
+            user=assignee, tenant_id="tenant-a", role="support_agent"
+        )
+        case = SupportCase.objects.create(
+            tenant_id="tenant-a",
+            account=account,
+            category="TECHNICAL",
+            safe_summary="synthetic support state test",
+        )
+        client = APIClient()
+        client.force_authenticate(manager)
+        endpoint = f"/api/internal/v1/support/cases/{case.pk}/events"
+        self.assertEqual(
+            client.post(
+                endpoint,
+                {"event_type": "ASSIGNED", "assigned_to": assignee.pk},
+                format="json",
+            ).status_code,
+            201,
+        )
+        self.assertEqual(
+            client.post(endpoint, {"event_type": "RESOLVED"}, format="json").status_code,
+            201,
+        )
+        case.refresh_from_db()
+        self.assertEqual(case.assigned_to, assignee)
+        self.assertEqual(case.status, "RESOLVED")
+        self.assertIsNotNone(case.resolved_at)
+        self.assertEqual(
+            client.post(endpoint, {"event_type": "REOPENED"}, format="json").status_code,
+            201,
+        )
+        case.refresh_from_db()
+        self.assertEqual(case.status, "OPEN")
+        self.assertIsNone(case.resolved_at)
+
     def test_wrong_tenant_account_cannot_be_frozen(self):
         outsider = user("outsider@example.test", "+10000000035", brand="tenant-b")
         client = APIClient()
