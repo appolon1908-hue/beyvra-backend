@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
+import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, connection, transaction
@@ -12,6 +13,7 @@ from users.models import User
 from .models import CalendarSession, CorporateAction, Instrument, InstrumentVersion, MarketDataObservation, MarketStatusRecord, ProviderSymbolMapping, ReferenceDataAudit, TradingCalendar, Venue
 from .reconciliation import run_reference_data_reconciliation
 from .services import record_market_observation, resolve_provider_symbol
+from ws.gateway import _resolve_realtime_instrument
 
 
 class ReferenceAuthorityTests(TestCase):
@@ -121,6 +123,18 @@ class ReferenceAuthorityTests(TestCase):
         first = self.client.get("/api/v1/market/instruments", HTTP_X_BEYVRA_TENANT="tenant-a").json()
         second = self.client.get("/api/v1/market/instruments", HTTP_X_BEYVRA_TENANT="tenant-b").json()
         self.assertEqual(first, second)
+
+    def test_realtime_resolves_canonical_uuid_through_instrument_authority(self):
+        ProviderSymbolMapping.objects.create(
+            provider_id="binance",
+            provider_symbol="AAPLUSDT",
+            product="MARKET_DATA",
+            instrument=self.instrument,
+            effective_from=self.effective,
+        )
+        resolved = _resolve_realtime_instrument.__wrapped__(str(self.instrument.instrument_id))
+        self.assertEqual(resolved, (str(self.instrument.instrument_id), "AAPLUSDT"))
+        self.assertIsNone(_resolve_realtime_instrument.__wrapped__(str(uuid.uuid4())))
 
     def test_reconciliation_passes_and_detects_missing_current_version(self):
         self.assertEqual(run_reference_data_reconciliation()["status"], "PASS")
