@@ -4,7 +4,7 @@
   "ignore_unfixed": true,
   "critical_findings": 0,
   "images": {
-    "beyvra-backend-dr:local": "sha256:93f0609767fd20d9926b863ea22c8600db1350ccf2a902c2cfc75d1e278e93de",
+    "beyvra-backend-dr:local": "sha256:afb2ade7daeea007034d8636eab17f7f8d10302af9be3256ffd2096e21fc4f9e",
     "beyvra-postgres16-dr-source:local": "sha256:c8da4e5acf1e6f81cdabe9f1a3828cf48c1d977c6e095b2f463a46778310586a",
     "nats:2.11-alpine": "sha256:e4bf19f15fd3218814a4e3c9e0064e1334bd8aa20d5984b9f1a0afd084f8cc00",
     "redis:7.4-alpine": "sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2"
