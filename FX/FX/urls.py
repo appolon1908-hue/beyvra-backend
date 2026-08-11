@@ -61,6 +61,8 @@ urlpatterns = [
     path("api/v1/trading/", include("apps.trading.api.urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/operator/surveillance/", include("apps.surveillance.urls")),
+    path("api/v1/post-trade/", include("apps.post_trade.urls")),
+    path("api/v1/operator/post-trade/", include("apps.post_trade.operator_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
     path("api/v1/news/crypto", news_views.news_crypto_v1, name="news_crypto_v1"),
     path("api/v1/news/market", news_views.news_market_v1, name="news_market_v1"),

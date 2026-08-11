@@ -12,6 +12,7 @@ from apps.trading.models import RiskDecision, SimulatedAccount, SimulatedPositio
 from apps.trading.risk import RiskEngine
 from apps.surveillance.engine import SurveillanceEngine
 from apps.surveillance.services import persist_findings
+from apps.post_trade.processor import process_simulated_fill
 from integrations.execution.simulated import SimulatedExecutionProvider
 from integrations.financial.simulated import SimulatedFinancialAdapter
 from prometheus_client import Counter, Histogram
@@ -211,7 +212,9 @@ def apply_execution(order_id, execution):
             reservation.refresh_from_db()
             if reservation.state == SimulatedReservation.State.CONSUMED:
                 transaction.on_commit(lambda: SIM_RESERVATIONS["consumed"].inc())
-            SimulatedTrade.objects.create(order=order, execution_id=execution.execution_id, instrument_id=order.instrument_id, side=order.side, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=timezone.now())
+            executed_at = timezone.now()
+            SimulatedTrade.objects.create(order=order, execution_id=execution.execution_id, instrument_id=order.instrument_id, side=order.side, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=executed_at)
+            process_simulated_fill(order=order, execution_id=execution.execution_id, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=executed_at)
             transaction.on_commit(lambda: SIM_SETTLEMENTS.labels("success").inc())
             SIMULATED_FILLS.inc()
             audit_ref(order.subject_ref, "simulation.execution.received", "simulation_execution", execution.execution_id, uuid.uuid4())

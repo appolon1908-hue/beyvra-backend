@@ -18,6 +18,11 @@ MESSAGES = {
     "SURVEILLANCE_TEMPORARILY_UNAVAILABLE": "Trading controls are temporarily unavailable.",
     "PERMISSION_DENIED": "You do not have permission to perform this action.",
     "SELF_APPROVAL_FORBIDDEN": "Independent approval is required.",
+    "TRADE_NOT_FOUND": "The trade could not be found.",
+    "SETTLEMENT_NOT_FOUND": "The settlement record could not be found.",
+    "POST_TRADE_EXCEPTION": "This trade requires review.",
+    "SETTLEMENT_PENDING": "Settlement is pending.",
+    "SETTLEMENT_UNAVAILABLE": "Settlement information is temporarily unavailable.",
 }
 
 

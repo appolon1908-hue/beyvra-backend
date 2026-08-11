@@ -4,6 +4,8 @@ from rest_framework.response import Response
 
 from apps.trading.application.simulation import account_for, cancel, create, preview, serialize_account, serialize_order, simulation_authorized
 from apps.trading.models import SimulatedPosition, SimulatedTrade, TradingOrder
+from apps.post_trade.api import trade_payload
+from apps.post_trade.models import Trade
 from apps.foundation.services import IdempotencyConflict
 from integrations.financial.simulated import SimulationFinancialError
 from .errors import error_response
@@ -73,8 +75,15 @@ class TradesView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
-        rows = SimulatedTrade.objects.filter(order__subject_ref=str(request.user.pk), order__tenant_ref="default").order_by("-executed_at")
-        return Response({"results": [{"trade_id": str(row.trade_id), "order_id": str(row.order_id), "execution_id": row.execution_id, "instrument": row.instrument_id, "side": row.side, "quantity": str(row.quantity), "price": str(row.price), "fee": str(row.fee), "executed_at": row.executed_at.isoformat(), "simulation": True} for row in rows]})
+        rows = Trade.objects.filter(account_ref=f"sim:{request.user.pk}", tenant_ref="default").order_by("-trade_time")
+        return Response({"results": [trade_payload(row) for row in rows]})
+
+
+class TradeDetailView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request, trade_id):
+        row = Trade.objects.filter(pk=trade_id, account_ref=f"sim:{request.user.pk}", tenant_ref="default").first()
+        return Response(trade_payload(row)) if row else error_response(request, "TRADE_NOT_FOUND", 404)
 
 
 class PositionsView(APIView):
