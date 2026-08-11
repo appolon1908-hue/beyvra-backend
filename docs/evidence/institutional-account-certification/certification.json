@@ -28,6 +28,12 @@
     "high_or_critical_config_findings": 0,
     "sbom": "sbom.cdx.json"
   },
+  "tests": {
+    "full_backend": "PASS",
+    "full_backend_count": 255,
+    "institutional": "PASS",
+    "institutional_count": 14
+  },
   "safety": {
     "real_trading_enabled": false,
     "external_execution_enabled": false,

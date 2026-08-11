@@ -8,6 +8,8 @@ Service database access are included.
 
 - PostgreSQL 16 migration-from-zero, rollback, and reapply: PASS
 - Django migration drift: NONE
+- Full backend suite: PASS (255 tests)
+- Focused institutional suite: PASS (14 tests)
 - Synthetic load: 100 institutions and 10,000 subaccounts
 - Restore into disposable PostgreSQL 16: PASS
 - Reconciliation and audit continuity after restore: PASS
