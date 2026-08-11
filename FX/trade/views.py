@@ -33,5 +33,8 @@ class TradeListCreateView(generics.ListCreateAPIView):
                 action="trading",
             )
         except PermissionError as exc:
-            raise ValidationError("ACCOUNT_FROZEN") from exc
+            code = str(exc)
+            raise ValidationError(
+                code if code in {"ACCOUNT_FROZEN", "TRADING_HALTED"} else "ACTION_DENIED"
+            ) from exc
         serializer.save()

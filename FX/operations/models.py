@@ -124,6 +124,35 @@ class AccountFreeze(TenantAccountModel):
         ]
 
 
+class TradingHalt(ProtectedDeleteModel):
+    halt_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    tenant_id = models.CharField(max_length=120, db_index=True)
+    reason = models.CharField(max_length=500)
+    activated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="trading_halts_activated",
+        on_delete=models.PROTECT,
+    )
+    activated_at = models.DateTimeField(auto_now_add=True)
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        related_name="trading_halts_released",
+        on_delete=models.PROTECT,
+    )
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_id",),
+                condition=models.Q(released_at__isnull=True),
+                name="one_active_trading_halt_per_tenant",
+            )
+        ]
+
+
 class FraudCase(TenantAccountModel):
     STATUSES = [
         (x, x) for x in ("OPEN", "IN_REVIEW", "ESCALATED", "RESOLVED", "CLOSED")
@@ -216,8 +245,22 @@ class SupportCaseEvent(TenantAccountModel, ImmutableModel):
 
 
 class TransactionHistoryEntry(TenantAccountModel, ImmutableModel):
+    TYPES = [
+        (value, value)
+        for value in (
+            "ORDER",
+            "TRADE",
+            "FEE",
+            "DEPOSIT",
+            "WITHDRAWAL",
+            "TRANSFER",
+            "ADJUSTMENT",
+            "RESERVATION",
+            "SETTLEMENT",
+        )
+    ]
     entry_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    type = models.CharField(max_length=20)
+    type = models.CharField(max_length=20, choices=TYPES)
     asset = models.CharField(max_length=24)
     amount = models.DecimalField(max_digits=36, decimal_places=18)
     fee = models.DecimalField(max_digits=36, decimal_places=18, default=0)
@@ -230,6 +273,21 @@ class TransactionHistoryEntry(TenantAccountModel, ImmutableModel):
 
     class Meta:
         ordering = ("-occurred_at", "-entry_id")
+
+
+class TradeConfirmation(TenantAccountModel, ImmutableModel):
+    trade_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    order_ref = models.CharField(max_length=128)
+    instrument = models.CharField(max_length=64)
+    side = models.CharField(max_length=4, choices=(("BUY", "BUY"), ("SELL", "SELL")))
+    quantity = models.DecimalField(max_digits=36, decimal_places=18)
+    price = models.DecimalField(max_digits=36, decimal_places=18)
+    fee = models.DecimalField(max_digits=36, decimal_places=18, default=0)
+    executed_at = models.DateTimeField()
+    simulation = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("-executed_at", "-trade_id")
 
 
 class ReportJob(TenantAccountModel):

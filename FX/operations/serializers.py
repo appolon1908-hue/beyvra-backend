@@ -10,6 +10,7 @@ from .models import (
     Statement,
     SupportCase,
     SupportCaseEvent,
+    TradeConfirmation,
     TransactionHistoryEntry,
 )
 
@@ -66,6 +67,16 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TransactionHistoryEntry
+        exclude = ("tenant_id", "account")
+
+
+class TradeConfirmationSerializer(serializers.ModelSerializer):
+    quantity = serializers.CharField()
+    price = serializers.CharField()
+    fee = serializers.CharField()
+
+    class Meta:
+        model = TradeConfirmation
         exclude = ("tenant_id", "account")
 
 

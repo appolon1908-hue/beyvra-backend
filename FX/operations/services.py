@@ -2,6 +2,7 @@ import csv
 import hashlib
 import io
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -28,7 +29,13 @@ from .models import (
     OutboxEvent,
     ProcessedEvent,
     ReconciliationCheck,
+    ReportJob,
     SecurityEvent,
+    Statement,
+    SupportCase,
+    TradingHalt,
+    TransactionHistoryEntry,
+    PrivacyExportJob,
 )
 
 REASON_CODES = frozenset(
@@ -66,6 +73,17 @@ REAL_FEATURE_FLAGS = {
     "REAL_MONEY_ENABLED": False,
 }
 
+ACTION_ROLE_POLICY = {
+    "UNFREEZE": frozenset({"security_manager", "platform_admin"}),
+    "COMPLIANCE_OVERRIDE": frozenset({"compliance_manager", "platform_admin"}),
+    "FINANCIAL_OVERRIDE": frozenset({"financial_manager", "platform_admin"}),
+    "WITHDRAWAL_OVERRIDE": frozenset({"financial_manager", "platform_admin"}),
+    "PROVIDER_ACTIVATION": frozenset({"operations_manager", "platform_admin"}),
+    "REAL_MONEY_ACTIVATION": frozenset({"platform_admin"}),
+    "KILL_SWITCH_RELEASE": frozenset({"operations_manager", "platform_admin"}),
+    "LEGAL_HOLD_RELEASE": frozenset({"compliance_manager", "platform_admin"}),
+}
+
 
 def tenant_for(user):
     return (getattr(user, "brand", None) or "default").strip().lower()
@@ -79,6 +97,19 @@ def tenant_account_q(tenant_id):
     return Q(brand__iexact=normalized)
 
 
+def request_identity_refs(*, user, request):
+    tenant_id = tenant_for(user)
+    user_agent = (request.META.get("HTTP_USER_AGENT") or "unknown")[:255]
+    network_address = request.META.get("REMOTE_ADDR") or "unknown"
+    device_hash = hashlib.sha256(
+        f"{tenant_id}:{user.pk}:{user_agent}".encode()
+    ).hexdigest()
+    network_hash = hashlib.sha256(
+        f"{tenant_id}:{user.pk}:{network_address}".encode()
+    ).hexdigest()
+    return user_agent, device_hash, network_hash
+
+
 @transaction.atomic
 def issue_session_token_pair(*, user, request, mfa_verified=False):
     from rest_framework_simplejwt.settings import api_settings
@@ -86,10 +117,20 @@ def issue_session_token_pair(*, user, request, mfa_verified=False):
 
     now = timezone.now()
     tenant_id = tenant_for(user)
-    user_agent = (request.META.get("HTTP_USER_AGENT") or "unknown")[:255]
-    fingerprint_hash = hashlib.sha256(
-        f"{tenant_id}:{user.pk}:{user_agent}".encode()
-    ).hexdigest()
+    user_agent, fingerprint_hash, network_hash = request_identity_refs(
+        user=user, request=request
+    )
+    known_network = SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=user,
+        event_type__in={"LOGIN_SUCCESS", "NEW_NETWORK"},
+        network_ref=network_hash,
+    ).exists()
+    had_network = SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=user,
+        event_type__in={"LOGIN_SUCCESS", "NEW_NETWORK"},
+    ).exists()
     device, new_device = DeviceIdentity.objects.get_or_create(
         tenant_id=tenant_id,
         account=user,
@@ -99,10 +140,15 @@ def issue_session_token_pair(*, user, request, mfa_verified=False):
             "risk_state": "NEW",
         },
     )
+    session_lifetime = (
+        min(api_settings.REFRESH_TOKEN_LIFETIME, timedelta(minutes=30))
+        if user.is_staff
+        else api_settings.REFRESH_TOKEN_LIFETIME
+    )
     session = AccountSession.objects.create(
         tenant_id=tenant_id,
         account=user,
-        expires_at=now + api_settings.REFRESH_TOKEN_LIFETIME,
+        expires_at=now + session_lifetime,
         device_ref=device,
         auth_strength="MFA" if mfa_verified else "PASSWORD",
         mfa_verified_at=now if mfa_verified else None,
@@ -120,6 +166,7 @@ def issue_session_token_pair(*, user, request, mfa_verified=False):
         source="AUTH",
         risk_level="LOW",
         device_ref=device.device_id,
+        network_ref=network_hash,
         session_ref=session.session_id,
         metadata_safe={"auth_strength": session.auth_strength},
     )
@@ -131,6 +178,7 @@ def issue_session_token_pair(*, user, request, mfa_verified=False):
         source="AUTH",
         risk_level="LOW",
         device_ref=device.device_id,
+        network_ref=network_hash,
         session_ref=session.session_id,
     )
     if new_device:
@@ -153,6 +201,18 @@ def issue_session_token_pair(*, user, request, mfa_verified=False):
             template_version="1",
             payload_safe={"action": "review_sessions"},
             dedup_key=f"new-device:{device.device_id}",
+        )
+    if had_network and not known_network:
+        SecurityEvent.objects.create(
+            tenant_id=tenant_id,
+            account=user,
+            event_type="NEW_NETWORK",
+            occurred_at=now,
+            source="AUTH",
+            risk_level="MEDIUM",
+            device_ref=device.device_id,
+            network_ref=network_hash,
+            session_ref=session.session_id,
         )
     access = refresh.access_token
     return {"refresh": str(refresh), "access": str(access), "session": session}
@@ -177,12 +237,17 @@ def revoke_sessions_after_credential_change(*, user, event_type):
     create_notification(
         tenant_id=tenant_id,
         account=user,
-        type="PASSWORD_CHANGED",
+        type={
+            "MFA_ENABLED": "MFA_CHANGED",
+            "MFA_DISABLED": "MFA_CHANGED",
+            "MFA_RESET": "MFA_CHANGED",
+            "EMAIL_CHANGED": "EMAIL_CHANGED",
+        }.get(event_type, "PASSWORD_CHANGED"),
         category="SECURITY",
         channel="IN_APP",
         template_version="1",
         payload_safe={"action": "review_sessions"},
-        dedup_key=f"password-changed:{int(now.timestamp())}",
+        dedup_key=f"credential-change:{event_type}:{int(now.timestamp())}",
     )
     return revoked
 
@@ -293,7 +358,78 @@ def evaluate_account_risk(
     return RiskDecision(decision, reasons, policy_version, timezone.now())
 
 
+def evaluate_login_risk(*, account, request=None):
+    """Evaluate canonical login signals and append a safe decision audit."""
+    tenant_id = tenant_for(account)
+    now = timezone.now()
+    signals = set()
+    if SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=account,
+        event_type="LOGIN_FAILURE",
+        risk_level__in={"HIGH", "CRITICAL"},
+        occurred_at__gte=now - timedelta(minutes=10),
+    ).exists():
+        signals.add("TOO_MANY_FAILED_LOGINS")
+    if SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=account,
+        event_type="PASSWORD_RESET",
+        occurred_at__gte=now - timedelta(hours=24),
+    ).exists():
+        signals.add("RECENT_PASSWORD_RESET")
+    if SecurityEvent.objects.filter(
+        tenant_id=tenant_id,
+        account=account,
+        event_type="MFA_RESET",
+        occurred_at__gte=now - timedelta(hours=24),
+    ).exists():
+        signals.add("RECENT_MFA_RESET")
+    if request is not None:
+        _, device_hash, network_hash = request_identity_refs(
+            user=account, request=request
+        )
+        if DeviceIdentity.objects.filter(
+            tenant_id=tenant_id, account=account
+        ).exists() and not DeviceIdentity.objects.filter(
+            tenant_id=tenant_id,
+            account=account,
+            fingerprint_hash=device_hash,
+            revoked=False,
+        ).exists():
+            signals.add("NEW_DEVICE")
+        prior_networks = SecurityEvent.objects.filter(
+            tenant_id=tenant_id,
+            account=account,
+            event_type__in={"LOGIN_SUCCESS", "NEW_NETWORK"},
+        )
+        if prior_networks.exists() and not prior_networks.filter(
+            network_ref=network_hash
+        ).exists():
+            signals.add("NEW_NETWORK")
+    decision = evaluate_account_risk(
+        tenant_id=tenant_id, account=account, signals=signals
+    )
+    AuditEvent.objects.create(
+        tenant_id=tenant_id,
+        actor=account,
+        role="account",
+        action="ACCOUNT_RISK_EVALUATED",
+        target=f"account:{account.pk}",
+        metadata_safe={
+            "decision": decision.decision,
+            "reason_codes": list(decision.reason_codes),
+            "policy_version": decision.policy_version,
+        },
+    )
+    return decision
+
+
 def assert_sensitive_mutation_allowed(*, tenant_id, account, action):
+    if action == "trading" and TradingHalt.objects.filter(
+        tenant_id=tenant_id, released_at__isnull=True
+    ).exists():
+        raise PermissionError("TRADING_HALTED")
     freeze = AccountFreeze.objects.filter(
         tenant_id=tenant_id, account=account, released_at__isnull=True
     ).first()
@@ -333,10 +469,15 @@ def create_notification(
         },
     )
     if created:
-        OutboxEvent.objects.create(
+        event = OutboxEvent.objects.create(
             tenant_id=tenant_id,
             topic="notification.created",
             payload_safe={"notification_id": str(notification.pk)},
+        )
+        from .tasks import deliver_notification_outbox_event
+
+        transaction.on_commit(
+            lambda: deliver_notification_outbox_event.delay(str(event.event_id))
         )
         notifications_created.labels(category=category, channel=channel).inc()
     return notification, created
@@ -452,19 +593,18 @@ def consume_once(*, event_id, consumer, effect):
 
 
 @transaction.atomic
-def approve_operator_request(*, request_id, approver, approver_roles):
-    request = OperatorActionRequest.objects.select_for_update().get(pk=request_id)
+def approve_operator_request(
+    *, request_id, tenant_id, approver, approver_roles
+):
+    request = OperatorActionRequest.objects.select_for_update().get(
+        pk=request_id, tenant_id=tenant_id
+    )
     if request.requested_by_id == approver.id:
         raise PermissionError("SELF_APPROVAL_FORBIDDEN")
     if request.status != "PENDING" or request.expires_at <= timezone.now():
         raise PermissionError("REQUEST_NOT_APPROVABLE")
-    if not set(approver_roles) & {
-        "security_manager",
-        "compliance_manager",
-        "financial_manager",
-        "operations_manager",
-        "platform_admin",
-    }:
+    allowed_roles = ACTION_ROLE_POLICY.get(request.action_type, frozenset())
+    if not set(approver_roles) & allowed_roles:
         raise PermissionError("INSUFFICIENT_ROLE")
     request.status = "APPROVED"
     request.approved_by = approver
@@ -489,16 +629,98 @@ def approve_operator_request(*, request_id, approver, approver_roles):
 
 
 @transaction.atomic
-def execute_operator_request(*, request_id, executor, executor_roles):
-    request = OperatorActionRequest.objects.select_for_update().get(pk=request_id)
+def execute_operator_request(
+    *, request_id, tenant_id, executor, executor_roles
+):
+    request = OperatorActionRequest.objects.select_for_update().get(
+        pk=request_id, tenant_id=tenant_id
+    )
     if request.status != "APPROVED" or not request.approved_by_id:
         raise PermissionError("REQUEST_NOT_EXECUTABLE")
     if request.requested_by_id == executor.id:
         raise PermissionError("MAKER_CANNOT_EXECUTE")
-    if request.action_type != "UNFREEZE":
+    if request.action_type not in {
+        "UNFREEZE",
+        "KILL_SWITCH_RELEASE",
+        "LEGAL_HOLD_RELEASE",
+    }:
         raise PermissionError("EXTERNAL_AUTHORITY_REQUIRED")
-    if not set(executor_roles) & {"security_manager", "platform_admin"}:
+    if not set(executor_roles) & ACTION_ROLE_POLICY[request.action_type]:
         raise PermissionError("INSUFFICIENT_ROLE")
+    if request.action_type == "KILL_SWITCH_RELEASE":
+        prefix, separator, raw_halt_id = request.target_ref.partition(":")
+        if prefix != "trading_halt" or not separator:
+            raise PermissionError("INVALID_TARGET")
+        try:
+            halt = TradingHalt.objects.select_for_update().get(
+                halt_id=raw_halt_id,
+                tenant_id=request.tenant_id,
+                released_at__isnull=True,
+            )
+        except (ValueError, TradingHalt.DoesNotExist) as exc:
+            raise PermissionError("INVALID_TARGET") from exc
+        before_hash = stable_hash({"active": True, "reason": halt.reason})
+        halt.released_at = timezone.now()
+        halt.released_by = executor
+        halt.save(update_fields=("released_at", "released_by"))
+        request.status = "EXECUTED"
+        request.executed_at = timezone.now()
+        updated = OperatorActionRequest.objects.filter(
+            pk=request.pk, tenant_id=request.tenant_id, status="APPROVED"
+        ).update(status="EXECUTED", executed_at=request.executed_at)
+        if updated != 1:
+            raise PermissionError("EXECUTION_RACE_LOST")
+        AuditEvent.objects.create(
+            tenant_id=request.tenant_id,
+            actor=executor,
+            role="operations_manager",
+            action="TRADING_HALT_RELEASED",
+            target=request.target_ref,
+            reason=request.reason,
+            request_id=request.pk,
+            before_state_hash=before_hash,
+            after_state_hash=stable_hash({"active": False, "reason": halt.reason}),
+        )
+        return request
+
+    if request.action_type == "LEGAL_HOLD_RELEASE":
+        prefix, separator, raw_hold_id = request.target_ref.partition(":")
+        if prefix != "legal_hold" or not separator:
+            raise PermissionError("INVALID_TARGET")
+        try:
+            hold = LegalHold.objects.select_for_update().get(
+                pk=raw_hold_id,
+                tenant_id=request.tenant_id,
+                active=True,
+                released_at__isnull=True,
+            )
+        except (ValueError, LegalHold.DoesNotExist) as exc:
+            raise PermissionError("INVALID_TARGET") from exc
+        before_hash = stable_hash({"active": True, "reason": hold.reason})
+        hold.active = False
+        hold.released_at = timezone.now()
+        hold.released_by = executor
+        hold.save(update_fields=("active", "released_at", "released_by"))
+        request.status = "EXECUTED"
+        request.executed_at = timezone.now()
+        updated = OperatorActionRequest.objects.filter(
+            pk=request.pk, tenant_id=request.tenant_id, status="APPROVED"
+        ).update(status="EXECUTED", executed_at=request.executed_at)
+        if updated != 1:
+            raise PermissionError("EXECUTION_RACE_LOST")
+        AuditEvent.objects.create(
+            tenant_id=request.tenant_id,
+            actor=executor,
+            role="compliance_manager",
+            action="LEGAL_HOLD_RELEASED",
+            target=request.target_ref,
+            reason=request.reason,
+            request_id=request.pk,
+            before_state_hash=before_hash,
+            after_state_hash=stable_hash({"active": False, "reason": hold.reason}),
+        )
+        return request
+
     prefix, separator, raw_account_id = request.target_ref.partition(":")
     if prefix != "account" or not separator or not raw_account_id.isdigit():
         raise PermissionError("INVALID_TARGET")
@@ -527,9 +749,11 @@ def execute_operator_request(*, request_id, executor, executor_roles):
     freeze.save(update_fields=("released_at", "review_evidence"))
     request.status = "EXECUTED"
     request.executed_at = timezone.now()
-    OperatorActionRequest.objects.filter(pk=request.pk, status="APPROVED").update(
-        status="EXECUTED", executed_at=request.executed_at
-    )
+    updated = OperatorActionRequest.objects.filter(
+        pk=request.pk, tenant_id=request.tenant_id, status="APPROVED"
+    ).update(status="EXECUTED", executed_at=request.executed_at)
+    if updated != 1:
+        raise PermissionError("EXECUTION_RACE_LOST")
     AuditEvent.objects.create(
         tenant_id=request.tenant_id,
         actor=executor,
@@ -566,6 +790,55 @@ def stable_hash(value):
     ).hexdigest()
 
 
+@transaction.atomic
+def issue_simulation_statement(
+    *, tenant_id, account, period_start, period_end, actor, supersedes=None, reason=""
+):
+    if period_start >= period_end:
+        raise ValueError("INVALID_STATEMENT_PERIOD")
+    if TransactionHistoryEntry.objects.filter(
+        tenant_id=tenant_id,
+        account=account,
+        occurred_at__gte=period_start,
+        occurred_at__lte=period_end,
+        simulation=False,
+    ).exists():
+        raise PermissionError("FINANCIAL_SERVICE_AUTHORITY_REQUIRED")
+    checks = reconcile_operational_domains(tenant_id=tenant_id)
+    if not all(check.status == "PASS" for check in checks):
+        raise PermissionError("RECONCILIATION_REQUIRED")
+    version = 1
+    statement_id = uuid.uuid4()
+    if supersedes is not None:
+        if supersedes.tenant_id != tenant_id or supersedes.account_id != account.pk:
+            raise PermissionError("INVALID_SUPERSEDED_STATEMENT")
+        if not reason.strip():
+            raise ValueError("CORRECTION_REASON_REQUIRED")
+        statement_id = supersedes.statement_id
+        version = supersedes.version + 1
+    statement = Statement.objects.create(
+        statement_id=statement_id,
+        version=version,
+        tenant_id=tenant_id,
+        account=account,
+        period_start=period_start,
+        period_end=period_end,
+        simulation=True,
+        reconciliation_passed=True,
+        supersedes=supersedes,
+        correction_reason=reason[:500],
+    )
+    AuditEvent.objects.create(
+        tenant_id=tenant_id,
+        actor=actor,
+        role="financial_manager" if getattr(actor, "is_staff", False) else "system",
+        action="STATEMENT_SUPERSEDED" if supersedes else "STATEMENT_GENERATED",
+        target=f"statement:{statement.statement_id}:v{statement.version}",
+        reason=statement.correction_reason,
+    )
+    return statement
+
+
 def deletion_disposition(*, tenant_id, account):
     held = LegalHold.objects.filter(
         tenant_id=tenant_id, account=account, active=True
@@ -590,6 +863,22 @@ def reconcile_operational_domains(*, tenant_id):
         ).exists(),
         "NOTIFICATIONS": not Notification.objects.filter(
             tenant_id=tenant_id, status="DELIVERED", delivered_at__isnull=True
+        ).exists(),
+        "SUPPORT": not SupportCase.objects.filter(
+            tenant_id=tenant_id,
+            status__in={"RESOLVED", "CLOSED"},
+            resolved_at__isnull=True,
+        ).exists(),
+        "REPORTING": not (
+            Statement.objects.filter(
+                tenant_id=tenant_id, reconciliation_passed=False
+            ).exists()
+            or ReportJob.objects.filter(
+                tenant_id=tenant_id, status="COMPLETED", artifact_ref=""
+            ).exists()
+        ),
+        "PRIVACY": not PrivacyExportJob.objects.filter(
+            tenant_id=tenant_id, status="COMPLETED", artifact_ref=""
         ).exists(),
         "OPERATOR": not OperatorActionRequest.objects.filter(
             tenant_id=tenant_id, status="EXECUTED", executed_at__isnull=True

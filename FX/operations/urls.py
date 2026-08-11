@@ -10,6 +10,7 @@ urlpatterns = [
     path("reports/trades", views.TransactionList.as_view(history_type="TRADE")),
     path("reports/fees", views.TransactionList.as_view(history_type="FEE")),
     path("reports/transactions", views.TransactionList.as_view()),
+    path("reports/trade-confirmations", views.TradeConfirmationList.as_view()),
     path("reports/statements", views.StatementList.as_view()),
     path("reports/exports", views.ReportJobListCreate.as_view()),
     path("reports/exports/<uuid:job_id>/download", views.ReportJobDownload.as_view()),

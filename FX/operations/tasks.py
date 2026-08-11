@@ -12,6 +12,7 @@ from .artifacts import write_private_artifact
 from .models import (
     AuditEvent,
     Notification,
+    OutboxEvent,
     PrivacyExportJob,
     ReportJob,
     SecurityEvent,
@@ -27,7 +28,13 @@ from .metrics import (
     report_jobs_completed,
     report_jobs_failed,
 )
-from .services import csv_safe
+from .services import (
+    NotificationService,
+    consume_once,
+    csv_safe,
+    publish_realtime_notification,
+    record_delivery_failure,
+)
 
 
 REPORT_FIELDS = (
@@ -43,6 +50,60 @@ REPORT_FIELDS = (
     "simulation",
     "version",
 )
+
+
+def _deliver_notification_outbox_event(event_id):
+    with transaction.atomic():
+        event = OutboxEvent.objects.select_for_update().get(event_id=event_id)
+        if event.published_at is not None:
+            return "ALREADY_PUBLISHED"
+        if event.topic != "notification.created":
+            return "IGNORED"
+        notification = Notification.objects.select_for_update().get(
+            notification_id=event.payload_safe["notification_id"],
+            tenant_id=event.tenant_id,
+        )
+
+        def deliver():
+            if notification.channel == "IN_APP":
+                publish_realtime_notification(notification)
+                notification.status = "SENT"
+                notification.sent_at = timezone.now()
+                notification.save(update_fields=("status", "sent_at"))
+                return
+            try:
+                NotificationService().send(notification)
+            except RuntimeError:
+                record_delivery_failure(
+                    notification,
+                    transient=False,
+                    reason_safe="delivery provider unavailable",
+                )
+
+        consume_once(
+            event_id=event.event_id,
+            consumer="operations.notification.delivery.v1",
+            effect=deliver,
+        )
+        event.published_at = timezone.now()
+        event.save(update_fields=("published_at",))
+    return "PUBLISHED"
+
+
+@shared_task(
+    bind=True,
+    name="operations.deliver_notification_outbox_event",
+    max_retries=5,
+)
+def deliver_notification_outbox_event(self, event_id):
+    try:
+        return _deliver_notification_outbox_event(event_id)
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(
+                exc=exc, countdown=min(2 ** (self.request.retries + 1), 30)
+            )
+        raise
 
 
 def metric_report_type(value):

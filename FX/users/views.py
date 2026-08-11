@@ -12,6 +12,7 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
 from django.core import signing
+from django.middleware.csrf import get_token
 from django.core.cache import cache
 from django.core.signing import BadSignature, SignatureExpired
 from django.db import connection, transaction
@@ -29,6 +30,7 @@ from operations.services import (
     revoke_bound_session,
     revoke_sessions_after_credential_change,
 )
+from operations.authentication import SessionBoundJWTAuthentication
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
@@ -36,6 +38,8 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.views import TokenRefreshView
 from trade.models import Trade, Transaction
 from trade.serializers import (
     TradeDetailSerializer,
@@ -131,7 +135,9 @@ class SendEmailVerificationView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid(raise_exception=True):
             user = serializer.validated_data["user"]
 
@@ -425,11 +431,16 @@ class VerifyMFAView(generics.GenericAPIView):
         otp_code = serializer.validated_data["otp"]
         totp = pyotp.TOTP(user.mfa_secret)
         if totp.verify(otp_code):
-            if not user.is_mfa_enabled:  # to validate mfa is enabled
+            newly_enabled = not user.is_mfa_enabled
+            if newly_enabled:  # to validate mfa is enabled
                 user.is_mfa_enabled = True
             if not user.two_factor_authentication_enabled:
                 user.two_factor_authentication_enabled = True
             user.save()
+            if newly_enabled:
+                revoke_sessions_after_credential_change(
+                    user=user, event_type="MFA_ENABLED"
+                )
             response = {"message": "OTP verified successfully"}
             if completing_login:
                 credentials = issue_session_token_pair(
@@ -442,7 +453,10 @@ class VerifyMFAView(generics.GenericAPIView):
                         "user": UserSerializer(user).data,
                     }
                 )
-            return Response(response, status=status.HTTP_200_OK)
+            result = Response(response, status=status.HTTP_200_OK)
+            if completing_login:
+                set_browser_auth_cookies(result, request, credentials)
+            return result
         return Response(
             {"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST
         )
@@ -467,7 +481,9 @@ class LoginView(generics.CreateAPIView):
     )
     @csrf_exempt
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid(raise_exception=True):
             user = serializer.validated_data["user"]
             user_logged_in.send(sender=user.__class__, request=request, user=user)
@@ -480,6 +496,18 @@ class LoginView(generics.CreateAPIView):
 
             serializer.save(request)
 
+            risk_decision = serializer.validated_data["risk_decision"]
+            if risk_decision.decision == "STEP_UP" and not (
+                user.is_mfa_enabled and user.two_factor_authentication_enabled
+            ):
+                return Response(
+                    {
+                        "code": "STEP_UP_REQUIRED",
+                        "message": "Additional verification is required.",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             if user.two_factor_authentication_enabled:
                 login_token = signing.dumps({"user_id": user.pk}, salt="mfa-login")
                 return Response(
@@ -491,7 +519,7 @@ class LoginView(generics.CreateAPIView):
                 user=user, request=request, mfa_verified=False
             )
 
-            return Response(
+            response = Response(
                 {
                     "refresh": credentials["refresh"],
                     "access": credentials["access"],
@@ -499,6 +527,8 @@ class LoginView(generics.CreateAPIView):
                 },
                 status=status.HTTP_200_OK,
             )
+            set_browser_auth_cookies(response, request, credentials)
+            return response
         return Response(
             {"detail": "Invalid credentials"},
             status=status.HTTP_401_UNAUTHORIZED,
@@ -510,13 +540,82 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data={
+                "refresh": request.COOKIES.get("beyvra_refresh")
+                or request.data.get("refresh")
+            }
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(request)
         session_id = request.auth.get("session_id") if request.auth else None
         if session_id:
             revoke_bound_session(user=request.user, session_id=session_id)
-        return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
+        response = Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
+        clear_browser_auth_cookies(response)
+        return response
+
+
+def set_browser_auth_cookies(response, request, credentials):
+    cookie_options = {
+        "secure": True,
+        "httponly": True,
+        "samesite": "Strict",
+    }
+    response.set_cookie(
+        "beyvra_access", credentials["access"], path="/", **cookie_options
+    )
+    response.set_cookie(
+        "beyvra_refresh",
+        credentials["refresh"],
+        path="/",
+        **cookie_options,
+    )
+    response.set_cookie(
+        "csrftoken",
+        get_token(request),
+        path="/",
+        secure=True,
+        httponly=False,
+        samesite="Strict",
+    )
+
+
+def clear_browser_auth_cookies(response):
+    response.delete_cookie("beyvra_access", path="/", samesite="Strict")
+    response.delete_cookie(
+        "beyvra_refresh", path="/", samesite="Strict"
+    )
+    response.delete_cookie("csrftoken", path="/", samesite="Strict")
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        body_supplied = "refresh" in request.data
+        refresh_token = (
+            request.data.get("refresh")
+            if body_supplied
+            else request.COOKIES.get("beyvra_refresh")
+        )
+        if refresh_token is None:
+            raise AuthenticationFailed("Authentication is required.")
+        if not body_supplied:
+            SessionBoundJWTAuthentication.enforce_csrf(request)
+        serializer = self.get_serializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise InvalidToken("Refresh token is invalid or expired.") from exc
+        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+        response.set_cookie(
+            "beyvra_access",
+            serializer.validated_data["access"],
+            path="/",
+            secure=True,
+            httponly=True,
+            samesite="Strict",
+        )
+        return response
 
 
 class KYCFileListCreateView(generics.ListCreateAPIView):

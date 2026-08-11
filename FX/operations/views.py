@@ -2,10 +2,11 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -25,10 +26,14 @@ from .models import (
     OperatorActionRequest,
     OperatorRole,
     PrivacyExportJob,
+    ReconciliationCheck,
     ReportJob,
     Statement,
     SupportCase,
     SupportCaseEvent,
+    SecurityEvent,
+    TradeConfirmation,
+    TradingHalt,
     TransactionHistoryEntry,
 )
 from .metrics import (
@@ -42,7 +47,12 @@ from .metrics import (
 )
 from .permissions import (
     IsAnyOperator,
+    IsComplianceOperator,
+    IsComplianceManager,
+    IsFinancialOperator,
+    IsFinancialManager,
     IsManagerOperator,
+    IsOperationsManager,
     IsSecurityAnalyst,
     IsSecurityManager,
     IsSupportAgent,
@@ -61,12 +71,15 @@ from .serializers import (
     SupportMessageSerializer,
     TransactionSerializer,
     TransactionQuerySerializer,
+    TradeConfirmationSerializer,
 )
 from .services import (
+    ACTION_ROLE_POLICY,
     REAL_FEATURE_FLAGS,
     approve_operator_request,
     deletion_disposition,
     execute_operator_request,
+    issue_simulation_statement,
     reconcile_operational_domains,
     revoke_bound_session,
     stable_hash,
@@ -173,6 +186,23 @@ class TransactionList(TenantMixin, generics.ListAPIView):
         if query.validated_data.get("date_to"):
             qs = qs.filter(occurred_at__lte=query.validated_data["date_to"])
         return qs
+
+
+class TradeConfirmationList(TenantMixin, generics.ListAPIView):
+    permission_classes = (IsAuthenticated,)
+    serializer_class = TradeConfirmationSerializer
+
+    def get_queryset(self):
+        query = TransactionQuerySerializer(data=self.request.query_params)
+        query.is_valid(raise_exception=True)
+        rows = TradeConfirmation.objects.filter(
+            tenant_id=self.tenant_id(), account=self.request.user
+        )
+        if query.validated_data.get("date_from"):
+            rows = rows.filter(executed_at__gte=query.validated_data["date_from"])
+        if query.validated_data.get("date_to"):
+            rows = rows.filter(executed_at__lte=query.validated_data["date_to"])
+        return rows
 
 
 class NotificationList(TenantMixin, generics.ListAPIView):
@@ -576,7 +606,10 @@ class OperatorApprove(APIView):
         )
         try:
             action = approve_operator_request(
-                request_id=request_id, approver=request.user, approver_roles=roles
+                request_id=request_id,
+                tenant_id=tenant,
+                approver=request.user,
+                approver_roles=roles,
             )
         except (PermissionError, OperatorActionRequest.DoesNotExist) as exc:
             action = (
@@ -607,7 +640,10 @@ class OperatorExecute(APIView):
         )
         try:
             action = execute_operator_request(
-                request_id=request_id, executor=request.user, executor_roles=roles
+                request_id=request_id,
+                tenant_id=tenant,
+                executor=request.user,
+                executor_roles=roles,
             )
         except (PermissionError, OperatorActionRequest.DoesNotExist):
             return Response(
@@ -622,6 +658,14 @@ class OperatorExecute(APIView):
 
 def operator_tenant(request):
     return request.headers.get("X-Beyvra-Tenant", tenant_for(request.user)).lower()
+
+
+def operator_roles(request):
+    return set(
+        OperatorRole.objects.filter(
+            user=request.user, tenant_id=operator_tenant(request)
+        ).values_list("role", flat=True)
+    )
 
 
 class OperatorFraudCases(generics.ListCreateAPIView):
@@ -811,6 +855,7 @@ class OperatorActionCreate(APIView):
             "PROVIDER_ACTIVATION",
             "REAL_MONEY_ACTIVATION",
             "KILL_SWITCH_RELEASE",
+            "LEGAL_HOLD_RELEASE",
         }:
             return Response(
                 {
@@ -819,6 +864,21 @@ class OperatorActionCreate(APIView):
                 },
                 status=400,
             )
+        tenant = operator_tenant(request)
+        requester_roles = set(
+            OperatorRole.objects.filter(user=request.user, tenant_id=tenant).values_list(
+                "role", flat=True
+            )
+        )
+        if not requester_roles & ACTION_ROLE_POLICY[action_type]:
+            unauthorized_operator_attempts.labels(action="request_denied").inc()
+            return Response(
+                {
+                    "code": "ACTION_NOT_ALLOWED",
+                    "message": "The requested action is not available.",
+                },
+                status=403,
+            )
         reason = request.data.get("reason", "").strip()
         if not reason:
             return Response(
@@ -826,7 +886,7 @@ class OperatorActionCreate(APIView):
                 status=400,
             )
         action = OperatorActionRequest.objects.create(
-            tenant_id=operator_tenant(request),
+            tenant_id=tenant,
             action_type=action_type,
             target_ref=request.data.get("target_ref", "")[:128],
             requested_by=request.user,
@@ -845,7 +905,7 @@ class OperatorActionCreate(APIView):
 
 
 class OperatorLegalHold(APIView):
-    permission_classes = (IsManagerOperator,)
+    permission_classes = (IsComplianceManager,)
 
     @transaction.atomic
     def post(self, request, account_id):
@@ -869,11 +929,273 @@ class OperatorLegalHold(APIView):
         return Response({"hold_id": hold.pk, "active": True}, status=201)
 
 
+class OperatorAccountSummary(APIView):
+    permission_classes = (IsAnyOperator,)
+
+    def get(self, request, account_id):
+        tenant = operator_tenant(request)
+        account = get_object_or_404(
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
+        )
+        active_freeze = AccountFreeze.objects.filter(
+            tenant_id=tenant, account=account, released_at__isnull=True
+        ).values("level", "reason_code", "created_at").first()
+        recent_security = list(
+            SecurityEvent.objects.filter(tenant_id=tenant, account=account)
+            .order_by("-occurred_at")
+            .values("event_type", "risk_level", "occurred_at", "resolved")[:10]
+        )
+        history_counts = list(
+            TransactionHistoryEntry.objects.filter(
+                tenant_id=tenant, account=account, simulation=True
+            )
+            .values("type")
+            .annotate(count=Count("entry_id"))
+            .order_by("type")
+        )
+        AuditEvent.objects.create(
+            tenant_id=tenant,
+            actor=request.user,
+            role=sorted(operator_roles(request))[0],
+            action="OPERATOR_ACCOUNT_SUMMARY_VIEWED",
+            target=f"account:{account.pk}",
+        )
+        return Response(
+            {
+                "account_ref": str(account.pk),
+                "account_state": "ACTIVE" if account.is_active else "DISABLED",
+                "verification_summary": {
+                    "status": getattr(account, "verification_status", "UNKNOWN"),
+                    "email_verified": bool(getattr(account, "email_verified", False)),
+                    "phone_verified": bool(getattr(account, "phone_verified", False)),
+                },
+                "active_restriction": active_freeze,
+                "recent_security_events": recent_security,
+                "simulation_history_counts": history_counts,
+                "wallet_feature_state": REAL_FEATURE_FLAGS,
+                "open_support_cases": SupportCase.objects.filter(
+                    tenant_id=tenant,
+                    account=account,
+                    status__in={"OPEN", "PENDING_CUSTOMER", "PENDING_INTERNAL", "ESCALATED"},
+                ).count(),
+            }
+        )
+
+
+class OperatorComplianceState(APIView):
+    permission_classes = (IsComplianceOperator,)
+
+    def get(self, request, account_id):
+        tenant = operator_tenant(request)
+        account = get_object_or_404(
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
+        )
+        return Response(
+            {
+                "account_ref": str(account.pk),
+                "verification_status": getattr(account, "verification_status", "UNKNOWN"),
+                "document_verification": getattr(account, "document_verification", "UNKNOWN"),
+                "face_verification": getattr(account, "face_verification", "UNKNOWN"),
+                "active_legal_hold": LegalHold.objects.filter(
+                    tenant_id=tenant, account=account, active=True
+                ).exists(),
+            }
+        )
+
+
+class OperatorFinancialState(APIView):
+    permission_classes = (IsFinancialOperator,)
+
+    def get(self, request, account_id):
+        tenant = operator_tenant(request)
+        account = get_object_or_404(
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
+        )
+        return Response(
+            {
+                "account_ref": str(account.pk),
+                "authority": "SIMULATION_PROJECTION",
+                "real_financial_mutations_enabled": False,
+                "history_counts": list(
+                    TransactionHistoryEntry.objects.filter(
+                        tenant_id=tenant, account=account, simulation=True
+                    )
+                    .values("type")
+                    .annotate(count=Count("entry_id"))
+                    .order_by("type")
+                ),
+            }
+        )
+
+
+class OperatorStatementIssue(APIView):
+    permission_classes = (IsFinancialManager,)
+
+    def post(self, request, account_id):
+        tenant = operator_tenant(request)
+        account = get_object_or_404(
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
+        )
+        try:
+            period_start = serializers.DateTimeField().to_internal_value(
+                request.data.get("period_start")
+            )
+            period_end = serializers.DateTimeField().to_internal_value(
+                request.data.get("period_end")
+            )
+        except Exception as exc:
+            raise ValidationError("Invalid statement period") from exc
+        supersedes = None
+        if request.data.get("supersedes"):
+            supersedes = get_object_or_404(
+                Statement,
+                pk=request.data["supersedes"],
+                tenant_id=tenant,
+                account=account,
+            )
+        try:
+            statement = issue_simulation_statement(
+                tenant_id=tenant,
+                account=account,
+                period_start=period_start,
+                period_end=period_end,
+                actor=request.user,
+                supersedes=supersedes,
+                reason=request.data.get("reason", ""),
+            )
+        except (ValueError, PermissionError) as exc:
+            raise ValidationError("Statement cannot be issued") from exc
+        return Response(StatementSerializer(statement).data, status=201)
+
+
+class OperatorControlState(APIView):
+    permission_classes = (IsAnyOperator,)
+
+    def get(self, request):
+        tenant = operator_tenant(request)
+        halt = TradingHalt.objects.filter(
+            tenant_id=tenant, released_at__isnull=True
+        ).values("halt_id", "reason", "activated_at").first()
+        return Response(
+            {
+                "safety_flags": REAL_FEATURE_FLAGS,
+                "trading": {"simulation": True, "emergency_halt": halt},
+                "providers": {
+                    "custody": "DISABLED",
+                    "payment": "DISABLED",
+                    "execution": "DISABLED",
+                },
+                "support_impersonation": False,
+            }
+        )
+
+
+class OperatorTradingHalt(APIView):
+    permission_classes = (IsOperationsManager,)
+
+    @transaction.atomic
+    def post(self, request):
+        tenant = operator_tenant(request)
+        reason = request.data.get("reason", "").strip()
+        if not reason:
+            raise ValidationError("A reason is required")
+        halt, created = TradingHalt.objects.get_or_create(
+            tenant_id=tenant,
+            released_at__isnull=True,
+            defaults={"reason": reason[:500], "activated_by": request.user},
+        )
+        if created:
+            AuditEvent.objects.create(
+                tenant_id=tenant,
+                actor=request.user,
+                role="operations_manager",
+                action="TRADING_HALT_ACTIVATED",
+                target=f"trading_halt:{halt.pk}",
+                reason=halt.reason,
+            )
+        return Response(
+            {"halt_id": halt.pk, "active": True}, status=201 if created else 200
+        )
+
+
+class OperatorIncidents(APIView):
+    permission_classes = (IsAnyOperator,)
+
+    def get(self, request):
+        tenant = operator_tenant(request)
+        roles = operator_roles(request)
+        payload = {}
+        if "platform_admin" in roles or roles & {
+            "security_viewer", "security_analyst", "security_manager"
+        }:
+            payload["security"] = {
+                "unresolved_high_risk_events": SecurityEvent.objects.filter(
+                    tenant_id=tenant,
+                    resolved=False,
+                    risk_level__in={"HIGH", "CRITICAL"},
+                ).count(),
+                "open_fraud_cases": FraudCase.objects.filter(
+                    tenant_id=tenant,
+                    status__in={"OPEN", "IN_REVIEW", "ESCALATED"},
+                ).count(),
+            }
+        if "platform_admin" in roles or roles & {
+            "support_viewer", "support_agent", "support_manager"
+        }:
+            payload["support"] = {
+                "open_cases": SupportCase.objects.filter(
+                    tenant_id=tenant,
+                    status__in={"OPEN", "PENDING_CUSTOMER", "PENDING_INTERNAL", "ESCALATED"},
+                ).count()
+            }
+        if "platform_admin" in roles or roles & {
+            "compliance_viewer", "compliance_analyst", "compliance_manager"
+        }:
+            payload["compliance"] = {
+                "pending_accounts": get_user_model().objects.filter(
+                    tenant_account_q(tenant), verification_status="PENDING"
+                ).count()
+            }
+        if "platform_admin" in roles or roles & {
+            "operations_viewer", "operations_engineer", "operations_manager"
+        }:
+            payload["operations"] = {
+                "failed_reports": ReportJob.objects.filter(
+                    tenant_id=tenant, status="FAILED"
+                ).count(),
+                "failed_privacy_exports": PrivacyExportJob.objects.filter(
+                    tenant_id=tenant, status="FAILED"
+                ).count(),
+                "notification_dead_letters": Notification.objects.filter(
+                    tenant_id=tenant, status="FAILED"
+                ).count(),
+                "reconciliation_failures": ReconciliationCheck.objects.filter(
+                    tenant_id=tenant, status="FAIL"
+                ).count(),
+            }
+        return Response(payload)
+
+
 class OperatorAuditTimeline(generics.ListAPIView):
     permission_classes = (IsAnyOperator,)
 
     def get(self, request):
-        rows = AuditEvent.objects.filter(tenant_id=operator_tenant(request)).values(
+        roles = operator_roles(request)
+        queryset = AuditEvent.objects.filter(tenant_id=operator_tenant(request))
+        if "platform_admin" not in roles:
+            allowed = Q(pk__isnull=True)
+            if roles & {"support_viewer", "support_agent", "support_manager"}:
+                allowed |= Q(action__startswith="SUPPORT_")
+            if roles & {"security_viewer", "security_analyst", "security_manager"}:
+                allowed |= Q(action__startswith="ACCOUNT_") | Q(action__startswith="FRAUD_") | Q(action__startswith="SESSION_")
+            if roles & {"compliance_viewer", "compliance_analyst", "compliance_manager"}:
+                allowed |= Q(action__startswith="LEGAL_HOLD_") | Q(action__startswith="COMPLIANCE_") | Q(action__startswith="PRIVACY_")
+            if roles & {"financial_viewer", "financial_operations", "financial_manager"}:
+                allowed |= Q(action__startswith="REPORT_") | Q(action__startswith="STATEMENT_") | Q(action__startswith="FINANCIAL_")
+            if roles & {"operations_viewer", "operations_engineer", "operations_manager"}:
+                allowed |= Q(action__startswith="OPERATOR_") | Q(action__startswith="TRADING_HALT_") | Q(action__startswith="RECONCILIATION_")
+            queryset = queryset.filter(allowed)
+        rows = queryset.order_by("-timestamp").values(
             "audit_id", "action", "target", "timestamp", "role"
         )[:100]
         return Response(list(rows))

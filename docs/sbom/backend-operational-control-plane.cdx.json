@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
-  "serialNumber": "urn:uuid:579a51f5-dd68-4642-9834-982126e99c8c",
+  "serialNumber": "urn:uuid:93ac8402-2e27-4921-af2c-3c5409d6f691",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-08-11T09:38:34+00:00",
+    "timestamp": "2026-08-11T10:55:26+00:00",
     "tools": {
       "components": [
         {
@@ -20,10 +20,10 @@
       ]
     },
     "component": {
-      "bom-ref": "pkg:oci/beyvra-backend-operational-review@sha256:454dbfc2ed9b640e33af194568ee6c94e77afbeb8298e0c473618448ffc12aef?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
+      "bom-ref": "pkg:oci/beyvra-backend-operational-review@sha256:cdb76a7d9412277fdceca7d19fd455ef6bf2458b2ece094996d487cd3e89a45e?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
       "type": "container",
-      "name": "beyvra-backend-operational-review:15ee29a",
-      "purl": "pkg:oci/beyvra-backend-operational-review@sha256:454dbfc2ed9b640e33af194568ee6c94e77afbeb8298e0c473618448ffc12aef?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
+      "name": "beyvra-backend-operational-review:final-20260811",
+      "purl": "pkg:oci/beyvra-backend-operational-review@sha256:cdb76a7d9412277fdceca7d19fd455ef6bf2458b2ece094996d487cd3e89a45e?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
       "properties": [
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -32,6 +32,10 @@
         {
           "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:38057c1be02ee693ab6e9c991c39c62c60b3b78fc767dd083b58dfaf952b22fc"
+        },
+        {
+          "name": "aquasecurity:trivy:DiffID",
+          "value": "sha256:411f14f95e7c064aa8b886a663d3f00001f88a017bc2a550278b2bf37548a25a"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -59,11 +63,11 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:bb674cfc3bb45d7d479d22b4eba34458bd45e513667c3e7f789cee68c29bb951"
+          "value": "sha256:95b3810dd974bff7107e387f1746402f5e2e75ca242a605dbfaaf9d38a42a497"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:cd635a31ebcff16d22990ee5ee307f9ef55b376116e8ba21daa47d3adba566d3"
+          "value": "sha256:bb674cfc3bb45d7d479d22b4eba34458bd45e513667c3e7f789cee68c29bb951"
         },
         {
           "name": "aquasecurity:trivy:DiffID",
@@ -71,27 +75,23 @@
         },
         {
           "name": "aquasecurity:trivy:DiffID",
-          "value": "sha256:e07ed83fad2c9448456d6bf5fcd2557649806a4ed6e7548f5cf77eefffbab5bf"
-        },
-        {
-          "name": "aquasecurity:trivy:DiffID",
           "value": "sha256:ec88dc830eadd6575b4be551fa78b6528a92abe11b582f5c3473c6229dbd6eda"
         },
         {
           "name": "aquasecurity:trivy:ImageID",
-          "value": "sha256:454dbfc2ed9b640e33af194568ee6c94e77afbeb8298e0c473618448ffc12aef"
+          "value": "sha256:cdb76a7d9412277fdceca7d19fd455ef6bf2458b2ece094996d487cd3e89a45e"
         },
         {
           "name": "aquasecurity:trivy:Reference",
-          "value": "beyvra-backend-operational-review:15ee29a"
+          "value": "beyvra-backend-operational-review:final-20260811"
         },
         {
           "name": "aquasecurity:trivy:RepoDigest",
-          "value": "beyvra-backend-operational-review@sha256:454dbfc2ed9b640e33af194568ee6c94e77afbeb8298e0c473618448ffc12aef"
+          "value": "beyvra-backend-operational-review@sha256:cdb76a7d9412277fdceca7d19fd455ef6bf2458b2ece094996d487cd3e89a45e"
         },
         {
           "name": "aquasecurity:trivy:RepoTag",
-          "value": "beyvra-backend-operational-review:15ee29a"
+          "value": "beyvra-backend-operational-review:final-20260811"
         },
         {
           "name": "aquasecurity:trivy:SchemaVersion",
@@ -99,14 +99,14 @@
         },
         {
           "name": "aquasecurity:trivy:Size",
-          "value": "1013811712"
+          "value": "1013976576"
         }
       ]
     }
   },
   "components": [
     {
-      "bom-ref": "c5f189ed-fba5-4b32-b853-20fb2713106b",
+      "bom-ref": "0cd8ea8a-ff6e-4686-8264-14bf01ca9903",
       "type": "operating-system",
       "name": "debian",
       "version": "13.6",
@@ -15372,7 +15372,7 @@
   ],
   "dependencies": [
     {
-      "ref": "c5f189ed-fba5-4b32-b853-20fb2713106b",
+      "ref": "0cd8ea8a-ff6e-4686-8264-14bf01ca9903",
       "dependsOn": [
         "pkg:deb/debian/apt@3.0.3?arch=amd64&distro=debian-13.6",
         "pkg:deb/debian/bash@5.2.37-2%2Bb9?arch=amd64&distro=debian-13.6",
@@ -16288,9 +16288,9 @@
       ]
     },
     {
-      "ref": "pkg:oci/beyvra-backend-operational-review@sha256:454dbfc2ed9b640e33af194568ee6c94e77afbeb8298e0c473618448ffc12aef?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
+      "ref": "pkg:oci/beyvra-backend-operational-review@sha256:cdb76a7d9412277fdceca7d19fd455ef6bf2458b2ece094996d487cd3e89a45e?arch=amd64&repository_url=index.docker.io%2Flibrary%2Fbeyvra-backend-operational-review",
       "dependsOn": [
-        "c5f189ed-fba5-4b32-b853-20fb2713106b",
+        "0cd8ea8a-ff6e-4686-8264-14bf01ca9903",
         "pkg:pypi/adyen@12.3.0",
         "pkg:pypi/aiohappyeyeballs@2.7.1",
         "pkg:pypi/aiohttp-retry@2.9.1",

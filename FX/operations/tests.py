@@ -27,6 +27,8 @@ from .models import (
     Notification,
     OperatorActionRequest,
     OperatorRole,
+    OutboxEvent,
+    ProcessedEvent,
     PrivacyExportJob,
     ReportJob,
     SecurityEvent,
@@ -34,6 +36,8 @@ from .models import (
     SupportCase,
     SupportCaseEvent,
     TransactionHistoryEntry,
+    TradingHalt,
+    TradeConfirmation,
 )
 from .services import (
     approve_operator_request,
@@ -44,11 +48,16 @@ from .services import (
     evaluate_account_risk,
     execute_operator_request,
     issue_session_token_pair,
+    issue_simulation_statement,
     notification_group,
     realtime_notification_payload,
     record_delivery_failure,
 )
-from .tasks import generate_privacy_export, generate_report_artifact
+from .tasks import (
+    _deliver_notification_outbox_event,
+    generate_privacy_export,
+    generate_report_artifact,
+)
 
 
 def user(email, phone, brand="tenant-a", staff=False):
@@ -107,6 +116,17 @@ class FraudAuthorityTests(TestCase):
         with self.assertRaises(PermissionError):
             assert_sensitive_mutation_allowed(
                 tenant_id="tenant-a", account=self.account, action="withdrawal"
+            )
+
+    def test_active_trading_halt_precedes_account_trading_authority(self):
+        TradingHalt.objects.create(
+            tenant_id="tenant-a",
+            reason="synthetic market integrity incident",
+            activated_by=self.actor,
+        )
+        with self.assertRaisesRegex(PermissionError, "TRADING_HALTED"):
+            assert_sensitive_mutation_allowed(
+                tenant_id="tenant-a", account=self.account, action="trading"
             )
 
 
@@ -366,6 +386,67 @@ class NotificationAuthorityTests(TestCase):
         )
         self.assertEqual(notification.attempts, 5)
 
+    @patch("operations.tasks.publish_realtime_notification")
+    def test_in_app_outbox_delivery_is_idempotent(self, publish):
+        notification, _ = create_notification(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="NEW_DEVICE",
+            category="SECURITY",
+            channel="IN_APP",
+            template_version="1",
+            payload_safe={"action": "review_sessions"},
+            dedup_key="outbox-in-app-1",
+        )
+        event = OutboxEvent.objects.get(
+            topic="notification.created",
+            payload_safe__notification_id=str(notification.pk),
+        )
+        self.assertEqual(_deliver_notification_outbox_event(event.pk), "PUBLISHED")
+        self.assertEqual(
+            _deliver_notification_outbox_event(event.pk), "ALREADY_PUBLISHED"
+        )
+        notification.refresh_from_db()
+        event.refresh_from_db()
+        self.assertEqual(notification.status, "SENT")
+        self.assertIsNotNone(notification.sent_at)
+        self.assertIsNotNone(event.published_at)
+        self.assertEqual(publish.call_count, 1)
+        self.assertEqual(
+            ProcessedEvent.objects.filter(
+                event_id=event.pk,
+                consumer="operations.notification.delivery.v1",
+            ).count(),
+            1,
+        )
+
+    def test_external_channel_is_dead_lettered_without_delivery_claim(self):
+        notification, _ = create_notification(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="PASSWORD_CHANGED",
+            category="SECURITY",
+            channel="EMAIL",
+            template_version="1",
+            payload_safe={"action": "review_sessions"},
+            dedup_key="outbox-email-disabled-1",
+        )
+        event = OutboxEvent.objects.get(
+            topic="notification.created",
+            payload_safe__notification_id=str(notification.pk),
+        )
+        self.assertEqual(_deliver_notification_outbox_event(event.pk), "PUBLISHED")
+        notification.refresh_from_db()
+        self.assertEqual(notification.status, "FAILED")
+        self.assertIsNone(notification.sent_at)
+        self.assertIsNone(notification.delivered_at)
+        self.assertTrue(
+            OutboxEvent.objects.filter(
+                topic="notification.dead_letter",
+                payload_safe__notification_id=str(notification.pk),
+            ).exists()
+        )
+
 
 class OperatorAuthorityTests(TestCase):
     def setUp(self):
@@ -390,6 +471,7 @@ class OperatorAuthorityTests(TestCase):
         with self.assertRaisesRegex(PermissionError, "SELF_APPROVAL_FORBIDDEN"):
             approve_operator_request(
                 request_id=action.pk,
+                tenant_id="tenant-a",
                 approver=self.maker,
                 approver_roles={"security_manager"},
             )
@@ -398,6 +480,7 @@ class OperatorAuthorityTests(TestCase):
         action = self.action()
         approved = approve_operator_request(
             request_id=action.pk,
+            tenant_id="tenant-a",
             approver=self.checker,
             approver_roles={"security_manager"},
         )
@@ -405,9 +488,34 @@ class OperatorAuthorityTests(TestCase):
         with self.assertRaises(PermissionError):
             approve_operator_request(
                 request_id=action.pk,
+                tenant_id="tenant-a",
                 approver=self.checker,
                 approver_roles={"security_manager"},
             )
+
+    def test_action_approval_is_tenant_bound(self):
+        action = self.action()
+        with self.assertRaises(OperatorActionRequest.DoesNotExist):
+            approve_operator_request(
+                request_id=action.pk,
+                tenant_id="tenant-b",
+                approver=self.checker,
+                approver_roles={"security_manager"},
+            )
+        action.refresh_from_db()
+        self.assertEqual(action.status, "PENDING")
+
+    def test_action_approval_requires_the_matching_domain_manager(self):
+        action = self.action()
+        with self.assertRaisesRegex(PermissionError, "INSUFFICIENT_ROLE"):
+            approve_operator_request(
+                request_id=action.pk,
+                tenant_id="tenant-a",
+                approver=self.checker,
+                approver_roles={"support_manager", "compliance_manager"},
+            )
+        action.refresh_from_db()
+        self.assertEqual(action.status, "PENDING")
 
     def test_approved_unfreeze_executes_once_with_audit_hashes(self):
         freeze = AccountFreeze.objects.create(
@@ -427,11 +535,13 @@ class OperatorAuthorityTests(TestCase):
         )
         approve_operator_request(
             request_id=action.pk,
+            tenant_id="tenant-a",
             approver=self.checker,
             approver_roles={"security_manager"},
         )
         executed = execute_operator_request(
             request_id=action.pk,
+            tenant_id="tenant-a",
             executor=self.checker,
             executor_roles={"security_manager"},
         )
@@ -444,6 +554,7 @@ class OperatorAuthorityTests(TestCase):
         with self.assertRaises(PermissionError):
             execute_operator_request(
                 request_id=action.pk,
+                tenant_id="tenant-a",
                 executor=self.checker,
                 executor_roles={"security_manager"},
             )
@@ -459,14 +570,16 @@ class OperatorAuthorityTests(TestCase):
         )
         approve_operator_request(
             request_id=action.pk,
+            tenant_id="tenant-a",
             approver=self.checker,
-            approver_roles={"security_manager"},
+            approver_roles={"operations_manager"},
         )
         with self.assertRaisesRegex(PermissionError, "EXTERNAL_AUTHORITY_REQUIRED"):
             execute_operator_request(
                 request_id=action.pk,
+                tenant_id="tenant-a",
                 executor=self.checker,
-                executor_roles={"security_manager"},
+                executor_roles={"operations_manager"},
             )
         action.refresh_from_db()
         self.assertEqual(action.status, "APPROVED")
@@ -511,6 +624,7 @@ class OperatorAuthorityTests(TestCase):
         action = self.action()
         approve_operator_request(
             request_id=action.pk,
+            tenant_id="tenant-a",
             approver=self.checker,
             approver_roles={"security_manager"},
         )
@@ -608,6 +722,267 @@ class OperatorAuthorityTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertFalse(AccountFreeze.objects.filter(account=outsider).exists())
+
+    def test_wrong_tenant_operator_cannot_approve_action_by_id(self):
+        action = self.action()
+        outsider = user(
+            "tenant-b-security@example.test",
+            "+10000000046",
+            brand="tenant-b",
+            staff=True,
+        )
+        OperatorRole.objects.create(
+            user=outsider, tenant_id="tenant-b", role="security_manager"
+        )
+        client = APIClient()
+        client.force_authenticate(outsider)
+        response = client.post(
+            f"/api/internal/v1/actions/{action.pk}/approve",
+            HTTP_X_BEYVRA_TENANT="tenant-b",
+        )
+        self.assertEqual(response.status_code, 403)
+        action.refresh_from_db()
+        self.assertEqual(action.status, "PENDING")
+
+    def test_support_manager_cannot_request_security_action_or_create_legal_hold(self):
+        support = user(
+            "support-manager@example.test", "+10000000047", staff=True
+        )
+        OperatorRole.objects.create(
+            user=support, tenant_id="tenant-a", role="support_manager"
+        )
+        client = APIClient()
+        client.force_authenticate(support)
+        request_response = client.post(
+            "/api/internal/v1/actions",
+            {
+                "action_type": "UNFREEZE",
+                "target_ref": f"account:{self.maker.pk}",
+                "reason": "not a support authority",
+            },
+            format="json",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        hold_response = client.post(
+            f"/api/internal/v1/accounts/{self.maker.pk}/legal-holds",
+            {"reason": "not a support authority"},
+            format="json",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        self.assertEqual(request_response.status_code, 403)
+        self.assertEqual(hold_response.status_code, 403)
+        self.assertFalse(LegalHold.objects.filter(account=self.maker).exists())
+
+    def test_safe_account_summary_is_tenant_bound_and_contains_no_direct_pii(self):
+        client = APIClient()
+        client.force_authenticate(self.checker)
+        response = client.get(
+            f"/api/internal/v1/accounts/{self.maker.pk}/summary",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["account_ref"], str(self.maker.pk))
+        serialized = json.dumps(response.data).lower()
+        self.assertNotIn(self.maker.email.lower(), serialized)
+        self.assertNotIn("phone_number", serialized)
+        self.assertNotIn("password", serialized)
+        outsider = user(
+            "summary-outsider@example.test", "+10000000048", brand="tenant-b"
+        )
+        self.assertEqual(
+            client.get(
+                f"/api/internal/v1/accounts/{outsider.pk}/summary",
+                HTTP_X_BEYVRA_TENANT="tenant-a",
+            ).status_code,
+            404,
+        )
+
+    def test_support_audit_timeline_is_filtered_by_domain(self):
+        support = user("audit-support@example.test", "+10000000049", staff=True)
+        OperatorRole.objects.create(
+            user=support, tenant_id="tenant-a", role="support_viewer"
+        )
+        AuditEvent.objects.create(
+            tenant_id="tenant-a",
+            actor=self.checker,
+            action="SUPPORT_CASE_CREATED",
+            target="case:safe",
+        )
+        AuditEvent.objects.create(
+            tenant_id="tenant-a",
+            actor=self.checker,
+            action="ACCOUNT_FROZEN",
+            target="account:safe",
+        )
+        client = APIClient()
+        client.force_authenticate(support)
+        response = client.get(
+            "/api/internal/v1/audit-timeline",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        self.assertEqual(response.status_code, 200)
+        actions = {row["action"] for row in response.data}
+        self.assertIn("SUPPORT_CASE_CREATED", actions)
+        self.assertNotIn("ACCOUNT_FROZEN", actions)
+
+    def test_emergency_halt_release_requires_independent_operations_authority(self):
+        maker = user("halt-maker@example.test", "+10000000050", staff=True)
+        checker = user("halt-checker@example.test", "+10000000051", staff=True)
+        OperatorRole.objects.create(
+            user=maker, tenant_id="tenant-a", role="operations_manager"
+        )
+        OperatorRole.objects.create(
+            user=checker, tenant_id="tenant-a", role="operations_manager"
+        )
+        client = APIClient()
+        client.force_authenticate(maker)
+        halted = client.post(
+            "/api/internal/v1/trading/halt",
+            {"reason": "synthetic incident fixture"},
+            format="json",
+            HTTP_X_BEYVRA_TENANT="tenant-a",
+        )
+        self.assertEqual(halted.status_code, 201)
+        action = OperatorActionRequest.objects.create(
+            tenant_id="tenant-a",
+            action_type="KILL_SWITCH_RELEASE",
+            target_ref=f"trading_halt:{halted.data['halt_id']}",
+            requested_by=maker,
+            reason="independent recovery review",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        approve_operator_request(
+            request_id=action.pk,
+            tenant_id="tenant-a",
+            approver=checker,
+            approver_roles={"operations_manager"},
+        )
+        execute_operator_request(
+            request_id=action.pk,
+            tenant_id="tenant-a",
+            executor=checker,
+            executor_roles={"operations_manager"},
+        )
+        halt = TradingHalt.objects.get(pk=halted.data["halt_id"])
+        self.assertIsNotNone(halt.released_at)
+        self.assertEqual(halt.released_by, checker)
+
+    def test_legal_hold_release_requires_independent_compliance_authority(self):
+        maker = user("hold-maker@example.test", "+10000000052", staff=True)
+        checker = user("hold-checker@example.test", "+10000000053", staff=True)
+        hold = LegalHold.objects.create(
+            tenant_id="tenant-a",
+            account=self.maker,
+            reason="synthetic legal hold fixture",
+            created_by=maker,
+        )
+        action = OperatorActionRequest.objects.create(
+            tenant_id="tenant-a",
+            action_type="LEGAL_HOLD_RELEASE",
+            target_ref=f"legal_hold:{hold.pk}",
+            requested_by=maker,
+            reason="independent release review",
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+        approve_operator_request(
+            request_id=action.pk,
+            tenant_id="tenant-a",
+            approver=checker,
+            approver_roles={"compliance_manager"},
+        )
+        execute_operator_request(
+            request_id=action.pk,
+            tenant_id="tenant-a",
+            executor=checker,
+            executor_roles={"compliance_manager"},
+        )
+        hold.refresh_from_db()
+        self.assertFalse(hold.active)
+        self.assertEqual(hold.released_by, checker)
+
+
+class ReportingAuthorityTests(TestCase):
+    def setUp(self):
+        self.account = user("statement-account@example.test", "+10000000054")
+        self.operator = user("financial-manager@example.test", "+10000000055", staff=True)
+        OperatorRole.objects.create(
+            user=self.operator, tenant_id="tenant-a", role="financial_manager"
+        )
+
+    def test_simulation_statement_correction_creates_new_immutable_version(self):
+        start = timezone.now() - timedelta(days=30)
+        end = timezone.now()
+        original = issue_simulation_statement(
+            tenant_id="tenant-a",
+            account=self.account,
+            period_start=start,
+            period_end=end,
+            actor=self.operator,
+        )
+        correction = issue_simulation_statement(
+            tenant_id="tenant-a",
+            account=self.account,
+            period_start=start,
+            period_end=end,
+            actor=self.operator,
+            supersedes=original,
+            reason="synthetic correction fixture",
+        )
+        self.assertEqual(correction.statement_id, original.statement_id)
+        self.assertEqual(correction.version, 2)
+        self.assertEqual(correction.supersedes, original)
+        self.assertTrue(correction.simulation)
+        self.assertTrue(correction.reconciliation_passed)
+        self.assertEqual(Statement.objects.count(), 2)
+
+    def test_real_history_prevents_local_statement_authority(self):
+        TransactionHistoryEntry.objects.create(
+            tenant_id="tenant-a",
+            account=self.account,
+            type="SETTLEMENT",
+            asset="USD",
+            amount=Decimal("1.00"),
+            status="SETTLED",
+            occurred_at=timezone.now(),
+            source_ref="financial-authority-fixture",
+            simulation=False,
+        )
+        with self.assertRaisesRegex(
+            PermissionError, "FINANCIAL_SERVICE_AUTHORITY_REQUIRED"
+        ):
+            issue_simulation_statement(
+                tenant_id="tenant-a",
+                account=self.account,
+                period_start=timezone.now() - timedelta(days=1),
+                period_end=timezone.now() + timedelta(seconds=1),
+                actor=self.operator,
+            )
+
+    def test_trade_confirmation_api_is_owner_and_tenant_scoped(self):
+        confirmation = TradeConfirmation.objects.create(
+            tenant_id="tenant-a",
+            account=self.account,
+            order_ref="demo-order-1",
+            instrument="BTC-USD",
+            side="BUY",
+            quantity=Decimal("0.010000000000000000"),
+            price=Decimal("25000.000000000000000000"),
+            fee=Decimal("1.250000000000000000"),
+            executed_at=timezone.now(),
+            simulation=True,
+        )
+        client = APIClient()
+        client.force_authenticate(self.account)
+        response = client.get("/api/v1/reports/trade-confirmations")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["trade_id"], str(confirmation.pk))
+        outsider = user(
+            "confirmation-outsider@example.test", "+10000000056", brand="tenant-b"
+        )
+        client.force_authenticate(outsider)
+        self.assertEqual(
+            client.get("/api/v1/reports/trade-confirmations").data["count"], 0
+        )
 
     def test_default_tenant_operator_can_target_null_brand_account(self):
         account = user("default-account@example.test", "+10000000037", brand=None)

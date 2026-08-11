@@ -49,6 +49,30 @@ class IsSupportAgent(IsScopedOperator):
     allowed_roles = frozenset({"support_agent", "support_manager", "platform_admin"})
 
 
+class IsComplianceManager(IsScopedOperator):
+    allowed_roles = frozenset({"compliance_manager", "platform_admin"})
+
+
+class IsComplianceOperator(IsScopedOperator):
+    allowed_roles = frozenset(
+        {"compliance_viewer", "compliance_analyst", "compliance_manager", "platform_admin"}
+    )
+
+
+class IsFinancialOperator(IsScopedOperator):
+    allowed_roles = frozenset(
+        {"financial_viewer", "financial_operations", "financial_manager", "platform_admin"}
+    )
+
+
+class IsFinancialManager(IsScopedOperator):
+    allowed_roles = frozenset({"financial_manager", "platform_admin"})
+
+
+class IsOperationsManager(IsScopedOperator):
+    allowed_roles = frozenset({"operations_manager", "platform_admin"})
+
+
 class IsManagerOperator(IsScopedOperator):
     allowed_roles = frozenset(
         {

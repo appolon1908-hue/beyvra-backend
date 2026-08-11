@@ -2,12 +2,11 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.core.validators import MinLengthValidator
 from django.utils import timezone
-from operations.services import record_login_failure
+from operations.services import evaluate_login_risk, record_login_failure
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from security.login_anomaly_detection import AnomalyDetector
 from security.utils import password_check_policy
 from users import messages
 from users.models import TwoFactorAuthType, UserDeviceInfo
@@ -242,13 +241,6 @@ class LoginSerializer(serializers.Serializer):
         if email and password:
             user = get_user_model().objects.filter(email=email).first()
             if user is not None:
-                # check for user anomalies
-                detector = AnomalyDetector(user)
-                if not detector.check_for_anomalies():
-                    raise serializers.ValidationError(
-                        messages.ANOMALY_DETECTED,
-                        code="anomaly_detected",
-                    )
                 if not check_password(password, user.password):
                     record_login_failure(user=user)
                     raise AuthenticationFailed("Invalid credentials.")
@@ -256,6 +248,11 @@ class LoginSerializer(serializers.Serializer):
                     raise serializers.ValidationError(
                         messages.USER_BANNED_CONTACT_SUPPORT
                     )
+                risk_decision = evaluate_login_risk(
+                    account=user, request=self.context.get("request")
+                )
+                if risk_decision.decision in {"DENY", "REVIEW"}:
+                    raise AuthenticationFailed("Invalid credentials.")
             else:
                 raise AuthenticationFailed("Invalid credentials.")
         else:
@@ -264,6 +261,7 @@ class LoginSerializer(serializers.Serializer):
                 code="authorization",
             )
         data["user"] = user
+        data["risk_decision"] = risk_decision
         return data
 
     def save(self, request):
