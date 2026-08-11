@@ -3,6 +3,7 @@ import tempfile
 import uuid
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -565,6 +566,29 @@ class OperatorAuthorityTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertFalse(AccountFreeze.objects.filter(account=outsider).exists())
 
+    def test_default_tenant_operator_can_target_null_brand_account(self):
+        account = user("default-account@example.test", "+10000000037", brand=None)
+        operator = user(
+            "default-security@example.test", "+10000000038", brand=None, staff=True
+        )
+        OperatorRole.objects.create(
+            user=operator, tenant_id="default", role="security_manager"
+        )
+        client = APIClient()
+        client.force_authenticate(operator)
+        response = client.post(
+            f"/api/internal/v1/accounts/{account.pk}/freeze",
+            {"level": "FULL", "reason_code": "ACCOUNT_REVIEW_REQUIRED"},
+            format="json",
+            HTTP_X_BEYVRA_TENANT="default",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            AccountFreeze.objects.filter(
+                tenant_id="default", account=account, released_at__isnull=True
+            ).exists()
+        )
+
     def test_operator_without_mfa_cannot_access_internal_api(self):
         operator = user("no-mfa@example.test", "+10000000036", staff=False)
         operator.is_staff = True
@@ -656,6 +680,25 @@ class PrivateArtifactTests(TestCase):
         self.client.force_authenticate(self.other)
         response = self.client.get(f"/api/v1/reports/exports/{job.pk}/download")
         self.assertEqual(response.status_code, 404)
+
+    def test_artifact_failure_is_bounded_and_job_is_not_left_running(self):
+        job = ReportJob.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            report_type="ACTIVITY",
+            parameters_hash="0" * 64,
+            idempotency_key="report-storage-failure",
+            reconciliation_passed=True,
+        )
+        with patch(
+            "operations.tasks.write_private_artifact",
+            side_effect=PermissionError("private storage unavailable"),
+        ):
+            with self.assertRaises(PermissionError):
+                generate_report_artifact.run(str(job.pk))
+        self.assertEqual(generate_report_artifact.max_retries, 3)
+        job.refresh_from_db()
+        self.assertEqual(job.status, "FAILED")
 
     def test_privacy_export_excludes_internal_support_notes(self):
         case = SupportCase.objects.create(

@@ -61,6 +61,7 @@ from .services import (
     reconcile_operational_domains,
     revoke_bound_session,
     stable_hash,
+    tenant_account_q,
     tenant_for,
 )
 
@@ -516,7 +517,7 @@ class OperatorFreeze(APIView):
             "X-Beyvra-Tenant", tenant_for(request.user)
         ).lower()
         account = get_object_or_404(
-            get_user_model(), pk=account_id, brand__iexact=tenant
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
         )
         level = request.data.get("level", "FULL")
         if level not in {"PARTIAL", "FULL"}:
@@ -793,7 +794,7 @@ class OperatorLegalHold(APIView):
     def post(self, request, account_id):
         tenant = operator_tenant(request)
         account = get_object_or_404(
-            get_user_model(), pk=account_id, brand__iexact=tenant
+            get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
         )
         hold = LegalHold.objects.create(
             tenant_id=tenant,

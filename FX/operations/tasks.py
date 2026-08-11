@@ -37,8 +37,7 @@ REPORT_FIELDS = (
 )
 
 
-@shared_task(name="operations.generate_report_artifact")
-def generate_report_artifact(job_id):
+def _generate_report_artifact(job_id):
     with transaction.atomic():
         job = ReportJob.objects.select_for_update().select_related("account").get(
             job_id=job_id
@@ -90,8 +89,24 @@ def generate_report_artifact(job_id):
     return "COMPLETED"
 
 
-@shared_task(name="operations.generate_privacy_export")
-def generate_privacy_export(job_id):
+@shared_task(
+    bind=True,
+    name="operations.generate_report_artifact",
+    max_retries=3,
+)
+def generate_report_artifact(self, job_id):
+    try:
+        return _generate_report_artifact(job_id)
+    except Exception as exc:
+        ReportJob.objects.filter(job_id=job_id).update(status="FAILED")
+        if self.request.retries < self.max_retries:
+            raise self.retry(
+                exc=exc, countdown=min(2 ** (self.request.retries + 1), 30)
+            )
+        raise
+
+
+def _generate_privacy_export(job_id):
     with transaction.atomic():
         job = PrivacyExportJob.objects.select_for_update().select_related("account").get(
             job_id=job_id
@@ -182,3 +197,20 @@ def generate_privacy_export(job_id):
             target=str(job.job_id),
         )
     return "COMPLETED"
+
+
+@shared_task(
+    bind=True,
+    name="operations.generate_privacy_export",
+    max_retries=3,
+)
+def generate_privacy_export(self, job_id):
+    try:
+        return _generate_privacy_export(job_id)
+    except Exception as exc:
+        PrivacyExportJob.objects.filter(job_id=job_id).update(status="FAILED")
+        if self.request.retries < self.max_retries:
+            raise self.retry(
+                exc=exc, countdown=min(2 ** (self.request.retries + 1), 30)
+            )
+        raise

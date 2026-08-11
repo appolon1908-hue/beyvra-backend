@@ -9,6 +9,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from .metrics import (
@@ -68,6 +69,14 @@ REAL_FEATURE_FLAGS = {
 
 def tenant_for(user):
     return (getattr(user, "brand", None) or "default").strip().lower()
+
+
+def tenant_account_q(tenant_id):
+    """Match persisted accounts using the same default-tenant semantics as tenant_for."""
+    normalized = tenant_id.strip().lower()
+    if normalized == "default":
+        return Q(brand__isnull=True) | Q(brand="") | Q(brand__iexact="default")
+    return Q(brand__iexact=normalized)
 
 
 @transaction.atomic
@@ -495,7 +504,7 @@ def execute_operator_request(*, request_id, executor, executor_roles):
         raise PermissionError("INVALID_TARGET")
     account = (
         get_user_model()
-        .objects.filter(pk=int(raw_account_id), brand__iexact=request.tenant_id)
+        .objects.filter(tenant_account_q(request.tenant_id), pk=int(raw_account_id))
         .first()
     )
     if account is None:
