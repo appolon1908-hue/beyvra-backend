@@ -61,7 +61,7 @@ REALTIME_V2_V1_FALLBACK_ENABLED = os.getenv("REALTIME_V2_V1_FALLBACK_ENABLED", "
 CENTRIFUGO_ENABLED = os.getenv("CENTRIFUGO_ENABLED", "false").lower() == "true"
 NATS_JETSTREAM_ENABLED = os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() == "true"
 PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "false").lower() == "true"
-REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
+REAL_MONEY_ENABLED = False
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 REAL_TRADING_ENABLED = False
 EXTERNAL_EXECUTION_ENABLED = False

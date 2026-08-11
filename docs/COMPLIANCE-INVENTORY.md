@@ -15,6 +15,7 @@ Inventory date: 2026-08-11. Scope: canonical backend and client portal. Financia
 | Old KYC screens/hooks | client `api/kyc`, KYC pages | UI_ONLY / LEGACY | Submission UI only; canonical summary comes from compliance APIs. |
 | Frontend trading checks | platform chart container | UI_ONLY | Convenience only; server remains authority. |
 | AML, sanctions, jurisdiction, restrictions, cases, overrides | no prior persisted authority | MISSING | Implemented by canonical compliance app. |
-| Compliance websocket event schemas | no prior schemas | MISSING | Added safe private channel registry contracts/outbox event types. |
+| Shared transactional outbox | `FX/apps/foundation/models.py`, publisher | AUTHORITATIVE | Compliance mutations enqueue safe private events through the shared outbox; the duplicate compliance-local outbox was removed. |
+| Compliance websocket event schemas | no prior schemas | MISSING | Added safe private channel registry contracts and user-scoped event channels. |
 
 Search terms included `is_verified`, KYC, AML, sanctions, compliance, restricted, blocked, approved, rejected, review, risk, country, jurisdiction, and capability booleans across models, routes, admin code, frontend, flags, migrations, and integrations.

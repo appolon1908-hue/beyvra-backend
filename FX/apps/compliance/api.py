@@ -9,7 +9,9 @@ import hashlib, hmac, json, time
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from rest_framework.permissions import AllowAny
-from .models import ComplianceInboxEvent
+from .models import ComplianceInboxEvent, ComplianceProfile
+from .services import transition_kyc
+from .domain import KycState
 
 def _profile(request):
     org_id = OrganizationMembership.objects.filter(user=request.user).order_by("id").values_list("organization_id", flat=True).first()
@@ -54,6 +56,19 @@ class ComplianceWebhookView(APIView):
         event_id = request.headers.get("X-Compliance-Event-ID", "")
         if not event_id: return Response({"error":{"code":"INVALID_WEBHOOK"}}, status=400)
         try:
-            with transaction.atomic(): ComplianceInboxEvent.objects.create(provider=provider_key, provider_event_id=event_id, payload_hash=hashlib.sha256(request.body).hexdigest(), processed_at=timezone.now())
+            payload=json.loads(request.body or b"{}")
+        except (ValueError,TypeError): return Response({"error":{"code":"INVALID_WEBHOOK"}},status=400)
+        try:
+            with transaction.atomic():
+                inbox=ComplianceInboxEvent.objects.create(provider=provider_key, provider_event_id=event_id, payload_hash=hashlib.sha256(request.body).hexdigest())
+                if payload.get("type")=="verification.updated":
+                    profile=ComplianceProfile.objects.filter(pk=payload.get("account_ref")).first()
+                    mapping={"pending":KycState.PENDING,"review":KycState.IN_REVIEW,"approved":KycState.APPROVED,"rejected":KycState.REJECTED,"expired":KycState.EXPIRED}
+                    result=mapping.get(payload.get("result"))
+                    reference=str(payload.get("verification_ref",""))[:255]
+                    if not profile or not result or not reference: raise ValueError("INVALID_PROVIDER_RESULT")
+                    transition_kyc(profile.pk,result,actor_ref=f"PROVIDER:{provider_key}",evidence_ref=reference)
+                inbox.processed_at=timezone.now(); inbox.save(update_fields=["processed_at"])
         except IntegrityError: return Response({"status":"duplicate"}, status=200)
+        except ValueError: return Response({"error":{"code":"INVALID_PROVIDER_RESULT"}},status=409)
         return Response({"status":"accepted"}, status=202)

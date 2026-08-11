@@ -55,3 +55,15 @@ class EligibilityDecisionValue:
 # Compatibility aliases; not authoritative.
 KycStatus = KycState
 ScreeningStatus = AmlState
+
+@dataclass(frozen=True)
+class ComplianceEligibility:
+    """Legacy value object retained for import compatibility; persisted policy is authoritative."""
+    kyc_status: KycState
+    aml_status: AmlState
+    sanctions_status: AmlState
+    trading_eligible: bool
+    deposit_eligible: bool
+    withdrawal_eligible: bool
+    def permits_trading(self):
+        return self.kyc_status==KycState.APPROVED and self.aml_status==AmlState.CLEARED and self.sanctions_status==AmlState.CLEARED and self.trading_eligible

@@ -83,7 +83,7 @@ class ComplianceCaseEvent(models.Model):
 class ComplianceOverride(models.Model):
     override_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.ForeignKey(ComplianceProfile, on_delete=models.PROTECT, related_name="overrides")
-    control = models.CharField(max_length=40); previous_state = models.CharField(max_length=64); new_state = models.CharField(max_length=64)
+    control = models.CharField(max_length=80); previous_state = models.CharField(max_length=64); new_state = models.CharField(max_length=64)
     reason = models.CharField(max_length=255); requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="compliance_overrides_requested")
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="compliance_overrides_approved")
     requested_at = models.DateTimeField(auto_now_add=True); approved_at = models.DateTimeField(null=True, blank=True); expires_at = models.DateTimeField(null=True, blank=True)
@@ -108,11 +108,6 @@ class ComplianceAuditEvent(models.Model):
         if self.pk and ComplianceAuditEvent.objects.filter(pk=self.pk).exists(): raise ValueError("AUDIT_EVENTS_ARE_IMMUTABLE")
         return super().save(*args, **kwargs)
     def delete(self, *args, **kwargs): raise ValueError("AUDIT_EVENTS_ARE_IMMUTABLE")
-
-
-class ComplianceOutboxEvent(models.Model):
-    event_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False); account = models.ForeignKey(ComplianceProfile, on_delete=models.PROTECT)
-    event_type = models.CharField(max_length=64); payload = models.JSONField(default=dict); created_at = models.DateTimeField(auto_now_add=True); published_at = models.DateTimeField(null=True, blank=True)
 
 
 class ComplianceInboxEvent(models.Model):

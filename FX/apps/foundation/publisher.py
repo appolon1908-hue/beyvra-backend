@@ -8,13 +8,16 @@ from .services import claim_outbox_batch, mark_publish_result
 
 
 def envelope(event):
-    return {
+    result = {
         "event_id": str(event.event_id), "event_type": event.event_type,
         "schema_version": event.schema_version, "occurred_at": event.occurred_at.isoformat(),
         "correlation_id": str(event.correlation_id),
         "causation_id": str(event.causation_id) if event.causation_id else None,
         "tenant_ref": event.tenant_ref, "payload": event.payload,
     }
+    if event.event_type.startswith("compliance."):
+        result.update({"type":"event","channel":event.payload.get("channel"),"data":event.payload.get("data",{})})
+    return result
 
 
 async def _publish(rows):
@@ -26,7 +29,7 @@ async def _publish(rows):
     try:
         for event in rows:
             try:
-                subject = f"application.{event.event_type}"
+                subject = f"private.{event.event_type}" if event.event_type.startswith("compliance.") else f"application.{event.event_type}"
                 await stream.publish(subject, json.dumps(envelope(event), separators=(",", ":"), default=str).encode(), headers={"Nats-Msg-Id": str(event.event_id)})
                 results.append((event, ""))
             except Exception as exc:
