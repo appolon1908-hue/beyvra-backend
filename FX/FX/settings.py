@@ -171,7 +171,20 @@ INSTALLED_APPS = [
     "apps.trading",
     "apps.compliance",
     "operations",
+    "treasury",
 ]
+
+# Treasury is an application-side simulation/read-model boundary. These flags
+# are deliberately non-overridable in this candidate: live authority belongs
+# to Financial Service and separately approved providers.
+REAL_TREASURY_TRANSFERS_ENABLED = False
+REAL_CASH_MANAGEMENT_ENABLED = False
+REAL_COLLATERAL_MOVEMENT_ENABLED = False
+REAL_INTRADAY_FUNDING_ENABLED = False
+REAL_CREDIT_ENABLED = False
+REAL_SETTLEMENT_ENABLED = False
+LIVE_CUSTODY_ENABLED = False
+LIVE_CLEARING_ENABLED = False
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
