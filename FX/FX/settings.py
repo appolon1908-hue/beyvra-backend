@@ -282,6 +282,11 @@ if STAGING_WEBHOOK_RECEIVER_SECRET_FILE:
     except OSError:
         STAGING_WEBHOOK_RECEIVER_SECRET = ""
 STAGING_WEBHOOK_RECEIVER_ENABLED = API_ENV == "staging" and bool(STAGING_WEBHOOK_RECEIVER_SECRET)
+if STAGING_WEBHOOK_RECEIVER_ENABLED:
+    # The isolated staging receiver is fixture-only. Reuse its mounted secret
+    # for the canonical webhook contract without enabling any real provider.
+    PLATFORM_WEBHOOK_SECRETS = {"fixture": [STAGING_WEBHOOK_RECEIVER_SECRET]}
+    PLATFORM_WEBHOOK_EVENT_TYPES = {"fixture:notification": ["delivery.updated"]}
 DATA_ENCRYPTION_KEY_FILE = os.getenv("DATA_ENCRYPTION_KEY_FILE", "")
 API_TOKEN_PEPPER_FILE = os.getenv("API_TOKEN_PEPPER_FILE", "")
 WEBHOOK_MASTER_KEY_FILE = os.getenv("WEBHOOK_MASTER_KEY_FILE", "")
