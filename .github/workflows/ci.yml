@@ -47,6 +47,8 @@ jobs:
         run: pip install -r FX/requirements.txt pip-audit bandit
       - name: Compile Python sources
         run: python -m compileall -q FX
+      - name: Validate pinned Financial Service consumer contract
+        run: python scripts/validate_financial_service_contract.py --require-pinned
       - name: Run Django checks and security regression tests
         working-directory: FX
         env:
