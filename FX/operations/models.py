@@ -17,12 +17,22 @@ class TenantAccountModel(models.Model):
         abstract = True
 
 
-class ImmutableModel(models.Model):
+class ProtectedDeleteModel(models.Model):
     class Meta:
         abstract = True
 
     def delete(self, *args, **kwargs):
         raise ValidationError("Append-only records cannot be deleted")
+
+
+class ImmutableModel(ProtectedDeleteModel):
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError("Append-only records cannot be updated")
+        return super().save(*args, **kwargs)
 
 
 class SecurityEvent(TenantAccountModel, ImmutableModel):
@@ -379,7 +389,7 @@ class OperatorRole(models.Model):
         ]
 
 
-class OperatorActionRequest(ImmutableModel):
+class OperatorActionRequest(ProtectedDeleteModel):
     request_id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     tenant_id = models.CharField(max_length=120, db_index=True)
     action_type = models.CharField(max_length=64)
@@ -419,11 +429,6 @@ class AuditEvent(ImmutableModel):
     before_state_hash = models.CharField(max_length=64, blank=True)
     after_state_hash = models.CharField(max_length=64, blank=True)
     metadata_safe = models.JSONField(default=dict)
-
-    def save(self, *args, **kwargs):
-        if self.pk and AuditEvent.objects.filter(pk=self.pk).exists():
-            raise ValidationError("Audit events are immutable")
-        return super().save(*args, **kwargs)
 
 
 class OutboxEvent(models.Model):

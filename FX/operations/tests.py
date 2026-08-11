@@ -7,6 +7,7 @@ from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import DatabaseError, connection, transaction
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -23,6 +24,7 @@ from .models import (
     Notification,
     OperatorActionRequest,
     OperatorRole,
+    Statement,
     SupportCase,
     SupportCaseEvent,
     TransactionHistoryEntry,
@@ -414,6 +416,44 @@ class OperatorAuthorityTests(TestCase):
             audit.save()
         with self.assertRaises(ValidationError):
             audit.delete()
+
+    def test_postgresql_rejects_bulk_audit_mutation(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("PostgreSQL trigger certification")
+        audit = AuditEvent.objects.create(
+            tenant_id="tenant-a", actor=self.checker, action="TEST", target="safe"
+        )
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            AuditEvent.objects.filter(pk=audit.pk).update(reason="bypass")
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            AuditEvent.objects.filter(pk=audit.pk).delete()
+
+    def test_statement_is_immutable_after_issue(self):
+        statement = Statement.objects.create(
+            tenant_id="tenant-a",
+            account=self.maker,
+            period_start=timezone.now() - timedelta(days=30),
+            period_end=timezone.now(),
+            simulation=True,
+            reconciliation_passed=True,
+        )
+        statement.correction_reason = "silent replacement"
+        with self.assertRaises(ValidationError):
+            statement.save()
+        with self.assertRaises(ValidationError):
+            statement.delete()
+
+    def test_operator_action_request_uses_governed_mutable_state(self):
+        action = self.action()
+        approve_operator_request(
+            request_id=action.pk,
+            approver=self.checker,
+            approver_roles={"security_manager"},
+        )
+        action.refresh_from_db()
+        self.assertEqual(action.status, "APPROVED")
+        with self.assertRaises(ValidationError):
+            action.delete()
 
     def test_support_agent_can_escalate_but_customer_cannot_use_operator_api(self):
         account = user("supported@example.test", "+10000000033")
