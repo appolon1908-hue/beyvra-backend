@@ -21,6 +21,9 @@ def financial_database_isolation(_app_configs=None, **_kwargs):
         "REAL_TRADING_ENABLED",
         "EXTERNAL_EXECUTION_ENABLED",
         "REAL_MONEY_ENABLED",
+        "POLYGON_OMS_ENABLED",
+        "POLYGON_OMS_PRODUCTION_ENABLED",
+        "CROSS_CHAIN_TRANSFERS_ENABLED",
     )
     if any(getattr(settings, flag, False) for flag in safety_flags):
         errors.append(Error("P0 real-money and execution flags must remain disabled.", id="codestra.E003"))
@@ -35,4 +38,8 @@ def financial_database_isolation(_app_configs=None, **_kwargs):
                 id="codestra.E004",
             )
         )
+    if not getattr(settings, "POLYGON_OMS_HALTED", True):
+        errors.append(Error("Polygon OMS kill switch must remain active.", id="codestra.E005"))
+    if not getattr(settings, "ALL_FINANCIAL_MUTATIONS_HALTED", True):
+        errors.append(Error("Global financial mutation halt must remain active.", id="codestra.E006"))
     return errors
