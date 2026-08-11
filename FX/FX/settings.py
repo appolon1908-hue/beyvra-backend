@@ -235,6 +235,9 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = "/app/static"
+OPERATIONS_PRIVATE_ARTIFACT_ROOT = os.getenv(
+    "OPERATIONS_PRIVATE_ARTIFACT_ROOT", "/var/lib/beyvra/private-artifacts"
+)
 
 
 # Default primary key field type

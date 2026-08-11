@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -9,6 +10,8 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from .artifacts import open_private_artifact
 
 from .models import (
     AccountDeletionRequest,
@@ -257,6 +260,11 @@ class ReportJobListCreate(TenantMixin, generics.ListCreateAPIView):
                 },
                 status=400,
             )
+        if len(idempotency_key) > 128:
+            raise ValidationError("Invalid idempotency key")
+        if report_type not in {"ACTIVITY", "TRANSACTIONS", "TRADE", "FEE"}:
+            raise ValidationError("Invalid report type")
+        reconciliation = reconcile_operational_domains(tenant_id=self.tenant_id())
         job, created = ReportJob.objects.get_or_create(
             tenant_id=self.tenant_id(),
             account=request.user,
@@ -264,9 +272,47 @@ class ReportJobListCreate(TenantMixin, generics.ListCreateAPIView):
             defaults={
                 "report_type": report_type,
                 "parameters_hash": stable_hash(request.data),
+                "reconciliation_passed": all(
+                    check.status == "PASS" for check in reconciliation
+                ),
             },
         )
+        if created:
+            from .tasks import generate_report_artifact
+
+            transaction.on_commit(lambda: generate_report_artifact.delay(str(job.pk)))
         return Response(self.get_serializer(job).data, status=201 if created else 200)
+
+
+class ReportJobDownload(TenantMixin, APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, job_id):
+        job = get_object_or_404(
+            ReportJob,
+            job_id=job_id,
+            tenant_id=self.tenant_id(),
+            account=request.user,
+            status="COMPLETED",
+            reconciliation_passed=True,
+            expires_at__gt=timezone.now(),
+        )
+        try:
+            artifact = open_private_artifact(job.artifact_ref)
+        except (FileNotFoundError, OSError):
+            raise NotFound("Resource not found")
+        AuditEvent.objects.create(
+            tenant_id=self.tenant_id(),
+            actor=request.user,
+            action="REPORT_DOWNLOADED",
+            target=str(job.pk),
+        )
+        return FileResponse(
+            artifact,
+            as_attachment=True,
+            filename=f"beyvra-report-{job.pk}.csv",
+            content_type="text/csv; charset=utf-8",
+        )
 
 
 class StatementList(TenantMixin, generics.ListAPIView):
@@ -301,13 +347,49 @@ class PrivacyExportListCreate(TenantMixin, generics.ListCreateAPIView):
                 },
                 status=400,
             )
+        if len(key) > 128:
+            raise ValidationError("Invalid idempotency key")
         job, created = PrivacyExportJob.objects.get_or_create(
             tenant_id=self.tenant_id(),
             account=request.user,
             idempotency_key=key,
-            defaults={"policy_version": "PENDING-LEGAL-APPROVAL"},
+            defaults={"policy_version": "PRIVACY-EXPORT-SCHEMA-v1"},
         )
+        if created:
+            from .tasks import generate_privacy_export
+
+            transaction.on_commit(lambda: generate_privacy_export.delay(str(job.pk)))
         return Response(self.get_serializer(job).data, status=201 if created else 200)
+
+
+class PrivacyExportDownload(TenantMixin, APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, job_id):
+        job = get_object_or_404(
+            PrivacyExportJob,
+            job_id=job_id,
+            tenant_id=self.tenant_id(),
+            account=request.user,
+            status="COMPLETED",
+            expires_at__gt=timezone.now(),
+        )
+        try:
+            artifact = open_private_artifact(job.artifact_ref)
+        except (FileNotFoundError, OSError):
+            raise NotFound("Resource not found")
+        AuditEvent.objects.create(
+            tenant_id=self.tenant_id(),
+            actor=request.user,
+            action="PRIVACY_EXPORT_DOWNLOADED",
+            target=str(job.pk),
+        )
+        return FileResponse(
+            artifact,
+            as_attachment=True,
+            filename=f"beyvra-privacy-export-{job.pk}.json",
+            content_type="application/json",
+        )
 
 
 class AccountDeletionListCreate(TenantMixin, generics.ListCreateAPIView):

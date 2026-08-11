@@ -1,3 +1,5 @@
+import json
+import tempfile
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -8,7 +10,7 @@ from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, connection, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APIClient, APIRequestFactory
@@ -24,6 +26,8 @@ from .models import (
     Notification,
     OperatorActionRequest,
     OperatorRole,
+    PrivacyExportJob,
+    ReportJob,
     SecurityEvent,
     Statement,
     SupportCase,
@@ -43,6 +47,7 @@ from .services import (
     realtime_notification_payload,
     record_delivery_failure,
 )
+from .tasks import generate_privacy_export, generate_report_artifact
 
 
 def user(email, phone, brand="tenant-a", staff=False):
@@ -590,6 +595,102 @@ class ExportSafetyTests(TestCase):
                 "message": "This feature is currently unavailable.",
             },
         )
+
+
+class PrivateArtifactTests(TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(
+            OPERATIONS_PRIVATE_ARTIFACT_ROOT=self.temporary_directory.name
+        )
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+        self.addCleanup(self.temporary_directory.cleanup)
+        self.account = user("artifact@example.test", "+10000000043", "artifact-a")
+        self.other = user("artifact-other@example.test", "+10000000044", "artifact-b")
+        self.client = APIClient()
+
+    def test_reconciled_report_is_csv_safe_and_owner_downloadable(self):
+        TransactionHistoryEntry.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            type="TRADE",
+            asset="=HYPERLINK(\"unsafe\")",
+            amount=Decimal("1.25"),
+            fee=Decimal("0.01"),
+            status="SETTLED",
+            occurred_at=timezone.now(),
+            source_ref="sim-safe",
+        )
+        job = ReportJob.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            report_type="TRADE",
+            parameters_hash="0" * 64,
+            idempotency_key="report-private-1",
+            reconciliation_passed=True,
+        )
+        self.assertEqual(generate_report_artifact(str(job.pk)), "COMPLETED")
+        job.refresh_from_db()
+        self.client.force_authenticate(self.account)
+        response = self.client.get(f"/api/v1/reports/exports/{job.pk}/download")
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content).decode("utf-8")
+        self.assertIn("'=HYPERLINK", content)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                action="REPORT_DOWNLOADED", target=str(job.pk)
+            ).exists()
+        )
+
+    def test_report_download_is_cross_tenant_safe_and_reconciliation_gated(self):
+        job = ReportJob.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            report_type="ACTIVITY",
+            parameters_hash="0" * 64,
+            idempotency_key="report-private-2",
+            reconciliation_passed=False,
+        )
+        self.assertEqual(generate_report_artifact(str(job.pk)), "FAILED")
+        self.client.force_authenticate(self.other)
+        response = self.client.get(f"/api/v1/reports/exports/{job.pk}/download")
+        self.assertEqual(response.status_code, 404)
+
+    def test_privacy_export_excludes_internal_support_notes(self):
+        case = SupportCase.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            category="SECURITY",
+            safe_summary="customer summary",
+        )
+        for visibility, body in (
+            ("INTERNAL_NOTE", "employee-only investigation"),
+            ("CUSTOMER_VISIBLE_MESSAGE", "customer-visible update"),
+        ):
+            SupportCaseEvent.objects.create(
+                tenant_id="artifact-a",
+                account=self.account,
+                case=case,
+                event_type="MESSAGE_ADDED",
+                visibility=visibility,
+                body_safe=body,
+                actor=self.account,
+            )
+        job = PrivacyExportJob.objects.create(
+            tenant_id="artifact-a",
+            account=self.account,
+            idempotency_key="privacy-private-1",
+            policy_version="PRIVACY-EXPORT-SCHEMA-v1",
+        )
+        self.assertEqual(generate_privacy_export(str(job.pk)), "COMPLETED")
+        self.client.force_authenticate(self.account)
+        response = self.client.get(f"/api/v1/privacy/exports/{job.pk}/download")
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(b"".join(response.streaming_content))
+        exported_messages = [row["body_safe"] for row in payload["support_messages"]]
+        self.assertEqual(exported_messages, ["customer-visible update"])
+        self.assertNotIn("employee-only investigation", json.dumps(payload))
 
 
 class PrivateNotificationRealtimeTests(TransactionTestCase):
