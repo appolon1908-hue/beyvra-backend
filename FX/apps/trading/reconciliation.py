@@ -39,6 +39,9 @@ def evaluate_snapshot(snapshot, scope="full"):
         check("FILLED_QUANTITY_MATCHES_EXECUTIONS",mismatch); check("OVERFILL",overfill)
         settlement=[_violation("DUPLICATE_SETTLEMENT","execution",x["execution_id"],x) for x in snapshot.get("duplicate_settlements",[])]
         check("DUPLICATE_SETTLEMENT",settlement)
+        execution_ids={str(x) for x in snapshot.get("execution_outbox_ids",[])}
+        missing_execution=[_violation("MISSING_EXECUTION_EVENT","trade",x["execution_id"],{}) for x in trades if str(x["execution_id"]) not in execution_ids]
+        check("TRADE_MATCHES_EXECUTION",missing_execution)
     if scope in {"full","orders","settlements"}:
         leaks=[]
         for oid,order in orders.items():
@@ -74,6 +77,7 @@ def collect_snapshot(tenant=None):
       "positions":list(SimulatedPosition.objects.filter(account__account_ref__in=account_ids).values("account__account_ref","instrument_id","quantity")).copy(),
       "accounts":list(SimulatedAccount.objects.filter(account_ref__in=account_ids).values("id","total_balance","pending_balance")),
       "outbox_order_ids":list(OutboxEvent.objects.filter(aggregate_type="order",aggregate_id__in=[str(x) for x in ids]).values_list("aggregate_id",flat=True)),
+      "execution_outbox_ids":list(OutboxEvent.objects.filter(aggregate_type="execution",aggregate_id__in=list(SimulatedTrade.objects.filter(order_id__in=ids).values_list("execution_id",flat=True))).values_list("aggregate_id",flat=True)),
       "audit_order_ids":list(ApplicationAuditEvent.objects.filter(resource_type="simulation_order",resource_id__in=[str(x) for x in ids]).values_list("resource_id",flat=True)),
       "duplicate_trades":list(SimulatedTrade.objects.values("execution_id").annotate(count=Count("trade_id")).filter(count__gt=1)),
       "duplicate_settlements":[], "duplicate_processed":list(ProcessedEvent.objects.values("event_id","consumer_name").annotate(count=Count("id")).filter(count__gt=1))}
