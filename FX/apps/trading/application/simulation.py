@@ -13,6 +13,7 @@ from apps.trading.risk import RiskEngine
 from integrations.execution.simulated import SimulatedExecutionProvider
 from integrations.financial.simulated import SimulatedFinancialAdapter
 from prometheus_client import Counter, Histogram
+from apps.foundation.observability import ENVIRONMENT, ORDERS, ORDERS_CANCELLED, ORDERS_FILLED, ORDERS_PARTIAL, RISK_DECISIONS, SIM_SETTLEMENTS, SIM_RESERVATIONS
 
 FEE_RATE = Decimal("0.001")
 SIMULATED_ORDERS = Counter("simulated_orders_total", "Simulation-only canonical orders", ("decision",))
@@ -85,6 +86,8 @@ def evaluate(user, data):
     if state == "CANCEL_ONLY" or (state == "CLOSE_ONLY" and payload["side"] == "BUY"):
         inputs["control_state"] = "HALTED"
     result = RiskEngine().evaluate_order(inputs)
+    reason = "validation" if result.reason_codes else "unknown"
+    RISK_DECISIONS.labels(result.decision, reason, result.policy_version, "true").inc()
     return payload, account, result, available, notional
 
 
@@ -126,11 +129,13 @@ def create(user, data, idempotency_key):
         SIMULATED_REJECTIONS.inc()
     else:
         reservation = SimulatedFinancialAdapter().reserve_funds(account=account, order_id=order.id, instrument_id=order.instrument_id, side=order.side, quantity=order.quantity, price=payload["price"])
+        transaction.on_commit(lambda: SIM_RESERVATIONS["created"].inc())
         order.reservation_id = reservation.id
         order.save(update_fields=("risk_decision_id", "reservation_id", "updated_at"))
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.created.v1", payload=event_payload(order), tenant_ref=tenant, correlation_id=correlation)
     audit(user, "simulation.order.submitted", order.id, correlation)
     SIMULATED_ORDERS.labels(decision=result.decision).inc()
+    transaction.on_commit(lambda: ORDERS.labels(ENVIRONMENT, "true").inc())
     body = serialize_order(order)
     complete_idempotent_request(record, status=201, body=body, resource_type="simulation_order", resource_id=order.id)
     if settings.SIMULATED_EXECUTION_INLINE and result.decision == "ALLOW":
@@ -168,8 +173,13 @@ def apply_execution(order_id, execution):
             next_filled = order.filled_quantity + execution.quantity
             if next_filled > order.quantity: raise ValueError("EXECUTION_OVERFILL")
             fee = execution.quantity * execution.price * FEE_RATE
-            account, position, _ = SimulatedFinancialAdapter().settle_trade(reservation=SimulatedReservation.objects.get(pk=order.reservation_id), side=order.side, instrument_id=order.instrument_id, quantity=execution.quantity, price=execution.price, fee=fee)
+            reservation = SimulatedReservation.objects.get(pk=order.reservation_id)
+            account, position, _ = SimulatedFinancialAdapter().settle_trade(reservation=reservation, side=order.side, instrument_id=order.instrument_id, quantity=execution.quantity, price=execution.price, fee=fee)
+            reservation.refresh_from_db()
+            if reservation.state == SimulatedReservation.State.CONSUMED:
+                transaction.on_commit(lambda: SIM_RESERVATIONS["consumed"].inc())
             SimulatedTrade.objects.create(order=order, execution_id=execution.execution_id, instrument_id=order.instrument_id, side=order.side, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=timezone.now())
+            transaction.on_commit(lambda: SIM_SETTLEMENTS.labels("success").inc())
             SIMULATED_FILLS.inc()
             audit_ref(order.subject_ref, "simulation.execution.received", "simulation_execution", execution.execution_id, uuid.uuid4())
             audit_ref(order.subject_ref, "simulation.trade.executed", "simulation_trade", execution.execution_id, uuid.uuid4())
@@ -178,6 +188,8 @@ def apply_execution(order_id, execution):
             order.filled_quantity = next_filled
             order.average_fill_price = (previous_value + execution.quantity * execution.price) / next_filled
             order.state = transition_order(order.state, "FILLED" if next_filled == order.quantity else "PARTIALLY_FILLED")
+            state_metric = ORDERS_FILLED if order.state == "FILLED" else ORDERS_PARTIAL
+            transaction.on_commit(lambda metric=state_metric: metric.labels(ENVIRONMENT, "true").inc())
             event_type = "trading.order.filled.v1" if order.state == "FILLED" else "trading.order.partially_filled.v1"
             tenant = order.tenant_ref
             enqueue_event(aggregate_type="trade", aggregate_id=execution.execution_id, event_type="trading.trade.executed.v1", payload=event_payload(order, execution_id=execution.execution_id, price=str(execution.price), fee=str(fee)), tenant_ref=tenant)
@@ -219,9 +231,11 @@ def cancel(user, order_id):
     order.state = transition_order(order.state, "CANCELLED")
     order.save(update_fields=("state", "updated_at"))
     SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
+    transaction.on_commit(lambda: SIM_RESERVATIONS["released"].inc())
     enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancelled.v1", payload=event_payload(order), tenant_ref=tenant)
     audit(user, "simulation.order.cancelled", order.id, uuid.uuid4())
     SIMULATED_CANCELLATIONS.inc()
+    transaction.on_commit(lambda: ORDERS_CANCELLED.labels(ENVIRONMENT, "true").inc())
     return serialize_order(order)
 
 

@@ -1,0 +1,2 @@
+# Reservation Leak
+Symptoms: invariant counter rises or terminal orders retain active reservations. Dashboard: Trading Pipeline. Alert: BeyvraSimulationInvariantCritical. Stop new simulation acceptance and run reconciliation. Do not edit balances manually. Roll back implicated trading code. Escalate trading owner. Resume only after reviewed repair tooling, reconciliation PASS, and no negative balance/position errors.

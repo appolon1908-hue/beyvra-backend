@@ -1,0 +1,2 @@
+# Duplicate Effect Detected
+Symptoms: duplicate business effect or settlement counter increases. Dashboard: Trading Pipeline. Alert: BeyvraDuplicateBusinessEffectCritical. Halt simulated order acceptance, preserve evidence, and run read-only reconciliation. Do not delete events or settlements. Roll back the implicated consumer release. Escalate immediately to trading/security. Resume only after root cause, replay safety, reconciliation PASS, and counter stability.

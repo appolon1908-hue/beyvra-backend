@@ -1,0 +1,2 @@
+# Realtime Failure
+Symptoms: bridge/Centrifugo down, publish failures, gaps. Dashboard: Realtime. Alert: BeyvraRealtimeCritical. Verify NATS, bridge heartbeat, Centrifugo health, gap and snapshot metrics without channel IDs. Restore bridge/Centrifugo; clients must fetch canonical snapshots. Roll back realtime config. Escalate platform/trading. Confirm reconnect, successful snapshot recovery, and resumed sequence.

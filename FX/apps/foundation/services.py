@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .events import payload_hash
 from .models import IdempotencyRecord, OutboxEvent, ProcessedEvent
+from .observability import IDEMPOTENCY, INBOX_DUPLICATES, INBOX_PROCESSED
 
 
 class IdempotencyConflict(Exception):
@@ -64,9 +65,11 @@ def consume_once(*, envelope, consumer_name, mutation):
             if existing:
                 if existing.payload_hash != digest:
                     raise ValueError("EVENT_PAYLOAD_CONFLICT")
+                INBOX_DUPLICATES.labels(consumer_name).inc()
                 return False
             mutation()
             ProcessedEvent.objects.create(event_id=event_id, consumer_name=consumer_name, payload_hash=digest)
+            INBOX_PROCESSED.labels(consumer_name).inc()
             return True
     except IntegrityError:
         # A concurrent consumer won the unique (event_id, consumer_name) insert.
@@ -88,11 +91,14 @@ def begin_idempotent_request(*, key, tenant_ref, actor_ref, endpoint, method, re
         try:
             with transaction.atomic():
                 record = IdempotencyRecord.objects.create(**scope, request_hash=digest, expires_at=timezone.now() + ttl)
+            IDEMPOTENCY.labels("new").inc()
             return record, True
         except IntegrityError:
             record = IdempotencyRecord.objects.select_for_update().get(**scope)
             if record.request_hash != digest:
+                IDEMPOTENCY.labels("conflict").inc()
                 raise IdempotencyConflict("IDEMPOTENCY_CONFLICT")
+            IDEMPOTENCY.labels("replay").inc()
             return record, False
 
 

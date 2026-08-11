@@ -6,6 +6,7 @@ import ssl
 from django.conf import settings
 
 from .services import claim_outbox_batch, mark_publish_result
+from .observability import OUTBOX_FAILURES, OUTBOX_LAST_SUCCESS, OUTBOX_PUBLISHED, OUTBOX_RETRIES, worker_success
 
 
 def envelope(event):
@@ -50,5 +51,9 @@ def publish_batch(limit=100):
     published = 0
     for event, error in asyncio.run(_publish(rows)):
         mark_publish_result(event, error_code=error, maximum_attempts=getattr(settings, "OUTBOX_MAX_ATTEMPTS", 10))
+        if error:
+            OUTBOX_FAILURES.labels("dependency").inc(); OUTBOX_RETRIES.inc()
+        else:
+            OUTBOX_PUBLISHED.inc(); OUTBOX_LAST_SUCCESS.set(__import__("time").time()); worker_success("outbox_publisher")
         published += not bool(error)
     return published
