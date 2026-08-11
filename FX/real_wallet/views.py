@@ -23,7 +23,6 @@ def disabled_response(request, feature):
             "detail": "Real-value wallet operations are disabled until staging approval.",
             "instance": request.path,
             "code": "FEATURE_DISABLED",
-            "request_id": request.headers.get("X-Request-ID", ""),
             "errors": [],
             "feature": feature,
         },

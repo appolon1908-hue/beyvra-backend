@@ -47,7 +47,8 @@ urlpatterns = [
     path("api/v1/realtime/v2/health", realtime_v2.health, name="realtime_v2_health"),
     # Separate real-wallet boundary. Every real-value feature is disabled by
     # default and never falls back to the demo wallet.
-    path("api/v1/", include("real_wallet.urls")),
+    path("api/v1/", include("financial_boundary.urls")),
+    path("api/v1/legacy-real-wallet/", include("real_wallet.urls")),
     path("api/v1/", include("trade.market_urls")),
     path("api/", include("api_trade.urls")),
     path("api/wallet/", include("wallet.urls")),

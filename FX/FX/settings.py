@@ -62,6 +62,14 @@ PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "fa
 REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
+REAL_WALLET_READ_ENABLED = os.getenv("REAL_WALLET_READ_ENABLED", "false").lower() == "true"
+REAL_DEPOSITS_ENABLED = os.getenv("REAL_DEPOSITS_ENABLED", "false").lower() == "true"
+REAL_WITHDRAWALS_ENABLED = os.getenv("REAL_WITHDRAWALS_ENABLED", "false").lower() == "true"
+REAL_INTERNAL_TRANSFERS_ENABLED = os.getenv("REAL_INTERNAL_TRANSFERS_ENABLED", "false").lower() == "true"
+REAL_TRADING_ENABLED = os.getenv("REAL_TRADING_ENABLED", "false").lower() == "true"
+EXTERNAL_EXECUTION_ENABLED = os.getenv("EXTERNAL_EXECUTION_ENABLED", "false").lower() == "true"
+CUSTODY_PROVIDER_ACTIVATED = False
+PAYMENT_PROVIDER_ACTIVATED = False
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
 LEGAL_SERVICE_AGREEMENT_VERSION = os.getenv("LEGAL_SERVICE_AGREEMENT_VERSION", "demo-v1")
@@ -128,6 +136,7 @@ INSTALLED_APPS = [
     "real_wallet",
     "provider_governance",
     "financial_client",
+    "financial_boundary",
 ]
 
 MIDDLEWARE = [
@@ -193,6 +202,15 @@ FINANCIAL_SERVICE_URL = os.getenv("FINANCIAL_SERVICE_URL", "https://financial-mt
 FINANCIAL_SERVICE_CLIENT_CERT = os.getenv("FINANCIAL_SERVICE_CLIENT_CERT", "/run/secrets/financial/client.crt")
 FINANCIAL_SERVICE_CLIENT_KEY = os.getenv("FINANCIAL_SERVICE_CLIENT_KEY", "/run/secrets/financial/client.key")
 FINANCIAL_SERVICE_CA_CERT = os.getenv("FINANCIAL_SERVICE_CA_CERT", "/run/secrets/financial/ca.crt")
+FINANCIAL_SERVICE_API_VERSION = "v1"
+FINANCIAL_SERVICE_CALLER = "codestra-application-backend"
+FINANCIAL_SERVICE_SCOPES = "financial.wallet.read financial.deposit.read financial.withdrawal.read financial.withdrawal.request financial.transfer.request financial.reconciliation.read"
+FINANCIAL_SERVICE_AUDIENCE = "financial-service"
+FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS", "2"))
+FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS", "5"))
+FINANCIAL_SERVICE_RETRY_COUNT = int(os.getenv("FINANCIAL_SERVICE_RETRY_COUNT", "2"))
+FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD", "5"))
+FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS", "30"))
 
 # REDIS
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)

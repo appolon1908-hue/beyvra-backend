@@ -3,7 +3,8 @@ import uuid
 from pathlib import Path
 from unittest.mock import Mock
 from django.test import SimpleTestCase,override_settings
-from .client import FinancialContext,FinancialFeatureDisabled,FinancialServiceClient
+import requests
+from .client import FinancialContext,FinancialFeatureDisabled,FinancialServiceClient,UnknownFinancialOutcome,CircuitBreaker,CircuitOpen,FinancialContractUnavailable
 
 class FinancialServiceClientTests(SimpleTestCase):
     def setUp(self):
@@ -23,3 +24,29 @@ class FinancialServiceClientTests(SimpleTestCase):
     def test_no_financial_database_alias_exists(self):
         from django.conf import settings
         self.assertEqual(set(settings.DATABASES),{"default"})
+    def test_mutation_timeout_is_unknown_and_never_retried(self):
+        session=Mock(); session.request.side_effect=requests.Timeout()
+        with self.assertRaises(UnknownFinancialOutcome): FinancialServiceClient(session=session).request_transfer(self.context,{"amount":"1.00"},"key")
+        self.assertEqual(session.request.call_count,1)
+    def test_safe_read_retries_are_bounded(self):
+        session=Mock(); session.request.side_effect=requests.ConnectionError()
+        with self.assertRaises(Exception): FinancialServiceClient(session=session).list_wallets(self.context)
+        self.assertEqual(session.request.call_count,3)
+    def test_circuit_breaker_opens_and_recovers_half_open(self):
+        now=[0.0]; breaker=CircuitBreaker(threshold=2,recovery_seconds=30,clock=lambda:now[0])
+        breaker.failure(); breaker.failure()
+        with self.assertRaises(CircuitOpen): breaker.before_request()
+        now[0]=31
+        breaker.before_request(); self.assertEqual(breaker.state,"HALF_OPEN")
+        breaker.success(); self.assertEqual(breaker.state,"CLOSED")
+    def test_missing_authoritative_operations_never_make_network_request(self):
+        session=Mock()
+        with self.assertRaises(FinancialContractUnavailable): FinancialServiceClient(session=session).settle_trade(self.context,{},"key")
+        session.request.assert_not_called()
+    def test_mtls_failures_are_denied_without_retry_or_tls_bypass(self):
+        session=Mock(); session.request.side_effect=requests.exceptions.SSLError("synthetic wrong CA")
+        with self.assertRaises(Exception) as raised:
+            FinancialServiceClient(session=session).list_wallets(self.context)
+        self.assertEqual(raised.exception.code,"MTLS_AUTHENTICATION_FAILED")
+        self.assertEqual(session.request.call_count,1)
+        self.assertNotIn("verify=False",str(session.request.call_args))

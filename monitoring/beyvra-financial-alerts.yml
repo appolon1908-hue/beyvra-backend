@@ -1,0 +1,29 @@
+groups:
+  - name: beyvra-financial-boundary
+    rules:
+      - alert: FinancialServiceUnavailable
+        expr: sum(rate(beyvra_financial_client_failures_total[5m])) > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Financial Service unavailable"}
+      - alert: FinancialCircuitBreakerOpen
+        expr: beyvra_financial_circuit_breaker_state == 1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Financial client circuit breaker remains open"}
+      - alert: UnknownFinancialOutcome
+        expr: increase(beyvra_financial_unknown_outcomes_total[5m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "A financial mutation has an unknown outcome"}
+      - alert: FinancialReconciliationViolation
+        expr: increase(beyvra_financial_reconciliation_violations_total[15m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "Financial reconciliation disagreement detected"}
+      - alert: WithdrawalSecurityEnforcementFailure
+        expr: increase(beyvra_withdrawal_security_enforcement_failures_total[5m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "Withdrawal security enforcement failed"}
+      - alert: FinancialMtlsCertificateExpiryNear
+        expr: beyvra_financial_mtls_expiry_timestamp_seconds - time() < 1209600
+        labels: {severity: warning}
+        annotations: {summary: "Financial client certificate expires within 14 days"}
