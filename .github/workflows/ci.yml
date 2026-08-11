@@ -33,6 +33,12 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U codestra_ci -d codestra_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -54,7 +60,7 @@ jobs:
           CSRF_TRUSTED_ORIGINS: '[]'
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
-          REDIS_PASSWORD: ci-only-password
+          REDIS_PASSWORD: ""
           REDIS_DATABASE: "0"
           DB_NAME: codestra_ci
           DB_USER: codestra_ci
@@ -62,11 +68,15 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: "5432"
           TEST_DB_NAME: test_codestra_ci
+          API_TOKEN_PEPPER: ci-only-api-token-pepper-more-than-thirty-two-bytes
+          IDEMPOTENCY_HMAC_KEY: ci-only-idempotency-key-more-than-thirty-two-bytes
+          PII_ENCRYPTION_KEY: ci-only-pii-encryption-key-more-than-thirty-two-bytes
         run: |
           python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
-          python manage.py test wallet.tests.test_transfer_security bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
-          python manage.py test news_app.test_phase5_contracts ws.test_v2
+          python manage.py test --noinput
+          python manage.py spectacular --file /tmp/openapi.yaml --validate
+          cmp /tmp/openapi.yaml ../docs/evidence/api-certification/openapi.yaml
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
       - name: Scan Python code

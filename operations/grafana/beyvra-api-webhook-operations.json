@@ -1,0 +1,12 @@
+{
+  "title": "Beyvra / API & Webhook Operations",
+  "schemaVersion": 39,
+  "tags": ["beyvra", "api", "webhook", "no-pii"],
+  "panels": [
+    {"type": "timeseries", "title": "API request rate", "targets": [{"expr": "sum(rate(django_http_requests_total_by_method_total[5m])) by (method)"}]},
+    {"type": "timeseries", "title": "API error rate", "targets": [{"expr": "sum(rate(django_http_responses_total_by_status_total{status=~\"4..|5..\"}[5m])) by (status)"}]},
+    {"type": "timeseries", "title": "Webhook outcomes", "targets": [{"expr": "sum(rate(beyvra_webhooks_total[5m])) by (provider, webhook_type, result)"}]},
+    {"type": "timeseries", "title": "Webhook latency", "targets": [{"expr": "histogram_quantile(0.95, sum(rate(beyvra_webhook_processing_seconds_bucket[5m])) by (le, provider, webhook_type))"}]},
+    {"type": "timeseries", "title": "Idempotency outcomes", "targets": [{"expr": "sum(rate(beyvra_api_idempotency_total[5m])) by (scope, result)"}]}
+  ]
+}
