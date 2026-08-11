@@ -17,8 +17,23 @@ Enabled `ScopedRateThrottle`, assigned bounded scopes, closed cross-user detail 
 and removed internal request identifiers from trading errors. Fifty-eight isolated
 security/trading/reconciliation tests pass on PostgreSQL 16.
 
+## Frontend token-storage review
+
+The frontend stores no access or refresh tokens in `localStorage` or
+`sessionStorage`. It currently stores bearer tokens in cookies readable by JavaScript
+because the SPA reads them to construct Authorization headers. All token-writing paths
+were standardized to `Secure`, `SameSite=Strict` and `Path=/`; persistent login keeps
+the existing 30.4-day maximum age. This does not protect a bearer token from successful
+same-origin script execution.
+
+Before real-money readiness, migrate to backend-issued `HttpOnly`, `Secure`,
+`SameSite=Strict` session/refresh cookies, keep short-lived access material in memory
+or behind a same-origin BFF, add CSRF protection for cookie-authenticated mutations,
+and remove direct token access from React. This coordinated migration is not
+represented as complete by the cookie-option hardening.
+
 ## Deferred external evidence
 
 Credential rotation/revocation and independent security approval remain owner actions.
-No such evidence is claimed. Browser token-storage policy requires frontend review in
-its own repository; this backend work does not assert that local storage is unused.
+No such evidence is claimed. The HttpOnly/BFF migration above remains an architecture
+action before real-money readiness.
