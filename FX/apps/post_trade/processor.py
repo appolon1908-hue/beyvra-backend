@@ -29,4 +29,8 @@ def process_simulated_fill(*, order, execution_id, quantity, price, fee, execute
     trade = PostTradeStateService.transition(trade, "SETTLED")
     instruction.state = "SETTLED"
     instruction.save(update_fields=("state", "updated_at"))
+    # Portfolio accounting consumes the canonical trade only after the
+    # simulated post-trade chain is complete. It never reads Financial DB.
+    from apps.valuation.accounting import process_trade_accounting
+    process_trade_accounting(trade)
     return trade, True
