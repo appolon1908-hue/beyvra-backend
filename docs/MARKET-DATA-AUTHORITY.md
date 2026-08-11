@@ -1,0 +1,8 @@
+# Canonical market-data authority
+
+`trade.market_authority` defines provider-neutral `Instrument`, `Quote`, `TradeTick`, `Candle`, `MarketStatus`, `OrderBookSnapshot`, provenance, and event envelopes. Adapters must normalize before publishing. Canonical event types are `market.quote.updated.v1`, `market.trade.received.v1`, `market.candle.updated.v1`, `market.candle.closed.v1`, and `market.status.changed.v1`; NATS/JetStream subjects are `market.quote.v1`, `market.trade.v1`, `market.candle.v1`, and `market.status.v1`.
+
+Every event preserves provider/message/source type, original provider timestamp, server receipt timestamp, normalizer version, and optional raw-message hash. Provider timestamps are never replaced. Deterministic envelope identity plus bounded deduplication eliminates duplicate canonical effects. Negative/non-finite values, invalid timestamps, unknown instruments, and impossible OHLC are rejected; crossed quotes are marked suspect. Bid/ask are never derived from last or candle close. Market `OPEN` is never inferred from a quote or asset class; absent authority returns `UNKNOWN`.
+
+REST authority is `/api/v1/market/instruments`, `/quotes`, `/candles`, `/trades/{instrument}`, and `/status/{instrument}`. Legacy provider-specific surfaces are deprecated and must be removed after client migration. `/ws/v2/` remains the existing realtime architecture; no new bus was introduced. Browser provider calls are forbidden.
+

@@ -7,6 +7,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS, MarketDataError, get_market_history
 from .models import MarketCandle
+from .market_authority import FIVE_SECOND_AVAILABLE, TIMEFRAME_AUTHORITY
 
 
 CHART_INTERVALS = ("5s", "10s", "15s", "30s", "1m", "5m", "15m", "1h", "4h", "1d")
@@ -77,7 +78,8 @@ def _server_time():
 
 
 def _market_status(definition):
-    return "OPEN" if definition["asset_class"] == "CRYPTO" else "UNKNOWN"
+    # A quote, candle, or 24/7 asset class is not market-status authority.
+    return "UNKNOWN"
 
 
 class MarketSnapshotV1View(APIView):
@@ -103,7 +105,7 @@ class MarketSnapshotV1View(APIView):
             "sequence": sequence,
             "server_time": _server_time(),
             "market_status": _market_status(definition),
-            "quote": {"bid": price, "ask": price, "mid": price, "occurred_at": latest["open_time"]},
+            "quote": None,
             "candles": candles,
         })
 
@@ -178,19 +180,25 @@ class InstrumentMarketDataCapabilitiesV1View(InstrumentV1View):
         timeframes = []
         for interval in CHART_INTERVALS:
             if interval in SUPPORTED_INTERVALS:
-                timeframes.append({"interval": interval, "available": True, "source": "provider", "mode": "native"})
+                authority = TIMEFRAME_AUTHORITY[interval]
+                timeframes.append({"interval": interval, "available": authority["certified"], "source": authority["source"], "mode": authority["native_or_aggregated"].lower()})
             else:
                 reason = "GENUINE_5S_SOURCE_UNAVAILABLE" if interval == "5s" else "TIMEFRAME_SOURCE_UNAVAILABLE"
                 timeframes.append({"interval": interval, "available": False, "reason": reason})
-        return Response({"instrument_id": normalized, "timeframes": timeframes})
+        return Response({"instrument_id": normalized, "timeframes": timeframes, "5s_available": FIVE_SECOND_AVAILABLE})
 
 
 class InstrumentRegistryView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     def get(self, request, symbol=None):
-        symbols = [symbol.upper()] if symbol else sorted(SUPPORTED_SYMBOLS)
-        return Response({"results": [{"symbol": item, "status": "ENABLED_FOR_DEMO", "source": "configured-provider"} for item in symbols if item in SUPPORTED_SYMBOLS]})
+        requested = [symbol.upper()] if symbol else sorted(INSTRUMENTS)
+        results=[]
+        for instrument_id in requested:
+            definition=INSTRUMENTS.get(instrument_id)
+            if definition:
+                results.append({"instrument_id":instrument_id,"symbol":instrument_id,"display_symbol":instrument_id,"asset_class":definition["asset_class"],"base_asset":instrument_id.split("-")[0],"quote_asset":instrument_id.split("-")[1] if "-" in instrument_id else None,"venue":"UNKNOWN","status":"DEMO_ONLY","price_precision":definition["price_decimals"],"quantity_precision":definition["quantity_decimals"],"timezone":"UTC"})
+        return Response({"results":results})
 
 
 class MarketCandlesView(APIView):
@@ -212,17 +220,14 @@ class MarketQuotesView(APIView):
     authentication_classes = [JWTAuthentication]
     def get(self, request):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()
-        candle = MarketCandle.objects.filter(symbol=symbol).order_by("-timestamp").first()
-        if candle is None:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": "No quote is currently available.", "symbol": symbol}, status=503)
-        return Response({"symbol": symbol, "bid": str(candle.close), "ask": str(candle.close), "mid": str(candle.close), "last": str(candle.close), "timestamp": candle.timestamp.isoformat(), "source": candle.provider, "sequence": 0})
+        return Response({"code":"MARKET_DATA_UNAVAILABLE","detail":"No approved quote authority is configured.","instrument_id":symbol},status=503)
 
 
 class MarketStatusView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
-        return Response({"symbol": symbol.upper(), "status": "UNSUPPORTED", "delay_status": "UNKNOWN", "source": None})
+        return Response({"instrument_id": symbol.upper(), "status": "UNKNOWN", "halt_status":"UNKNOWN", "provider_id": None})
 
 
 class MarketCapabilityUnsupportedView(APIView):

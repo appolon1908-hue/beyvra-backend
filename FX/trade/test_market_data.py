@@ -14,7 +14,11 @@ import os
 
 def approve_provider(provider_id, provider_type="MARKET_DATA"):
     provider = ProviderDefinition.objects.create(
-        provider_id=provider_id, provider_type=provider_type, enabled=True
+        provider_id=provider_id, provider_type=provider_type, enabled=True,
+        license_verified=True, security_approved=True, compliance_approved=True,
+        staging_approved=True, allowed_asset_classes=["*"],
+        allowed_data_types=["HISTORICAL_CANDLES"], max_staleness_ms=60000,
+        updated_by="test-suite",
     )
     license_record = ProviderLicense.objects.create(
         provider=provider,
@@ -158,7 +162,8 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["instrument_id"], "BTC-USD")
         self.assertEqual(response.data["sequence"], 1700000000)
-        self.assertEqual(response.data["market_status"], "OPEN")
+        self.assertEqual(response.data["market_status"], "UNKNOWN")
+        self.assertIsNone(response.data["quote"])
         self.assertEqual(len(response.data["candles"]), 1)
         self.assertEqual(response.data["candles"][0]["close"], "105.0")
         self.assertIn("open_time", response.data["candles"][0])

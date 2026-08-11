@@ -1,0 +1,38 @@
+groups:
+  - name: beyvra-market-data-authority
+    rules:
+      - alert: BeyvraProviderUnavailable
+        expr: beyvra_provider_up == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "Approved market provider unavailable"}
+      - alert: BeyvraMarketDataStale
+        expr: beyvra_market_authority_data_age_seconds > 60
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "Canonical market authority is stale"}
+      - alert: BeyvraProviderSequenceGapSustained
+        expr: increase(beyvra_provider_sequence_gaps_total[5m]) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Provider stream sequence gaps sustained"}
+      - alert: BeyvraSnapshotDisagreementSustained
+        expr: increase(beyvra_market_snapshot_disagreement_total[10m]) > 2
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "REST snapshot and stream disagree"}
+      - alert: BeyvraProviderRateLimitedSustained
+        expr: increase(beyvra_provider_rate_limited_total[10m]) > 5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Provider rate limiting sustained"}
+      - alert: BeyvraProviderReconnectLoop
+        expr: increase(beyvra_provider_reconnects_total[10m]) > 10
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Provider reconnect loop"}
+      - alert: BeyvraNoMarketAuthority
+        expr: sum(beyvra_provider_up) == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "No canonical market-data authority"}
