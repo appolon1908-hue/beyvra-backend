@@ -4,7 +4,7 @@ Certification date: 2026-08-11. Runtime: Python 3.11, Django, PostgreSQL 16, Red
 
 | Control | Evidence | Result |
 |---|---|---|
-| Full backend regression | 237 Django tests | PASS |
+| Full backend regression | 239 Django tests on PostgreSQL 16 | PASS |
 | Canonical route matrix | auth, contract, safe-error and fail-closed checks | PASS |
 | Tenant and object isolation | cross-organization resources resolve as not found/denied | PASS |
 | Role authorization | user/operator and maker/checker coverage | PASS |

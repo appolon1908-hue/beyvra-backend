@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_from": "django-url-resolver",
-  "endpoint_count": 807,
+  "endpoint_count": 811,
   "endpoints": [
     {
       "method": "GET",
@@ -10404,6 +10404,22 @@
       "classification": "CANONICAL"
     },
     {
+      "method": "GET",
+      "path": "/api/v1/reports/activity",
+      "auth": "AUTHENTICATED",
+      "role": "IsAuthenticated",
+      "tenant_scope": "REQUIRED",
+      "request_schema": "EXPLICIT_OR_NO_BODY",
+      "response_schema": "CANONICAL",
+      "idempotency": "NOT_REQUIRED_OR_NA",
+      "owner_service": "apps.platform_api.api.ReportView",
+      "implemented": true,
+      "tested": true,
+      "openapi": true,
+      "frontend_caller": "SEE_FRONTEND_CALLER_MATRIX",
+      "classification": "CANONICAL"
+    },
+    {
       "method": "POST",
       "path": "/api/v1/reports/exports",
       "auth": "AUTHENTICATED",
@@ -10437,7 +10453,55 @@
     },
     {
       "method": "GET",
-      "path": "/api/v1/reports/{report_type}",
+      "path": "/api/v1/reports/fees",
+      "auth": "AUTHENTICATED",
+      "role": "IsAuthenticated",
+      "tenant_scope": "REQUIRED",
+      "request_schema": "EXPLICIT_OR_NO_BODY",
+      "response_schema": "CANONICAL",
+      "idempotency": "NOT_REQUIRED_OR_NA",
+      "owner_service": "apps.platform_api.api.ReportView",
+      "implemented": true,
+      "tested": true,
+      "openapi": true,
+      "frontend_caller": "SEE_FRONTEND_CALLER_MATRIX",
+      "classification": "CANONICAL"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/statements",
+      "auth": "AUTHENTICATED",
+      "role": "IsAuthenticated",
+      "tenant_scope": "REQUIRED",
+      "request_schema": "EXPLICIT_OR_NO_BODY",
+      "response_schema": "CANONICAL",
+      "idempotency": "NOT_REQUIRED_OR_NA",
+      "owner_service": "apps.platform_api.api.ReportView",
+      "implemented": true,
+      "tested": true,
+      "openapi": true,
+      "frontend_caller": "SEE_FRONTEND_CALLER_MATRIX",
+      "classification": "CANONICAL"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/trades",
+      "auth": "AUTHENTICATED",
+      "role": "IsAuthenticated",
+      "tenant_scope": "REQUIRED",
+      "request_schema": "EXPLICIT_OR_NO_BODY",
+      "response_schema": "CANONICAL",
+      "idempotency": "NOT_REQUIRED_OR_NA",
+      "owner_service": "apps.platform_api.api.ReportView",
+      "implemented": true,
+      "tested": true,
+      "openapi": true,
+      "frontend_caller": "SEE_FRONTEND_CALLER_MATRIX",
+      "classification": "CANONICAL"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/transactions",
       "auth": "AUTHENTICATED",
       "role": "IsAuthenticated",
       "tenant_scope": "REQUIRED",

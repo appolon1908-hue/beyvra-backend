@@ -61,6 +61,22 @@ class CanonicalPlatformApiTests(TestCase):
             self.assertIs(body[name], False)
         self.assertIs(body["five_second_market_data"], False)
 
+    @override_settings(GUEST_DEMO_ENABLED=True, PAPER_TRADING_ONLY=True)
+    def test_guest_demo_wallet_has_canonical_tenant_context(self):
+        guest = APIClient().post(
+            "/api/user/guest-demo/",
+            {},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="tenant-linked-guest-fixture",
+        )
+        self.assertEqual(guest.status_code, 201)
+        authenticated = APIClient()
+        authenticated.credentials(HTTP_AUTHORIZATION=f"Bearer {guest.json()['access']}")
+        account = authenticated.get("/api/v1/demo/account")
+        self.assertEqual(account.status_code, 200)
+        self.assertEqual(account.json()["kind"], "DEMO")
+        self.assertIs(account.json()["real_money"], False)
+
     def test_support_idempotency_outbox_and_tenant_isolation(self):
         headers = {"HTTP_IDEMPOTENCY_KEY": "support-fixture-key"}
         payload = {"subject": "Synthetic support request", "message": "Fixture-only customer message"}

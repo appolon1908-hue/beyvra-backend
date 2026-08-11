@@ -6,10 +6,12 @@ import time
 from datetime import datetime, timedelta, timezone as datetime_timezone
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -106,9 +108,13 @@ def page(request, query, serializer):
         return api_error("VALIDATION_ERROR", 400, fields={"limit": ["Must be between 1 and 100."]})
     cursor = request.query_params.get("cursor")
     if cursor:
-        query = query.filter(id__lt=cursor)
-    rows = list(query.order_by("-id")[: limit + 1])
-    return Response({"results": [serializer(row) for row in rows[:limit]], "next": str(rows[limit - 1].id) if len(rows) > limit else None})
+        try:
+            cursor = query.model._meta.pk.to_python(cursor)
+        except (DjangoValidationError, TypeError, ValueError):
+            return api_error("VALIDATION_ERROR", 400, fields={"cursor": ["Invalid cursor."]})
+        query = query.filter(pk__lt=cursor)
+    rows = list(query.order_by("-pk")[: limit + 1])
+    return Response({"results": [serializer(row) for row in rows[:limit]], "next": str(rows[limit - 1].pk) if len(rows) > limit else None})
 
 
 def request_digest(data):
@@ -496,11 +502,57 @@ REPORT_TYPES = {"activity", "trades", "fees", "transactions", "statements"}
 
 class ReportView(APIView):
     permission_classes = (IsAuthenticated,)
+    report_type = None
 
-    def get(self, request, report_type):
+    def get(self, request, report_type=None):
+        report_type = report_type or self.report_type
         if report_type not in REPORT_TYPES:
             return api_error("NOT_FOUND", 404)
-        return Response({"results": [], "next": None, "report_type": report_type, "timezone": "UTC"})
+        # Real financial reports remain Financial Service-owned and disabled.
+        # These public reports expose only the tenant's authoritative simulation
+        # records and label every entry accordingly.
+        if report_type in {"fees", "statements"}:
+            return Response({"results": [], "next": None, "report_type": report_type, "timezone": "UTC", "simulation": True})
+        organization = tenant_for(request)
+        rows = Trade.objects.filter(
+            organization=organization,
+            wallet__user=request.user,
+            wallet__is_real=False,
+        ).select_related("asset", "transaction")
+        for parameter, lookup in (("created_after", "created_at__gte"), ("created_before", "created_at__lte")):
+            value = request.query_params.get(parameter)
+            if not value:
+                continue
+            parsed = parse_datetime(value)
+            if parsed is None or timezone.is_naive(parsed):
+                return api_error("VALIDATION_ERROR", 400, fields={parameter: ["Use an ISO-8601 timestamp with timezone."]})
+            rows = rows.filter(**{lookup: parsed})
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            rows = rows.filter(demo_state=status_filter.upper())
+        instrument = request.query_params.get("instrument") or request.query_params.get("asset")
+        if instrument:
+            rows = rows.filter(asset__symbol=instrument.upper())
+
+        def report_data(row):
+            return {
+                "id": str(row.pk),
+                "type": "TRADE",
+                "asset": row.asset.symbol,
+                "instrument": row.asset.symbol,
+                "side": row.trade_type.upper(),
+                "quantity": str(row.quantity),
+                "price": str(row.price_per_unit),
+                "amount": str(row.total_value),
+                "fee": "0",
+                "status": row.demo_state,
+                "occurred_at": row.created_at,
+                "settled_at": row.result_time,
+                "source_ref": str(row.transaction.transaction_id),
+                "simulation": True,
+            }
+
+        return page(request, rows, report_data)
 
 
 class ReportExportCollectionView(APIView):

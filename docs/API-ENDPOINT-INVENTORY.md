@@ -2,7 +2,7 @@
 
 Generated from the Django URL resolver. Canonical routes are `/api/v1/*`; compatibility routes remain until usage evidence supports removal.
 
-Total method/path entries: **807**.
+Total method/path entries: **811**.
 
 | Method | Path | Auth | Tenant | Idempotency | Classification | Owner |
 |---|---|---|---|---|---|---|
@@ -656,9 +656,13 @@ Total method/path entries: **807**.
 | GET | `/api/v1/reports/` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `real_wallet.views.RealWalletDisabledView` |
 | PATCH | `/api/v1/reports/` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `real_wallet.views.RealWalletDisabledView` |
 | POST | `/api/v1/reports/` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `real_wallet.views.RealWalletDisabledView` |
+| GET | `/api/v1/reports/activity` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
 | POST | `/api/v1/reports/exports` | AUTHENTICATED | REQUIRED | REQUIRED | CANONICAL | `apps.platform_api.api.ReportExportCollectionView` |
 | GET | `/api/v1/reports/exports/{export_id}` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportExportDetailView` |
-| GET | `/api/v1/reports/{report_type}` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
+| GET | `/api/v1/reports/fees` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
+| GET | `/api/v1/reports/statements` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
+| GET | `/api/v1/reports/trades` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
+| GET | `/api/v1/reports/transactions` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.ReportView` |
 | GET | `/api/v1/session` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `users.views.SessionResolveView` |
 | GET | `/api/v1/status` | PUBLIC | N/A_OR_LEGACY | NOT_REQUIRED_OR_NA | CANONICAL | `apps.platform_api.api.StatusView` |
 | GET | `/api/v1/status/` | AUTHENTICATED | REQUIRED | NOT_REQUIRED_OR_NA | CANONICAL | `real_wallet.views.RealWalletStatusView` |

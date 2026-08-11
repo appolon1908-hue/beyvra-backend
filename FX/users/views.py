@@ -67,6 +67,7 @@ from users.utils import confirm_action
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 from wallet.serializers import WalletDetailSerializer
+from integrations.models import Organization, OrganizationMembership
 
 from .models import KYC, KYCFile, PhoneVerificationCode
 from .tasks import (
@@ -524,8 +525,21 @@ class GuestDemoSessionView(APIView):
                 is_guest_demo=True,
                 guest_demo_expires_at=expires_at,
             )
+            organization, _ = Organization.objects.get_or_create(name="Codestra staging")
+            OrganizationMembership.objects.get_or_create(
+                user=guest,
+                organization=organization,
+                defaults={"role": "member"},
+            )
             demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
-            wallet = Wallet.objects.create(name=DEMO_WALLET_NAME, currency=demo_currency, user=guest, balance=10000, is_real=False)
+            wallet = Wallet.objects.create(
+                name=DEMO_WALLET_NAME,
+                currency=demo_currency,
+                user=guest,
+                organization=organization,
+                balance=10000,
+                is_real=False,
+            )
             DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=10000, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
 
         refresh = AuthTokenObtainPairSerializer.get_token(guest)

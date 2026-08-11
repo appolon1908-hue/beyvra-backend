@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from decimal import Decimal
 
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
@@ -6,7 +7,8 @@ from rest_framework.test import APIClient
 from apps.compliance.models import ComplianceProfile
 from integrations.models import Organization, OrganizationMembership
 from users.models import User
-from wallet.models import Currency, Wallet
+from trade.models import Asset, AssetType, Trade, TradeCategory
+from wallet.models import Currency, Transaction, Wallet
 
 
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
@@ -125,3 +127,28 @@ class CanonicalRouteMatrixTests(TestCase):
             body = response.json()
             self.assertNotIn("hostname", body)
             self.assertNotIn("database", body)
+
+    def test_simulation_report_uses_canonical_tenant_scoped_records(self):
+        asset_type, _ = AssetType.objects.get_or_create(name="Synthetic")
+        asset, _ = Asset.objects.get_or_create(name="Synthetic Asset", defaults={"symbol": "SYN", "asset_type": asset_type})
+        category, _ = TradeCategory.objects.get_or_create(name="spot")
+        transaction = Transaction.objects.create(wallet=self.wallet, type="TD", amount=Decimal("25.00"), status="S")
+        trade = Trade.objects.create(
+            wallet=self.wallet,
+            organization=self.organization,
+            asset=asset,
+            quantity=Decimal("2.0"),
+            price_per_unit=Decimal("12.5000"),
+            transaction=transaction,
+            trade_type="buy",
+            category=category,
+            duration=None,
+            demo_state="FILLED",
+        )
+        response = self.client.get("/api/v1/reports/transactions")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(trade.pk))
+        self.assertIs(response.json()["results"][0]["simulation"], True)
+        self.assertNotIn("user", response.json()["results"][0])
+        self.assertEqual(self.client.get("/api/v1/reports/transactions?created_after=2026-01-01T00:00:00").status_code, 400)
+        self.assertEqual(self.client.get("/api/v1/reports/transactions?cursor=not-an-integer").status_code, 400)

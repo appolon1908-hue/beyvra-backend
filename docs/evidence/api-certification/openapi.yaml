@@ -9009,15 +9009,9 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/v1/reports/{report_type}:
+  /api/v1/reports/activity:
     get:
-      operationId: v1_reports_retrieve_2
-      parameters:
-      - in: path
-        name: report_type
-        schema:
-          type: string
-        required: true
+      operationId: v1_reports_activity_retrieve
       tags:
       - v1
       security:
@@ -9082,6 +9076,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportExport'
+          description: ''
+  /api/v1/reports/fees:
+    get:
+      operationId: v1_reports_fees_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/reports/statements:
+    get:
+      operationId: v1_reports_statements_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/reports/trades:
+    get:
+      operationId: v1_reports_trades_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/reports/transactions:
+    get:
+      operationId: v1_reports_transactions_retrieve
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
           description: ''
   /api/v1/session:
     get:
