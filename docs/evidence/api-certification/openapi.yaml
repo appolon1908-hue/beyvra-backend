@@ -12900,7 +12900,7 @@ components:
         expiration_time:
           type: string
           format: date-time
-          default: '2026-08-11T17:12:51.627237Z'
+          nullable: true
         currency:
           type: string
         amount:
@@ -12940,7 +12940,7 @@ components:
         expiration_time:
           type: string
           format: date-time
-          default: '2026-08-11T17:12:51.627237Z'
+          nullable: true
         currency:
           type: string
         amount:
