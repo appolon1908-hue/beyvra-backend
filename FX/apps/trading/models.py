@@ -166,6 +166,14 @@ class ExecutionProviderRecord(models.Model):
         HALTED = "HALTED"
 
     provider_id = models.CharField(max_length=64, primary_key=True)
+    provider_type = models.CharField(max_length=16, default="SIMULATION")
+    environment = models.CharField(max_length=16, default="SIMULATION")
+    priority = models.PositiveIntegerField(default=100)
+    governance_state = models.CharField(max_length=40, default="DISCOVERED")
+    paper_supported = models.BooleanField(default=False)
+    live_supported = models.BooleanField(default=False)
+    fix_supported = models.BooleanField(default=False)
+    api_supported = models.BooleanField(default=False)
     display_name = models.CharField(max_length=128)
     mode = models.CharField(max_length=16, choices=Mode.choices)
     enabled = models.BooleanField(default=False)
@@ -182,6 +190,11 @@ class ExecutionProviderRecord(models.Model):
 class ExecutionVenue(models.Model):
     venue_id = models.CharField(max_length=64, primary_key=True)
     display_name = models.CharField(max_length=128)
+    venue_type = models.CharField(max_length=32, default="INTERNAL")
+    timezone = models.CharField(max_length=64, default="UTC")
+    status = models.CharField(max_length=16, default="DISABLED")
+    routing_enabled = models.BooleanField(default=False)
+    paper_supported = models.BooleanField(default=False)
     asset_classes = models.JSONField(default=list)
     order_types = models.JSONField(default=list)
     active = models.BooleanField(default=False)
@@ -209,6 +222,10 @@ class ExecutionRoutingDecision(models.Model):
     exclusion_reasons = models.JSONField(default=list)
     market_snapshot_hash = models.CharField(max_length=64)
     request_hash = models.CharField(max_length=64)
+    evidence_hash = models.CharField(max_length=64, blank=True)
+    pricing_snapshot_hash = models.CharField(max_length=64, blank=True)
+    risk_snapshot_hash = models.CharField(max_length=64, blank=True)
+    selected_score = models.DecimalField(max_digits=24, decimal_places=8, null=True)
     reference_price = models.DecimalField(max_digits=36, decimal_places=18)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -228,7 +245,155 @@ class ExecutionQualityReport(models.Model):
     price_improvement_bps = models.DecimalField(max_digits=24, decimal_places=8)
     measurement_version = models.CharField(max_length=32)
     evidence_hash = models.CharField(max_length=64)
+    arrival_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    decision_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    fees = models.DecimalField(max_digits=36, decimal_places=18, default=0)
+    fill_rate = models.DecimalField(max_digits=12, decimal_places=8, default=0)
+    unfilled_quantity = models.DecimalField(max_digits=36, decimal_places=18, default=0)
+    quality_state = models.CharField(max_length=32, default="MEASURED")
+    time_to_first_fill_ms = models.PositiveIntegerField(null=True)
+    time_to_complete_ms = models.PositiveIntegerField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def delete(self, *args, **kwargs):
         raise ValueError("EXECUTION_QUALITY_IMMUTABLE")
+
+
+class ExecutionProviderCapability(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider = models.ForeignKey(ExecutionProviderRecord, on_delete=models.PROTECT, related_name="capability_records")
+    asset_class = models.CharField(max_length=16)
+    venue = models.ForeignKey(ExecutionVenue, on_delete=models.PROTECT, null=True, blank=True)
+    capability_type = models.CharField(max_length=32)
+    enabled = models.BooleanField(default=False)
+    source = models.CharField(max_length=32)
+    source_version = models.CharField(max_length=64)
+    effective_from = models.DateTimeField()
+    effective_to = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField()
+    metadata_safe = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("provider", "asset_class", "venue", "capability_type", "source_version"), name="execution_provider_capability_unique")]
+
+
+class VenueCapability(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    venue = models.ForeignKey(ExecutionVenue, on_delete=models.PROTECT, related_name="capability_records")
+    asset_class = models.CharField(max_length=16)
+    order_type = models.CharField(max_length=16)
+    time_in_force = models.CharField(max_length=8)
+    session_type = models.CharField(max_length=16, default="REGULAR")
+    short_sell_supported = models.BooleanField(default=False)
+    fractional_supported = models.BooleanField(default=False)
+    minimum_quantity = models.DecimalField(max_digits=36, decimal_places=18)
+    quantity_increment = models.DecimalField(max_digits=36, decimal_places=18)
+    price_increment = models.DecimalField(max_digits=36, decimal_places=18)
+    effective_from = models.DateTimeField()
+    effective_to = models.DateTimeField(null=True, blank=True)
+    source_version = models.CharField(max_length=64)
+
+
+class BestExecutionPolicy(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=64)
+    asset_class = models.CharField(max_length=16)
+    account_type = models.CharField(max_length=32, blank=True)
+    instrument_id = models.CharField(max_length=64, blank=True)
+    mode = models.CharField(max_length=16)
+    price_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    fee_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    latency_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    fill_probability_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    liquidity_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    reliability_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    market_impact_weight = models.DecimalField(max_digits=8, decimal_places=6)
+    status = models.CharField(max_length=16, default="DRAFT")
+    policy_version = models.CharField(max_length=32)
+    effective_from = models.DateTimeField()
+    effective_to = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("code", "policy_version"), name="best_execution_policy_version_unique")]
+
+
+class ExecutionRouteCandidate(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    decision = models.ForeignKey(ExecutionRoutingDecision, on_delete=models.PROTECT, related_name="candidates")
+    provider = models.ForeignKey(ExecutionProviderRecord, on_delete=models.PROTECT)
+    venue = models.ForeignKey(ExecutionVenue, on_delete=models.PROTECT)
+    mode = models.CharField(max_length=16)
+    expected_price = models.DecimalField(max_digits=36, decimal_places=18)
+    expected_fee = models.DecimalField(max_digits=36, decimal_places=18)
+    expected_slippage = models.DecimalField(max_digits=36, decimal_places=18)
+    available_quantity = models.DecimalField(max_digits=36, decimal_places=18)
+    estimated_fill_probability = models.DecimalField(max_digits=8, decimal_places=6)
+    estimated_latency_ms = models.PositiveIntegerField()
+    provider_health = models.CharField(max_length=16)
+    score = models.DecimalField(max_digits=24, decimal_places=8)
+    eligible = models.BooleanField()
+    rejection_reasons = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CanonicalExecution(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(TradingOrder, on_delete=models.PROTECT, related_name="canonical_executions")
+    provider = models.ForeignKey(ExecutionProviderRecord, on_delete=models.PROTECT)
+    venue = models.ForeignKey(ExecutionVenue, on_delete=models.PROTECT)
+    provider_order_ref_hash = models.CharField(max_length=64, blank=True)
+    provider_execution_ref_hash = models.CharField(max_length=64, blank=True)
+    state = models.CharField(max_length=24, default="CREATED")
+    quantity = models.DecimalField(max_digits=36, decimal_places=18)
+    filled_quantity = models.DecimalField(max_digits=36, decimal_places=18, default=0)
+    remaining_quantity = models.DecimalField(max_digits=36, decimal_places=18)
+    average_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    last_fill_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    last_fill_quantity = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    submitted_at = models.DateTimeField(null=True)
+    accepted_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
+    provider_timestamp = models.DateTimeField(null=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+    mode = models.CharField(max_length=16)
+    version = models.PositiveIntegerField(default=1)
+
+
+class ExecutionProviderHealth(models.Model):
+    provider = models.OneToOneField(ExecutionProviderRecord, on_delete=models.PROTECT, primary_key=True, related_name="health_record")
+    state = models.CharField(max_length=16, default="UNKNOWN")
+    circuit_state = models.CharField(max_length=16, default="CLOSED")
+    last_success_at = models.DateTimeField(null=True)
+    last_failure_at = models.DateTimeField(null=True)
+    latency_p50_ms = models.PositiveIntegerField(default=0)
+    latency_p95_ms = models.PositiveIntegerField(default=0)
+    error_rate = models.DecimalField(max_digits=8, decimal_places=6, default=0)
+    reject_rate = models.DecimalField(max_digits=8, decimal_places=6, default=0)
+    connection_state = models.CharField(max_length=16, default="DISCONNECTED")
+    last_checked_at = models.DateTimeField(auto_now=True)
+
+
+class UnknownExecutionOutcome(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    execution = models.OneToOneField(CanonicalExecution, on_delete=models.PROTECT, related_name="unknown_outcome")
+    classification = models.CharField(max_length=32, default="AMBIGUOUS_SUBMISSION")
+    state = models.CharField(max_length=16, default="UNRESOLVED")
+    lookup_attempts = models.PositiveIntegerField(default=0)
+    last_lookup_at = models.DateTimeField(null=True)
+    resolution_evidence_hash = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True)
+
+
+class ExecutionReconciliationRun(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.CharField(max_length=16)
+    candidate_sha = models.CharField(max_length=64)
+    check_count = models.PositiveIntegerField(default=0)
+    warning_count = models.PositiveIntegerField(default=0)
+    critical_count = models.PositiveIntegerField(default=0)
+    evidence_hash = models.CharField(max_length=64)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField()
