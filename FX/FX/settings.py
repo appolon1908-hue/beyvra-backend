@@ -96,6 +96,10 @@ SIMULATED_EXECUTION_PRICE_SOURCE = os.getenv("SIMULATED_EXECUTION_PRICE_SOURCE",
 SIMULATED_MARKET_DATA_STALE = os.getenv("SIMULATED_MARKET_DATA_STALE", "false").lower() == "true"
 SIMULATED_EXECUTION_INLINE = os.getenv("SIMULATED_EXECUTION_INLINE", "false").lower() == "true"
 REAL_WALLET_READ_ENABLED = False
+REAL_MARGIN_ENABLED = False
+REAL_LEVERAGE_ENABLED = False
+REAL_SHORT_SELLING_ENABLED = False
+REAL_LIQUIDATION_ENABLED = False
 REAL_DEPOSITS_ENABLED = False
 REAL_WITHDRAWALS_ENABLED = False
 REAL_INTERNAL_TRANSFERS_ENABLED = False
@@ -184,6 +188,8 @@ INSTALLED_APPS = [
     "provider_governance",
     "financial_client",
     "reference_data",
+    "pricing_authority",
+    "risk_authority",
     "apps.foundation",
     "apps.trading",
     "apps.compliance",
