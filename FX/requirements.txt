@@ -10,7 +10,8 @@ Django==5.2.16
 django-admin-rangefilter==0.13.2
 django-celery-beat==2.9.0
 django-cors-headers==4.3.1
-django-import-export==3.3.7
+django-import-export==4.3.14
+tablib==3.10.0
 django-ipware==7.0.1
 django-prometheus==2.3.1
 django-silk==5.1.0
