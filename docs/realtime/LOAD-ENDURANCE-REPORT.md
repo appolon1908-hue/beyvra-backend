@@ -1,6 +1,6 @@
 # Codestra `/ws/v1/` staging load report
 
-Run date: 2026-08-05  
+Run date: 2026-08-05
 Scope: staging only; no production, payment, or real-money systems were changed.
 
 ## Changes applied during the run

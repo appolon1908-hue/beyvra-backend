@@ -3,8 +3,11 @@ from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions, response, status, views
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .market_data import MarketDataError, get_market_history
+
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
 from .models import Asset, Trade
 from .serializers import AssetSerializer, TradeDetailSerializer, TradeSerializer
 
@@ -71,6 +74,20 @@ class TradeListCreateView(generics.ListCreateAPIView):
         except Exception:
             cache.delete(cache_key)
             raise
+
+    def perform_create(self, serializer):
+        try:
+            assert_sensitive_mutation_allowed(
+                tenant_id=tenant_for(self.request.user),
+                account=self.request.user,
+                action="trading",
+            )
+        except PermissionError as exc:
+            code = str(exc)
+            raise ValidationError(
+                code if code in {"ACCOUNT_FROZEN", "TRADING_HALTED"} else "ACTION_DENIED"
+            ) from exc
+        serializer.save()
 
 
 class TradeDetailView(generics.RetrieveAPIView):

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import parse_qs
 from django.conf import settings
+from FX.provider_credentials import required_provider_credential
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Asset
@@ -120,26 +121,28 @@ class BaseDataConsumer(AsyncWebsocketConsumer):
         """ Méthode à surcharger dans les sous-classes pour envoyer des données spécifiques. """
         pass
 
-    async def get_market_data(self, url):
+    async def get_market_data(self, url, params=None):
         try:
-            async with self.session.get(url) as response:
+            async with self.session.get(url, params=params) as response:
                 return await response.json()
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception:
+            return {"error": "Market data is temporarily unavailable"}
 
 class CryptoMarketDataConsumer(BaseDataConsumer):
     async def send_data(self):
-        url = f"https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
+        url = "https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09"
+        params = {"adjusted": "true", "apiKey": required_provider_credential("POLYGON_API_KEY")}
         while self.keep_sending:
-            response = await self.get_market_data(url)
+            response = await self.get_market_data(url, params=params)
             await self.send(text_data=json.dumps(response))
             await asyncio.sleep(60)
 
 class StockMarketDataConsumer(BaseDataConsumer):
     async def send_data(self):
-        url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
+        url = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09"
+        params = {"adjusted": "true", "apiKey": required_provider_credential("POLYGON_API_KEY")}
         while self.keep_sending:
-            response = await self.get_market_data(url)
+            response = await self.get_market_data(url, params=params)
             await self.send(text_data=json.dumps(response))
             await asyncio.sleep(60)
 

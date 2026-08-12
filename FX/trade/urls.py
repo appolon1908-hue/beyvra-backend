@@ -1,7 +1,14 @@
 from django.urls import path
 from trade import views
 from trade.demo_engine import DemoOrderView, DemoTradeListView
-from .market_api import FeedHealthView, InstrumentRegistryView, MarketCandlesView, MarketQuotesView, MarketStatusView
+from .market_api import (
+    FeedHealthView,
+    InstrumentRegistryView,
+    MarketCandlesView,
+    MarketCapabilityUnsupportedView,
+    MarketQuotesView,
+    MarketStatusView,
+)
 
 app_name = "trade"
 
@@ -18,7 +25,7 @@ urlpatterns = [
     path("market/candles", MarketCandlesView.as_view(), name="market_candles"),
     path("market/quotes", MarketQuotesView.as_view(), name="market_quotes"),
     path("market/status/<str:symbol>", MarketStatusView.as_view(), name="market_status"),
-    path("market/orderbook/<str:symbol>", MarketStatusView.as_view(), name="market_orderbook"),
-    path("market/trades/<str:symbol>", MarketStatusView.as_view(), name="market_trades"),
+    path("market/orderbook/<str:symbol>", MarketCapabilityUnsupportedView.as_view(), name="market_orderbook"),
+    path("market/trades/<str:symbol>", MarketCapabilityUnsupportedView.as_view(), name="market_trades"),
     path("market/feed-health", FeedHealthView.as_view(), name="market_feed_health"),
 ]

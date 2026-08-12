@@ -8,6 +8,7 @@ from django.db import models
 from drf_spectacular.utils import extend_schema
 import logging
 from django.conf import settings
+from FX.provider_credentials import required_provider_credential
 from decimal import Decimal
 from wallet.models import Wallet
 
@@ -86,8 +87,12 @@ class CryptoMarketDataView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        url = f"https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
-        response = requests.get(url, timeout=10)
+        url = "https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/2023-01-09"
+        response = requests.get(
+            url,
+            params={"adjusted": "true", "apiKey": required_provider_credential("POLYGON_API_KEY")},
+            timeout=10,
+        )
         response.raise_for_status()
         data = response.json()
         return Response(data)
@@ -96,8 +101,12 @@ class StockMarketDataView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09?adjusted=true&apiKey={settings.POLYGON_API_KEY}"
-        response = requests.get(url, timeout=10)
+        url = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2023-01-09"
+        response = requests.get(
+            url,
+            params={"adjusted": "true", "apiKey": required_provider_credential("POLYGON_API_KEY")},
+            timeout=10,
+        )
         response.raise_for_status()
         data = response.json()
         return Response(data)

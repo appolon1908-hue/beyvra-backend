@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info: {title: Beyvra Treasury Simulation API, version: 1.0.0}
+servers: [{url: /api/v1}]
+security: [{bearerAuth: []}]
+paths:
+  /treasury/accounts: {get: {$ref: '#/components/x-read'}}
+  /treasury/cash: {get: {$ref: '#/components/x-read'}}
+  /treasury/cash/{currency}: {get: {$ref: '#/components/x-read'}}
+  /treasury/liquidity: {get: {$ref: '#/components/x-read'}}
+  /treasury/liquidity/{currency}: {get: {$ref: '#/components/x-read'}}
+  /institutional/liquidity: {get: {$ref: '#/components/x-read'}}
+  /treasury/collateral: {get: {$ref: '#/components/x-read'}}
+  /treasury/collateral/{asset}: {get: {$ref: '#/components/x-read'}}
+  /treasury/collateral/mobility/preview: {post: {$ref: '#/components/x-preview'}}
+  /treasury/funding-requirements: {get: {$ref: '#/components/x-read'}}
+  /treasury/funding-requirements/{id}: {get: {$ref: '#/components/x-read'}}
+  /treasury/intraday: {get: {$ref: '#/components/x-read'}}
+  /treasury/intraday/{currency}: {get: {$ref: '#/components/x-read'}}
+  /treasury/forecast: {get: {$ref: '#/components/x-read'}}
+  /treasury/forecast/{currency}: {get: {$ref: '#/components/x-read'}}
+  /treasury/transfer-plans/preview: {post: {$ref: '#/components/x-preview'}}
+  /treasury/transfer-plans: {get: {$ref: '#/components/x-read'}}
+  /treasury/transfer-plans/{id}: {get: {$ref: '#/components/x-read'}}
+  /treasury/settlement-funding: {get: {$ref: '#/components/x-read'}}
+  /treasury/settlement-funding/{settlement_id}: {get: {$ref: '#/components/x-read'}}
+  /treasury/stress/preview: {post: {$ref: '#/components/x-preview'}}
+  /treasury/reconciliation/status: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/accounts: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/accounts/{id}: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/transfer-plans: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/transfer-plans/{id}/simulate: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/transfer-plans/{id}/cancel: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/stress-scenarios: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/stress/run: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/exceptions: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/exceptions/{id}: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/exceptions/{id}/assign: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/exceptions/{id}/escalate: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/exceptions/{id}/resolve: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/reconciliation: {get: {$ref: '#/components/x-read'}}
+  /operator/treasury/reconciliation/run: {post: {$ref: '#/components/x-preview'}}
+  /operator/treasury/funding-requirements/{id}/evidence: {get: {$ref: '#/components/x-read'}}
+components:
+  securitySchemes: {bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}}
+  x-read:
+    summary: Tenant-scoped simulation/readiness data
+    responses: {'200': {description: Simulation response}, '401': {description: Authentication required}, '403': {description: Tenant or role denied}}
+  x-preview:
+    summary: Side-effect-free simulation preview
+    responses: {'200': {description: Simulation result with no financial effect}, '400': {description: Safe validation error}, '403': {description: Tenant or role denied}}

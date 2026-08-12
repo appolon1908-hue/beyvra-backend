@@ -1,0 +1,47 @@
+services:
+  static-init:
+    command: ["sh", "-c", "chown -R 100:101 /app/static"]
+
+  web:
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      SIMULATED_EXECUTION_SCENARIO: IMMEDIATE_FULL_FILL
+      SIMULATED_EXECUTION_INLINE: "false"
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+
+  daphne:
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+
+  simulated-execution-consumer:
+    user: "999:999"
+    environment:
+      DEPLOYMENT_ENV: staging
+      SIMULATED_TRADING_ENABLED: "true"
+      SIMULATED_EXECUTION_SCENARIO: IMMEDIATE_FULL_FILL
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+
+  canonical-outbox-publisher:
+    user: "999:999"
+
+  realtime_bridge:
+    user: "999:999"
+
+  demo-event-publisher:
+    user: "999:999"
+
+  celery_beat:
+    command: ["celery", "-A", "FX", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+    entrypoint: []
+
+  celery-flower:
+    command: ["sh", "-c", "celery -A FX flower --port=5555"]

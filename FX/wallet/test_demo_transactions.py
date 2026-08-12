@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from wallet.models import Currency, Transaction, Wallet
 
 
-@override_settings(PAPER_TRADING_ONLY=True)
+@override_settings(PAPER_TRADING_ONLY=True, SIMULATED_TRADING_ENABLED=True)
 class DemoTransactionTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

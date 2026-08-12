@@ -3,15 +3,25 @@ from django.contrib.auth.hashers import check_password
 from django.core.validators import MinLengthValidator
 from django.db import transaction
 from django.utils import timezone
+from operations.services import evaluate_login_risk, record_login_failure
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from security.login_anomaly_detection import AnomalyDetector
 from security.utils import password_check_policy
 from users import messages
 from users.models import TwoFactorAuthType, UserDeviceInfo
-from users.tasks import async_send_device_verification_email, async_send_email_verification_email
-from users.utils import ALPHABETS_REGEX_VALIDATOR, PHONE_REGEX_VALIDATOR, get_user_location, mask_email, mask_phone
+from users.tasks import (
+    async_send_device_verification_email,
+    async_send_email_verification_email,
+)
+from users.utils import (
+    ALPHABETS_REGEX_VALIDATOR,
+    PHONE_REGEX_VALIDATOR,
+    get_user_location,
+    mask_email,
+    mask_phone,
+)
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 
@@ -70,7 +80,12 @@ class UserSerializer(BaseUserSerializer):
             "password_max_length",
         )
         extra_kwargs = {
-            "password": {"write_only": True, "min_length": 5, "max_length": 20, "validators": [password_check_policy]}
+            "password": {
+                "write_only": True,
+                "min_length": 5,
+                "max_length": 20,
+                "validators": [password_check_policy],
+            }
         }
         read_only_fields = USER_READ_ONLY
 
@@ -110,7 +125,15 @@ class AdminUserStatusSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = get_user_model()
-        fields = ["id", "email", "is_active", "status", "role", "last_login", "date_joined"]
+        fields = [
+            "id",
+            "email",
+            "is_active",
+            "status",
+            "role",
+            "last_login",
+            "date_joined",
+        ]
 
     def get_status(self, obj):
         if not obj.is_active:
@@ -126,7 +149,19 @@ class UserUpdateSerializer(BaseUserSerializer):
 
     class Meta:
         model = get_user_model()
-        exclude = ("groups", "user_permissions", "password")
+        exclude = (
+            "groups",
+            "user_permissions",
+            "password",
+            "mfa_secret",
+            "password_complexity",
+            "custom_characters",
+            "ip_restricted",
+            "two_fa_type",
+            "password_strength",
+            "password_min_length",
+            "password_max_length",
+        )
         read_only_fields = USER_READ_ONLY
 
     def update(self, instance, validated_data):
@@ -159,11 +194,12 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     new_password = serializers.CharField(
-        max_length=20,
-        write_only=True,
+        max_length=20, write_only=True,
         validators=[MinLengthValidator(8), password_check_policy],
     )
-    new_password_confirm = serializers.CharField(max_length=20, write_only=True)
+    new_password_confirm = serializers.CharField(
+        max_length=20, write_only=True
+    )
 
     def validate(self, data):
         if data["new_password"] != data["new_password_confirm"]:
@@ -174,15 +210,21 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(max_length=20)
-    new_password = serializers.CharField(max_length=20, validators=[MinLengthValidator(5)])
-    new_password_confirm = serializers.CharField(max_length=20, validators=[MinLengthValidator(5)])
+    new_password = serializers.CharField(
+        max_length=20, validators=[MinLengthValidator(5)]
+    )
+    new_password_confirm = serializers.CharField(
+        max_length=20, validators=[MinLengthValidator(5)]
+    )
 
     def validate(self, data):
         if data["new_password"] != data["new_password_confirm"]:
             raise serializers.ValidationError("Passwords must match.")
 
         if data["old_password"] == data["new_password"]:
-            raise serializers.ValidationError("Old password and new password should be different.")
+            raise serializers.ValidationError(
+                "Old password and new password should be different."
+            )
 
         return data
 
@@ -204,28 +246,27 @@ class LoginSerializer(serializers.Serializer):
         if email and password:
             user = get_user_model().objects.filter(email__iexact=email.strip()).first()
             if user is not None:
-                # check for user anomalies
-                detector = AnomalyDetector(user)
-                if not detector.check_for_anomalies():
-                    raise serializers.ValidationError(
-                        messages.ANOMALY_DETECTED,
-                        code="anomaly_detected",
-                    )
                 if not check_password(password, user.password):
-                    raise serializers.ValidationError(
-                        "Invalid credentials.",
-                        code="authorization",
-                    )
+                    record_login_failure(user=user)
+                    raise AuthenticationFailed("Invalid credentials.")
                 if not user.is_active:
-                    raise serializers.ValidationError(messages.USER_BANNED_CONTACT_SUPPORT)
+                    raise serializers.ValidationError(
+                        messages.USER_BANNED_CONTACT_SUPPORT
+                    )
+                risk_decision = evaluate_login_risk(
+                    account=user, request=self.context.get("request")
+                )
+                if risk_decision.decision in {"DENY", "REVIEW"}:
+                    raise AuthenticationFailed("Invalid credentials.")
             else:
-                raise serializers.ValidationError("Invalid credentials.", code="authorization")
+                raise AuthenticationFailed("Invalid credentials.")
         else:
             raise serializers.ValidationError(
                 'Must include "email" and "password".',
                 code="authorization",
             )
         data["user"] = user
+        data["risk_decision"] = risk_decision
         return data
 
     def save(self, request):
@@ -242,7 +283,12 @@ class LoginSerializer(serializers.Serializer):
     def _handle_user_device_info(self, user, ip_address, user_agent, location, device):
         device_info, created = UserDeviceInfo.objects.get_or_create(
             user=user,
-            defaults={"ip_address": ip_address, "user_agent": user_agent, "location": location, "device": device},
+            defaults={
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "location": location,
+                "device": device,
+            },
         )
         if not created and device_info.ip_address != ip_address:
             device_info.ip_address = ip_address
@@ -268,7 +314,9 @@ class LogoutSerializer(serializers.Serializer):
             refresh = RefreshToken(self.token)
             if str(refresh.get("user_id")) != str(request.user.pk):
                 raise serializers.ValidationError(
-                    {"refresh": "Refresh token does not belong to the authenticated user."}
+                    {
+                        "refresh": "Refresh token does not belong to the authenticated user."
+                    }
                 )
             refresh.blacklist()
         except TokenError:
@@ -283,7 +331,9 @@ class ResendEmailVerfySerializer(serializers.Serializer):
         if email:
             user = get_user_model().objects.filter(email=email).first()
             if user is None:
-                raise serializers.ValidationError({"detail": "User with that email has not registered yet."})
+                raise serializers.ValidationError(
+                    {"detail": "User with that email has not registered yet."}
+                )
         else:
             raise serializers.ValidationError(
                 {"detail": 'Must include "email" field'},
@@ -301,13 +351,17 @@ class KYCFileSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # if kyc status is verified do not allow editing
         if validated_data["kyc"].verified:
-            raise serializers.ValidationError("Can not update already verified document.")
+            raise serializers.ValidationError(
+                "Can not update already verified document."
+            )
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         # if kyc status is verified do not allow editing
         if instance.kyc.verified:
-            raise serializers.ValidationError("Can not update already verified document.")
+            raise serializers.ValidationError(
+                "Can not update already verified document."
+            )
         return super().update(instance, validated_data)
 
 
@@ -353,14 +407,18 @@ class KYCSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # if kyc status is verified do not allow editing
         if instance.verified:
-            raise serializers.ValidationError("Can not update already verified document.")
+            raise serializers.ValidationError(
+                "Can not update already verified document."
+            )
         # status should always be pending when kyc updated
         instance.status = "P"
         return super().update(instance, validated_data)
 
 
 class UserVerificationStatusSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=["PENDING", "APPROVED", "REJECTED", "VERIFIED"])
+    status = serializers.ChoiceField(
+        choices=["PENDING", "APPROVED", "REJECTED", "VERIFIED"]
+    )
 
     def validate(self, data):
         user_id = self.context["view"].kwargs.get("user_id")
@@ -369,14 +427,20 @@ class UserVerificationStatusSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError("User not found.")
         if user.is_superuser:
-            raise serializers.ValidationError("Cannot perform this action for a superuser.")
+            raise serializers.ValidationError(
+                "Cannot perform this action for a superuser."
+            )
         if user.is_staff:
-            raise serializers.ValidationError("Cannot perform this action for a staff user.")
+            raise serializers.ValidationError(
+                "Cannot perform this action for a staff user."
+            )
         return data
 
 
 class User2FAMethodSerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
+    method = serializers.ChoiceField(
+        choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name]
+    )
 
     def validate(self, data):
         # Accessing the user from the request
@@ -388,12 +452,19 @@ class User2FAMethodSerializer(serializers.Serializer):
 
 class PreferredLanguageSerializer(serializers.Serializer):
     preferred_language = serializers.ChoiceField(
-        choices=[("en", "English"), ("fr", "French"), ("es", "Spanish"), ("de", "German")],
+        choices=[
+            ("en", "English"),
+            ("fr", "French"),
+            ("es", "Spanish"),
+            ("de", "German"),
+        ],
         required=True,
         allow_blank=False,
     )
 
 
 class Global2FAMethodSerializer(serializers.Serializer):
-    method = serializers.ChoiceField(choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name])
+    method = serializers.ChoiceField(
+        choices=[TwoFactorAuthType.SMS.name, TwoFactorAuthType.AUTHENTICATOR_APP.name]
+    )
     confirm_override = serializers.BooleanField()

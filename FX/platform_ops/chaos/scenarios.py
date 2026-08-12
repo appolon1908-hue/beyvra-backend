@@ -1,0 +1,4 @@
+SCENARIOS=("API_WORKER_KILL","OUTBOX_WORKER_KILL","EXECUTION_CONSUMER_KILL","POST_TRADE_CONSUMER_KILL","VALUATION_WORKER_KILL","TREASURY_WORKER_KILL","REGULATORY_WORKER_KILL","REALTIME_BRIDGE_KILL","REDIS_STOP","NATS_DISCONNECT","JETSTREAM_CONSUMER_RESTART","POSTGRES_SESSION_KILL","NETWORK_DELAY","NETWORK_PARTITION")
+def precheck(*,environment,backup_verified,flags):
+    unsafe=[k for k,v in flags.items() if k.startswith(("REAL_","EXTERNAL_","LIVE_")) and v is not False]
+    return environment in {"TEST","ISOLATED_STAGING","SIMULATION"} and backup_verified is True and not unsafe

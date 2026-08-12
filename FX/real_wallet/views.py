@@ -174,6 +174,11 @@ class WalletAddressesView(APIView):
 class DepositListView(APIView):
     permission_classes = (IsAuthenticated,)
 
+    def post(self, request):
+        # Deposit initiation is intentionally unavailable until the real-money
+        # activation gate is independently approved and implemented.
+        return disabled_response(request, "real_wallet_deposits_enabled")
+
     def get(self, request):
         if not is_feature_enabled("real_wallet_read_enabled"):
             return disabled_response(request, "real_wallet_read_enabled")
@@ -189,6 +194,11 @@ class DepositListView(APIView):
 
 class WithdrawalListView(APIView):
     permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        # Withdrawal initiation must fail closed rather than exposing a generic
+        # method error while the real-money boundary is disabled.
+        return disabled_response(request, "real_wallet_withdrawals_enabled")
 
     def get(self, request):
         if not is_feature_enabled("real_wallet_read_enabled"):

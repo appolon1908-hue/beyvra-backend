@@ -12,8 +12,9 @@ from django.conf import settings
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.auth.tokens import default_token_generator
-from django.core.cache import cache
 from django.core import signing
+from django.middleware.csrf import get_token
+from django.core.cache import cache
 from django.core.signing import BadSignature, SignatureExpired
 from django.db import connection, transaction
 from django.db.models import Case, CharField, Q, Sum, Value, When
@@ -26,6 +27,12 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from operations.services import (
+    issue_session_token_pair,
+    revoke_bound_session,
+    revoke_sessions_after_credential_change,
+)
+from operations.authentication import SessionBoundJWTAuthentication
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
@@ -34,9 +41,15 @@ from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import APIView
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.views import TokenRefreshView
 from trade.models import Trade, Transaction
 from trade.models import DemoLedgerEntry
-from trade.serializers import TradeDetailSerializer, TradeHistorySerializer, TransactionSerializer
+from trade.serializers import (
+    TradeDetailSerializer,
+    TradeHistorySerializer,
+    TransactionSerializer,
+)
 from users import messages
 from users.models import User
 from users.serializers import (
@@ -110,9 +123,13 @@ class DeleteUserView(generics.GenericAPIView):
         try:
             user_to_delete = User.objects.get(email=user)
         except User.DoesNotExist:
-            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+            )
         user_to_delete.delete()
-        return Response({"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK
+        )
 
 
 class GetUserView(APIView):
@@ -124,7 +141,9 @@ class GetUserView(APIView):
         try:
             user = User.objects.get(id=id)
         except User.DoesNotExist:
-            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+            )
 
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -136,12 +155,16 @@ class SendEmailVerificationView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid(raise_exception=True):
             user = serializer.validated_data["user"]
 
             async_send_email_verification_email.delay(user.id)
-            return Response({"detail": "Verification Email sent."}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"detail": "Verification Email sent."}, status=status.HTTP_201_CREATED
+            )
         return Response(
             {"detail": "Invalid data."},
             status=status.HTTP_400_BAD_REQUEST,
@@ -161,7 +184,9 @@ def request_email_verification(request):
     # Send verification email asynchronously
     async_send_email_verification_email.delay(user.id)
 
-    return Response({"detail": messages.VERIFICATION_EMAIL_SENT}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": messages.VERIFICATION_EMAIL_SENT}, status=status.HTTP_200_OK
+    )
 
 
 @api_view(["GET"])
@@ -195,7 +220,9 @@ class SendPhoneVerificationView(APIView):
     def post(self, request):
         async_send_mobile_verification_code.delay(request.user.id)
 
-        return Response({"detail": "Verification Message sent."}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Verification Message sent."}, status=status.HTTP_200_OK
+        )
 
 
 @extend_schema(request=VerifyPhoneCodeSerializer)
@@ -218,7 +245,9 @@ class VerifyPhoneCodeView(APIView):
             if verification_code.failed_checks >= 3:
                 verification_code.delete()
                 return Response(
-                    {"detail": "Verification failed checks limit exceeded. Please request new code."},
+                    {
+                        "detail": "Verification failed checks limit exceeded. Please request new code."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -290,6 +319,7 @@ def password_reset_confirm(request, uidb64, token):
         user.set_password(new_password)
         user._password_changed = True
         user.save()
+        revoke_sessions_after_credential_change(user=user, event_type="PASSWORD_RESET")
 
         for outstanding_token in OutstandingToken.objects.filter(user=user):
             BlacklistedToken.objects.get_or_create(token=outstanding_token)
@@ -319,7 +349,9 @@ def password_change(request):
     user = request.user
 
     if not user.check_password(old_password):
-        return Response({"detail": "Incorrect old password"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Incorrect old password"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     user.set_password(new_password)
     # Reset verification status if user is in change password status
@@ -327,8 +359,11 @@ def password_change(request):
         user.verification_status = ""
     user._password_changed = True
     user.save()
+    revoke_sessions_after_credential_change(user=user, event_type="PASSWORD_RESET")
 
-    return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": "Password updated successfully"}, status=status.HTTP_200_OK
+    )
 
 
 class ManageUserView(generics.RetrieveUpdateAPIView):
@@ -400,31 +435,51 @@ class VerifyMFAView(generics.GenericAPIView):
                 payload = signing.loads(login_token, salt="mfa-login", max_age=300)
                 user = User.objects.get(pk=payload["user_id"], is_active=True)
             except (BadSignature, SignatureExpired, KeyError, User.DoesNotExist):
-                return Response({"detail": "Invalid or expired MFA challenge."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    {"detail": "Invalid or expired MFA challenge."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
         elif request.user.is_authenticated:
             user = request.user
         else:
-            return Response({"detail": "Authentication is required."}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {"detail": "Authentication is required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp_code = serializer.validated_data["otp"]
         totp = pyotp.TOTP(user.mfa_secret)
         if totp.verify(otp_code):
-            if not user.is_mfa_enabled:  # to validate mfa is enabled
+            newly_enabled = not user.is_mfa_enabled
+            if newly_enabled:  # to validate mfa is enabled
                 user.is_mfa_enabled = True
             if not user.two_factor_authentication_enabled:
                 user.two_factor_authentication_enabled = True
             user.save()
+            if newly_enabled:
+                revoke_sessions_after_credential_change(
+                    user=user, event_type="MFA_ENABLED"
+                )
             response = {"message": "OTP verified successfully"}
             if completing_login:
-                refresh = AuthTokenObtainPairSerializer.get_token(user)
-                response.update({
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                    "user": UserSerializer(user).data,
-                })
-            return Response(response, status=status.HTTP_200_OK)
-        return Response({"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST)
+                credentials = issue_session_token_pair(
+                    user=user, request=request, mfa_verified=True
+                )
+                response.update(
+                    {
+                        "refresh": credentials["refresh"],
+                        "access": credentials["access"],
+                        "user": UserSerializer(user).data,
+                    }
+                )
+            result = Response(response, status=status.HTTP_200_OK)
+            if completing_login:
+                set_browser_auth_cookies(result, request, credentials)
+            return result
+        return Response(
+            {"error": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 @api_view(["GET"])
@@ -446,7 +501,9 @@ class LoginView(generics.CreateAPIView):
     )
     @csrf_exempt
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid():
             user = serializer.validated_data["user"]
             user_logged_in.send(sender=user.__class__, request=request, user=user)
@@ -459,6 +516,18 @@ class LoginView(generics.CreateAPIView):
 
             serializer.save(request)
 
+            risk_decision = serializer.validated_data["risk_decision"]
+            if risk_decision.decision == "STEP_UP" and not (
+                user.is_mfa_enabled and user.two_factor_authentication_enabled
+            ):
+                return Response(
+                    {
+                        "code": "STEP_UP_REQUIRED",
+                        "message": "Additional verification is required.",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             if user.two_factor_authentication_enabled:
                 login_token = signing.dumps({"user_id": user.pk}, salt="mfa-login")
                 return Response(
@@ -466,18 +535,25 @@ class LoginView(generics.CreateAPIView):
                     status=status.HTTP_202_ACCEPTED,
                 )
 
-            refresh = AuthTokenObtainPairSerializer.get_token(user)
+            credentials = issue_session_token_pair(
+                user=user, request=request, mfa_verified=False
+            )
 
-            return Response(
+            response = Response(
                 {
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
+                    "refresh": credentials["refresh"],
+                    "access": credentials["access"],
                     "user": UserSerializer(user).data,
                 },
                 status=status.HTTP_200_OK,
             )
+            set_browser_auth_cookies(response, request, credentials)
+            return response
         non_field_errors = serializer.errors.get("non_field_errors", [])
-        invalid_credentials = any(getattr(error, "code", None) == "authorization" for error in non_field_errors)
+        invalid_credentials = any(
+            getattr(error, "code", None) == "authorization"
+            for error in non_field_errors
+        )
         return Response(
             serializer.errors,
             status=status.HTTP_401_UNAUTHORIZED if invalid_credentials else status.HTTP_400_BAD_REQUEST,
@@ -564,10 +640,82 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = self.serializer_class(data=request.data)
+        serializer = self.serializer_class(
+            data={
+                "refresh": request.COOKIES.get("beyvra_refresh")
+                or request.data.get("refresh")
+            }
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save(request)
-        return Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
+        session_id = request.auth.get("session_id") if request.auth else None
+        if session_id:
+            revoke_bound_session(user=request.user, session_id=session_id)
+        response = Response({"detail": "Logged out"}, status=status.HTTP_200_OK)
+        clear_browser_auth_cookies(response)
+        return response
+
+
+def set_browser_auth_cookies(response, request, credentials):
+    cookie_options = {
+        "secure": True,
+        "httponly": True,
+        "samesite": "Strict",
+    }
+    response.set_cookie(
+        "beyvra_access", credentials["access"], path="/", **cookie_options
+    )
+    response.set_cookie(
+        "beyvra_refresh",
+        credentials["refresh"],
+        path="/",
+        **cookie_options,
+    )
+    response.set_cookie(
+        "csrftoken",
+        get_token(request),
+        path="/",
+        secure=True,
+        httponly=False,
+        samesite="Strict",
+    )
+
+
+def clear_browser_auth_cookies(response):
+    response.delete_cookie("beyvra_access", path="/", samesite="Strict")
+    response.delete_cookie(
+        "beyvra_refresh", path="/", samesite="Strict"
+    )
+    response.delete_cookie("csrftoken", path="/", samesite="Strict")
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        body_supplied = "refresh" in request.data
+        refresh_token = (
+            request.data.get("refresh")
+            if body_supplied
+            else request.COOKIES.get("beyvra_refresh")
+        )
+        if refresh_token is None:
+            raise AuthenticationFailed("Authentication is required.")
+        if not body_supplied:
+            SessionBoundJWTAuthentication.enforce_csrf(request)
+        serializer = self.get_serializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise InvalidToken("Refresh token is invalid or expired.") from exc
+        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+        response.set_cookie(
+            "beyvra_access",
+            serializer.validated_data["access"],
+            path="/",
+            secure=True,
+            httponly=True,
+            samesite="Strict",
+        )
+        return response
 
 
 class KYCFileListCreateView(generics.ListCreateAPIView):
@@ -626,16 +774,35 @@ class KYCUpdateView(generics.UpdateAPIView):
     description="Fetch users based on active status, and username. Only accessible by admins.",
     parameters=[
         OpenApiParameter(
-            "is_active", description="Filter by active status. Pass 'true' or 'false'.", required=False, type=bool
+            "is_active",
+            description="Filter by active status. Pass 'true' or 'false'.",
+            required=False,
+            type=bool,
         ),
         OpenApiParameter(
-            "email", description="Filter by email (partial, case-insensitive match).", required=False, type=str
+            "email",
+            description="Filter by email (partial, case-insensitive match).",
+            required=False,
+            type=str,
         ),
-        OpenApiParameter("role", description="Filter by user role. Pass 'admin' or 'user'.", required=False, type=str),
-        OpenApiParameter("trader_id", description="Filter by trading id.", required=False, type=int),
-        OpenApiParameter("first_name", description="Filter by first name.", required=False, type=str),
-        OpenApiParameter("last_name", description="Filter by last name.", required=False, type=str),
-        OpenApiParameter("phone", description="Filter by phone number.", required=False, type=str),
+        OpenApiParameter(
+            "role",
+            description="Filter by user role. Pass 'admin' or 'user'.",
+            required=False,
+            type=str,
+        ),
+        OpenApiParameter(
+            "trader_id", description="Filter by trading id.", required=False, type=int
+        ),
+        OpenApiParameter(
+            "first_name", description="Filter by first name.", required=False, type=str
+        ),
+        OpenApiParameter(
+            "last_name", description="Filter by last name.", required=False, type=str
+        ),
+        OpenApiParameter(
+            "phone", description="Filter by phone number.", required=False, type=str
+        ),
     ],
     responses={
         200: UserSerializer(many=True),
@@ -690,7 +857,10 @@ class FetchUserView(generics.ListAPIView):
     def list(self, request):
         user = request.user
         if not user.is_staff:
-            return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": messages.UNAUTHORIZED_ACTION},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         queryset = self.get_queryset()
         serializer = UserSerializer(queryset, many=True)
@@ -702,13 +872,18 @@ class FetchUserDetailView(generics.GenericAPIView):
 
     def get(self, request, user_id):
         if not request.user.is_staff:
-            return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": messages.UNAUTHORIZED_ACTION},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             # Retrieve the user by ID
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Attempt to retrieve the user's KYC data
         kyc = KYC.objects.filter(user=user).first()
@@ -719,14 +894,18 @@ class FetchUserDetailView(generics.GenericAPIView):
 
         # Retrieve the user's KYC files based on the KYC instance
         kyc_files = KYCFile.objects.filter(kyc=kyc) if kyc else []
-        kyc_file_data = KYCFileSerializer(kyc_files, many=True).data if kyc_files else []
+        kyc_file_data = (
+            KYCFileSerializer(kyc_files, many=True).data if kyc_files else []
+        )
 
         # Retrieve the user's wallets
         wallets = Wallet.objects.filter(user=user, is_active=True, is_archived=False)
         wallet_data = WalletDetailSerializer(wallets, many=True).data
 
         # Retrieve trades related to the user's wallets
-        trades = Trade.objects.filter(wallet__in=wallets).select_related("wallet", "asset", "transaction", "category")
+        trades = Trade.objects.filter(wallet__in=wallets).select_related(
+            "wallet", "asset", "transaction", "category"
+        )
         trade_data = TradeDetailSerializer(trades, many=True).data
 
         # Return the user data, KYC data, KYC files, wallets, and trades
@@ -744,7 +923,10 @@ class FetchUserDetailView(generics.GenericAPIView):
     def delete(self, request, user_id):
         user = request.user
         if not user.is_staff:
-            return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": messages.UNAUTHORIZED_ACTION},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -754,10 +936,14 @@ class FetchUserDetailView(generics.GenericAPIView):
         try:
             user_to_delete = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+            )
 
         user_to_delete.delete()
-        return Response({"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK
+        )
 
     @extend_schema(
         request=UserUpdateSerializer,
@@ -766,7 +952,10 @@ class FetchUserDetailView(generics.GenericAPIView):
     def patch(self, request, user_id):
         user = request.user
         if not user.is_staff:
-            return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": messages.UNAUTHORIZED_ACTION},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -775,13 +964,19 @@ class FetchUserDetailView(generics.GenericAPIView):
         try:
             user_to_update = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        serializer = UserUpdateSerializer(user_to_update, data=request.data, partial=True)
+        serializer = UserUpdateSerializer(
+            user_to_update, data=request.data, partial=True
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response({"detail": messages.USER_UPDATED_SUCCESS}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": messages.USER_UPDATED_SUCCESS}, status=status.HTTP_200_OK
+        )
 
 
 class BulkCreateUserView(APIView):
@@ -805,10 +1000,15 @@ class BulkCreateUserView(APIView):
     def post(self, request):
         file = request.FILES.get("file")
         if not file:
-            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         if not file.name.endswith(".csv"):
-            return Response({"detail": "Only CSV files are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Only CSV files are allowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -818,9 +1018,13 @@ class BulkCreateUserView(APIView):
         try:
             df = pd.read_csv(file, dtype={"phone_number": str})
         except pd.errors.EmptyDataError:
-            return Response({"detail": "Empty file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Empty file uploaded."}, status=status.HTTP_400_BAD_REQUEST
+            )
         except pd.errors.ParserError:
-            return Response({"detail": "Invalid file format."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid file format."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         errors = []
         created_users = []
@@ -829,7 +1033,11 @@ class BulkCreateUserView(APIView):
         demo_currency = Currency.objects.filter(name="Đ").first()
 
         # Temporarily disable the post_save signal
-        post_save.disconnect(update_user_upon_creation, sender=User, dispatch_uid="update_user_upon_creation")
+        post_save.disconnect(
+            update_user_upon_creation,
+            sender=User,
+            dispatch_uid="update_user_upon_creation",
+        )
 
         for index, row in df.iterrows():
             # Values
@@ -856,11 +1064,23 @@ class BulkCreateUserView(APIView):
                 continue
 
             if User.objects.filter(email=email).exists():
-                errors.append({"row": index + 1, "email": email, "reason": f"User with email {email} already exists."})
+                errors.append(
+                    {
+                        "row": index + 1,
+                        "email": email,
+                        "reason": f"User with email {email} already exists.",
+                    }
+                )
                 continue
 
             if User.objects.filter(phone_number=phone).exists():
-                errors.append({"row": index + 1, "phone": phone, "reason": f"User with phone {phone} already exists."})
+                errors.append(
+                    {
+                        "row": index + 1,
+                        "phone": phone,
+                        "reason": f"User with phone {phone} already exists.",
+                    }
+                )
                 continue
 
             if not NAME_REGEX.match(fname) or not NAME_REGEX.match(lname):
@@ -874,7 +1094,13 @@ class BulkCreateUserView(APIView):
                 continue
 
             if not PHONE_REGEX.match(phone):
-                errors.append({"row": index + 1, "email": email, "reason": "Invalid phone number."})
+                errors.append(
+                    {
+                        "row": index + 1,
+                        "email": email,
+                        "reason": "Invalid phone number.",
+                    }
+                )
                 continue
 
             if len(fname) > 20 or len(lname) > 20:
@@ -888,7 +1114,9 @@ class BulkCreateUserView(APIView):
                 continue
 
             if not EMAIL_REGEX.match(email):
-                errors.append({"row": index + 1, "email": email, "reason": "Invalid email."})
+                errors.append(
+                    {"row": index + 1, "email": email, "reason": "Invalid email."}
+                )
                 continue
 
             # Generate random password for user
@@ -914,29 +1142,49 @@ class BulkCreateUserView(APIView):
                 users = User.objects.bulk_create([user for user, _ in user_objs])
 
             # Prepare wallets and send welcome emails after users have been created
-            for user, temp_password in zip(users, [temp_password for _, temp_password in user_objs]):
+            for user, temp_password in zip(
+                users, [temp_password for _, temp_password in user_objs]
+            ):
                 wallet_objs.append(
                     Wallet(
-                        name=DEMO_WALLET_NAME, currency=demo_currency, user=user, balance=DEMO_BALANCE, is_real=False
+                        name=DEMO_WALLET_NAME,
+                        currency=demo_currency,
+                        user=user,
+                        balance=DEMO_BALANCE,
+                        is_real=False,
                     )
                 )
 
                 # Send welcome email with temporary password
-                async_send_welcome_email.delay(user.email, user.first_name, temp_password)
+                async_send_welcome_email.delay(
+                    user.email, user.first_name, temp_password
+                )
 
                 created_users.append(user.email)
 
             # Bulk create wallets
             Wallet.objects.bulk_create(wallet_objs)
 
-        except Exception as e:
-            errors.append({"row": index + 1, "email": email, "reason": f"Error creating user: {str(e)}"})
+        except Exception:
+            errors.append(
+                {
+                    "row": index + 1,
+                    "email": email,
+                    "reason": "User creation failed.",
+                }
+            )
 
         # Reconnect the post_save signal
-        post_save.connect(update_user_upon_creation, sender=User, dispatch_uid="update_user_upon_creation")
+        post_save.connect(
+            update_user_upon_creation,
+            sender=User,
+            dispatch_uid="update_user_upon_creation",
+        )
 
         success_message = (
-            f"Users created successfully: {', '.join(created_users)}." if created_users else "No users were created."
+            f"Users created successfully: {', '.join(created_users)}."
+            if created_users
+            else "No users were created."
         )
 
         if errors:
@@ -962,20 +1210,28 @@ class BulkCreateUserView(APIView):
 def ban_user(request, user_id):
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user_to_ban = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     # Prevent banning of other staff members
     if user_to_ban.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     # Check if the user is already banned
     if not user_to_ban.is_active:
-        return Response({"detail": messages.USER_ALREADY_BANNED}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": messages.USER_ALREADY_BANNED}, status=status.HTTP_200_OK
+        )
 
     # Deactivate the user
     user_to_ban.is_active = False
@@ -1001,22 +1257,30 @@ def ban_user(request, user_id):
 def unban_user(request, user_id):
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user_to_unban = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     # Check if the user is already active
     if user_to_unban.is_active:
-        return Response({"detail": messages.USER_ALREADY_UNBANNED}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": messages.USER_ALREADY_UNBANNED}, status=status.HTTP_200_OK
+        )
 
     # Activate the user
     user_to_unban.is_active = True
     user_to_unban.save()
 
-    return Response({"detail": messages.USER_UNBANNED_SUCCESS}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": messages.USER_UNBANNED_SUCCESS}, status=status.HTTP_200_OK
+    )
 
 
 @extend_schema(
@@ -1031,7 +1295,9 @@ def admin_dashboard_overview(request):
 
     # Check if the user is a staff/admin
     if not user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     # User statistics
     total_users = User.objects.filter(is_staff=False).count()
@@ -1080,16 +1346,22 @@ def admin_dashboard_overview(request):
 def get_user_trading_activity(request, user_id):
     user = request.user
     if not user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     trades = Trade.objects.filter(wallet__user=user)
 
-    return Response(TradeDetailSerializer(trades, many=True).data, status=status.HTTP_200_OK)
+    return Response(
+        TradeDetailSerializer(trades, many=True).data, status=status.HTTP_200_OK
+    )
 
 
 @extend_schema(
@@ -1104,12 +1376,16 @@ def get_user_trading_activity(request, user_id):
 def get_user_trading_history(request, user_id):
     user = request.user
     if not user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     trades = Trade.objects.filter(wallet__user=user)
     paginator = LimitOffsetPagination()
@@ -1121,7 +1397,11 @@ def get_user_trading_history(request, user_id):
 
 @extend_schema(
     description="Get user trading statistics",
-    responses={200: dict, 403: {"description": "Unauthorized action."}, 404: {"description": "User not found."}},
+    responses={
+        200: dict,
+        403: {"description": "Unauthorized action."},
+        404: {"description": "User not found."},
+    },
 )
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -1130,7 +1410,9 @@ def get_user_trading_statistics(request, user_id):
 
     # Check if the requesting user is staff
     if not user.is_staff:
-        return Response({"detail": "Unauthorized action."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": "Unauthorized action."}, status=status.HTTP_403_FORBIDDEN
+        )
 
     # Fetch the user for whom to retrieve statistics
     try:
@@ -1166,10 +1448,18 @@ def get_user_trading_statistics(request, user_id):
     total_transactions = transactions.count()
 
     # Aggregate amounts for different transaction types
-    total_deposit_amount = transactions.filter(type="D").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_withdrawal_amount = transactions.filter(type="W").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_traded_amount = transactions.filter(type="TD").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_transfer_amount = transactions.filter(type="TN").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    total_deposit_amount = (
+        transactions.filter(type="D").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_withdrawal_amount = (
+        transactions.filter(type="W").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_traded_amount = (
+        transactions.filter(type="TD").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_transfer_amount = (
+        transactions.filter(type="TN").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
 
     balance = user_wallets.aggregate(Sum("balance"))["balance__sum"] or 0.00
 
@@ -1185,7 +1475,9 @@ def get_user_trading_statistics(request, user_id):
             "total_traded_amount": total_traded_amount,
             "total_transfer_amount": total_transfer_amount,
             "balance": balance - total_withdrawal_amount,
-            "pending_transactions": TransactionSerializer(pending_transactions, many=True).data,
+            "pending_transactions": TransactionSerializer(
+                pending_transactions, many=True
+            ).data,
         },
         status=status.HTTP_200_OK,
     )
@@ -1204,16 +1496,22 @@ def get_user_trading_statistics(request, user_id):
 def get_user_kyc(request, user_id):
     user = request.user
     if not user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     user_kyc = KYC.objects.filter(user=user).first()
     if not user_kyc:
-        return Response({"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     if user_kyc:
         kyc_data = GetKYCSerializer(user_kyc).data
@@ -1233,19 +1531,27 @@ def get_user_kyc(request, user_id):
 def verify_user_kyc(request, user_id):
     user = request.user
     if not user.is_staff:
-        return Response({"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
+        )
 
     try:
         user_profile = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     kyc = KYC.objects.filter(user=user_profile).first()
     if not kyc:
-        return Response({"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "User KYC not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     if kyc.verified:
-        return Response({"detail": "User KYC already verified."}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "User KYC already verified."}, status=status.HTTP_200_OK
+        )
 
     if request.method == "GET":
         # Extract KYC fields
@@ -1274,7 +1580,9 @@ def verify_user_kyc(request, user_id):
         kyc.status = "S"
         kyc.save()
 
-    return Response({"detail": "User KYC verified successfully."}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": "User KYC verified successfully."}, status=status.HTTP_200_OK
+    )
 
 
 @extend_schema(
@@ -1291,7 +1599,9 @@ def user_trading_statistics(request):
     try:
         target_user = User.objects.get(id=user.id)
     except User.DoesNotExist:
-        return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
+        )
 
     # Fetch all trades related to the user's wallets
     user_wallets = Wallet.objects.filter(user=target_user)
@@ -1321,10 +1631,18 @@ def user_trading_statistics(request):
     total_transactions = transactions.count()
 
     # Aggregate amounts for different transaction types
-    total_deposit_amount = transactions.filter(type="D").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_withdrawal_amount = transactions.filter(type="W").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_traded_amount = transactions.filter(type="TD").aggregate(Sum("amount"))["amount__sum"] or 0.00
-    total_transfer_amount = transactions.filter(type="TN").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    total_deposit_amount = (
+        transactions.filter(type="D").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_withdrawal_amount = (
+        transactions.filter(type="W").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_traded_amount = (
+        transactions.filter(type="TD").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
+    total_transfer_amount = (
+        transactions.filter(type="TN").aggregate(Sum("amount"))["amount__sum"] or 0.00
+    )
 
     balance = user_wallets.aggregate(Sum("balance"))["balance__sum"] or 0.00
 
@@ -1340,7 +1658,9 @@ def user_trading_statistics(request):
             "total_traded_amount": total_traded_amount,
             "total_transfer_amount": total_transfer_amount,
             "balance": balance - total_withdrawal_amount,
-            "pending_transactions": TransactionSerializer(pending_transactions, many=True).data,
+            "pending_transactions": TransactionSerializer(
+                pending_transactions, many=True
+            ).data,
         },
         status=status.HTTP_200_OK,
     )
@@ -1360,7 +1680,9 @@ def accept_kyc_file(request, file_id):
     try:
         kyc_file = KYCFile.objects.get(id=file_id)
     except KYCFile.DoesNotExist:
-        return Response({"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     # check action confirmation
     confirm_response = confirm_action(request)
@@ -1368,11 +1690,15 @@ def accept_kyc_file(request, file_id):
         return confirm_response
 
     if kyc_file.status == "A":
-        return Response({"detail": "KYC File already accepted."}, status=status.HTTP_409_CONFLICT)
+        return Response(
+            {"detail": "KYC File already accepted."}, status=status.HTTP_409_CONFLICT
+        )
 
     kyc_file.status = "A"
     kyc_file.save()
-    return Response({"detail": "KYC File accepted successfully."}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": "KYC File accepted successfully."}, status=status.HTTP_200_OK
+    )
 
 
 @extend_schema(
@@ -1390,7 +1716,9 @@ def reject_kyc_file(request, file_id):
     try:
         kyc_file = KYCFile.objects.get(id=file_id)
     except KYCFile.DoesNotExist:
-        return Response({"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "KYC File not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
     # check action confirmation
     confirm_response = confirm_action(request)
@@ -1398,14 +1726,21 @@ def reject_kyc_file(request, file_id):
         return confirm_response
 
     if kyc_file.status == "R":
-        return Response({"detail": "KYC File already rejected."}, status=status.HTTP_409_CONFLICT)
+        return Response(
+            {"detail": "KYC File already rejected."}, status=status.HTTP_409_CONFLICT
+        )
 
     if kyc_file.status == "A":
-        return Response({"detail": "KYC File already accepted. Cannot reject."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "KYC File already accepted. Cannot reject."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     kyc_file.status = "R"
     kyc_file.save()
-    return Response({"detail": "KYC File rejected successfully."}, status=status.HTTP_200_OK)
+    return Response(
+        {"detail": "KYC File rejected successfully."}, status=status.HTTP_200_OK
+    )
 
 
 class UserDocumentVerificationStatus(generics.GenericAPIView):
@@ -1510,7 +1845,9 @@ class UserSearchView(generics.ListAPIView):
         If no results are found, it will return an empty list.
         """
         queryset = User.objects.all()
-        query = self.request.query_params.get("query", "").strip()  # Strip any leading/trailing spaces
+        query = self.request.query_params.get(
+            "query", ""
+        ).strip()  # Strip any leading/trailing spaces
 
         if query:
             queryset = queryset.filter(
@@ -1568,7 +1905,9 @@ class UserSet2FAMethodView(generics.GenericAPIView):
 
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
-        serializer = self.get_serializer(data=request.data, context={"view": self})  # Pass request context properly
+        serializer = self.get_serializer(
+            data=request.data, context={"view": self}
+        )  # Pass request context properly
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1578,7 +1917,9 @@ class UserSet2FAMethodView(generics.GenericAPIView):
 @permission_classes([IsAuthenticated])
 def import_users(request):
     if not request.user.is_staff:
-        return Response({"error": "You do not have permission to perform this action."}, status=403)
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=403
+        )
 
     file = request.FILES.get("file")
     if not file:
@@ -1594,7 +1935,10 @@ def import_users(request):
     elif file.name.endswith(".xlsx"):
         df = pd.read_excel(file)
     else:
-        return Response({"error": "Unsupported file format. Please upload a CSV or Excel file."}, status=400)
+        return Response(
+            {"error": "Unsupported file format. Please upload a CSV or Excel file."},
+            status=400,
+        )
 
     users = []
     for index, row in df.iterrows():
@@ -1608,7 +1952,9 @@ def import_users(request):
             user = User.objects.create(**user_data)
             users.append(user)
         except ValidationError as e:
-            return Response({"error": f"Error creating user at row {index}: {e}"}, status=400)
+            return Response(
+                {"error": f"Error creating user at row {index}: {e}"}, status=400
+            )
 
     return Response({"message": f"{len(users)} users imported successfully."})
 
@@ -1617,7 +1963,9 @@ def import_users(request):
 @permission_classes([IsAuthenticated])
 def export_users(request):
     if not request.user.is_staff:
-        return Response({"error": "You do not have permission to perform this action."}, status=403)
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=403
+        )
 
     filters = {}
     if "is_active" in request.GET:
@@ -1648,12 +1996,17 @@ def export_users(request):
         return response
 
     elif "excel" in request.GET:
-        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         response["Content-Disposition"] = 'attachment; filename="users.xlsx"'
         df.to_excel(path_or_buffer=response, index=False, engine="openpyxl")
         return response
 
-    return Response({"error": "Invalid file type requested. Please specify 'csv' or 'excel'."}, status=400)
+    return Response(
+        {"error": "Invalid file type requested. Please specify 'csv' or 'excel'."},
+        status=400,
+    )
 
 
 class StandardResultsPagination(PageNumberPagination):
@@ -1666,7 +2019,9 @@ class StandardResultsPagination(PageNumberPagination):
 @permission_classes([IsAuthenticated])
 def search_users(request):
     if not request.user.is_staff:
-        return Response({"error": "You do not have permission to perform this action."}, status=403)
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=403
+        )
 
     search_query = request.GET.get("search", "")
     is_active = request.GET.get("is_active")
@@ -1722,7 +2077,9 @@ def user_roles(request, user_id):
 
         allowed_roles = ["Admin", "User", "Manager"]
         if role not in allowed_roles:
-            return Response({"error": f"Invalid role. Allowed roles: {allowed_roles}"}, status=400)
+            return Response(
+                {"error": f"Invalid role. Allowed roles: {allowed_roles}"}, status=400
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -1732,7 +2089,9 @@ def user_roles(request, user_id):
         user.role = role
         user.save()
 
-        return Response({"message": f"Role updated to {role} for user {user.email}."}, status=200)
+        return Response(
+            {"message": f"Role updated to {role} for user {user.email}."}, status=200
+        )
 
 
 @api_view(["GET"])
@@ -1752,7 +2111,9 @@ def assign_permissions_to_role(request):
         role = Group.objects.get(id=role_id)
         permissions = Permission.objects.filter(id__in=permission_ids)
         role.permissions.set(permissions)
-        return Response({"message": f"Permissions assigned to role '{role.name}' successfully."})
+        return Response(
+            {"message": f"Permissions assigned to role '{role.name}' successfully."}
+        )
     except Group.DoesNotExist:
         return Response({"error": "Role not found."}, status=404)
 
@@ -1766,9 +2127,13 @@ def assign_user_to_role(request):
         user = User.objects.get(id=user_id)
         role = Group.objects.get(id=role_id)
         user.groups.add(role)
-        return Response({"message": f"User '{user.username}' assigned to role '{role.name}' successfully."})
+        return Response(
+            {
+                "message": f"User '{user.username}' assigned to role '{role.name}' successfully."
+            }
+        )
     except (User.DoesNotExist, Group.DoesNotExist) as e:
-        return Response({"error": str(e)}, status=404)
+        raise ValidationError("Resource not found") from e
 
 
 @api_view(["POST"])
@@ -1798,7 +2163,10 @@ def toggle_user_status(request, user_id):
         user = User.objects.get(id=user_id)
         user.is_active = not user.is_active  # Toggle active status
         user.save()
-        return Response({"message": f"User status toggled. Active: {user.is_active}"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"User status toggled. Active: {user.is_active}"},
+            status=status.HTTP_200_OK,
+        )
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1812,7 +2180,8 @@ def update_user_status(request, user_id):
     status_value = request.data.get("status")
     if status_value not in ["active", "inactive"]:
         return Response(
-            {"error": "Invalid status. Please use 'active' or 'inactive'."}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid status. Please use 'active' or 'inactive'."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     # check action confirmation
@@ -1827,7 +2196,10 @@ def update_user_status(request, user_id):
         elif status_value == "inactive":
             user.is_active = False
         user.save()
-        return Response({"message": f"User status updated to {status_value}"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"User status updated to {status_value}"},
+            status=status.HTTP_200_OK,
+        )
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1847,9 +2219,12 @@ def create_user(request):
             email=data.get("email"),
             password=data.get("password"),
         )
-        return Response({"message": f"User {user.username} created successfully"}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"message": f"User {user.username} created successfully"},
+            status=status.HTTP_201_CREATED,
+        )
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        raise ValidationError("User creation failed") from e
 
 
 @api_view(["PUT"])
@@ -1870,7 +2245,10 @@ def update_user(request, user_id):
         user.last_name = data.get("last_name", user.last_name)
         user.email = data.get("email", user.email)
         user.save()
-        return Response({"message": f"User {user.username} updated successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"User {user.username} updated successfully"},
+            status=status.HTTP_200_OK,
+        )
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1884,14 +2262,19 @@ def delete_user(request, user_id):
     confirm = request.data.get("confirm", False)
     if not confirm:
         return Response(
-            {"error": "Please confirm deletion by adding 'confirm: true' in the request body."},
+            {
+                "error": "Please confirm deletion by adding 'confirm: true' in the request body."
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
         user = User.objects.get(id=user_id)
         user.delete()
-        return Response({"message": f"User {user.username} deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"message": f"User {user.username} deleted successfully"},
+            status=status.HTTP_204_NO_CONTENT,
+        )
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1907,7 +2290,9 @@ def bulk_actions(request):
     action = request.data.get("action")
     user_ids = request.data.get("user_ids")
     if not user_ids:
-        return Response({"error": "No user IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "No user IDs provided"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     # check action confirmation
     confirm_response = confirm_action(request)
@@ -1917,12 +2302,18 @@ def bulk_actions(request):
     if action == "delete":
         users_to_delete = User.objects.filter(id__in=user_ids)
         deleted_count = users_to_delete.delete()[0]
-        return Response({"message": f"{deleted_count} users deleted successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"{deleted_count} users deleted successfully"},
+            status=status.HTTP_200_OK,
+        )
 
     elif action == "update_roles":
         new_role = request.data.get("role")
         if not new_role:
-            return Response({"error": "No role provided for update"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No role provided for update"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         users_to_update = User.objects.filter(id__in=user_ids)
         updated_count = 0
@@ -1932,13 +2323,19 @@ def bulk_actions(request):
             updated_count += 1
 
         return Response(
-            {"message": f"{updated_count} users' roles updated to {new_role} successfully"}, status=status.HTTP_200_OK
+            {
+                "message": f"{updated_count} users' roles updated to {new_role} successfully"
+            },
+            status=status.HTTP_200_OK,
         )
 
     elif action == "update_status":
         new_status = request.data.get("is_active")
         if new_status is None:
-            return Response({"error": "No status provided for update"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No status provided for update"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         users_to_update = User.objects.filter(id__in=user_ids)
         updated_count = 0
@@ -1947,11 +2344,16 @@ def bulk_actions(request):
             user.save()
             updated_count += 1
 
-        return Response({"message": f"{updated_count} users' statuses updated successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"{updated_count} users' statuses updated successfully"},
+            status=status.HTTP_200_OK,
+        )
 
     else:
         return Response(
-            {"error": "Invalid action. Please provide a valid action (delete, update_roles, or update_status)."},
+            {
+                "error": "Invalid action. Please provide a valid action (delete, update_roles, or update_status)."
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -1972,7 +2374,11 @@ def filter_users(request):
     if is_active is not None:
         filters &= Q(is_active=is_active.lower() == "true")
     if search:
-        filters &= Q(first_name__icontains=search) | Q(last_name__icontains=search) | Q(email__icontains=search)
+        filters &= (
+            Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(email__icontains=search)
+        )
 
     users = User.objects.filter(filters)
 
@@ -2030,7 +2436,9 @@ class ResetUserPasswordView(APIView):
             )
 
         if new_password != confirm_password:
-            return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse(
+                {"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -2040,12 +2448,17 @@ class ResetUserPasswordView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return JsonResponse({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            return JsonResponse(
+                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         user.set_password(new_password)
         user.save()
+        revoke_sessions_after_credential_change(user=user, event_type="PASSWORD_RESET")
 
-        return JsonResponse({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
+        return JsonResponse(
+            {"message": "Password reset successfully."}, status=status.HTTP_200_OK
+        )
 
 
 class BulkResetPasswordView(APIView):
@@ -2057,7 +2470,10 @@ class BulkResetPasswordView(APIView):
         confirm_password = request.data.get("confirm_password")
 
         if not user_ids or not isinstance(user_ids, list) or not user_ids:
-            return JsonResponse({"error": "'user_ids' must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse(
+                {"error": "'user_ids' must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not new_password or not confirm_password:
             return JsonResponse(
@@ -2066,7 +2482,9 @@ class BulkResetPasswordView(APIView):
             )
 
         if new_password != confirm_password:
-            return JsonResponse({"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse(
+                {"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # check action confirmation
         confirm_response = confirm_action(request)
@@ -2075,13 +2493,22 @@ class BulkResetPasswordView(APIView):
 
         users = User.objects.filter(id__in=user_ids)
         if not users.exists():
-            return JsonResponse({"error": "No users found for the provided IDs."}, status=status.HTTP_404_NOT_FOUND)
+            return JsonResponse(
+                {"error": "No users found for the provided IDs."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         for user in users:
             user.set_password(new_password)
             user.save()
+            revoke_sessions_after_credential_change(
+                user=user, event_type="PASSWORD_RESET"
+            )
 
-        return JsonResponse({"message": f"Passwords reset for {users.count()} users."}, status=status.HTTP_200_OK)
+        return JsonResponse(
+            {"message": f"Passwords reset for {users.count()} users."},
+            status=status.HTTP_200_OK,
+        )
 
 
 @extend_schema(request=PreferredLanguageSerializer)
@@ -2102,7 +2529,10 @@ class UpdatePreferredLanguageView(APIView):
             user.save()
 
             return Response(
-                {"message": "Preferred language updated successfully.", "language": preferred_language},
+                {
+                    "message": "Preferred language updated successfully.",
+                    "language": preferred_language,
+                },
                 status=status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

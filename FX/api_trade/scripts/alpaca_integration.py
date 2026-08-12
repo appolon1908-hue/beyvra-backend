@@ -286,8 +286,8 @@ class AlpacaIntegrationAssets:
             )
             asset = asset.model_dump()
             return asset, None
-        except Exception as e:
-            return None, str(e)
+        except Exception:
+            return None, "External execution request failed"
 
     def add_asset_to_watchlist_by_id(self, asset_id):
         """Get asset by id."""

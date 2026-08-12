@@ -20,3 +20,35 @@ groups:
         expr: increase(codestra_demo_ledger_reconciliation_failure_total[5m]) > 0
         labels: {severity: critical, environment: staging, owner: finance-controls}
         annotations: {runbook: https://github.com/appolon1908-hue/trading-backend/docs/PRODUCTION_READINESS_REMEDIATION.md, summary: demo ledger reconciliation failed}
+      - alert: BeyvraOmsUnexpectedlyActive
+        expr: max(beyvra_oms_provider_enabled) > 0
+        for: 1m
+        labels: {severity: critical, environment: staging, owner: finance-controls}
+        annotations: {runbook: docs/POLYGON-OMS-ACTIVATION-GATES.md, summary: Polygon OMS is unexpectedly active}
+      - alert: BeyvraOmsUnavailable
+        expr: sum(increase(beyvra_oms_failures_total{result="provider_unavailable"}[10m])) > 5
+        for: 5m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations: {runbook: docs/POLYGON-OMS-SECURITY.md, summary: Polygon OMS unavailable}
+      - alert: BeyvraOmsWebhookSignatureFailureSpike
+        expr: sum(increase(beyvra_oms_webhook_failures_total{reason="signature"}[5m])) > 5
+        labels: {severity: critical, environment: staging, owner: security}
+        annotations: {runbook: docs/POLYGON-OMS-WEBHOOK-INVENTORY.md, summary: OMS webhook signature failures spiking}
+      - alert: BeyvraOmsUnknownOutcome
+        expr: sum(increase(beyvra_oms_unknown_outcomes_total[5m])) > 0
+        labels: {severity: critical, environment: staging, owner: finance-controls}
+        annotations: {runbook: docs/POLYGON-OMS-RECONCILIATION.md, summary: OMS operation outcome unknown}
+      - alert: BeyvraOmsReconciliationMismatch
+        expr: sum(increase(beyvra_oms_reconciliation_violations_total[5m])) > 0
+        labels: {severity: critical, environment: staging, owner: finance-controls}
+        annotations: {runbook: docs/POLYGON-OMS-RECONCILIATION.md, summary: OMS reconciliation mismatch}
+      - alert: BeyvraOmsCircuitOpen
+        expr: max(beyvra_oms_circuit_state{state="open"}) > 0
+        for: 5m
+        labels: {severity: warning, environment: staging, owner: platform}
+        annotations: {runbook: docs/POLYGON-OMS-SECURITY.md, summary: OMS circuit breaker open}
+      - alert: BeyvraOmsCredentialExpiry
+        expr: min(beyvra_oms_credential_expiry_timestamp_seconds - time()) < 2592000
+        for: 1h
+        labels: {severity: warning, environment: staging, owner: security}
+        annotations: {runbook: docs/POLYGON-OMS-SECURITY.md, summary: OMS credential or certificate nearing expiry}

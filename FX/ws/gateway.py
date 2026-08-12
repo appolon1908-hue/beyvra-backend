@@ -10,13 +10,21 @@ from urllib.parse import parse_qs
 import aiohttp
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
+from prometheus_client import Counter
 
 from integrations.models import OrganizationMembership
+from operations.services import notification_group, tenant_for
 from provider_governance.service import ProviderNotAvailable, resolve_provider
 from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
 CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
+legacy_ws_connections = Counter(
+    "legacy_ws_connections_total",
+    "Connections to compatibility WebSocket routes",
+    ("route", "client_version", "environment"),
+)
 
 
 @database_sync_to_async
@@ -25,7 +33,12 @@ def _tenant_for_user(user_id: int, requested: str | None = None) -> str:
     if requested and memberships.filter(organization_id=requested).exists():
         return str(requested)
     membership = memberships.order_by("id").values_list("organization_id", flat=True).first()
-    return str(membership) if membership else "default"
+    if membership:
+        return str(membership)
+    from users.models import User
+
+    user = User.objects.get(pk=user_id)
+    return tenant_for(user)
 
 
 @database_sync_to_async
@@ -57,8 +70,23 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return
         query = parse_qs(self.scope.get("query_string", b"").decode())
         self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
+        route = self.scope.get("path", "")
+        legacy = route.startswith("/ws/v1/")
+        if legacy:
+            headers = dict(self.scope.get("headers", []))
+            legacy_ws_connections.labels(
+                route="/ws/v1/",
+                client_version=headers.get(b"x-client-version", b"unknown").decode(errors="replace")[:64],
+                environment=getattr(settings, "ENVIRONMENT", "unknown"),
+            ).inc()
         await self.accept()
-        await self.send_json({"type": "gateway.ready", "version": 1, "tenant": self.tenant_id})
+        self.notification_group = notification_group(self.tenant_id, user.id)
+        await self.channel_layer.group_add(self.notification_group, self.channel_name)
+        ready = {"type": "gateway.ready", "version": 2, "tenant": self.tenant_id}
+        if legacy:
+            ready["deprecation"] = True
+            ready["successor"] = "/ws/v2/"
+        await self.send_json(ready)
 
     async def disconnect(self, close_code):
         for task in self.market_tasks.values():
@@ -68,6 +96,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope.get("user")
         if user and user.is_authenticated:
             await self.channel_layer.group_discard(f"trades_updates_{self.tenant_id}_{user.id}", self.channel_name)
+            await self.channel_layer.group_discard(self.notification_group, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
         action = content.get("action")
@@ -190,3 +219,14 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))
+
+    async def simulation_update(self, event):
+        message = event.get("message", {})
+        event_type = str(message.get("event_type", "trading.order.updated.v1"))
+        channel = "demo.execution" if "trade." in event_type or "filled" in event_type else "demo.position" if "position." in event_type or "balance_projection" in event_type else "demo.order"
+        await self._emit(channel, message)
+
+    async def notification_created(self, event):
+        await self.send_json(
+            {"type": "notification.created", "notification": event["notification"]}
+        )

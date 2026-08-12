@@ -1,0 +1,11 @@
+{
+  "entity": {"beyvra_account_ref": "acct_fixture_a", "provider_ref": "cst_fixture_a", "status": "pending"},
+  "wallet": {"wallet_ref": "wallet_fixture_a", "provider_ref": "wlt_fixture_a", "asset": "usdc", "network": "polygon", "status": "pending"},
+  "quote": {"quote_id": "quote_fixture_a", "operation_type": "crypto_to_fiat", "input_asset": "usdc", "input_amount": "100.00", "output_asset": "usd", "output_amount": "99.00", "fee": "1.00", "rate": "1.00", "expires_at": "2030-01-01T00:05:00Z", "provider_ref": "qt_fixture_a"},
+  "transaction": {"operation_ref": "operation_fixture_a", "provider_ref": "txn_fixture_a", "status": "processing", "amount": "100.00"},
+  "onramp": {"operation_ref": "onramp_fixture_a", "source": {"asset": "usd", "network": "ach"}, "destination": {"asset": "usdc", "network": "polygon"}, "status": "disabled_fixture"},
+  "offramp": {"operation_ref": "offramp_fixture_a", "source": {"asset": "usdc", "network": "polygon"}, "destination": {"asset": "usd", "network": "ach"}, "status": "disabled_fixture"},
+  "transfer": {"operation_ref": "transfer_fixture_a", "asset": "usdc", "network": "polygon", "amount": "10.00", "status": "disabled_fixture"},
+  "compliance": {"provider_ref": "endorsement_fixture_a", "status": "inReview", "reason_codes": ["FIXTURE_REVIEW"]},
+  "webhook": {"id": "whd_fixture_a", "eventId": "evt_fixture_a", "eventType": "transaction.statusChanged", "sequence": 1, "createdAt": "2026-08-11T00:00:01Z", "occurredAt": "2026-08-11T00:00:00Z", "data": {"id": "txn_fixture_a", "object": "transaction", "status": "completed"}}
+}

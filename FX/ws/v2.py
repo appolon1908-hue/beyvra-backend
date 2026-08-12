@@ -36,12 +36,16 @@ CHANNEL_REGISTRY = {
     "news.economic": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
     "trade.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
+    "simulation.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/orders", "rate_limit": 10},
+    "simulation.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/trades", "rate_limit": 10},
+    "simulation.position.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/positions", "rate_limit": 10},
     "demo.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "demo.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "portfolio.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "wallet.balance.{account_id}": {"visibility": "private", "required_permission": "demo.wallet.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/wallet", "rate_limit": 10},
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
     "account.security.{user_id}": {"visibility": "private", "required_permission": "account.security.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/session", "rate_limit": 5},
+    "treasury.{tenant_id}": {"visibility": "private", "required_permission": "treasury.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/treasury/liquidity", "rate_limit": 10},
     "system.status": {"visibility": "public", "required_permission": "system.read", "tenant_scope": False, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 50, "history_ttl": 60, "resume_supported": False, "snapshot_provider": "/api/v1/realtime/v2/health", "rate_limit": 10},
 }
 
@@ -52,6 +56,7 @@ def _compile_pattern(pattern):
         "timeframe": r"[A-Za-z0-9_-]+",
         "account_id": r"[A-Za-z0-9:_-]+",
         "user_id": r"[A-Za-z0-9:_-]+",
+        "tenant_id": r"[A-Fa-f0-9-]+",
     }.items():
         escaped = escaped.replace(re.escape("{" + name + "}"), expression)
     return re.compile("^" + escaped + "$")
@@ -83,6 +88,8 @@ def _tenant(user):
 
 
 def _owns_demo_account(user_id, channel):
+    if channel.startswith(("simulation.order.", "simulation.execution.", "simulation.position.")):
+        return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
     if not channel.startswith(("demo.order.", "demo.execution.")):
         return False
     account_id = channel.rsplit(".", 1)[-1]
@@ -141,7 +148,11 @@ def subscription_token(request):
         return JsonResponse({"code": "UNSUPPORTED_CHANNEL"}, status=403)
     user_id = str(request.user.id)
     if entry["visibility"] == "private":
+        if pattern and pattern.startswith("simulation.") and not _owns_demo_account(request.user.id, channel):
+            return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if pattern in {"notification.{user_id}", "account.security.{user_id}"} and not channel.endswith(user_id):
+            return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
+        if pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(request.user)}":
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if entry["account_scope"] and not (user_id in channel or _owns_demo_account(request.user.id, channel)):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
@@ -164,7 +175,11 @@ def authorize_subscription(request):
     pattern, entry = _channel_entry(channel) if isinstance(channel, str) else (None, None)
     if not entry:
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and not (user_id in channel or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
+    if entry["visibility"] == "private" and pattern and pattern.startswith("simulation.") and not _owns_demo_account(user_id, channel):
+        return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+    if entry["visibility"] == "private" and pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(type('UserRef', (), {'id': user_id})())}":
+        return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_id in channel or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     return JsonResponse({"result": {}})
 

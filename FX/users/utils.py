@@ -136,8 +136,11 @@ def get_local_currency(country_name):
             return JsonResponse({"error": "Currency not found"}, status=404)
 
         return currency.alpha_3
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+    except Exception:
+        return JsonResponse(
+            {"code": "REQUEST_FAILED", "message": "The request could not be completed."},
+            status=500,
+        )
 
 
 def mask_email(email: str) -> str:
@@ -196,13 +199,11 @@ def get_user_location(ip_address: str) -> str:
 
         return f"{city}, {country}"
 
-    except requests.exceptions.RequestException as e:
-        # Handle any network-related exceptions
-        return f"Network error: {str(e)}"
+    except requests.exceptions.RequestException:
+        return "Location lookup unavailable"
 
-    except Exception as e:
-        # Handle any other unexpected exceptions
-        return f"An error occurred: {str(e)}"
+    except Exception:
+        return "Location lookup unavailable"
 
 
 def get_user_location_mod(ip_address: str) -> [dict, str]:
@@ -214,12 +215,10 @@ def get_user_location_mod(ip_address: str) -> [dict, str]:
         city = data.get("city")
         country = data.get("country")
         return {"city": city, "country": country}
-    except requests.exceptions.RequestException as e:
-        # Handle any network-related exceptions
-        return f"Network error: {str(e)}"
-    except Exception as e:
-        # Handle any other unexpected exceptions
-        return f"An error occurred: {str(e)}"
+    except requests.exceptions.RequestException:
+        return {"city": None, "country": None}
+    except Exception:
+        return {"city": None, "country": None}
 
 
 def get_ip_address(request):

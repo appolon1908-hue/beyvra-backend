@@ -17,9 +17,27 @@ from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _provider_credential(name: str) -> str:
+    """Load a provider credential from one environment or mounted-file source."""
+    value = os.getenv(name, "").strip()
+    file_reference = os.getenv(f"{name}_FILE", "").strip()
+    if value and file_reference:
+        raise ImproperlyConfigured(f"Configure only one source for {name}")
+    if not file_reference:
+        return value
+    try:
+        secret = Path(file_reference).read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ImproperlyConfigured(f"Unable to read configured secret file for {name}") from exc
+    if not secret:
+        raise ImproperlyConfigured(f"Configured secret file for {name} is empty")
+    return secret
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
@@ -65,6 +83,15 @@ REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 REAL_TRADING_ENABLED = False
 EXTERNAL_EXECUTION_ENABLED = False
+DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "local").lower()
+RELEASE_SHA = os.getenv("RELEASE_SHA", "").strip()
+SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"
+SIMULATED_TRADING_ENABLED = SIMULATED_TRADING_REQUESTED and DEPLOYMENT_ENV in {"local", "test", "staging"}
+SIMULATED_EXECUTION_SCENARIO = os.getenv("SIMULATED_EXECUTION_SCENARIO", "IMMEDIATE_FULL_FILL")
+SIMULATED_EXECUTION_PRICES = {"BTC-USD": "50000.00", "ETH-USD": "3000.00"}
+SIMULATED_EXECUTION_PRICE_SOURCE = os.getenv("SIMULATED_EXECUTION_PRICE_SOURCE", "deterministic_fixture")
+SIMULATED_MARKET_DATA_STALE = os.getenv("SIMULATED_MARKET_DATA_STALE", "false").lower() == "true"
+SIMULATED_EXECUTION_INLINE = os.getenv("SIMULATED_EXECUTION_INLINE", "false").lower() == "true"
 REAL_WALLET_READ_ENABLED = False
 REAL_DEPOSITS_ENABLED = False
 REAL_WITHDRAWALS_ENABLED = False
@@ -144,7 +171,24 @@ INSTALLED_APPS = [
     "apps.foundation",
     "apps.trading",
     "apps.compliance",
+    "operations",
+    "treasury",
+    "platform_ops",
 ]
+
+# Treasury is an application-side simulation/read-model boundary. These flags
+# are deliberately non-overridable in this candidate: live authority belongs
+# to Financial Service and separately approved providers.
+REAL_TREASURY_TRANSFERS_ENABLED = False
+REAL_CASH_MANAGEMENT_ENABLED = False
+REAL_COLLATERAL_MOVEMENT_ENABLED = False
+REAL_INTRADAY_FUNDING_ENABLED = False
+REAL_CREDIT_ENABLED = False
+REAL_SETTLEMENT_ENABLED = False
+LIVE_CUSTODY_ENABLED = False
+LIVE_CLEARING_ENABLED = False
+LIVE_BROKER_ROUTING_ENABLED = False
+FIX_LIVE_SESSION_ENABLED = False
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
@@ -229,14 +273,13 @@ CACHES = {
 }
 
 
-
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
-CELERY_TIMEZONE = 'UTC'
+CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
 
@@ -245,18 +288,18 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'api_trade.tasks.settle_demo_orders',
         'schedule': 5.0,
     },
-    
+
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")
+        'schedule': crontab(minute="*/1"),
     },
-    'send_asset_specific_updates': {
-        'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/2")
+    "send_asset_specific_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/2"),
     },
-    'send_email_verification_reminder': {
-        'task': 'wsnotifications.tasks.send_email_verification_reminder',
-        'schedule': crontab(minute="*/1")
+    "send_email_verification_reminder": {
+        "task": "wsnotifications.tasks.send_email_verification_reminder",
+        "schedule": crontab(minute="*/1"),
     },
     'purge_expired_notifications': {
         'task': 'notifications.tasks.purge_expired_notifications',
@@ -328,6 +371,9 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = "/app/static"
+OPERATIONS_PRIVATE_ARTIFACT_ROOT = os.getenv(
+    "OPERATIONS_PRIVATE_ARTIFACT_ROOT", "/var/lib/beyvra/private-artifacts"
+)
 
 
 # Default primary key field type
@@ -336,12 +382,30 @@ STATIC_ROOT = "/app/static"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "operations.authentication.SessionBoundJWTAuthentication",
+    ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    "EXCEPTION_HANDLER": "operations.errors.BeyvraErrorMapper",
 }
+
+# Server-authoritative kill switches. Enabling requires a separately governed release.
+REAL_WALLET_READ_ENABLED = False
+REAL_DEPOSITS_ENABLED = False
+REAL_WITHDRAWALS_ENABLED = False
+REAL_INTERNAL_TRANSFERS_ENABLED = False
+REAL_TRADING_ENABLED = False
+EXTERNAL_EXECUTION_ENABLED = False
+REAL_MONEY_ENABLED = False
+POLYGON_OMS_ENABLED = False
+POLYGON_OMS_PRODUCTION_ENABLED = False
+POLYGON_OMS_HALTED = True
+CROSS_CHAIN_TRANSFERS_ENABLED = False
+ALL_FINANCIAL_MUTATIONS_HALTED = True
+SUPPORT_IMPERSONATION = False
 
 if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
@@ -470,11 +534,11 @@ if not DEBUG:
     PROMETHEUS_METRICS_EXPORT_PORT_RANGE = range(7001, 7100)
 
 
-NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
-POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+NEWS_DATA_API_KEY: str = _provider_credential("NEWS_DATA_API_KEY")
+POLYGON_API_KEY: str = _provider_credential("POLYGON_API_KEY")
 TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
 PROVIDER_CREDENTIAL_ROOT: str = os.getenv("PROVIDER_CREDENTIAL_ROOT", "/etc/codestra/providers")
-COINGECKO_API_KEY: str = os.getenv("COINGECKO_API_KEY", "")
+COINGECKO_API_KEY: str = _provider_credential("COINGECKO_API_KEY")
 SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
 TWELVE_DATA_REST_URL: str = os.getenv(
     "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"

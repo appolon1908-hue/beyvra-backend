@@ -205,6 +205,17 @@ class MarketHistoryTests(TestCase):
         self.assertFalse(entries["5s"]["available"])
         self.assertEqual(entries["5s"]["reason"], "GENUINE_5S_SOURCE_UNAVAILABLE")
 
+    def test_legacy_orderbook_and_trade_routes_report_unsupported_capability(self):
+        self.client.force_authenticate(self.user)
+        for endpoint in (
+            "/api/trades/market/orderbook/BTCUSDT",
+            "/api/trades/market/trades/BTCUSDT",
+        ):
+            response = self.client.get(endpoint, secure=True)
+            self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+            self.assertEqual(response.data["code"], "CAPABILITY_UNSUPPORTED")
+            self.assertEqual(response.data["symbol"], "BTCUSDT")
+
     @patch("trade.market_api.get_market_history")
     def test_five_second_request_fails_without_provider_call(self, history):
         self.client.force_authenticate(self.user)

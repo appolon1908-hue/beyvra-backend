@@ -26,4 +26,3 @@ Market data and news must remain separate logical channels. Account and platform
 ## Required durable state
 
 The target design needs provider-neutral instruments, provider connections, normalized candles/news/economic events, offsets, dead-letter records, and WebSocket audit records. High-volume raw ticks must be retained in time partitions or a bounded raw-event store rather than the existing transactional tables.
-

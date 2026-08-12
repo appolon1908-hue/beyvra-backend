@@ -59,6 +59,24 @@ class RealWalletBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
 
+        asset_response = client.get("/api/v1/wallets/USD/")
+        self.assertEqual(asset_response.status_code, 503)
+        self.assertEqual(asset_response.data["code"], "FEATURE_DISABLED")
+
+    def test_real_money_mutation_routes_fail_closed_with_canonical_contract(self):
+        client = APIClient()
+        client.force_authenticate(self.user)
+
+        deposit = client.post("/api/v1/deposits/", {}, format="json")
+        withdrawal = client.post("/api/v1/withdrawals/", {}, format="json")
+
+        self.assertEqual(deposit.status_code, 503)
+        self.assertEqual(deposit.data["code"], "FEATURE_DISABLED")
+        self.assertEqual(deposit.data["feature"], "real_wallet_deposits_enabled")
+        self.assertEqual(withdrawal.status_code, 503)
+        self.assertEqual(withdrawal.data["code"], "FEATURE_DISABLED")
+        self.assertEqual(withdrawal.data["feature"], "real_wallet_withdrawals_enabled")
+
     def test_public_configuration_exposes_only_enabled_reference_data(self):
         Network.objects.create(code="hidden", name="Hidden", enabled=False)
         visible = Network.objects.create(code="visible", name="Visible", enabled=True)

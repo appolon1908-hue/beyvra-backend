@@ -1,0 +1,17 @@
+{
+  "title": "Beyvra / Treasury & Liquidity",
+  "uid": "beyvra-treasury-liquidity",
+  "schemaVersion": 39,
+  "tags": ["simulation", "treasury", "no-pii"],
+  "panels": [
+    {"type":"stat","title":"Available liquidity","targets":[{"expr":"beyvra_treasury_liquidity_available"}]},
+    {"type":"stat","title":"Funding requirements","targets":[{"expr":"beyvra_treasury_funding_requirements_total"}]},
+    {"type":"stat","title":"Funding shortfalls","targets":[{"expr":"beyvra_treasury_funding_shortfalls_total"}]},
+    {"type":"stat","title":"Free collateral","targets":[{"expr":"beyvra_treasury_collateral_free_value"}]},
+    {"type":"stat","title":"Encumbered collateral","targets":[{"expr":"beyvra_treasury_encumbered_value"}]},
+    {"type":"stat","title":"Transfer plans","targets":[{"expr":"beyvra_treasury_transfer_plans_total"}]},
+    {"type":"stat","title":"Buffer breaches","targets":[{"expr":"beyvra_treasury_liquidity_buffer_breaches_total"}]},
+    {"type":"stat","title":"Reconciliation violations","targets":[{"expr":"beyvra_treasury_reconciliation_violations_total"}]},
+    {"type":"stat","title":"Open exceptions","targets":[{"expr":"beyvra_treasury_exceptions_open"}]}
+  ]
+}

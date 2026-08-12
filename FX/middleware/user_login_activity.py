@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -7,6 +8,7 @@ from security.models import UserActivity
 from users.utils import get_user_location
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class UserLoginActivityMiddleware(MiddlewareMixin):
@@ -25,8 +27,8 @@ class UserLoginActivityMiddleware(MiddlewareMixin):
                 else:
                     data = request.POST
                 email = data.get("email")
-            except Exception as e:
-                print("Error parsing request data in middleware: ", str(e))
+            except Exception:
+                logger.warning("Unable to parse login activity request")
                 email = None
             if email:
                 try:
@@ -56,8 +58,8 @@ class UserLoginActivityMiddleware(MiddlewareMixin):
                                 device_model=device_model,
                                 user_agent=user_agent,
                             )
-                except Exception as e:
-                    print("Error logging user activity in middleware: ", str(e))
+                except Exception:
+                    logger.warning("Unable to persist login activity")
 
         return None
 

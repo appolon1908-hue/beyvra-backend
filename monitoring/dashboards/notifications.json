@@ -1,0 +1,15 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type": "timeseries", "title": "Notification outcomes", "targets": [{"expr": "sum by (category, channel) (rate(beyvra_notifications_created_total[5m]))", "refId": "A"}, {"expr": "sum by (category, channel) (rate(beyvra_notifications_sent_total[5m]))", "refId": "B"}, {"expr": "sum by (category, channel, result) (rate(beyvra_notifications_failed_total[5m]))", "refId": "C"}], "gridPos": {"h": 9, "w": 16, "x": 0, "y": 0}},
+    {"type": "stat", "title": "Dead letters", "targets": [{"expr": "sum(increase(beyvra_notification_dead_letter_total[1h]))", "refId": "A"}], "gridPos": {"h": 9, "w": 8, "x": 16, "y": 0}}
+  ],
+  "schemaVersion": 39,
+  "tags": ["beyvra", "notifications"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Beyvra / Notifications",
+  "uid": "beyvra-notifications",
+  "version": 1
+}

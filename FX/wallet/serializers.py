@@ -152,7 +152,7 @@ class TransferSerializer(serializers.Serializer):
 
 class ManualBalanceUpdateSerializer(serializers.ModelSerializer):
     # admin is current request user
-    admin = serializers.HiddenField(default=serializers.CurrentUserDefault())  
+    admin = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = ManualBalanceUpdate

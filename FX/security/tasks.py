@@ -14,8 +14,8 @@ def async_send_user_anomaly_alert_to_admin(user_id, email_msg=None):
     user = User.objects.get(id=user_id)
     try:
         user_device_info = UserDeviceInfo.objects.get(user=user)
-    except UserDeviceInfo.DoesNotExist as e:
-        logging.warning(f"Error sending user anomaly alert to admin: {str(e)}")
+    except UserDeviceInfo.DoesNotExist:
+        logging.warning("User device information unavailable for anomaly alert")
         user_device_info = {}
     # capture anomaly into user activities
     log(
@@ -42,7 +42,7 @@ def async_check_anomalies():
         action_type__in=anomalous_action_types, created_at__gt=last_checked_time
     )
     if new_anomalies.exists():
-        logging.warning(new_anomalies)
+        logging.warning("New user anomalies detected", extra={"anomaly_count": new_anomalies.count()})
         for anomaly in new_anomalies:
             try:
                 user_device_info = UserDeviceInfo.objects.get(user=anomaly.user)
@@ -56,7 +56,7 @@ def async_check_anomalies():
             try:
                 # mail to admin
                 send_user_anomaly_alert_to_admin(anomaly.user, user_device_info, alert_message)
-            except Exception as e:
-                logging.warning(e)
+            except Exception:
+                logging.warning("Unable to send user anomaly alert")
         # Update last checked time
         AnomalyCheckSchedule.update_last_checked_time(timezone.now())

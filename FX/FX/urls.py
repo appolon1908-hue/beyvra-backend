@@ -20,19 +20,28 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from users.views import GuestDemoSessionView, SessionResolveView
+from users.views import GuestDemoSessionView, ManageUserView, SessionResolveView
 from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
+from users import urls as user_urls
+from treasury.api import LiquidityView as InstitutionalLiquidityView
 
 urlpatterns = [
+    path("health", include("platform_ops.health.urls")),
+    path("ready", include("platform_ops.health.ready_urls")),
     path("health/", include("apps.foundation.health_urls")),
     path("", include("django_prometheus.urls")),
     path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/frontendadmin/90210/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
     path("api/user/", include("users.urls")),
+    # Canonical aliases delegate to the existing views. Legacy routes remain
+    # compatibility-only and are measured by deprecation middleware.
+    path("api/v1/auth/", include((user_urls.urlpatterns, "canonical_auth"), namespace="canonical_auth")),
     path("api/v1/auth/", include("users.google_urls")),
+    path("api/v1/me/", ManageUserView.as_view(), name="me_v1"),
+    path("api/v1/notifications/", include("notifications.urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
@@ -71,6 +80,13 @@ urlpatterns = [
     path("api/portfolio/", include("portfolio.urls")),
     path("api/reporting/", include("reporting.urls")),
     path("api/", include("integrations.urls")),
+    path("api/v1/", include("operations.urls")),
+    path("api/v1/treasury/", include("treasury.urls")),
+    path("api/v1/institutional/liquidity", InstitutionalLiquidityView.as_view(), name="institutional_liquidity_v1"),
+    path("api/v1/operator/treasury/", include("treasury.operator_urls")),
+    path("api/v1/system/", include("platform_ops.public_urls")),
+    path("api/v1/operator/system/", include("platform_ops.operator_urls")),
+    path("api/internal/v1/", include("operations.operator_urls")),
 ]
 
 if settings.DEBUG:

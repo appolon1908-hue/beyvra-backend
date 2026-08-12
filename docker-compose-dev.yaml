@@ -86,7 +86,7 @@ services:
       args:
         CONFIG_FILE: nginx.dev.conf.template
     ports:
-      - ${PORT}:80
+      - ${PORT}:8080
     environment:
       - WEB_HOST=web:8000
       - DAPHNE_HOST=daphne:8001

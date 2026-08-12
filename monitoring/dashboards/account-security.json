@@ -1,0 +1,15 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type": "timeseries", "title": "Security events by reason and risk", "targets": [{"expr": "sum by (reason, risk) (rate(beyvra_security_events_total[5m]))", "refId": "A"}], "gridPos": {"h": 9, "w": 16, "x": 0, "y": 0}},
+    {"type": "stat", "title": "Freeze enforcement failures", "targets": [{"expr": "increase(beyvra_freeze_enforcement_failures_total[1h])", "refId": "A"}], "gridPos": {"h": 9, "w": 8, "x": 16, "y": 0}}
+  ],
+  "schemaVersion": 39,
+  "tags": ["beyvra", "security"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Beyvra / Account Security",
+  "uid": "beyvra-account-security",
+  "version": 1
+}

@@ -100,7 +100,8 @@ class TradeSecurityTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Real-money trading is disabled", str(response.data))
+        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
+        self.assertNotIn("wallet", str(response.data).lower())
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
 

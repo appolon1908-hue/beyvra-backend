@@ -122,5 +122,3 @@ class CryptocurrencyQuotesLatestView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             return Response(response_data, status=response.status_code)
-
-
