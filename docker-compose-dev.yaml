@@ -1,7 +1,7 @@
 version: "3.11"
 services:
   web:
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: ./web-init-prod.sh
     expose:
       - 8000
@@ -14,7 +14,7 @@ services:
       - redis
 
   daphne:
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
     expose:
       - 8001
@@ -50,7 +50,7 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD}
 
   celery_worker:
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     entrypoint: ["./worker-entrypoint.sh"]
     env_file:
       - .env
@@ -71,7 +71,7 @@ services:
       - celery_worker
 
   chart-data-publisher:
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: python3 api_trade/scripts/fetch_data.py
     env_file:
       - .env

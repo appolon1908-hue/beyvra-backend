@@ -144,6 +144,9 @@ secrets/
 infra/realtime-v2/tls/
 backups/*.dump
 backups/*.tmp
+backups/*.sql
+backups/*.sql.gz
+backups/*-web-inspect.json
 venv/
 .venv/
 

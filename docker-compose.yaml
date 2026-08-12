@@ -8,7 +8,7 @@ services:
 
   web:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: ./web-init-prod.sh
     restart: unless-stopped
     env_file:
@@ -33,7 +33,7 @@ services:
 
   daphne:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
     restart: unless-stopped
     ulimits:
@@ -275,7 +275,7 @@ services:
 
   celery_worker:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     entrypoint: ["./worker-entrypoint.sh"]
     restart: unless-stopped
     env_file:
@@ -290,7 +290,7 @@ services:
 
   celery_beat:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     entrypoint: ["./beat-entrypoint.sh"]
     restart: unless-stopped
     env_file:
@@ -324,7 +324,7 @@ services:
 
   chart-data-publisher:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: python3 api_trade/scripts/fetch_data.py
     restart: unless-stopped
     env_file:
@@ -395,7 +395,6 @@ volumes:
 
 networks:
   fx-network:
-    name: trading-network
     driver: bridge
   financial-api:
     external: true

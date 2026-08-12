@@ -1,7 +1,7 @@
 {
   "mission": "BEYVRA_INSTITUTIONAL_ACCOUNT_SUBACCOUNT_CUSTODY_ALLOCATION_AND_CLEARING_BROKER_STRUCTURE_AUTHORITY",
   "starting_head": "1289857ed2486edc6845e5bf0b9965c3c142fa00",
-  "openapi_sha256": "881e46b3619c37149c4fad632882a9e2cf727638a4ae23948b9db5e2571ac3d3",
+  "openapi_digest": "sha256:881e46b3619c37149c4fad632882a9e2cf727638a4ae23948b9db5e2571ac3d3",
   "database": {
     "engine": "PostgreSQL 16",
     "migration_from_zero": "PASS",

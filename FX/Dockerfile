@@ -11,7 +11,7 @@ RUN apk add --no-cache --virtual .build-deps \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
-COPY requirements.txt /tmp/requirements.txt
+COPY FX/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir --requirement /tmp/requirements.txt \
     && sed -i '/    Example input:/,/    :param keydata:/{ /    Example input:/!{ /    :param keydata:/!d; }; }' /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
@@ -37,7 +37,9 @@ RUN apk upgrade --no-cache \
     && chown app:app /logs
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=app:app . /app/
+COPY --chown=app:app FX/ /app/
+COPY --chown=app:app contracts/ /contracts/
+COPY --chown=app:app scripts/ /scripts/
 
 RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh
 
