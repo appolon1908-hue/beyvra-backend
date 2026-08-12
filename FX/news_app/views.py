@@ -8,7 +8,8 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_datetime
 
-from .utils import get_newsdata_news,get_newsdata_news_by_id
+from .service import fetch_newsdata
+from .newsdata import CapabilityNotAvailable, NewsDataMalformed
 from provider_governance.service import ProviderNotAvailable
 from provider_governance.service import resolve_provider
 from .models import EconomicCalendarEvent, NewsArticle
@@ -36,11 +37,7 @@ def _limit(request):
 
 
 def _news(article):
-    return {field: getattr(article, field) for field in (
-        "article_id", "provider_id", "provider_article_id", "headline", "summary", "publisher",
-        "canonical_url", "published_at", "updated_at", "retracted_at", "importance",
-        "affected_instruments", "affected_assets", "affected_currencies", "language", "status",
-    )}
+    return {"article_id":article.article_id,"news_id":article.article_id,"provider_id":article.provider_id,"provider_article_id":article.provider_article_id,"headline":article.headline,"summary":article.summary,"content_preview":article.content_preview,"source_name":article.publisher,"source_id":article.source_id,"source_url":article.source_url,"article_url":article.canonical_url,"image_url":article.image_url,"published_at":article.published_at,"received_at":article.received_at,"language":article.language,"countries":article.countries,"categories":article.categories,"instrument_refs":article.affected_instruments,"keywords":article.keywords,"sentiment":article.sentiment,"provider_timestamp":article.provider_timestamp,"delayed":article.delayed,"stale":False,"provenance":{"provider_id":article.provider_id,"normalizer_version":article.normalizer_version}}
 
 
 def _calendar(event):
@@ -53,34 +50,54 @@ def _calendar(event):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def news_list_v1(request):
-    instrument = request.query_params.get("instrument_id", "*").upper()
-    try:
-        _authorize(request, "newsdata", "FINANCIAL_NEWS", "HEADLINES", instrument)
-    except ProviderNotAvailable:
-        return _unavailable()
-    limit = _limit(request)
-    if limit is None:
-        return Response({"code": "VALIDATION_FAILED"}, status=400)
-    queryset = NewsArticle.objects.exclude(status=NewsArticle.Status.RETRACTED).order_by("-published_at", "-article_id")
-    importance = request.query_params.get("importance")
-    if importance:
-        queryset = queryset.filter(importance=importance.upper())
-    cursor = request.query_params.get("cursor")
-    if cursor:
-        queryset = queryset.filter(article_id__lt=cursor)
-    rows = [item for item in queryset[: limit + 1] if instrument == "*" or instrument in item.affected_instruments]
-    page = rows[:limit]
-    return Response({"results": [_news(item) for item in page], "next_cursor": page[-1].article_id if len(rows) > limit else None})
+    instrument = request.query_params.get("instrument", request.query_params.get("instrument_id", "*")).upper()
+    try: _authorize(request,"newsdata","NEWS","LATEST",instrument)
+    except ProviderNotAvailable: return _unavailable()
+    limit=_limit(request)
+    if limit is None: return Response({"code":"VALIDATION_FAILED"},status=400)
+    queryset=NewsArticle.objects.exclude(status=NewsArticle.Status.RETRACTED).order_by("-published_at","-article_id")
+    importance=request.query_params.get("importance")
+    if importance: queryset=queryset.filter(importance=importance.upper())
+    if request.query_params.get("category"): queryset=queryset.filter(categories__contains=[request.query_params["category"]])
+    if request.query_params.get("source"): queryset=queryset.filter(source_id=request.query_params["source"])
+    if request.query_params.get("language"): queryset=queryset.filter(language=request.query_params["language"])
+    rows=[item for item in queryset[:limit+1] if instrument=="*" or instrument in item.affected_instruments]
+    page=rows[:limit]
+    return Response({"results":[_news(item) for item in page],"next_cursor":page[-1].article_id if len(rows)>limit else None,"delayed":any(item.delayed for item in page),"stale":False})
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def news_detail_v1(request, article_id):
-    try:
-        _authorize(request, "newsdata", "FINANCIAL_NEWS", "ARTICLE", "*")
-    except ProviderNotAvailable:
-        return _unavailable()
-    return Response(_news(get_object_or_404(NewsArticle, article_id=article_id)))
+    item=fetch_newsdata(request,"latest",article_id=article_id)
+    return Response(item) if item else Response({"code":"NOT_FOUND"},status=404)
+
+
+def _provider_response(request, endpoint):
+    try: return Response(fetch_newsdata(request,endpoint))
+    except CapabilityNotAvailable: return Response({"code":"CAPABILITY_NOT_AVAILABLE"},status=404)
+    except (ProviderNotAvailable,NewsDataMalformed): return _unavailable()
+    except (TypeError,ValueError): return Response({"code":"VALIDATION_FAILED"},status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def news_crypto_v1(request): return _provider_response(request,"crypto")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def news_market_v1(request): return _provider_response(request,"market")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def news_sources_v1(request): return _provider_response(request,"sources")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def news_archive_v1(request): return _provider_response(request,"archive")
 
 
 @api_view(["GET"])
@@ -128,14 +145,11 @@ def get_news_newsdata(request):
         * ```country``` (str): The country to search for news.
     """
     try:
-        result = get_newsdata_news(request)
+        result = fetch_newsdata(request,"latest")
     except ProviderNotAvailable:
         return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except Exception as e:
-        return Response(
-            {"error": f"An error occurred: {e}"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    except Exception:
+        return _unavailable()
 
     return Response(result)
 
@@ -168,7 +182,7 @@ def get_news_by_id(request, article_id):
         * ```article_id``` (str): The article ID to search for.
     """
     try:
-        result = get_newsdata_news_by_id(request, article_id)
+        result = fetch_newsdata(request,"latest",article_id=article_id)
     except ProviderNotAvailable:
         return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(result)

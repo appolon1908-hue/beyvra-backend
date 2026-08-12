@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
@@ -27,6 +28,14 @@ legacy_ws_connections = Counter(
 )
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return True
+
+
 @database_sync_to_async
 def _tenant_for_user(user_id: int, requested: str | None = None) -> str:
     memberships = OrganizationMembership.objects.filter(user_id=user_id)
@@ -48,6 +57,43 @@ def _market_provider_approved(symbol: str) -> bool:
         return True
     except ProviderNotAvailable:
         return False
+
+
+@database_sync_to_async
+def _resolve_realtime_instrument(reference: str) -> tuple[str, str] | None:
+    """Resolve a public channel reference through the backend instrument master.
+
+    UUID is the canonical realtime identity. Canonical symbols remain accepted
+    as a compatibility input, but provider symbols are never returned as the
+    event's instrument identity.
+    """
+    from reference_data.models import Instrument
+
+    try:
+        instrument_id = uuid.UUID(reference)
+    except (TypeError, ValueError, AttributeError):
+        instrument_id = None
+
+    instruments = Instrument.objects.filter(status=Instrument.Status.ACTIVE)
+    instrument = (
+        instruments.filter(instrument_id=instrument_id).first()
+        if instrument_id is not None
+        else instruments.filter(canonical_symbol=reference.upper()).first()
+    )
+    if instrument is None:
+        return None
+    mapping = (
+        instrument.provider_mappings.filter(
+            provider_id="binance",
+            product="MARKET_DATA",
+            effective_to__isnull=True,
+        )
+        .order_by("effective_from")
+        .first()
+    )
+    if mapping is None:
+        return None
+    return str(instrument.instrument_id), mapping.provider_symbol
 
 
 class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
@@ -160,21 +206,31 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         if channel.startswith("compat."):
             return channel in {"compat.market-data", "compat.news", "compat.account", "compat.platform"}
         if len(parts) == 2 and parts[0] == "market.quote":
-            return parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS
+            return parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS or _is_uuid(parts[1])
         if len(parts) == 3 and parts[0] == "market.candle":
-            return (parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS) and parts[2] in SUPPORTED_INTERVALS
+            return (parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS or _is_uuid(parts[1])) and parts[2] in SUPPORTED_INTERVALS
         return False
 
     async def _stream_market(self, channel: str):
         parts = channel.split(":")
-        instrument_id = parts[1]
-        symbol = CANONICAL_SYMBOLS.get(instrument_id, instrument_id)
+        requested_reference = parts[1]
+        resolved = await _resolve_realtime_instrument(requested_reference)
+        if resolved is None:
+            # Temporary compatibility for stacks not yet seeded with the
+            # reference authority. UUID references never bypass authority.
+            if _is_uuid(requested_reference):
+                await self._emit("market.status", {"status": "unavailable", "reason": "INSTRUMENT_NOT_FOUND"}, instrument_id=requested_reference)
+                return
+            instrument_id = requested_reference
+            symbol = CANONICAL_SYMBOLS.get(requested_reference, requested_reference)
+        else:
+            instrument_id, symbol = resolved
         interval = parts[2] if len(parts) == 3 else "1m"
         if symbol not in {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}:
-            await self._emit("market.status", {"status": "unavailable", "symbol": symbol})
+            await self._emit("market.status", {"status": "unavailable"}, instrument_id=instrument_id)
             return
         if not await _market_provider_approved(symbol):
-            await self._emit("market.status", {"status": "unavailable", "symbol": instrument_id, "reason": "PROVIDER_NOT_AVAILABLE"})
+            await self._emit("market.status", {"status": "unavailable", "reason": "PROVIDER_NOT_AVAILABLE"}, instrument_id=instrument_id)
             return
         url = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@kline_{interval}"
         delay = 1
@@ -183,7 +239,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.ws_connect(url, heartbeat=20, receive_timeout=60) as upstream:
-                            await self._emit("market.status", {"status": "connected", "symbol": symbol, "interval": interval})
+                            await self._emit("market.status", {"status": "connected", "interval": interval}, instrument_id=instrument_id)
                             delay = 1
                             async for message in upstream:
                                 if channel not in self.subscriptions:
@@ -195,26 +251,26 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                                 if not candle:
                                     continue
                                 data = {"type": "candle", "symbol": instrument_id, "interval": interval, "closed": bool(candle["x"]), "time": int(candle["t"] / 1000), "open": str(candle["o"]), "high": str(candle["h"]), "low": str(candle["l"]), "close": str(candle["c"]), "volume": str(candle["v"])}
-                                await self._emit(channel, data)
-                                await self._emit(f"market.quote:{instrument_id}", {"bid": data["close"], "ask": data["close"], "mid": data["close"], "time": data["time"]})
+                                await self._emit(channel, data, instrument_id=instrument_id)
+                                await self._emit(f"market.quote:{instrument_id}", {"bid": data["close"], "ask": data["close"], "mid": data["close"], "time": data["time"]}, instrument_id=instrument_id)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
                     logger.info("market gateway reconnect: %s", type(exc).__name__)
-                    await self._emit("market.status", {"status": "disconnected", "symbol": symbol, "retry_in": delay})
+                    await self._emit("market.status", {"status": "disconnected", "retry_in": delay}, instrument_id=instrument_id)
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 30)
         finally:
             self.market_tasks.pop(channel, None)
 
-    async def _emit(self, channel, data):
+    async def _emit(self, channel, data, *, instrument_id=None):
         if self.sequence[channel] == 0 and isinstance(data, dict) and isinstance(data.get("time"), int):
             self.sequence[channel] = data["time"]
         else:
             self.sequence[channel] += 1
         event_type = "market.quote.updated" if channel.startswith("market.quote:") else "market.candle.updated" if channel.startswith("market.candle:") else "market.status.changed"
         now = datetime.now(timezone.utc).isoformat()
-        instrument_id = channel.split(":")[1] if channel.startswith("market.") and ":" in channel else None
+        instrument_id = instrument_id or (channel.split(":")[1] if channel.startswith("market.") and ":" in channel else None)
         await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_time": now, "source": "approved-provider", "data": data})
 
     async def send_price_update(self, event):

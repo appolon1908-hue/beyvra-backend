@@ -1,0 +1,2 @@
+# Database Failure
+Symptoms: readiness down, connection errors, deadlocks or lock waits. Dashboard: Platform Overview. Alert: BeyvraDatabaseCritical. Verify private exporter, connections, locks, rollback rate, and sanitized query classes. Restore PostgreSQL/connectivity; do not terminate broad sessions or touch Financial PostgreSQL. Roll back application pool changes. Escalate DBA/platform. Confirm readiness, transactions, reconciliation, and zero partial effects.

@@ -115,6 +115,11 @@ def resolve_provider(*, provider_id, provider_type, product, symbol, region, req
     if provider is None: _deny(context, "PROVIDER_RECORD_MISSING")
     if provider.provider_type != provider_type: _deny(context, "PROVIDER_TYPE_MISMATCH")
     if not provider.enabled: _deny(context, "PROVIDER_DISABLED")
+    if provider.environment != "STAGING": _deny(context, "ENVIRONMENT_NOT_ALLOWED")
+    if not provider.license_verified: _deny(context, "LICENSE_NOT_VERIFIED")
+    if not provider.security_approved: _deny(context, "SECURITY_NOT_APPROVED")
+    if not provider.compliance_approved: _deny(context, "COMPLIANCE_NOT_APPROVED")
+    if not provider.staging_approved: _deny(context, "STAGING_NOT_APPROVED")
     approval = ProviderApproval.objects.filter(provider=provider, environment="STAGING", status="APPROVED", replacement__isnull=True).select_related("license").first()
     context["approval"] = approval
     if approval is None: _deny(context, "APPROVAL_MISSING")

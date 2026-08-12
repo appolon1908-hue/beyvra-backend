@@ -24,6 +24,9 @@ def financial_database_isolation(_app_configs=None, **_kwargs):
         "POLYGON_OMS_ENABLED",
         "POLYGON_OMS_PRODUCTION_ENABLED",
         "CROSS_CHAIN_TRANSFERS_ENABLED",
+        "REAL_SETTLEMENT_ENABLED",
+        "LIVE_CLEARING_ENABLED",
+        "LIVE_CUSTODIAN_SETTLEMENT_ENABLED",
     )
     if any(getattr(settings, flag, False) for flag in safety_flags):
         errors.append(Error("P0 real-money and execution flags must remain disabled.", id="codestra.E003"))

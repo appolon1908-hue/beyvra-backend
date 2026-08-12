@@ -8,6 +8,7 @@ from .market_api import (
     MarketCapabilityUnsupportedView,
     MarketQuotesView,
     MarketStatusView,
+    MarketTradesView,
 )
 
 app_name = "trade"
@@ -26,6 +27,6 @@ urlpatterns = [
     path("market/quotes", MarketQuotesView.as_view(), name="market_quotes"),
     path("market/status/<str:symbol>", MarketStatusView.as_view(), name="market_status"),
     path("market/orderbook/<str:symbol>", MarketCapabilityUnsupportedView.as_view(), name="market_orderbook"),
-    path("market/trades/<str:symbol>", MarketCapabilityUnsupportedView.as_view(), name="market_trades"),
+    path("market/trades/<str:symbol>", MarketTradesView.as_view(), name="market_trades"),
     path("market/feed-health", FeedHealthView.as_view(), name="market_feed_health"),
 ]

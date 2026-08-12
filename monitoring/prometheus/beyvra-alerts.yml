@@ -1,0 +1,56 @@
+groups:
+- name: beyvra-operational-readiness
+  rules:
+  - alert: BeyvraApiAvailabilityWarning
+    expr: sum(rate(beyvra_http_requests_total{status_class="5xx"}[10m])) / clamp_min(sum(rate(beyvra_http_requests_total[10m])), 0.01) > 0.01 and sum(rate(beyvra_http_requests_total[10m])) > 0.1
+    for: 10m
+    labels: {severity: warning, owner: platform}
+    annotations: {summary: "API 5xx ratio exceeds 1%", runbook: "docs/runbooks/API-FAILURE.md"}
+  - alert: BeyvraApiAvailabilityCritical
+    expr: up{job="beyvra-backend"} == 0 or (sum(rate(beyvra_http_requests_total{status_class="5xx"}[10m])) / clamp_min(sum(rate(beyvra_http_requests_total[10m])), 0.01) > 0.05 and sum(rate(beyvra_http_requests_total[10m])) > 0.1)
+    for: 5m
+    labels: {severity: critical, owner: platform}
+    annotations: {summary: "API unavailable or sustained 5xx ratio", runbook: "docs/runbooks/API-FAILURE.md"}
+  - alert: BeyvraApiLatencyWarning
+    expr: histogram_quantile(0.95, sum by (le) (rate(beyvra_http_request_duration_seconds_bucket[10m]))) > 0.5 and sum(rate(beyvra_http_requests_total[10m])) > 0.1
+    for: 15m
+    labels: {severity: warning, owner: platform}
+    annotations: {summary: "API p95 exceeds initial engineering SLO", runbook: "docs/runbooks/API-FAILURE.md"}
+  - alert: BeyvraOutboxBacklogCritical
+    expr: beyvra_outbox_oldest_pending_age_seconds > 30 or time() - beyvra_outbox_worker_last_success_timestamp_seconds > 60
+    for: 5m
+    labels: {severity: critical, owner: trading}
+    annotations: {summary: "Outbox publication is delayed", runbook: "docs/runbooks/OUTBOX-BACKLOG.md"}
+  - alert: BeyvraDuplicateBusinessEffectCritical
+    expr: increase(beyvra_duplicate_business_effect_detected_total[5m]) > 0 or increase(beyvra_sim_duplicate_settlement_detected_total[5m]) > 0
+    labels: {severity: critical, owner: trading}
+    annotations: {summary: "Duplicate business effect detected", runbook: "docs/runbooks/DUPLICATE-EFFECT-DETECTED.md"}
+  - alert: BeyvraSimulationInvariantCritical
+    expr: increase(beyvra_sim_negative_balance_detected_total[5m]) > 0 or increase(beyvra_sim_reservation_leak_detected_total[5m]) > 0 or increase(beyvra_sim_position_accounting_error_total[5m]) > 0
+    labels: {severity: critical, owner: trading}
+    annotations: {summary: "Simulation accounting invariant violated", runbook: "docs/runbooks/RESERVATION-LEAK.md"}
+  - alert: BeyvraJetStreamLagWarning
+    expr: max(beyvra_jetstream_consumer_lag) > 1000
+    for: 10m
+    labels: {severity: warning, owner: platform}
+    annotations: {summary: "JetStream consumer lag is sustained", runbook: "docs/runbooks/EXECUTION-CONSUMER-LAG.md"}
+  - alert: BeyvraRealtimeCritical
+    expr: up{job=~"centrifugo|realtime-bridge"} == 0 or increase(beyvra_realtime_publish_failures_total[5m]) > 5
+    for: 5m
+    labels: {severity: critical, owner: platform}
+    annotations: {summary: "Realtime delivery unavailable", runbook: "docs/runbooks/REALTIME-FAILURE.md"}
+  - alert: BeyvraDatabaseCritical
+    expr: up{job="postgres-exporter"} == 0 or increase(beyvra_db_connection_errors_total[5m]) > 5
+    for: 5m
+    labels: {severity: critical, owner: platform}
+    annotations: {summary: "PostgreSQL dependency failure", runbook: "docs/runbooks/DATABASE-FAILURE.md"}
+  - alert: BeyvraRedisWarning
+    expr: up{job="redis-exporter"} == 0 or increase(beyvra_redis_errors_total[10m]) > 10
+    for: 10m
+    labels: {severity: warning, owner: platform}
+    annotations: {summary: "Redis degraded", runbook: "docs/runbooks/REDIS-FAILURE.md"}
+  - alert: BeyvraWorkerCritical
+    expr: beyvra_worker_up{worker_type=~"outbox_publisher|execution_consumer|realtime_bridge"} == 0 or time() - beyvra_worker_last_success_timestamp_seconds > 120
+    for: 5m
+    labels: {severity: critical, owner: trading}
+    annotations: {summary: "Critical worker unavailable or stale", runbook: "docs/runbooks/EXECUTION-CONSUMER-LAG.md"}

@@ -4,6 +4,8 @@ from rest_framework.response import Response
 
 from apps.trading.application.simulation import account_for, cancel, create, preview, serialize_account, serialize_order, simulation_authorized
 from apps.trading.models import SimulatedPosition, SimulatedTrade, TradingOrder
+from apps.post_trade.api import trade_payload
+from apps.post_trade.models import Trade
 from apps.foundation.services import IdempotencyConflict
 from integrations.financial.simulated import SimulationFinancialError
 from .errors import error_response
@@ -61,12 +63,27 @@ class OrderCancelView(APIView):
         except (ValueError, SimulationFinancialError) as error: return _failure(request, error)
 
 
+class OrderReplaceView(APIView):
+    """Replace is contract-ready but unavailable until independently certified."""
+    permission_classes = (IsAuthenticated,)
+    def post(self, request, order_id):
+        if blocked := _guard(request): return blocked
+        return error_response(request, "CAPABILITY_UNSUPPORTED", 409)
+
+
 class TradesView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
-        rows = SimulatedTrade.objects.filter(order__subject_ref=str(request.user.pk), order__tenant_ref="default").order_by("-executed_at")
-        return Response({"results": [{"trade_id": str(row.trade_id), "order_id": str(row.order_id), "execution_id": row.execution_id, "instrument": row.instrument_id, "side": row.side, "quantity": str(row.quantity), "price": str(row.price), "fee": str(row.fee), "executed_at": row.executed_at.isoformat(), "simulation": True} for row in rows]})
+        rows = Trade.objects.filter(account_ref=f"sim:{request.user.pk}", tenant_ref="default").order_by("-trade_time")
+        return Response({"results": [trade_payload(row) for row in rows]})
+
+
+class TradeDetailView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request, trade_id):
+        row = Trade.objects.filter(pk=trade_id, account_ref=f"sim:{request.user.pk}", tenant_ref="default").first()
+        return Response(trade_payload(row)) if row else error_response(request, "TRADE_NOT_FOUND", 404)
 
 
 class PositionsView(APIView):
@@ -82,6 +99,23 @@ class AccountsView(APIView):
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
         return Response({"results": [serialize_account(account_for(request.user))]})
+
+
+class PortfolioView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request):
+        if not simulation_authorized(request):
+            return Response({"cash": "0", "buying_power": "0", "equity": "0", "market_value": "0", "unrealized_pnl": "0", "realized_pnl": "0", "margin_if_applicable": None, "positions": [], "simulation": True})
+        account = account_for(request.user)
+        positions = list(SimulatedPosition.objects.filter(account=account))
+        serialized = [{"instrument_id": row.instrument_id, "quantity": str(row.quantity), "average_entry_price": str(row.average_price), "market_price": None, "market_value": None, "unrealized_pnl": None, "realized_pnl": str(row.realized_pnl), "updated_at": row.updated_at.isoformat(), "simulation": True} for row in positions]
+        return Response({
+            "cash": serialize_account(account)["available"], "buying_power": serialize_account(account)["available"],
+            "equity": str(account.total_balance), "market_value": None, "unrealized_pnl": None,
+            "realized_pnl": str(sum((row.realized_pnl for row in positions), 0)),
+            "margin_if_applicable": None, "as_of": account.updated_at.isoformat(),
+            "positions": serialized, "simulation": True,
+        })
 
 
 class EmptyDetailView(APIView):

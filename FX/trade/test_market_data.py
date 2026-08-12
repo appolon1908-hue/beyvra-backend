@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from trade.models import MarketCandle
+from trade.models import CanonicalMarketStatus, CanonicalQuote, CanonicalTradeTick, MarketCandle
 from provider_governance.models import ProviderApproval, ProviderDefinition, ProviderLicense
 from provider_governance.service import approval_payload_hash
 from django.utils import timezone
@@ -14,7 +14,11 @@ import os
 
 def approve_provider(provider_id, provider_type="MARKET_DATA"):
     provider = ProviderDefinition.objects.create(
-        provider_id=provider_id, provider_type=provider_type, enabled=True
+        provider_id=provider_id, provider_type=provider_type, enabled=True,
+        license_verified=True, security_approved=True, compliance_approved=True,
+        staging_approved=True, allowed_asset_classes=["*"],
+        allowed_data_types=["HISTORICAL_CANDLES"], max_staleness_ms=60000,
+        updated_by="test-suite",
     )
     license_record = ProviderLicense.objects.create(
         provider=provider,
@@ -158,7 +162,8 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["instrument_id"], "BTC-USD")
         self.assertEqual(response.data["sequence"], 1700000000)
-        self.assertEqual(response.data["market_status"], "OPEN")
+        self.assertEqual(response.data["market_status"], "UNKNOWN")
+        self.assertIsNone(response.data["quote"])
         self.assertEqual(len(response.data["candles"]), 1)
         self.assertEqual(response.data["candles"][0]["close"], "105.0")
         self.assertIn("open_time", response.data["candles"][0])
@@ -230,3 +235,23 @@ class MarketHistoryTests(TestCase):
         self.client.force_authenticate(self.user)
         response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=1m", secure=True)
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_canonical_quote_trade_and_status_endpoints(self):
+        now=timezone.now(); provenance={"provider_id":"fixture","source_type":"WEBSOCKET","normalizer_version":"1.0.0"}
+        CanonicalQuote.objects.create(instrument_id="BTC-USD",bid="99",ask="101",last="100",provider_timestamp=now,received_at=now,provider_id="fixture",sequence="1",provenance=provenance)
+        CanonicalTradeTick.objects.create(instrument_id="BTC-USD",price="100",size="2",trade_id="opaque-1",provider_timestamp=now,received_at=now,provider_id="fixture",venue="FIXTURE",sequence="2",provenance=provenance)
+        CanonicalMarketStatus.objects.create(instrument_id="BTC-USD",status="OPEN",halt_status_available=False,provider_timestamp=now,received_at=now,provider_id="fixture",provenance=provenance)
+        self.client.force_authenticate(self.user)
+        quote=self.client.get("/api/v1/market/quotes?instrument_id=BTC-USD",secure=True)
+        trades=self.client.get("/api/v1/market/trades/BTC-USD",secure=True)
+        market_status=self.client.get("/api/v1/market/status/BTC-USD",secure=True)
+        self.assertEqual((quote.status_code,trades.status_code,market_status.status_code),(200,200,200))
+        self.assertEqual(quote.data["results"][0]["bid"],"99.000000000000")
+        self.assertEqual(trades.data["results"][0]["trade_id"],"opaque-1")
+        self.assertEqual(market_status.data["status"],"OPEN"); self.assertEqual(market_status.data["halt_status"],"UNKNOWN")
+
+    def test_canonical_endpoints_fail_closed_without_fresh_authority(self):
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get("/api/v1/market/quotes?instrument_id=BTC-USD",secure=True).status_code,503)
+        self.assertEqual(self.client.get("/api/v1/market/trades/BTC-USD",secure=True).status_code,503)
+        self.assertEqual(self.client.get("/api/v1/market/status/BTC-USD",secure=True).status_code,503)

@@ -1,0 +1,26 @@
+groups:
+  - name: beyvra-market-surveillance
+    rules:
+      - alert: BeyvraCriticalSurveillanceIndicator
+        expr: increase(beyvra_surveillance_events_total{severity="CRITICAL"}[5m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "Critical surveillance indicator requires review"}
+      - alert: BeyvraSelfTradePreventionFailure
+        expr: increase(beyvra_self_trade_preventions_total{result="failure"}[5m]) > 0
+        labels: {severity: critical}
+        annotations: {summary: "Self-trade prevention enforcement failure"}
+      - alert: BeyvraSurveillanceDeadLetterGrowth
+        expr: increase(beyvra_surveillance_dead_letter_total[10m]) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Surveillance event dead-letter growth"}
+      - alert: BeyvraSurveillanceReconciliationViolation
+        expr: sum(beyvra_surveillance_reconciliation_violations_total) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Surveillance reconciliation invariant failed"}
+      - alert: BeyvraSurveillanceLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(beyvra_surveillance_evaluation_seconds_bucket[5m]))) > 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Pre-trade surveillance p95 exceeds staging budget"}

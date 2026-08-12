@@ -1,0 +1,18 @@
+{
+  "title": "Beyvra / Market Data Authority",
+  "uid": "beyvra-market-authority",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["beyvra", "market-data", "readiness"],
+  "templating": {"list": []},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Provider state", "targets": [{"expr": "beyvra_provider_up"}], "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}},
+    {"id": 2, "type": "timeseries", "title": "Freshness / age", "targets": [{"expr": "beyvra_market_authority_data_age_seconds"}], "gridPos": {"h": 6, "w": 9, "x": 6, "y": 0}},
+    {"id": 3, "type": "timeseries", "title": "Provider latency", "targets": [{"expr": "histogram_quantile(0.95, sum by (le,provider) (rate(beyvra_provider_latency_seconds_bucket[5m])))"}], "gridPos": {"h": 6, "w": 9, "x": 15, "y": 0}},
+    {"id": 4, "type": "timeseries", "title": "Reconnects and rate limits", "targets": [{"expr": "increase(beyvra_provider_reconnects_total[15m])"}, {"expr": "increase(beyvra_provider_rate_limited_total[15m])"}], "gridPos": {"h": 7, "w": 8, "x": 0, "y": 6}},
+    {"id": 5, "type": "timeseries", "title": "Snapshot disagreement", "targets": [{"expr": "increase(beyvra_market_snapshot_disagreement_total[15m])"}], "gridPos": {"h": 7, "w": 8, "x": 8, "y": 6}},
+    {"id": 6, "type": "timeseries", "title": "Failover / authority", "targets": [{"expr": "increase(beyvra_market_failover_total[15m])"}], "gridPos": {"h": 7, "w": 8, "x": 16, "y": 6}},
+    {"id": 7, "type": "stat", "title": "5S_AVAILABLE=false", "description": "Hard-disabled until genuine licensed runtime data passes the authority gate.", "targets": [{"expr": "vector(0)"}], "gridPos": {"h": 4, "w": 24, "x": 0, "y": 13}}
+  ]
+}

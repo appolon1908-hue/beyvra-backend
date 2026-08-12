@@ -80,6 +80,9 @@ CENTRIFUGO_ENABLED = os.getenv("CENTRIFUGO_ENABLED", "false").lower() == "true"
 NATS_JETSTREAM_ENABLED = os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() == "true"
 PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "false").lower() == "true"
 REAL_MONEY_ENABLED = os.getenv("REAL_MONEY_ENABLED", "false").lower() == "true"
+REAL_SETTLEMENT_ENABLED = False
+REAL_TAX_REPORTING_ENABLED = False
+REAL_NAV_PUBLICATION_ENABLED = False
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 REAL_TRADING_ENABLED = False
 EXTERNAL_EXECUTION_ENABLED = False
@@ -96,6 +99,18 @@ REAL_WALLET_READ_ENABLED = False
 REAL_DEPOSITS_ENABLED = False
 REAL_WITHDRAWALS_ENABLED = False
 REAL_INTERNAL_TRANSFERS_ENABLED = False
+SURVEILLANCE_ENABLED = os.getenv("SURVEILLANCE_ENABLED", "true").lower() == "true"
+SELF_TRADE_PREVENTION_ENABLED = os.getenv("SELF_TRADE_PREVENTION_ENABLED", "true").lower() == "true"
+REAL_SETTLEMENT_ENABLED = False
+LIVE_CLEARING_ENABLED = False
+LIVE_CUSTODIAN_SETTLEMENT_ENABLED = False
+NEWSDATA_API_KEY = _provider_credential("NEWSDATA_API_KEY")
+NEWSDATA_LATEST_ENTITLED = os.getenv("NEWSDATA_LATEST_ENTITLED", "false").lower() == "true"
+NEWSDATA_CRYPTO_ENTITLED = os.getenv("NEWSDATA_CRYPTO_ENTITLED", "false").lower() == "true"
+NEWSDATA_MARKET_ENTITLED = os.getenv("NEWSDATA_MARKET_ENTITLED", "false").lower() == "true"
+NEWSDATA_SOURCES_ENTITLED = os.getenv("NEWSDATA_SOURCES_ENTITLED", "false").lower() == "true"
+NEWSDATA_ARCHIVE_ENTITLED = os.getenv("NEWSDATA_ARCHIVE_ENTITLED", "false").lower() == "true"
+NEWSDATA_DELAYED = os.getenv("NEWSDATA_DELAYED", "true").lower() == "true"
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
@@ -168,12 +183,16 @@ INSTALLED_APPS = [
     "real_wallet",
     "provider_governance",
     "financial_client",
+    "reference_data",
     "apps.foundation",
     "apps.trading",
     "apps.compliance",
     "operations",
     "treasury",
     "platform_ops",
+    "apps.surveillance",
+    "apps.post_trade",
+    "apps.valuation",
 ]
 
 # Treasury is an application-side simulation/read-model boundary. These flags
@@ -192,6 +211,7 @@ FIX_LIVE_SESSION_ENABLED = False
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    "apps.foundation.middleware.CanonicalHTTPMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

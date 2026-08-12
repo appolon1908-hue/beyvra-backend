@@ -1,0 +1,2 @@
+# NATS Failure
+Symptoms: NATS target down, consumers unavailable, lag rising. Dashboard: Platform Overview. Alert: JetStream/realtime alerts. Verify internal health, stream availability, storage, and TLS files without printing secrets. Restore NATS quorum/connectivity; never recreate or purge streams during diagnosis. Roll back config changes. Escalate to platform. Confirm streams and consumers available, lag draining, and outbox publishing.

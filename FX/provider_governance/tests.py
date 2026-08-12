@@ -20,7 +20,11 @@ class GovernanceResolutionTests(TestCase):
         self.tmp = TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.override = override_settings(PROVIDER_CREDENTIAL_ROOT=self.tmp.name, PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
         self.override.enable(); self.addCleanup(self.override.disable)
-        self.provider = ProviderDefinition.objects.create(provider_id="deterministic_test", provider_type="MARKET_DATA", enabled=True)
+        self.provider = ProviderDefinition.objects.create(provider_id="deterministic_test", provider_type="MARKET_DATA", enabled=True, license_verified=True, security_approved=True, compliance_approved=True, staging_approved=True, allowed_asset_classes=["TEST"], allowed_data_types=["HISTORICAL_CANDLES"], max_staleness_ms=1000, updated_by="test-suite")
+
+    def test_provider_policy_defaults_fail_closed(self):
+        blocked=ProviderDefinition.objects.create(provider_id="blocked",provider_type="MARKET_DATA")
+        self.assertFalse(blocked.enabled); self.assertFalse(blocked.license_verified); self.assertFalse(blocked.security_approved); self.assertFalse(blocked.compliance_approved); self.assertFalse(blocked.staging_approved); self.assertFalse(blocked.production_approved)
 
     def records(self, *, status="APPROVED", policy="REQUIRED", approved_at=None, expires_at=None, version=1, supersedes=None):
         license_record = ProviderLicense.objects.create(provider=self.provider, environment="STAGING", status="APPROVED", license_reference=f"license:test:{version}")

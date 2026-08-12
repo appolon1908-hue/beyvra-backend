@@ -13,8 +13,12 @@ class NewsArticle(models.Model):
     provider_article_id = models.CharField(max_length=255)
     headline = models.CharField(max_length=512)
     summary = models.TextField(blank=True)
+    content_preview = models.TextField(blank=True)
     publisher = models.CharField(max_length=255, blank=True)
+    source_id = models.CharField(max_length=255, blank=True)
+    source_url = models.URLField(max_length=1024, null=True, blank=True)
     canonical_url = models.URLField(max_length=1024, null=True, blank=True)
+    image_url = models.URLField(max_length=1024, null=True, blank=True)
     published_at = models.DateTimeField()
     updated_at = models.DateTimeField(null=True, blank=True)
     retracted_at = models.DateTimeField(null=True, blank=True)
@@ -22,7 +26,16 @@ class NewsArticle(models.Model):
     affected_instruments = models.JSONField(default=list)
     affected_assets = models.JSONField(default=list)
     affected_currencies = models.JSONField(default=list)
+    countries = models.JSONField(default=list)
+    categories = models.JSONField(default=list)
+    keywords = models.JSONField(default=list)
+    sentiment = models.CharField(max_length=32, blank=True)
     language = models.CharField(max_length=16, default="en")
+    received_at = models.DateTimeField(auto_now_add=True)
+    provider_timestamp = models.DateTimeField(null=True, blank=True)
+    delayed = models.BooleanField(default=True)
+    raw_payload_hash = models.CharField(max_length=64, blank=True)
+    normalizer_version = models.CharField(max_length=32, default="newsdata-v1")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PUBLISHED)
 
     class Meta:
@@ -32,6 +45,23 @@ class NewsArticle(models.Model):
             models.UniqueConstraint(fields=["canonical_url"], condition=Q(canonical_url__isnull=False) & ~Q(canonical_url=""), name="news_canonical_url_unique"),
         ]
         indexes = [models.Index(fields=["status", "-published_at"])]
+
+
+class NewsSource(models.Model):
+    source_id = models.CharField(max_length=255, primary_key=True)
+    name = models.CharField(max_length=255)
+    domain = models.CharField(max_length=255, blank=True)
+    url = models.URLField(max_length=1024, null=True, blank=True)
+    country = models.CharField(max_length=16, blank=True)
+    language = models.CharField(max_length=16, blank=True)
+    categories = models.JSONField(default=list)
+    provider_id = models.CharField(max_length=64, default="newsdata")
+    active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "news_sources"
+        constraints = [models.UniqueConstraint(fields=["provider_id", "source_id"], name="news_source_provider_unique")]
 
 
 class EconomicCalendarEvent(models.Model):

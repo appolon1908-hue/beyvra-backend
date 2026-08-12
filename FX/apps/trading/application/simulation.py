@@ -10,9 +10,13 @@ from apps.foundation.services import begin_idempotent_request, complete_idempote
 from apps.trading.domain.orders import OrderState, transition_order
 from apps.trading.models import RiskDecision, SimulatedAccount, SimulatedPosition, SimulatedReservation, SimulatedTrade, TradingOrder
 from apps.trading.risk import RiskEngine
+from apps.surveillance.engine import SurveillanceEngine
+from apps.surveillance.services import persist_findings
+from apps.post_trade.processor import process_simulated_fill
 from integrations.execution.simulated import SimulatedExecutionProvider
 from integrations.financial.simulated import SimulatedFinancialAdapter
 from prometheus_client import Counter, Histogram
+from apps.foundation.observability import ENVIRONMENT, ORDERS, ORDERS_CANCELLED, ORDERS_FILLED, ORDERS_PARTIAL, RISK_DECISIONS, SIM_SETTLEMENTS, SIM_RESERVATIONS
 
 FEE_RATE = Decimal("0.001")
 SIMULATED_ORDERS = Counter("simulated_orders_total", "Simulation-only canonical orders", ("decision",))
@@ -67,11 +71,14 @@ def normalized_payload(data):
         order_type = str(data.get("order_type") or "MARKET").upper()
         quantity = Decimal(str(data.get("quantity")))
         price = Decimal(str(settings.SIMULATED_EXECUTION_PRICES[instrument]))
+        limit_price = Decimal(str(data.get("limit_price"))) if order_type == "LIMIT" else None
     except (KeyError, InvalidOperation, TypeError):
         raise ValueError("VALIDATION_ERROR")
     if side not in {"BUY", "SELL"} or order_type not in {"MARKET", "LIMIT"} or quantity <= 0:
         raise ValueError("VALIDATION_ERROR")
-    return {"instrument_id": instrument, "side": side, "order_type": order_type, "quantity": quantity, "price": price}
+    if order_type == "LIMIT" and (limit_price is None or limit_price <= 0):
+        raise ValueError("VALIDATION_ERROR")
+    return {"instrument_id": instrument, "side": side, "order_type": order_type, "quantity": quantity, "price": price, "limit_price": limit_price}
 
 
 def evaluate(user, data):
@@ -81,16 +88,21 @@ def evaluate(user, data):
     available = financial.available_quote(account)
     notional = payload["quantity"] * payload["price"]
     state = control_state(payload["instrument_id"])
-    inputs = {"account_status": account.status, "simulation_eligible": True, "instrument_status": "ACTIVE", "market_status": "OPEN", "side": payload["side"], "quantity": payload["quantity"], "min_quantity": "0.0001", "max_quantity": "100", "notional": notional, "min_notional": "1", "max_notional": "1000000", "available_funds": available if payload["side"] == "BUY" else Decimal("Infinity"), "projected_position": payload["quantity"], "position_limit": "100", "daily_notional": "0", "daily_notional_limit": "1000000", "daily_loss": "0", "daily_loss_limit": "10000", "market_data_stale": settings.SIMULATED_MARKET_DATA_STALE, "provider_health": "HEALTHY", "compliance_eligible": True, "control_state": state, "reference_price": payload["price"], "order_price": payload["price"], "price_band_percent": "5"}
+    inputs = {"account_status": account.status, "simulation_eligible": True, "instrument_status": "ACTIVE", "market_status": "OPEN", "side": payload["side"], "quantity": payload["quantity"], "min_quantity": "0.0001", "max_quantity": "100", "notional": notional, "min_notional": "1", "max_notional": "1000000", "available_funds": available if payload["side"] == "BUY" else Decimal("Infinity"), "projected_position": payload["quantity"], "position_limit": "100", "daily_notional": "0", "daily_notional_limit": "1000000", "daily_loss": "0", "daily_loss_limit": "10000", "market_data_stale": settings.SIMULATED_MARKET_DATA_STALE, "provider_health": "HEALTHY", "compliance_eligible": True, "control_state": state, "reference_price": payload["price"], "order_price": payload["limit_price"] or payload["price"], "price_band_percent": "5"}
     if state == "CANCEL_ONLY" or (state == "CLOSE_ONLY" and payload["side"] == "BUY"):
         inputs["control_state"] = "HALTED"
     result = RiskEngine().evaluate_order(inputs)
-    return payload, account, result, available, notional
+    reason = "validation" if result.reason_codes else "unknown"
+    RISK_DECISIONS.labels(result.decision, reason, result.policy_version, "true").inc()
+    surveillance = SurveillanceEngine().evaluate_order(tenant_ref="default", account_ref=account.account_ref, payload=payload, market_data_stale=settings.SIMULATED_MARKET_DATA_STALE)
+    return payload, account, result, surveillance, available, notional
 
 
 def preview(user, data):
-    payload, account, result, available, notional = evaluate(user, data)
-    return {"decision": result.decision, "reason_codes": list(result.reason_codes), "policy_version": result.policy_version, "inputs_hash": result.inputs_hash, "instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"], "quantity": str(payload["quantity"]), "price": str(payload["price"]), "notional": str(notional), "estimated_fee": str(notional * FEE_RATE), "available_simulated_balance": str(available), "simulation": True}
+    payload, account, result, surveillance, available, notional = evaluate(user, data)
+    decision = result.decision if result.decision != "ALLOW" else surveillance.decision
+    reasons = list(result.reason_codes) if result.decision != "ALLOW" else list(surveillance.reason_codes)
+    return {"decision": decision, "reason_codes": reasons, "policy_version": surveillance.policy_version if result.decision == "ALLOW" else result.policy_version, "inputs_hash": result.inputs_hash, "instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"], "quantity": str(payload["quantity"]), "price": str(payload["price"]), "notional": str(notional), "estimated_fee": str(notional * FEE_RATE), "available_simulated_balance": str(available), "simulation": True}
 
 
 def event_payload(order, **extra):
@@ -105,16 +117,41 @@ def audit_ref(actor_ref, action, resource_type, resource_id, correlation_id, rea
     return ApplicationAuditEvent.objects.create(actor_ref=str(actor_ref), action=action, resource_type=resource_type, resource_id=str(resource_id), request_id="simulation", correlation_id=correlation_id, context={"simulation": True}, reason=reason, occurred_at=timezone.now())
 
 
-@transaction.atomic
 def create(user, data, idempotency_key):
     tenant, subject, account_ref = refs(user)
-    payload, account, result, _available, _notional = evaluate(user, data)
+    payload, _account, result, surveillance, _available, _notional = evaluate(user, data)
     if result.decision != "ALLOW":
         raise ValueError(result.reason_codes[0] if result.reason_codes else "ORDER_REVIEW_REQUIRED")
+    if surveillance.decision != "ALLOW":
+        persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
+        raise ValueError(surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED")
+    body, status = _create_allowed(user, data, idempotency_key)
+    if status == 0:
+        raise ValueError(body["reason_code"])
+    return body, status
+
+
+@transaction.atomic
+def _create_allowed(user, data, idempotency_key):
+    tenant, subject, account_ref = refs(user)
+    # Serialize pre-trade controls for one economic account. This prevents two
+    # concurrent opposite-side submissions from both observing an empty order
+    # book and bypassing self-trade prevention.
+    account = account_for(user)
+    SimulatedAccount.objects.select_for_update().get(pk=account.pk)
+    payload, account, result, surveillance, _available, _notional = evaluate(user, data)
+    if result.decision != "ALLOW":
+        raise ValueError(result.reason_codes[0] if result.reason_codes else "ORDER_REVIEW_REQUIRED")
+    if surveillance.decision != "ALLOW":
+        # Commit evidence while still holding the account lock, then let the
+        # outer wrapper produce the customer-safe rejection. Raising here
+        # would roll the evidence back with the transaction.
+        persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
+        return {"reason_code": surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED"}, 0
     record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
     if not fresh and record.response_body is not None:
         return record.response_body, record.response_status
-    order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], state=OrderState.PENDING, simulation=True)
+    order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], limit_price=payload["limit_price"], state=OrderState.PENDING, simulation=True)
     risk = RiskDecision.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, order_id=order.id, decision=result.decision, reason_codes=list(result.reason_codes), policy_version=result.policy_version, inputs_hash=result.inputs_hash)
     correlation = uuid.uuid4()
     audit_ref(subject, "simulation.risk.decided", "risk_decision", risk.decision_id, correlation, result.decision)
@@ -126,11 +163,13 @@ def create(user, data, idempotency_key):
         SIMULATED_REJECTIONS.inc()
     else:
         reservation = SimulatedFinancialAdapter().reserve_funds(account=account, order_id=order.id, instrument_id=order.instrument_id, side=order.side, quantity=order.quantity, price=payload["price"])
+        transaction.on_commit(lambda: SIM_RESERVATIONS["created"].inc())
         order.reservation_id = reservation.id
         order.save(update_fields=("risk_decision_id", "reservation_id", "updated_at"))
         enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.created.v1", payload=event_payload(order), tenant_ref=tenant, correlation_id=correlation)
     audit(user, "simulation.order.submitted", order.id, correlation)
     SIMULATED_ORDERS.labels(decision=result.decision).inc()
+    transaction.on_commit(lambda: ORDERS.labels(ENVIRONMENT, "true").inc())
     body = serialize_order(order)
     complete_idempotent_request(record, status=201, body=body, resource_type="simulation_order", resource_id=order.id)
     if settings.SIMULATED_EXECUTION_INLINE and result.decision == "ALLOW":
@@ -168,8 +207,15 @@ def apply_execution(order_id, execution):
             next_filled = order.filled_quantity + execution.quantity
             if next_filled > order.quantity: raise ValueError("EXECUTION_OVERFILL")
             fee = execution.quantity * execution.price * FEE_RATE
-            account, position, _ = SimulatedFinancialAdapter().settle_trade(reservation=SimulatedReservation.objects.get(pk=order.reservation_id), side=order.side, instrument_id=order.instrument_id, quantity=execution.quantity, price=execution.price, fee=fee)
-            SimulatedTrade.objects.create(order=order, execution_id=execution.execution_id, instrument_id=order.instrument_id, side=order.side, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=timezone.now())
+            reservation = SimulatedReservation.objects.get(pk=order.reservation_id)
+            account, position, _ = SimulatedFinancialAdapter().settle_trade(reservation=reservation, side=order.side, instrument_id=order.instrument_id, quantity=execution.quantity, price=execution.price, fee=fee)
+            reservation.refresh_from_db()
+            if reservation.state == SimulatedReservation.State.CONSUMED:
+                transaction.on_commit(lambda: SIM_RESERVATIONS["consumed"].inc())
+            executed_at = timezone.now()
+            SimulatedTrade.objects.create(order=order, execution_id=execution.execution_id, instrument_id=order.instrument_id, side=order.side, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=executed_at)
+            process_simulated_fill(order=order, execution_id=execution.execution_id, quantity=execution.quantity, price=execution.price, fee=fee, executed_at=executed_at)
+            transaction.on_commit(lambda: SIM_SETTLEMENTS.labels("success").inc())
             SIMULATED_FILLS.inc()
             audit_ref(order.subject_ref, "simulation.execution.received", "simulation_execution", execution.execution_id, uuid.uuid4())
             audit_ref(order.subject_ref, "simulation.trade.executed", "simulation_trade", execution.execution_id, uuid.uuid4())
@@ -178,6 +224,8 @@ def apply_execution(order_id, execution):
             order.filled_quantity = next_filled
             order.average_fill_price = (previous_value + execution.quantity * execution.price) / next_filled
             order.state = transition_order(order.state, "FILLED" if next_filled == order.quantity else "PARTIALLY_FILLED")
+            state_metric = ORDERS_FILLED if order.state == "FILLED" else ORDERS_PARTIAL
+            transaction.on_commit(lambda metric=state_metric: metric.labels(ENVIRONMENT, "true").inc())
             event_type = "trading.order.filled.v1" if order.state == "FILLED" else "trading.order.partially_filled.v1"
             tenant = order.tenant_ref
             enqueue_event(aggregate_type="trade", aggregate_id=execution.execution_id, event_type="trading.trade.executed.v1", payload=event_payload(order, execution_id=execution.execution_id, price=str(execution.price), fee=str(fee)), tenant_ref=tenant)
@@ -219,9 +267,11 @@ def cancel(user, order_id):
     order.state = transition_order(order.state, "CANCELLED")
     order.save(update_fields=("state", "updated_at"))
     SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
+    transaction.on_commit(lambda: SIM_RESERVATIONS["released"].inc())
     enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancelled.v1", payload=event_payload(order), tenant_ref=tenant)
     audit(user, "simulation.order.cancelled", order.id, uuid.uuid4())
     SIMULATED_CANCELLATIONS.inc()
+    transaction.on_commit(lambda: ORDERS_CANCELLED.labels(ENVIRONMENT, "true").inc())
     return serialize_order(order)
 
 

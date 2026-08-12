@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+COMPOSE="docker compose -f $ROOT/chaos/docker-compose.yml"
+case "${1:-}" in
+  up) $COMPOSE up -d --wait postgres redis nats centrifugo ;;
+  down) $COMPOSE down --volumes --remove-orphans ;;
+  certify)
+    cleanup() { $COMPOSE down --volumes --remove-orphans >/dev/null 2>&1 || true; }
+    trap cleanup EXIT INT TERM
+    $COMPOSE up -d --wait postgres redis nats centrifugo
+    $COMPOSE run --rm runner
+    ;;
+  scenario) BEYVRA_CHAOS_ISOLATED=1 PYTHONPATH="$ROOT" python3 -m chaos.harness "${2:?scenario required}" ;;
+  *) echo "usage: $0 {up|down|certify|scenario NAME}" >&2; exit 2 ;;
+esac
