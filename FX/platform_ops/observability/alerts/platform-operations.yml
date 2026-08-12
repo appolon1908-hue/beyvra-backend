@@ -26,3 +26,53 @@ groups:
         for: 0m
         labels: {severity: SEV1}
         annotations: {summary: "A platform kill switch is active"}
+      - alert: BeyvraApiP99LatencyHigh
+        expr: histogram_quantile(0.99, sum(rate(beyvra_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "API p99 latency exceeds the provisional staging threshold"}
+      - alert: BeyvraApiErrorRateSpike
+        expr: sum(rate(beyvra_http_requests_total{status_class=~"5.."}[5m])) / sum(rate(beyvra_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "API error rate exceeds the provisional staging threshold"}
+      - alert: BeyvraMarketDataStale
+        expr: beyvra_market_data_age_seconds > 60
+        for: 2m
+        labels: {severity: SEV2}
+        annotations: {summary: "Market data is stale"}
+      - alert: BeyvraJetStreamPending
+        expr: beyvra_consumer_lag{dependency="jetstream"} > 1000
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "JetStream pending messages exceed policy"}
+      - alert: BeyvraRedisLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(beyvra_redis_operation_duration_seconds_bucket[5m])) by (le)) > 0.1
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "Redis latency exceeds policy"}
+      - alert: BeyvraDatabaseLockWait
+        expr: histogram_quantile(0.95, sum(rate(beyvra_db_lock_wait_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "Database lock waits exceed policy"}
+      - alert: BeyvraReconciliationFailure
+        expr: beyvra_reconciliation_violations_total > 0
+        for: 0m
+        labels: {severity: SEV1}
+        annotations: {summary: "Full-stack reconciliation detected a violation"}
+      - alert: BeyvraUnsafeHighRiskFlag
+        expr: beyvra_high_risk_flag_unsafe_configuration > 0
+        for: 0m
+        labels: {severity: SEV0}
+        annotations: {summary: "A high-risk feature flag is unexpectedly configured on"}
+      - alert: BeyvraBackupFailure
+        expr: time() - beyvra_backup_last_success_timestamp_seconds > 86400
+        for: 5m
+        labels: {severity: SEV1}
+        annotations: {summary: "No verified backup completed within policy"}
+      - alert: BeyvraRestoreVerificationFailure
+        expr: beyvra_restore_verification_success == 0
+        for: 0m
+        labels: {severity: SEV1}
+        annotations: {summary: "Restore verification failed"}

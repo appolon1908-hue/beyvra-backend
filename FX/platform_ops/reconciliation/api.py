@@ -16,5 +16,9 @@ class ReconciliationRunView(APIView):
         reason=request.data.get("reason_code")
         if not reason:return Response({"code":"REASON_CODE_REQUIRED"},status=400)
         if not settings.RELEASE_SHA:return Response({"code":"CANDIDATE_IDENTITY_UNAVAILABLE"},status=503)
-        x=record_run(candidate_sha=settings.RELEASE_SHA,policy_version="v1",results={})
-        record(request=request,action="reconciliation.run",resource_type="full_stack_reconciliation",resource_id=x.id,reason_code=reason);return Response(row(x),status=201)
+        # The control plane does not infer domain invariants from an empty result.
+        # Until every authoritative adapter supplies evidence, persist an honest
+        # incomplete run and fail the operator request closed.
+        x=record_run(candidate_sha=settings.RELEASE_SHA,policy_version="v1",results=None)
+        record(request=request,action="reconciliation.incomplete",resource_type="full_stack_reconciliation",resource_id=x.id,reason_code=reason)
+        return Response({"code":"RECONCILIATION_SOURCES_UNAVAILABLE","reconciliation":row(x)},status=503)

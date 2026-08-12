@@ -5,3 +5,14 @@ def evaluate(code,value):
         return False
     if isinstance(value,bool):return value
     return False
+
+def inspect(code,value):
+    configured_valid=isinstance(value,bool)
+    configured_enabled=value is True
+    high_risk=code in HIGH_RISK
+    return {
+        "effective_enabled":evaluate(code,value),
+        "configured_valid":configured_valid,
+        "unsafe_configuration":high_risk and configured_enabled,
+        "fail_closed":high_risk,
+    }

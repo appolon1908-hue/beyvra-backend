@@ -30,7 +30,8 @@ class OperatorApiTests(APITestCase):
         x=OperationalIncident.objects.create(severity="SEV2",category="TEST",summary="fixture",source="test",deduplication_key="test")
         self.assertEqual(self.client.post(f"/api/v1/operator/system/incidents/{x.id}/resolve",{"reason_code":"test"}).status_code,409)
     @override_settings(RELEASE_SHA="a"*40)
-    def test_reconciliation_run_is_narrow_and_audited(self):
-        self.assertEqual(self.client.post("/api/v1/operator/system/reconciliation/run",{"reason_code":"fixture"},format="json").status_code,201)
+    def test_reconciliation_never_fabricates_pass_without_sources(self):
+        response=self.client.post("/api/v1/operator/system/reconciliation/run",{"reason_code":"fixture"},format="json")
+        self.assertEqual(response.status_code,503);self.assertEqual(response.json()["reconciliation"]["state"],"INCOMPLETE")
     def test_no_generic_mutation_endpoints(self):
         for p in ("action","admin","toggle"):self.assertEqual(self.client.post(f"/api/v1/operator/system/{p}",{}).status_code,404)
