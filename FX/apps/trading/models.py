@@ -20,7 +20,6 @@ class TradingOrder(models.Model):
     average_fill_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
     risk_decision_id = models.UUIDField(null=True)
     reservation_id = models.UUIDField(null=True)
-    simulation = models.BooleanField(default=False)
     state = models.CharField(
         max_length=24,
         choices=[(value.value, value.value) for value in OrderState],

@@ -17,7 +17,8 @@ def _guard(request):
 
 def _failure(request, error):
     code = str(error)
-    status = 409 if code in {"ORDER_INVALID_STATE", "IDEMPOTENCY_CONFLICT"} else 422 if code == "VALIDATION_ERROR" else 403 if code == "SIMULATION_AUTHORITY_REQUIRED" else 409
+    compliance_codes = {"KYC_REQUIRED", "KYC_PENDING", "KYC_REJECTED", "AML_REVIEW", "AML_BLOCKED", "SANCTIONS_REVIEW", "SANCTIONS_BLOCKED", "JURISDICTION_RESTRICTED", "ACCOUNT_RESTRICTED", "ACCOUNT_SUSPENDED", "TRADING_DISABLED", "MANUAL_REVIEW_REQUIRED", "COMPLIANCE_NOT_ELIGIBLE"}
+    status = 409 if code in {"ORDER_INVALID_STATE", "IDEMPOTENCY_CONFLICT"} else 422 if code == "VALIDATION_ERROR" else 403 if code == "SIMULATION_AUTHORITY_REQUIRED" or code in compliance_codes else 409
     return error_response(request, code, status)
 
 

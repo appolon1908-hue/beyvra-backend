@@ -21,9 +21,12 @@ def disabled_response(request, feature):
             # Canonical clients consume the nested Beyvra error object below.
             "code": "FEATURE_DISABLED",
             "message": "This feature is not enabled.",
+            "details": [],
+            "feature": feature,
             "error": {
                 "code": "FEATURE_DISABLED",
                 "message": "This feature is not enabled.",
+                "details": [],
             },
         },
         status=503,

@@ -5,6 +5,13 @@ from apps.trading.application.simulation import create, process_created_order
 from apps.trading.models import ReconciliationRun
 from apps.foundation.models import ApplicationAuditEvent, OutboxEvent
 from users.models import User
+from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
+from apps.compliance.models import ComplianceProfile
+from integrations.models import Organization, OrganizationMembership
+
+def approve(user, name):
+    organization=Organization.objects.create(name=name); OrganizationMembership.objects.create(user=user,organization=organization)
+    ComplianceProfile.objects.create(user=user,organization=organization,account_state=AccountState.ACTIVE,kyc_state=KycState.APPROVED,aml_state=AmlState.CLEARED,sanctions_state=SanctionsState.CLEAR,jurisdiction_state=JurisdictionState.SUPPORTED)
 
 def valid_snapshot():
     return {"orders":[{"id":"o1","quantity":"10","filled_quantity":"10","state":"FILLED","account_id":"a1"}],
@@ -39,6 +46,7 @@ class ReconciliationDetectionTests(SimpleTestCase):
 class ReconciliationPersistenceTests(TestCase):
     def test_valid_database_state_persists_immutable_pass_evidence(self):
         user=User.objects.create_user(email="reconcile@example.invalid",phone_number="+12025550199",password=None)
+        approve(user,"Reconciliation Test Tenant")
         body,_=create(user,{"instrument":"BTC-USD","side":"BUY","order_type":"MARKET","quantity":"1"},"reconcile-valid")
         process_created_order(body["id"],"IMMEDIATE_FULL_FILL")
         report=run(candidate_sha="test-candidate")
@@ -49,6 +57,7 @@ class ReconciliationPersistenceTests(TestCase):
 
     def test_correlation_chain_is_preserved_through_settlement(self):
         user=User.objects.create_user(email="correlation@example.invalid",phone_number="+12025550200",password=None)
+        approve(user,"Correlation Test Tenant")
         correlation="3f25cc00-0fc9-47b6-aa64-393ea50bb726"
         body,_=create(user,{"instrument":"BTC-USD","side":"BUY","order_type":"MARKET","quantity":"1"},"correlation-chain",correlation)
         process_created_order(body["id"],"IMMEDIATE_FULL_FILL")

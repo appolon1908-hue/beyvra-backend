@@ -19,12 +19,18 @@ from apps.post_trade.state import PostTradeStateService
 from apps.trading.application.simulation import create, process_created_order
 from apps.trading.models import SimulatedReservation, TradingOrder
 from users.models import User
+from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
+from apps.compliance.models import ComplianceProfile
+from integrations.models import Organization, OrganizationMembership
 
 
 @override_settings(SIMULATED_TRADING_ENABLED=True, DEPLOYMENT_ENV="test", SIMULATED_EXECUTION_INLINE=False, SURVEILLANCE_ENABLED=True, SELF_TRADE_PREVENTION_ENABLED=True)
 class PostTradeAuthorityTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="post-trade@example.test", password="safe-password", phone_number="+15550001001")
+        organization = Organization.objects.create(name="Post Trade Test Tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=organization)
+        ComplianceProfile.objects.create(user=self.user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
         self.other = User.objects.create_user(email="other-post-trade@example.test", password="safe-password", phone_number="+15550001002")
         self.manager = User.objects.create_user(email="post-trade-manager@example.test", password="safe-password", phone_number="+15550001003")
         Group.objects.get_or_create(name="post_trade_manager")[0].user_set.add(self.manager)

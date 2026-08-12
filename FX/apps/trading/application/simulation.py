@@ -13,6 +13,9 @@ from apps.trading.execution_authority import preview_route, record_quality
 from apps.trading.risk import RiskEngine
 from apps.surveillance.engine import SurveillanceEngine
 from apps.surveillance.services import persist_findings
+from apps.compliance.domain import EligibilityResult
+from apps.compliance.models import ComplianceProfile
+from apps.compliance.services import get_trading_eligibility
 from apps.post_trade.processor import process_simulated_fill
 from integrations.execution.simulated import SimulatedExecutionProvider
 from integrations.financial.simulated import SimulatedFinancialAdapter
@@ -53,6 +56,16 @@ def refs(user):
     subject = str(user.pk)
     return "default", subject, f"sim:{subject}"
 
+
+def compliance_decision(user, *, lock=False):
+    profiles = ComplianceProfile.objects.filter(user_id=user.pk)
+    if lock:
+        profiles = profiles.select_for_update()
+    profile = profiles.first()
+    if profile is None:
+        return None
+    return get_trading_eligibility(profile)
+
 def correlation_uuid(value=None):
     try: return uuid.UUID(str(value))
     except (ValueError,TypeError,AttributeError): return uuid.uuid5(uuid.NAMESPACE_URL,f"beyvra:{value}") if value else uuid.uuid4()
@@ -76,6 +89,8 @@ def control_state(instrument_id):
 def normalized_payload(data):
     try:
         instrument = str(data.get("instrument") or data.get("instrument_id") or "").upper()
+        if "-" not in instrument and instrument.endswith("USD"):
+            instrument = f"{instrument[:-3]}-USD"
         side = str(data.get("side") or "").upper()
         order_type = str(data.get("order_type") or "MARKET").upper()
         quantity = Decimal(str(data.get("quantity")))
@@ -126,23 +141,29 @@ def audit_ref(actor_ref, action, resource_type, resource_id, correlation_id, rea
     return ApplicationAuditEvent.objects.create(actor_ref=str(actor_ref), action=action, resource_type=resource_type, resource_id=str(resource_id), request_id="simulation", correlation_id=correlation_id, context={"simulation": True}, reason=reason, occurred_at=timezone.now())
 
 
-@transaction.atomic
 def create(user, data, idempotency_key, correlation_id=None):
     tenant, subject, account_ref = refs(user)
+    eligibility = compliance_decision(user)
+    if eligibility is None or eligibility.result != EligibilityResult.ALLOWED:
+        reasons = eligibility.reason_codes if eligibility else ("KYC_REQUIRED",)
+        raise ValueError(reasons[0] if reasons else "COMPLIANCE_NOT_ELIGIBLE")
+    record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
+    if not fresh and record.response_body is not None:
+        return record.response_body, 200
     payload, _account, result, surveillance, _available, _notional = evaluate(user, data)
     if result.decision != "ALLOW":
         raise ValueError(result.reason_codes[0] if result.reason_codes else "ORDER_REVIEW_REQUIRED")
     if surveillance.decision != "ALLOW":
         persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
         raise ValueError(surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED")
-    body, status = _create_allowed(user, data, idempotency_key, correlation_id)
+    body, status = _create_allowed(user, data, idempotency_key, correlation_id, idempotency_record=record)
     if status == 0:
         raise ValueError(body["reason_code"])
     return body, status
 
 
 @transaction.atomic
-def _create_allowed(user, data, idempotency_key, correlation_id=None):
+def _create_allowed(user, data, idempotency_key, correlation_id=None, idempotency_record=None):
     tenant, subject, account_ref = refs(user)
     # Serialize pre-trade controls for one economic account. This prevents two
     # concurrent opposite-side submissions from both observing an empty order
@@ -158,10 +179,19 @@ def _create_allowed(user, data, idempotency_key, correlation_id=None):
         # would roll the evidence back with the transaction.
         persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
         return {"reason_code": surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED"}, 0
-    record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
-    if not fresh and record.response_body is not None:
-        return record.response_body, record.response_status
+    record = idempotency_record
+    if record is None:
+        record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
+        if not fresh and record.response_body is not None:
+            return record.response_body, 200
     order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], limit_price=payload["limit_price"], state=OrderState.PENDING, simulation=True)
+    eligibility = compliance_decision(user)
+    if eligibility is not None:
+        order.eligibility_policy_version = eligibility.policy_version
+        order.eligibility_result = eligibility.result
+        order.eligibility_reason_codes = list(eligibility.reason_codes)
+        order.eligibility_evaluated_at = eligibility.evaluated_at
+        order.save(update_fields=("eligibility_policy_version", "eligibility_result", "eligibility_reason_codes", "eligibility_evaluated_at", "updated_at"))
     correlation = correlation_uuid(correlation_id)
     preview_route(user, {"instrument": payload["instrument_id"], "side": payload["side"], "order_type": payload["order_type"],
         "quantity": str(payload["quantity"]), "reference_price": str(payload["price"]), "mode": "SIMULATION", "correlation_id":str(correlation)}, persist=True, order=order)
@@ -306,7 +336,7 @@ def cancel(user, order_id):
 
 
 def serialize_order(order):
-    return {"id": str(order.id), "instrument": order.instrument_id, "side": order.side, "order_type": order.order_type, "quantity": str(order.quantity), "filled_quantity": str(order.filled_quantity), "state": order.state, "simulation": True}
+    return {"id": str(order.id), "instrument": order.instrument_id, "side": order.side, "order_type": order.order_type, "quantity": str(order.quantity), "filled_quantity": str(order.filled_quantity), "state": order.state, "simulation": True, "eligibility_policy_version": order.eligibility_policy_version, "eligibility_result": order.eligibility_result, "eligibility_reason_codes": order.eligibility_reason_codes, "eligibility_evaluated_at": order.eligibility_evaluated_at.isoformat() if order.eligibility_evaluated_at else None}
 
 
 def serialize_account(account):

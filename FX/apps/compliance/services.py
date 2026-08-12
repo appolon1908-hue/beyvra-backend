@@ -36,7 +36,7 @@ def _invalidate_pending_simulation_orders_if_denied(profile):
     decision=_evaluate(profile,"TRADING",persist=False)
     if decision.result==EligibilityResult.ALLOWED:return 0
     from apps.trading.models import TradingOrder
-    return TradingOrder.objects.filter(account_ref=str(profile.pk),simulation=True,state="PENDING").update(state="REJECTED",eligibility_policy_version=decision.policy_version,eligibility_result=decision.result,eligibility_reason_codes=list(decision.reason_codes),eligibility_evaluated_at=decision.evaluated_at)
+    return TradingOrder.objects.filter(subject_ref=str(profile.user_id),simulation=True,state="PENDING").update(state="REJECTED",eligibility_policy_version=decision.policy_version,eligibility_result=decision.result,eligibility_reason_codes=list(decision.reason_codes),eligibility_evaluated_at=decision.evaluated_at)
 
 
 def _active_restrictions(profile, now):

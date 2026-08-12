@@ -5,6 +5,9 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from users.models import User
+from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
+from apps.compliance.models import ComplianceProfile
+from integrations.models import Organization, OrganizationMembership
 from .fx import FxValuationService
 from .models import FxValuationRate, RealizedPnLEvent, TaxLot, ValuationPrice
 from .prices import ValuationPriceService
@@ -14,6 +17,7 @@ from .services import PerformanceReturnService, PortfolioNavService, PositionVal
 class ValuationAuthorityTests(TestCase):
  def setUp(self):
   self.now=timezone.now(); self.user=User.objects.create_user(email="valuation@example.test",password="safe-test-password"); self.client=APIClient(); self.client.force_authenticate(self.user)
+  organization=Organization.objects.create(name="Valuation Test Tenant"); OrganizationMembership.objects.create(user=self.user,organization=organization); ComplianceProfile.objects.create(user=self.user,organization=organization,account_state=AccountState.ACTIVE,kyc_state=KycState.APPROVED,aml_state=AmlState.CLEARED,sanctions_state=SanctionsState.CLEAR,jurisdiction_state=JurisdictionState.SUPPORTED)
   self.price=ValuationPrice.objects.create(instrument_id="fixture-instrument",valuation_time=self.now,price=Decimal("100"),currency="USD",price_type="MID",provider_id="fixture",market_data_ref="price-1",quality_state="FRESH",market_status="OPEN",policy_id="SIMULATION",policy_version="1")
  def test_price_authority_rejects_stale_and_selects_evidence(self):
   self.assertEqual(ValuationPriceService.resolve("fixture-instrument"),self.price)

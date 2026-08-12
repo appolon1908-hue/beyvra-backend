@@ -15,6 +15,9 @@ from apps.surveillance.reconciliation import reconcile_surveillance
 from apps.surveillance.services import ingest_event
 from apps.trading.application.simulation import create
 from apps.trading.models import SimulatedTrade, TradingOrder
+from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
+from apps.compliance.models import ComplianceProfile
+from integrations.models import Organization, OrganizationMembership
 from users.models import User
 
 
@@ -36,6 +39,9 @@ class SurveillanceTests(TestCase):
         for name, event_type, severity, parameters in definitions:
             SurveillanceRule.objects.create(name=name, event_type=event_type, severity=severity, parameters_json_safe=parameters, policy_version="surveillance-2026-08-v1", effective_from=self.now)
         self.user = User.objects.create_user(email="trader@example.test", password="safe-password", phone_number="+15550000001")
+        organization = Organization.objects.create(name="Surveillance Test Tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=organization)
+        ComplianceProfile.objects.create(user=self.user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
         self.manager = User.objects.create_user(email="manager@example.test", password="safe-password", phone_number="+15550000002")
         self.checker = User.objects.create_user(email="checker@example.test", password="safe-password", phone_number="+15550000003")
         group, _ = Group.objects.get_or_create(name="surveillance_manager")

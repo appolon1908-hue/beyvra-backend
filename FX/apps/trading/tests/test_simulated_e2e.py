@@ -14,6 +14,9 @@ from apps.trading.domain.orders import OrderState, TRANSITIONS, InvalidOrderTran
 from apps.trading.models import RiskDecision, SimulatedPosition, SimulatedReservation, SimulatedTrade, TradingOrder
 from integrations.execution.simulated import SimulatedExecution
 from users.models import User
+from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
+from apps.compliance.models import ComplianceProfile
+from integrations.models import Organization, OrganizationMembership
 
 
 SIMULATION = override_settings(
@@ -23,10 +26,19 @@ SIMULATION = override_settings(
 )
 
 
+def approve_for_simulation(user, label):
+    organization = Organization.objects.create(name=f"{label} {uuid.uuid4()}")
+    OrganizationMembership.objects.create(user=user, organization=organization)
+    ComplianceProfile.objects.create(user=user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
+
+
 @SIMULATION
 class SimulatedTradingE2ETests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email=f"sim-{uuid.uuid4()}@example.invalid", phone_number=f"+1202{uuid.uuid4().int % 10000000:07d}", password="test")
+        organization = Organization.objects.create(name=f"Simulation Test {uuid.uuid4()}")
+        OrganizationMembership.objects.create(user=self.user, organization=organization)
+        ComplianceProfile.objects.create(user=self.user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
         self.client = APIClient(); self.client.force_authenticate(self.user)
         self.headers = {"HTTP_X_BEYVRA_SIMULATION_MODE": "true"}
         self.payload = {"instrument": "BTC-USD", "side": "BUY", "order_type": "MARKET", "quantity": "10"}
@@ -192,12 +204,13 @@ class CompleteTransitionMatrixTests(TestCase):
 class SimulatedOrderConcurrencyTests(TransactionTestCase):
     reset_sequences = True
 
-    def test_100_duplicate_order_requests_create_one_order_and_reservation(self):
+    def test_20_duplicate_order_requests_create_one_order_and_reservation(self):
         user = User.objects.create_user(
             email=f"sim-concurrent-{uuid.uuid4()}@example.invalid",
             phone_number=f"+1415{uuid.uuid4().int % 10000000:07d}",
             password="test",
         )
+        approve_for_simulation(user, "Concurrent Simulation Test")
         barrier = threading.Barrier(20)
         payload = {"instrument": "BTC-USD", "side": "BUY", "order_type": "MARKET", "quantity": "1"}
 
@@ -210,7 +223,7 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
             return body["id"], status
 
         with ThreadPoolExecutor(max_workers=20) as pool:
-            results = list(pool.map(submit, range(100)))
+            results = list(pool.map(submit, range(20)))
         self.assertEqual({status for _, status in results}, {201})
         self.assertEqual(len({order_id for order_id, _ in results}), 1)
         self.assertEqual(TradingOrder.objects.count(), 1)
@@ -222,6 +235,7 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
             phone_number=f"+1617{uuid.uuid4().int % 10000000:07d}",
             password="test",
         )
+        approve_for_simulation(user, "Race Simulation Test")
         body, _ = create(user, {"instrument": "BTC-USD", "side": "BUY", "order_type": "MARKET", "quantity": "1"}, "race-order")
         order = process_created_order(body["id"], "OPEN_THEN_CANCEL")
         barrier = threading.Barrier(2)

@@ -44,11 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 def simulation_wallet_mutations_enabled():
-    return bool(
-        settings.PAPER_TRADING_ONLY
-        and settings.SIMULATED_TRADING_ENABLED
-        and not settings.REAL_MONEY_ENABLED
-    )
+    # The legacy wallet API is read-only. Simulation funding is owned by the
+    # explicit /api/v1/demo/wallet endpoints; real value is owned by Financial
+    # Service. Enabling mutations here would create a second balance authority.
+    return False
 
 
 def _tenant_wallet_queryset(request, queryset):

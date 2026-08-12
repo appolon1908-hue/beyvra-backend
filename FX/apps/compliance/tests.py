@@ -86,7 +86,7 @@ class ComplianceAuthorityTests(TestCase):
         with self.assertRaises(SystemExit):call_command("reconcile_compliance",stdout=StringIO())
     def test_provider_session_is_not_faked(self): self.assertEqual(self.client.post("/api/v1/compliance/kyc/sessions").json()["error"]["code"],"PROVIDER_NOT_AVAILABLE")
     def test_simulation_order_gated_and_snapshotted(self):
-        payload={"instrument":"BTCUSD","side":"BUY","order_type":"MARKET","quantity":"1"}; headers={"HTTP_X_BEYVRA_SIMULATION_MODE":"true","HTTP_IDEMPOTENCY_KEY":"fixture-key"}
+        payload={"instrument":"BTCUSD","side":"BUY","order_type":"MARKET","quantity":"0.1"}; headers={"HTTP_X_BEYVRA_SIMULATION_MODE":"true","HTTP_IDEMPOTENCY_KEY":"fixture-key"}
         self.assertEqual(self.client.post("/api/v1/trading/orders",payload,format="json",**headers).status_code,403)
         self.approve(); first=self.client.post("/api/v1/trading/orders",payload,format="json",**headers); second=self.client.post("/api/v1/trading/orders",payload,format="json",**headers)
         self.assertEqual(first.status_code,201); self.assertEqual(second.status_code,200); self.assertEqual(first.json()["id"],second.json()["id"]); self.assertEqual(first.json()["eligibility_result"],"ALLOWED")
