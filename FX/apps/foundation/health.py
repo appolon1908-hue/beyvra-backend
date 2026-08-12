@@ -27,4 +27,6 @@ def ready(_request):
     if settings.NATS_JETSTREAM_ENABLED:
         checks["nats"] = "ready" if cache.get("health:outbox-worker") else "worker_unavailable"
     status = 200 if checks["postgresql"] and checks["redis"] and checks["nats"] in {"disabled", "ready"} else 503
-    return JsonResponse({"status": "ready" if status == 200 else "not_ready", "checks": checks}, status=status)
+    # Dependency names and topology stay internal; the public contract exposes
+    # only the aggregate readiness decision.
+    return JsonResponse({"status": "ready" if status == 200 else "not_ready"}, status=status)

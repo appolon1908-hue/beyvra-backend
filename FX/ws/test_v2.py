@@ -23,9 +23,35 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "NATS_JETSTREAM_ENABLED": "true",
         "CENTRIFUGO_PROXY_SECRET": "proxy-secret",
     })
-    def test_proxy_allows_market_and_denies_other_account(self):
+    @patch("ws.v2._owns_demo_account", return_value=False)
+    def test_proxy_allows_market_and_denies_other_account(self, owns_account):
         request = self.factory.post("/", {"channel": "market.BTCUSDT.quote", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
         self.assertEqual(v2.authorize_subscription(request).status_code, 200)
         request = self.factory.post("/", {"channel": "wallet.balance.99", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
         payload = json.loads(v2.authorize_subscription(request).content)
         self.assertEqual(payload["error"]["code"], 403)
+        owns_account.assert_called_once_with("42", "wallet.balance.99")
+
+    @patch("ws.v2._owns_demo_account", return_value=True)
+    @patch.dict("os.environ", {"CENTRIFUGO_PROXY_SECRET": "proxy-secret"})
+    def test_proxy_accepts_server_verified_account_ownership(self, owns_account):
+        request = self.factory.post(
+            "/", {"channel": "wallet.balance.99", "user": "42"}, format="json",
+            HTTP_X_BEYVRA_PROXY_SECRET="proxy-secret",
+        )
+        self.assertEqual(json.loads(v2.authorize_subscription(request).content), {"result": {}})
+        owns_account.assert_called_once_with("42", "wallet.balance.99")
+
+    @patch.dict("os.environ", {"CENTRIFUGO_PROXY_SECRET": "proxy-secret"})
+    def test_proxy_prefers_beyvra_header_and_retains_legacy_header(self):
+        modern = self.factory.post("/", {"channel": "market.BTCUSDT.quote", "user": "42"}, format="json", HTTP_X_BEYVRA_PROXY_SECRET="proxy-secret", HTTP_X_CODESTRA_PROXY_SECRET="wrong")
+        legacy = self.factory.post("/", {"channel": "market.BTCUSDT.quote", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
+        self.assertEqual(v2.authorize_subscription(modern).status_code, 200)
+        self.assertEqual(v2.authorize_subscription(legacy).status_code, 200)
+
+    @patch.dict("os.environ", {"CENTRIFUGO_PROXY_SECRET": "proxy-secret"})
+    def test_proxy_requires_exact_compliance_user_scope(self):
+        own = self.factory.post("/", {"channel": "compliance.profile.updated.v1.42", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
+        self.assertEqual(v2.authorize_subscription(own).status_code, 200)
+        other = self.factory.post("/", {"channel": "compliance.profile.updated.v1.142", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
+        self.assertEqual(json.loads(v2.authorize_subscription(other).content)["error"]["code"], 403)

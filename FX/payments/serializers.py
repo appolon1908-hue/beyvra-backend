@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -17,7 +16,7 @@ class BinancePaymentResponseSerializer(serializers.Serializer):
     order_id = serializers.IntegerField(required=False, default=1)
     merchant_trade_no = serializers.CharField(required=False, allow_blank=True, default="ABC")
     status = serializers.CharField(required=False, allow_blank=True, default="Active")
-    expiration_time = serializers.DateTimeField(required=False, default=datetime.now() + timedelta(hours=3))
+    expiration_time = serializers.DateTimeField(required=False, allow_null=True)
     currency = serializers.CharField(required=False, allow_blank=True, default=None)
     amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, default=None)
     merchant_name = serializers.CharField(required=False, allow_blank=True, default="Seaflux")

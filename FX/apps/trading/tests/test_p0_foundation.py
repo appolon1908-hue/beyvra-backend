@@ -129,10 +129,11 @@ class ControlAndCompatibilityTests(TestCase):
             ready = self.client.get("/health/ready")
             self.assertEqual(ready.status_code, 200)
             self.assertEqual(ready.json()["status"], "ready")
+            self.assertNotIn("checks", ready.json())
         with override_settings(NATS_JETSTREAM_ENABLED=True):
             unavailable = self.client.get("/health/ready")
             self.assertEqual(unavailable.status_code, 503)
-            self.assertEqual(unavailable.json()["checks"]["nats"], "worker_unavailable")
+            self.assertEqual(unavailable.json(), {"status": "not_ready"})
 
 
 class OutboxInboxTests(TestCase):

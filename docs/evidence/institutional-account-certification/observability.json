@@ -1,0 +1,29 @@
+{
+  "dashboard": "Beyvra / Institutional Accounts & Clearing",
+  "panels": [
+    "institutions",
+    "subaccounts",
+    "account hierarchy health",
+    "allocation exceptions",
+    "omnibus reconciliation",
+    "segregated mapping health",
+    "clearing relationship health",
+    "broker mapping collisions",
+    "institution exposure",
+    "reconciliation violations"
+  ],
+  "alerts": [
+    "orphan subaccount",
+    "allocation mismatch",
+    "omnibus attribution mismatch",
+    "segregated mapping conflict",
+    "broker mapping collision",
+    "clearing relationship missing",
+    "settlement mapping missing",
+    "risk aggregation mismatch",
+    "critical reconciliation violation"
+  ],
+  "pii_labels": false,
+  "account_id_labels": false,
+  "subaccount_id_labels": false
+}

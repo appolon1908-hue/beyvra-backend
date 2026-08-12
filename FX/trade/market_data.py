@@ -29,16 +29,37 @@ def validate_market(symbol: str, interval: str):
 def serialize_candle(candle: MarketCandle):
     return {
         "time": int(candle.timestamp.timestamp()),
-        "open": float(candle.open),
-        "high": float(candle.high),
-        "low": float(candle.low),
-        "close": float(candle.close),
-        "volume": float(candle.volume),
+        "open": str(candle.open),
+        "high": str(candle.high),
+        "low": str(candle.low),
+        "close": str(candle.close),
+        "volume": str(candle.volume),
     }
 
 
 def get_market_history(*, symbol: str, interval: str, limit: int, before: int | None = None):
     validate_market(symbol, interval)
+    if getattr(settings, "DEMO_MARKET_FIXTURE_ENABLED", False):
+        # Explicit staging-only paper-market fixture. It is deterministic,
+        # creates no provider call, and cannot be enabled outside staging.
+        step = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}[interval]
+        end = (before or int(datetime.now(tz=timezone.utc).timestamp())) // step * step
+        base = Decimal(100 + sum(symbol.encode("utf-8")) % 1000)
+        candles = []
+        for index in range(max(1, min(limit, 500))):
+            timestamp = end - (max(1, min(limit, 500)) - index) * step
+            offset = Decimal((timestamp // step) % 17) / Decimal("10")
+            open_price = base + offset
+            close_price = open_price + (Decimal("0.10") if index % 2 == 0 else Decimal("-0.10"))
+            candles.append({
+                "time": timestamp,
+                "open": str(open_price),
+                "high": str(max(open_price, close_price) + Decimal("0.20")),
+                "low": str(min(open_price, close_price) - Decimal("0.20")),
+                "close": str(close_price),
+                "volume": str(Decimal(1000 + index)),
+            })
+        return candles
     provider_id = "twelve_data" if symbol in TWELVE_DATA_SYMBOLS else "binance"
     try:
         resolved_provider = resolve_provider(

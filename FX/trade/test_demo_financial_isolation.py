@@ -36,4 +36,4 @@ class DemoFinancialIsolationTests(TestCase):
     def test_real_wallet_identifier_is_not_a_demo_wallet_identifier(self):
         response=self.client.get("/api/v1/demo/wallet",HTTP_X_ORGANIZATION_ID=str(self.organization.id),HTTP_X_FINANCIAL_WALLET_ID="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
         self.assertEqual(response.status_code,400)
-        self.assertEqual(response.data["code"],"FINANCIAL_WALLET_ID_NOT_ACCEPTED")
+        self.assertEqual(response.data["error"]["code"],"FINANCIAL_WALLET_ID_NOT_ACCEPTED")

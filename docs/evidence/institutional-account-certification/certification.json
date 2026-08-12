@@ -1,0 +1,50 @@
+{
+  "mission": "BEYVRA_INSTITUTIONAL_ACCOUNT_SUBACCOUNT_CUSTODY_ALLOCATION_AND_CLEARING_BROKER_STRUCTURE_AUTHORITY",
+  "starting_head": "1289857ed2486edc6845e5bf0b9965c3c142fa00",
+  "openapi_sha256": "881e46b3619c37149c4fad632882a9e2cf727638a4ae23948b9db5e2571ac3d3",
+  "database": {
+    "engine": "PostgreSQL 16",
+    "migration_from_zero": "PASS",
+    "migration_drift": "NONE",
+    "rollback": "PASS",
+    "reapply": "PASS",
+    "restore": "PASS",
+    "reconciliation_after_restore": "PASS",
+    "audit_continuity": "PASS"
+  },
+  "synthetic_load": {
+    "institutions": 100,
+    "subaccounts": 10000,
+    "institution_hierarchy_p95_ms": 0.806,
+    "subaccount_list_p95_ms": 4.574,
+    "position_aggregation_p95_ms": 0.946,
+    "risk_aggregation_p95_ms": 0.671,
+    "reconciliation_p95_ms": 8.819
+  },
+  "security": {
+    "current_source_secret_findings": 0,
+    "dependency_critical_vulnerabilities": 0,
+    "container_critical_vulnerabilities": 0,
+    "high_or_critical_config_findings": 0,
+    "sbom": "sbom.cdx.json"
+  },
+  "tests": {
+    "full_backend": "PASS",
+    "full_backend_count": 255,
+    "institutional": "PASS",
+    "institutional_count": 14
+  },
+  "safety": {
+    "real_trading_enabled": false,
+    "external_execution_enabled": false,
+    "live_broker_routing_enabled": false,
+    "real_settlement_enabled": false,
+    "real_money_enabled": false,
+    "live_custody_enabled": false,
+    "live_clearing_enabled": false,
+    "outbound_live_requests": 0,
+    "real_financial_effects": 0,
+    "financial_service_changed": false,
+    "production_changed": false
+  }
+}

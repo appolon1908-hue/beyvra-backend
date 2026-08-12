@@ -1,37 +1,81 @@
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
+
+class StrEnum(str, Enum):
+    def __str__(self): return self.value
 
 
-class KycStatus(StrEnum):
-    NOT_STARTED = "NOT_STARTED"
-    PENDING = "PENDING"
-    REVIEW = "REVIEW"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-    EXPIRED = "EXPIRED"
+class AccountState(StrEnum):
+    PENDING = "PENDING"; ACTIVE = "ACTIVE"; RESTRICTED = "RESTRICTED"; SUSPENDED = "SUSPENDED"; CLOSED = "CLOSED"
 
 
-class ScreeningStatus(StrEnum):
-    NOT_STARTED = "NOT_STARTED"
-    PENDING = "PENDING"
-    REVIEW = "REVIEW"
-    CLEARED = "CLEARED"
-    BLOCKED = "BLOCKED"
+class KycState(StrEnum):
+    NOT_STARTED = "NOT_STARTED"; PENDING = "PENDING"; IN_REVIEW = "IN_REVIEW"; APPROVED = "APPROVED"; REJECTED = "REJECTED"; EXPIRED = "EXPIRED"; REQUIRES_UPDATE = "REQUIRES_UPDATE"
+
+
+class AmlState(StrEnum):
+    NOT_SCREENED = "NOT_SCREENED"; PENDING = "PENDING"; CLEARED = "CLEARED"; REVIEW_REQUIRED = "REVIEW_REQUIRED"; BLOCKED = "BLOCKED"
+
+
+class SanctionsState(StrEnum):
+    NOT_CHECKED = "NOT_CHECKED"; CLEAR = "CLEAR"; POSSIBLE_MATCH = "POSSIBLE_MATCH"; CONFIRMED_MATCH = "CONFIRMED_MATCH"; MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
+class JurisdictionState(StrEnum):
+    SUPPORTED = "SUPPORTED"; LIMITED = "LIMITED"; RESTRICTED = "RESTRICTED"; UNKNOWN = "UNKNOWN"
+
+
+class EligibilityResult(StrEnum):
+    ALLOWED = "ALLOWED"; DENIED = "DENIED"; REVIEW_REQUIRED = "REVIEW_REQUIRED"
+
+
+class RestrictionType(StrEnum):
+    TRADING_DISABLED = "TRADING_DISABLED"; DEPOSITS_DISABLED = "DEPOSITS_DISABLED"; WITHDRAWALS_DISABLED = "WITHDRAWALS_DISABLED"; TRANSFERS_DISABLED = "TRANSFERS_DISABLED"; MARKET_DATA_LIMITED = "MARKET_DATA_LIMITED"; ACCOUNT_READ_ONLY = "ACCOUNT_READ_ONLY"; MANUAL_REVIEW_REQUIRED = "MANUAL_REVIEW_REQUIRED"
+
+
+class ProviderGovernanceState(StrEnum):
+    DISCOVERED = "DISCOVERED"; CONFIGURED = "CONFIGURED"; CREDENTIAL_PRESENT = "CREDENTIAL_PRESENT"; TECHNICALLY_CERTIFIED = "TECHNICALLY_CERTIFIED"; SECURITY_APPROVED = "SECURITY_APPROVED"; COMPLIANCE_APPROVED = "COMPLIANCE_APPROVED"; STAGING_APPROVED = "STAGING_APPROVED"; PRODUCTION_APPROVED = "PRODUCTION_APPROVED"; DISABLED = "DISABLED"
+
+
+class ReasonCode(StrEnum):
+    KYC_REQUIRED="KYC_REQUIRED"; KYC_PENDING="KYC_PENDING"; KYC_REJECTED="KYC_REJECTED"; AML_REVIEW="AML_REVIEW"; AML_BLOCKED="AML_BLOCKED"; SANCTIONS_REVIEW="SANCTIONS_REVIEW"; SANCTIONS_BLOCKED="SANCTIONS_BLOCKED"; JURISDICTION_RESTRICTED="JURISDICTION_RESTRICTED"; ACCOUNT_RESTRICTED="ACCOUNT_RESTRICTED"; ACCOUNT_SUSPENDED="ACCOUNT_SUSPENDED"; TRADING_DISABLED="TRADING_DISABLED"; DEPOSITS_DISABLED="DEPOSITS_DISABLED"; WITHDRAWALS_DISABLED="WITHDRAWALS_DISABLED"; TRANSFERS_DISABLED="TRANSFERS_DISABLED"; MANUAL_REVIEW_REQUIRED="MANUAL_REVIEW_REQUIRED"
+
+
+class RequirementType(StrEnum):
+    IDENTITY_VERIFICATION="IDENTITY_VERIFICATION"; ADDRESS_VERIFICATION="ADDRESS_VERIFICATION"; SOURCE_OF_FUNDS="SOURCE_OF_FUNDS"; TAX_INFORMATION="TAX_INFORMATION"; MANUAL_REVIEW="MANUAL_REVIEW"
+
+
+KYC_TRANSITIONS = {
+    KycState.NOT_STARTED: {KycState.PENDING},
+    KycState.PENDING: {KycState.IN_REVIEW, KycState.REJECTED},
+    KycState.IN_REVIEW: {KycState.APPROVED, KycState.REJECTED, KycState.REQUIRES_UPDATE},
+    KycState.APPROVED: {KycState.EXPIRED, KycState.REQUIRES_UPDATE},
+    KycState.REJECTED: {KycState.PENDING},
+    KycState.EXPIRED: {KycState.PENDING, KycState.REQUIRES_UPDATE},
+    KycState.REQUIRES_UPDATE: {KycState.PENDING, KycState.IN_REVIEW},
+}
 
 
 @dataclass(frozen=True)
+class EligibilityDecisionValue:
+    result: EligibilityResult
+    reason_codes: tuple[str, ...]
+    policy_version: str
+    evaluated_at: object
+
+
+# Compatibility aliases; not authoritative.
+KycStatus = KycState
+ScreeningStatus = AmlState
+
+@dataclass(frozen=True)
 class ComplianceEligibility:
-    kyc_status: KycStatus
-    aml_status: ScreeningStatus
-    sanctions_status: ScreeningStatus
+    """Legacy value object retained for import compatibility; persisted policy is authoritative."""
+    kyc_status: KycState
+    aml_status: AmlState
+    sanctions_status: AmlState
     trading_eligible: bool
     deposit_eligible: bool
     withdrawal_eligible: bool
-
     def permits_trading(self):
-        return (
-            self.kyc_status == KycStatus.APPROVED
-            and self.aml_status == ScreeningStatus.CLEARED
-            and self.sanctions_status == ScreeningStatus.CLEARED
-            and self.trading_eligible
-        )
+        return self.kyc_status==KycState.APPROVED and self.aml_status==AmlState.CLEARED and self.sanctions_status==AmlState.CLEARED and self.trading_eligible

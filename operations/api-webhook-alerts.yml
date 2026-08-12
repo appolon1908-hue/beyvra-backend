@@ -1,0 +1,28 @@
+groups:
+  - name: beyvra-api-webhook-certification
+    rules:
+      - alert: BeyvraWebhookSignatureFailureSpike
+        expr: sum(rate(beyvra_webhooks_total{result="signature_failure"}[5m])) by (provider, webhook_type) > 0.2
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Webhook authentication failures are elevated"}
+      - alert: BeyvraWebhookDeadLetterGrowth
+        expr: sum(increase(beyvra_webhooks_total{result="dead_letter"}[15m])) by (provider, webhook_type) > 10
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Webhook dead-letter volume is growing"}
+      - alert: BeyvraApiSustained5xx
+        expr: sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m])) / clamp_min(sum(rate(django_http_responses_total_by_status_total[5m])), 1) > 0.05
+        for: 10m
+        labels: {severity: critical}
+        annotations: {summary: "Canonical API 5xx rate is sustained"}
+      - alert: BeyvraApiIdempotencyFailure
+        expr: sum(increase(beyvra_api_idempotency_total{result="in_progress"}[10m])) by (scope) > 5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Idempotency requests remain in progress"}
+      - alert: BeyvraEndpointReadinessFailure
+        expr: probe_success{job="beyvra-readiness"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "Beyvra readiness endpoint is failing"}

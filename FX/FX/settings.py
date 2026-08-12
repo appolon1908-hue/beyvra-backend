@@ -44,6 +44,7 @@ NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 # This candidate is structurally paper/simulation-only. Environment input may
 # not expose legacy broker mutation routes.
 PAPER_TRADING_ONLY = True
+DEMO_MARKET_FIXTURE_ENABLED = False
 REAL_WALLET_REQUIRE_MFA = os.getenv("REAL_WALLET_REQUIRE_MFA", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
@@ -117,6 +118,8 @@ SELF_TRADE_PREVENTION_ENABLED = os.getenv("SELF_TRADE_PREVENTION_ENABLED", "true
 REAL_SETTLEMENT_ENABLED = False
 LIVE_CLEARING_ENABLED = False
 LIVE_CUSTODIAN_SETTLEMENT_ENABLED = False
+LIVE_OMNIBUS_ENABLED = False
+LIVE_SEGREGATED_CUSTODY_ENABLED = False
 NEWSDATA_API_KEY = _provider_credential("NEWSDATA_API_KEY")
 NEWSDATA_LATEST_ENTITLED = os.getenv("NEWSDATA_LATEST_ENTITLED", "false").lower() == "true"
 NEWSDATA_CRYPTO_ENTITLED = os.getenv("NEWSDATA_CRYPTO_ENTITLED", "false").lower() == "true"
@@ -124,6 +127,13 @@ NEWSDATA_MARKET_ENTITLED = os.getenv("NEWSDATA_MARKET_ENTITLED", "false").lower(
 NEWSDATA_SOURCES_ENTITLED = os.getenv("NEWSDATA_SOURCES_ENTITLED", "false").lower() == "true"
 NEWSDATA_ARCHIVE_ENTITLED = os.getenv("NEWSDATA_ARCHIVE_ENTITLED", "false").lower() == "true"
 NEWSDATA_DELAYED = os.getenv("NEWSDATA_DELAYED", "true").lower() == "true"
+COMPLIANCE_PROVIDER_ENABLED = False
+COMPLIANCE_POLICY_VERSION = "compliance-2026-08-11.v1"
+COMPLIANCE_WEBHOOK_SECRET = os.getenv("COMPLIANCE_WEBHOOK_SECRET", "")
+COMPLIANCE_WEBHOOK_MAX_AGE_SECONDS = 300
+COMPLIANCE_PROVIDER_RESULT_MAX_AGE_SECONDS = 86400
+PLATFORM_WEBHOOK_SECRETS = {}
+PLATFORM_WEBHOOK_EVENT_TYPES = {}
 PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
 AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
@@ -208,6 +218,8 @@ INSTALLED_APPS = [
     "apps.surveillance",
     "apps.post_trade",
     "apps.valuation",
+    "apps.platform_api",
+    "apps.institutional",
 ]
 
 # Treasury is an application-side simulation/read-model boundary. These flags

@@ -92,7 +92,7 @@ class MarketHistoryTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["results"][0]["close"], 105.0)
+        self.assertEqual(response.data["results"][0]["close"], "105")
         self.assertEqual(MarketCandle.objects.count(), 1)
 
     def test_unsupported_market_is_rejected(self):
@@ -110,6 +110,19 @@ class MarketHistoryTests(TestCase):
             secure=True,
         )
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        get.assert_not_called()
+
+    @patch("trade.market_data.requests.get")
+    @override_settings(DEMO_MARKET_FIXTURE_ENABLED=True)
+    def test_staging_demo_fixture_is_local_and_decimal_safe(self, get):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(
+            "/api/trades/market/history/?symbol=BTCUSDT&interval=1m&limit=3",
+            secure=True,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 3)
+        self.assertIsInstance(response.data["results"][0]["close"], str)
         get.assert_not_called()
 
     @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
@@ -141,7 +154,7 @@ class MarketHistoryTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["results"][0]["close"], 211.0)
+        self.assertEqual(response.data["results"][0]["close"], "211")
         candle = MarketCandle.objects.get()
         self.assertEqual(candle.provider, "twelve_data")
         self.assertEqual(get.call_args.kwargs["headers"], {"Authorization": "apikey test-only"})
@@ -226,7 +239,7 @@ class MarketHistoryTests(TestCase):
         self.client.force_authenticate(self.user)
         response = self.client.get("/api/v1/market-data/snapshot?instrument_id=BTC-USD&interval=5s", secure=True)
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertEqual(response.data["detail"], "GENUINE_5S_SOURCE_UNAVAILABLE")
+        self.assertEqual(response.data["error"]["code"], "TEMPORARILY_UNAVAILABLE")
         history.assert_not_called()
 
     @patch("trade.market_api.get_market_history")
