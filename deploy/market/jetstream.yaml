@@ -10,6 +10,13 @@ streams:
   NEWS_EVENTS: {subjects: ["news.article.*", "news.alert.*"], max_age: "30d", max_msgs: 100000, storage: file}
   ECONOMIC_EVENTS: {subjects: ["news.economic.*"], max_age: "90d", max_msgs: 100000, storage: file}
   TRADING_EVENTS: {subjects: ["trading.>"], max_age: "30d", max_msgs: 500000, storage: file}
+  POST_TRADE_EVENTS: {subjects: ["post_trade.>"], max_age: "30d", max_msgs: 250000, storage: file}
+  VALUATION_EVENTS: {subjects: ["valuation.>"], max_age: "30d", max_msgs: 250000, storage: file}
+  TREASURY_EVENTS: {subjects: ["treasury.>"], max_age: "30d", max_msgs: 250000, storage: file}
+  REGULATORY_EVENTS: {subjects: ["regulatory.>"], max_age: "7y", max_msgs: 500000, storage: file}
+  COMPLIANCE_EVENTS: {subjects: ["compliance.>"], max_age: "7y", max_msgs: 500000, storage: file}
+  PRIVATE_EVENTS: {subjects: ["private.>"], max_age: "30d", max_msgs: 500000, storage: file}
+  SYSTEM_EVENTS: {subjects: ["system.>"], max_age: "30d", max_msgs: 250000, storage: file}
 defaults:
   duplicate_window: "2m"
   ack_policy: explicit

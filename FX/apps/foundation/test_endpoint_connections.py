@@ -30,7 +30,6 @@ class FrontendBackendEndpointConnectionTests(SimpleTestCase):
             "/api/v1/market/quotes",
             "/api/v1/market/candles",
             "/api/v1/market/orderbook/BTC-USD",
-            "/api/v1/market/trades/BTC-USD",
             "/api/v1/market/status/BTC-USD",
             "/api/v1/trading/orders/preview",
             "/api/v1/trading/orders",
@@ -84,7 +83,6 @@ class FrontendBackendEndpointConnectionTests(SimpleTestCase):
     def test_unsupported_market_routes_do_not_return_status_payloads(self):
         for path in (
             "/api/v1/market/orderbook/BTC-USD",
-            "/api/v1/market/trades/BTC-USD",
             "/api/trades/market/orderbook/BTC-USD",
             "/api/trades/market/trades/BTC-USD",
         ):

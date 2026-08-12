@@ -22,8 +22,6 @@ from wallet.models import Wallet
 
 
 CHANNEL_REGISTRY = {
-    "market.quote:{symbol}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
-    "market.candle:{symbol}:{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.tick": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.quote": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.candle.{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
@@ -31,8 +29,6 @@ CHANNEL_REGISTRY = {
     "market.{symbol}.trades": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 10},
     "news.{symbol}": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
     "news.market": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
-    "news.instrument:{symbol}": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
-    "economic-calendar": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
     "news.economic": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
     "trade.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
     "order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/demo/trades", "rate_limit": 10},
@@ -47,6 +43,7 @@ CHANNEL_REGISTRY = {
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
     "account.security.{user_id}": {"visibility": "private", "required_permission": "account.security.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/session", "rate_limit": 5},
     "treasury.{tenant_id}": {"visibility": "private", "required_permission": "treasury.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/treasury/liquidity", "rate_limit": 10},
+    "institutional.subaccount.updated.v1.{user_id}": {"visibility": "private", "required_permission": "institutional.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/institutional/account/hierarchy", "rate_limit": 10},
     "system.status": {"visibility": "public", "required_permission": "system.read", "tenant_scope": False, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 50, "history_ttl": 60, "resume_supported": False, "snapshot_provider": "/api/v1/realtime/v2/health", "rate_limit": 10},
 }
 
@@ -169,7 +166,8 @@ def subscription_token(request):
 @permission_classes([AllowAny])
 def authorize_subscription(request):
     """Centrifugo subscribe-proxy contract; reachable only on the private network."""
-    if request.headers.get("X-Codestra-Proxy-Secret") != os.getenv("CENTRIFUGO_PROXY_SECRET", ""):
+    supplied_secret = request.headers.get("X-Beyvra-Proxy-Secret") or request.headers.get("X-Codestra-Proxy-Secret")
+    if supplied_secret != os.getenv("CENTRIFUGO_PROXY_SECRET", ""):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     channel = request.data.get("channel")
     user_id = str(request.data.get("user", ""))
@@ -180,7 +178,12 @@ def authorize_subscription(request):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     if entry["visibility"] == "private" and pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(type('UserRef', (), {'id': user_id})())}":
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_id in channel or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
+    user_scoped = pattern in {
+        "notification.{user_id}",
+        "account.security.{user_id}",
+        "institutional.subaccount.updated.v1.{user_id}",
+    } and channel.rsplit(".", 1)[-1] == user_id
+    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_scoped or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     return JsonResponse({"result": {}})
 

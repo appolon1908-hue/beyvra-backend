@@ -8,15 +8,42 @@ from django.conf import settings
 from .services import claim_outbox_batch, mark_publish_result
 from .observability import OUTBOX_FAILURES, OUTBOX_LAST_SUCCESS, OUTBOX_PUBLISHED, OUTBOX_RETRIES, worker_success
 
+CANONICAL_SUBJECT_DOMAINS = {
+    "trading",
+    "post_trade",
+    "valuation",
+    "treasury",
+    "regulatory",
+    "compliance",
+    "market",
+    "news",
+    "private",
+    "system",
+}
+
+
+def subject_for(event_type):
+    subject = str(event_type).strip()
+    domain = subject.split(".", 1)[0]
+    if domain not in CANONICAL_SUBJECT_DOMAINS or "." not in subject:
+        raise ValueError("NON_CANONICAL_EVENT_SUBJECT")
+    return subject
+
 
 def envelope(event):
-    return {
+    result = {
         "event_id": str(event.event_id), "event_type": event.event_type,
         "schema_version": event.schema_version, "occurred_at": event.occurred_at.isoformat(),
         "correlation_id": str(event.correlation_id),
         "causation_id": str(event.causation_id) if event.causation_id else None,
         "tenant_ref": event.tenant_ref, "payload": event.payload,
     }
+    if isinstance(event.payload, dict):
+        if "channel" in event.payload:
+            result["channel"] = event.payload["channel"]
+        if "data" in event.payload:
+            result["data"] = event.payload["data"]
+    return result
 
 
 async def _publish(rows):
@@ -33,7 +60,7 @@ async def _publish(rows):
     try:
         for event in rows:
             try:
-                subject = event.event_type if event.event_type.startswith("trading.") else f"application.{event.event_type}"
+                subject = subject_for(event.event_type)
                 await stream.publish(subject, json.dumps(envelope(event), separators=(",", ":"), default=str).encode(), headers={"Nats-Msg-Id": str(event.event_id)})
                 results.append((event, ""))
             except Exception as exc:

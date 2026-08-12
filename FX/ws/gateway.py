@@ -170,13 +170,13 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                     await self.channel_layer.group_add(f"trades_updates_{self.tenant_id}_{self.scope['user'].id}", self.channel_name)
                 # A candle stream also publishes its quote projection. Avoid a
                 # second provider socket when both channels are requested.
-                if channel.startswith("market.candle:") or (
-                    channel.startswith("market.quote:")
-                    and f"market.candle:{channel.split(':', 1)[1]}:1m" not in self.subscriptions
+                if ".candle." in channel or (
+                    channel.endswith(".quote")
+                    and f"market.{channel.split('.')[1]}.candle.1m" not in self.subscriptions
                 ):
-                    if channel.startswith("market.candle:"):
-                        symbol = channel.split(":")[1]
-                        quote_task = self.market_tasks.pop(f"market.quote:{symbol}", None)
+                    if ".candle." in channel:
+                        symbol = channel.split(".")[1]
+                        quote_task = self.market_tasks.pop(f"market.{symbol}.quote", None)
                         if quote_task:
                             quote_task.cancel()
                     self.market_tasks.setdefault(channel, asyncio.create_task(self._stream_market(channel)))
@@ -198,21 +198,20 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "error", "code": "UNKNOWN_ACTION"})
 
     def _valid_channel(self, channel: str) -> bool:
-        if channel in {"demo.order", "demo.execution", "demo.position", "notification", "market.status", "market.compat.crypto", "market.compat.stocks"}:
+        if channel in {"demo.order", "demo.execution", "demo.position", "notification", "market.status"}:
             return True
         parts = channel.split(":")
         if len(parts) == 2 and parts[0] in {"portfolio.balance", "portfolio.profit_loss"}:
             return parts[1] == str(self.scope["user"].id)
-        if channel.startswith("compat."):
-            return channel in {"compat.market-data", "compat.news", "compat.account", "compat.platform"}
-        if len(parts) == 2 and parts[0] == "market.quote":
-            return parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS or _is_uuid(parts[1])
-        if len(parts) == 3 and parts[0] == "market.candle":
-            return (parts[1] in SUPPORTED_SYMBOLS or parts[1] in CANONICAL_SYMBOLS or _is_uuid(parts[1])) and parts[2] in SUPPORTED_INTERVALS
+        dotted = channel.split(".")
+        if len(dotted) == 3 and dotted[0] == "market" and dotted[2] == "quote":
+            return dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])
+        if len(dotted) == 4 and dotted[0] == "market" and dotted[2] == "candle":
+            return (dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])) and dotted[3] in SUPPORTED_INTERVALS
         return False
 
     async def _stream_market(self, channel: str):
-        parts = channel.split(":")
+        parts = channel.split(".")
         requested_reference = parts[1]
         resolved = await _resolve_realtime_instrument(requested_reference)
         if resolved is None:
@@ -225,7 +224,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             symbol = CANONICAL_SYMBOLS.get(requested_reference, requested_reference)
         else:
             instrument_id, symbol = resolved
-        interval = parts[2] if len(parts) == 3 else "1m"
+        interval = parts[3] if len(parts) == 4 else "1m"
         if symbol not in {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}:
             await self._emit("market.status", {"status": "unavailable"}, instrument_id=instrument_id)
             return
@@ -252,7 +251,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                                     continue
                                 data = {"type": "candle", "symbol": instrument_id, "interval": interval, "closed": bool(candle["x"]), "time": int(candle["t"] / 1000), "open": str(candle["o"]), "high": str(candle["h"]), "low": str(candle["l"]), "close": str(candle["c"]), "volume": str(candle["v"])}
                                 await self._emit(channel, data, instrument_id=instrument_id)
-                                await self._emit(f"market.quote:{instrument_id}", {"bid": data["close"], "ask": data["close"], "mid": data["close"], "time": data["time"]}, instrument_id=instrument_id)
+                                await self._emit(f"market.{instrument_id}.quote", {"bid": data["close"], "ask": data["close"], "mid": data["close"], "time": data["time"]}, instrument_id=instrument_id)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -268,10 +267,17 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             self.sequence[channel] = data["time"]
         else:
             self.sequence[channel] += 1
-        event_type = "market.quote.updated" if channel.startswith("market.quote:") else "market.candle.updated" if channel.startswith("market.candle:") else "market.status.changed"
+        if channel == "demo.order":
+            event_type = "demo.order.updated.v1"
+        elif channel == "demo.execution":
+            event_type = "demo.execution.updated.v1"
+        elif channel == "demo.position":
+            event_type = "demo.position.updated.v1"
+        else:
+            event_type = "market.quote.updated.v1" if channel.endswith(".quote") else "market.candle.updated.v1" if ".candle." in channel else "market.status.changed.v1"
         now = datetime.now(timezone.utc).isoformat()
-        instrument_id = instrument_id or (channel.split(":")[1] if channel.startswith("market.") and ":" in channel else None)
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_time": now, "source": "approved-provider", "data": data})
+        instrument_id = instrument_id or (channel.split(".")[1] if channel.startswith("market.") and channel.count(".") >= 2 else None)
+        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "schema_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_timestamp": now, "server_time": now, "source": "approved-provider", "payload": data, "data": data})
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))
