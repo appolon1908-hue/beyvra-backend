@@ -43,3 +43,7 @@ Bundles and the pre-existing backend worktree archive are in `/root/backups/beyv
 ## Certification disposition
 
 The checked-out code is executable and test-green after the focused fixes, but whole-platform canonical-authority certification is BLOCKED. Active mission implementations remain split across sibling PR stacks with unresolved semantic model, migration, state-machine, event and authority conflicts. Those protected integration decisions cannot be fabricated in this audit branch.
+
+PR #46 is therefore audit/evidence input only and MUST NOT be merged or described as certified architecture. The dedicated convergence candidate is governed by `docs/architecture/CONVERGENCE-ACCEPTANCE-GATE.md`.
+
+The 18 historical secret candidates and eventual governance repin are tracked owner-side follow-ups. They do not block core convergence, but current-source secret scanning remains a blocking gate and exact Financial Service candidate repinning remains required before independent approval.

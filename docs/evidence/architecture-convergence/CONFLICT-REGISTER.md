@@ -129,20 +129,20 @@
 
 ## BAC-014
 
-- Severity: P1 external
+- Severity: TRACKED EXTERNAL (non-blocking for core convergence)
 - Type: secret history
 - Files: historical backend settings/provider files and historical frontend `client-portal/src/.env`
 - Conflict: gitleaks reports 17 backend and one frontend historical candidates
 - Impact: any credential that was genuine must be revoked and history handled under repository-owner policy
 - Fix: owner validates provider status, revokes/rotates externally, and chooses protected history remediation
-- Status: OPEN — no credential values printed; current tracked source has zero actionable leaks after one RFC WebSocket sample false-positive classification
+- Status: OPEN FOLLOW-UP — does not block the core convergence branch; owner validation/rotation remains mandatory, while `SECRET_SCAN=PASS_CURRENT_SOURCE` remains a blocking acceptance gate
 
 ## BAC-015
 
-- Severity: P1 external
+- Severity: TRACKED EXTERNAL (non-blocking for core convergence)
 - Type: governance exact-head certification
 - Files: governance `config.json`, protected governance main, Financial Service PRs
 - Conflict: governance publisher is pinned to a different frozen candidate and reports `wrong head`
 - Impact: current Financial Service SHA cannot receive independent exact-head approval status from this checkout
 - Fix: authorized owners merge governance correction, select/freeze the intended candidate, and perform independent reviews
-- Status: OPEN — external protected-repository action required
+- Status: OPEN FOLLOW-UP — does not block the core convergence branch; exact-candidate repinning remains mandatory before independent Financial Service approval
