@@ -38,7 +38,7 @@ class TradeSecurityTests(TestCase):
         }
         return client, wallet, payload
 
-    def test_idempotency_key_prevents_duplicate_trade(self):
+    def test_legacy_trade_create_is_not_a_writable_authority(self):
         client, wallet, payload = self._trade_fixture()
 
         first = client.post(
@@ -50,21 +50,18 @@ class TradeSecurityTests(TestCase):
             HTTP_IDEMPOTENCY_KEY="same-request"
         )
 
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(second.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(first.data["id"], second.data["id"])
+        self.assertEqual(first.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(second.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         wallet.refresh_from_db()
-        self.assertEqual(wallet.balance, Decimal("90.00"))
+        self.assertEqual(wallet.balance, Decimal("100.00"))
 
-    def test_cancel_active_trade_refunds_wallet_once(self):
+    def test_legacy_trade_cancel_route_is_removed(self):
         client, wallet, payload = self._trade_fixture()
         created = client.post("/api/trades/", payload, format="json", secure=True)
 
-        cancelled = client.post(f"/api/trades/{created.data['id']}/cancel/", secure=True)
-        repeated = client.post(f"/api/trades/{created.data['id']}/cancel/", secure=True)
-
-        self.assertEqual(cancelled.status_code, status.HTTP_200_OK)
-        self.assertEqual(repeated.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(created.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        cancelled = client.post("/api/trades/1/cancel/", secure=True)
+        self.assertEqual(cancelled.status_code, status.HTTP_404_NOT_FOUND)
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
 
@@ -99,9 +96,7 @@ class TradeSecurityTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "FEATURE_DISABLED")
-        self.assertNotIn("wallet", str(response.data).lower())
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
 
@@ -137,6 +132,6 @@ class TradeSecurityTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
