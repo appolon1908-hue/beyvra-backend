@@ -46,8 +46,7 @@ class DemoTenantIsolationTests(TestCase):
             "/api/v1/demo/trades",
             HTTP_X_ORGANIZATION_ID=str(self.tenant_b.id),
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["results"], [])
+        self.assertEqual(response.status_code, 404)
 
     def test_workspace_bootstrap_is_tenant_scoped_and_demo_only(self):
         response = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_a.id))
@@ -55,9 +54,11 @@ class DemoTenantIsolationTests(TestCase):
         self.assertEqual(response.data["account"]["kind"], "DEMO")
         self.assertTrue(response.data["account"]["demoOnly"])
         self.assertEqual(response.data["realtime"], {
-            "demo_order_channel": f"demo.order.{self.wallet.id}",
-            "demo_execution_channel": f"demo.execution.{self.wallet.id}",
+            "demo_order_channel": f"simulation.order.sim-{self.user.id}",
+            "demo_execution_channel": f"simulation.execution.sim-{self.user.id}",
         })
         self.assertFalse(response.data["features"]["realTrading"])
-        denied = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_b.id))
-        self.assertEqual(denied.status_code, 404)
+        other = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_b.id))
+        self.assertEqual(other.status_code, 200)
+        self.assertEqual(other.data["tenant"]["id"], str(self.tenant_b.id))
+        self.assertNotEqual(other.data["account"]["id"], response.data["account"]["id"])

@@ -41,7 +41,7 @@ class WorkspaceBootstrapView(APIView):
 
     def get(self, request):
         organization = organization_for_request(request)
-        account = account_for(request.user)
+        account = account_for(request.user, str(organization.id))
         account_data = serialize_account(account)
         symbols = list(Asset.objects.values_list("symbol", flat=True)[:100]) or ["BTCUSDT"]
         guest = bool(getattr(request.user, "is_guest_demo", False))

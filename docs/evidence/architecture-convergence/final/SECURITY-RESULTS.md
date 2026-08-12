@@ -1,10 +1,10 @@
 # Security results
 
 ```text
-SECRET_SCAN=PASS (gitleaks candidate working tree, 0 findings)
+SECRET_SCAN=PASS_CURRENT_SOURCE (gitleaks tracked exact-head scan, 0 findings)
 DEPENDENCY_SCAN=PASS (npm audit, 0 vulnerabilities; Trivy image dependency scan, 0 HIGH/CRITICAL)
 CONTAINER_SCAN=PASS (Trivy backend-app:local, 0 HIGH/CRITICAL)
-SBOM=PASS (CycloneDX artifact checked in as backend-sbom.cdx.json)
+SBOM=PASS (CycloneDX SHA256 0e0ef763bbaf700d1c33c16fef82823b5166f4f1adab776862cf4dc66eb92a54)
 REAL_TRADING_ENABLED=false
 EXTERNAL_EXECUTION_ENABLED=false
 REAL_SETTLEMENT_ENABLED=false

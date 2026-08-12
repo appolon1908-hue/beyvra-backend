@@ -6,20 +6,18 @@ MIGRATION_FROM_ZERO=PASS
 MIGRATION_DRIFT=NONE
 ROLLBACK=PASS
 REAPPLY=PASS
-FULL_BACKEND_TEST_COUNT=655
-FULL_BACKEND_SUITE=PASS (753.207 seconds)
-POST_COMMIT_NEWS_TEST_COUNT=42
-POST_COMMIT_NEWS_TESTS=PASS
+FULL_BACKEND_TEST_COUNT=593
+FULL_BACKEND_SUITE=PASS (724.437 seconds)
 MYPY=PASS (691 source files)
 FRONTEND_TYPECHECK=PASS
 FRONTEND_LINT=PASS
-FRONTEND_TESTS=PASS (67 focused realtime/chart tests)
+FRONTEND_TESTS=PASS (106 tests in 14 files)
 FRONTEND_BUILD=PASS
 OPENAPI=PASS
 DUPLICATE_OPENAPI_KEYS=0
 ```
 
-The combined run used the final converged PostgreSQL-backed application model,
-not isolated mission branches. The only source edit after that run was a
-type-inference-safe local variable rename in the NewsData normalizer; its full
-42-test application suite was rerun successfully against the rebuilt image.
+The combined run used the exact converged PostgreSQL-backed application tree,
+not isolated mission branches. Retired wallet/payment/real-wallet tests were
+removed with their writable routes; canonical financial-boundary, simulation,
+tenant, idempotency, concurrency, event, API, and realtime tests remain.

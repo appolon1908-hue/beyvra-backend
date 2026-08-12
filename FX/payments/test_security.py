@@ -40,10 +40,10 @@ class StripeWebhookSecurityTests(TestCase):
                 HTTP_STRIPE_SIGNATURE="test", secure=True,
             )
 
-        self.assertEqual(first.status_code, 400)
-        self.assertEqual(second.status_code, 400)
-        self.assertEqual(first.data["code"], "FEATURE_DISABLED")
-        self.assertEqual(second.data["code"], "FEATURE_DISABLED")
+        # The application no longer exposes provider payment webhooks; real
+        # callbacks belong at the Financial Service boundary.
+        self.assertEqual(first.status_code, 404)
+        self.assertEqual(second.status_code, 404)
         self.assertEqual(stripe_construct.call_count, 0)
         wallet.refresh_from_db()
         transaction.refresh_from_db()

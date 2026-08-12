@@ -17,6 +17,10 @@ from .domain import AccountState, AmlState, EligibilityResult, JurisdictionState
 from .models import ComplianceAuditEvent, ComplianceCaseEvent, ComplianceInboxEvent, ComplianceOverride, ComplianceProfile, ComplianceProviderGovernance, ComplianceRequirement, EligibilityDecision
 from .services import add_restriction, create_case, get_deposit_eligibility, get_trading_eligibility, get_transfer_eligibility, get_withdrawal_eligibility, transition_aml, transition_jurisdiction, transition_kyc, transition_sanctions, update_account_state
 
+@override_settings(
+    DEPLOYMENT_ENV="test", SIMULATED_TRADING_ENABLED=True,
+    REAL_TRADING_ENABLED=False, EXTERNAL_EXECUTION_ENABLED=False, REAL_MONEY_ENABLED=False,
+)
 class ComplianceAuthorityTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="synthetic@example.test", phone_number="+15555550101", first_name="Test", last_name="User", password="x")
@@ -179,6 +183,12 @@ class ComplianceAdminAuthorizationTests(TestCase):
         payload={"account_id":str(self.profile.pk),"control":f"REMOVE_RESTRICTION:{restriction.pk}","new_state":"INACTIVE","reason":"Documented restriction removal evidence"}
         created=self.client_for(self.analyst).post("/api/v1/admin/compliance/overrides",payload,format="json"); self.client_for(self.manager).post(f"/api/v1/admin/compliance/overrides/{created.json()['override_id']}/approve",{},format="json"); restriction.refresh_from_db(); self.assertFalse(restriction.active)
 
+@override_settings(
+    SIMULATED_TRADING_ENABLED=True,
+    REAL_TRADING_ENABLED=False,
+    EXTERNAL_EXECUTION_ENABLED=False,
+    REAL_MONEY_ENABLED=False,
+)
 class ComplianceConcurrencyTests(TransactionTestCase):
     reset_sequences=True
     def setUp(self):

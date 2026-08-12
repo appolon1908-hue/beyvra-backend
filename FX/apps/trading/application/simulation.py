@@ -52,9 +52,11 @@ def simulation_authorized(request):
     )
 
 
-def refs(user):
+def refs(user, tenant_ref="default"):
     subject = str(user.pk)
-    return "default", subject, f"sim:{subject}"
+    tenant = str(tenant_ref)
+    account_ref = f"sim:{subject}" if tenant == "default" else f"sim:{tenant}:{subject}"
+    return tenant, subject, account_ref
 
 
 def compliance_decision(user, *, lock=False):
@@ -75,8 +77,8 @@ def order_correlation(order):
     return correlation_uuid(value)
 
 
-def account_for(user):
-    tenant, subject, account_ref = refs(user)
+def account_for(user, tenant_ref="default"):
+    tenant, subject, account_ref = refs(user, tenant_ref)
     account, _ = SimulatedAccount.objects.get_or_create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref)
     return account
 
