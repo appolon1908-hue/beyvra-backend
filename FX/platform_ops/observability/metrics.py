@@ -1,6 +1,10 @@
 from prometheus_client import Counter,Gauge,Histogram
-HTTP_REQUESTS=Counter("beyvra_http_requests_total","HTTP request count",("service","route","method","status_class","environment","mode"))
-HTTP_DURATION=Histogram("beyvra_http_request_duration_seconds","HTTP duration",("service","route","method","environment","mode"))
+from apps.foundation.observability import (
+    HTTP_DURATION,
+    HTTP_REQUESTS,
+    MARKET_AGE as MARKET_DATA_AGE,
+    RECONCILIATION_VIOLATIONS,
+)
 WS_CONNECTIONS=Gauge("beyvra_ws_connections","Active WS connections",("service","environment","mode"))
 WS_LAG=Histogram("beyvra_ws_delivery_lag_seconds","WS delivery lag",("service","environment","mode"))
 OUTBOX_PENDING=Gauge("beyvra_outbox_pending","Pending outbox events",("service","environment"))
@@ -12,9 +16,7 @@ DB_LOCK=Histogram("beyvra_db_lock_wait_seconds","DB lock wait",("service","envir
 DEPENDENCY_HEALTH=Gauge("beyvra_dependency_health","Dependency health",("service","dependency","environment"))
 KILL_SWITCH=Gauge("beyvra_kill_switch_state","Kill switch state",("service","environment","mode"))
 RELEASE_INFO=Gauge("beyvra_release_info","Release identity",("service","environment"))
-MARKET_DATA_AGE=Gauge("beyvra_market_data_age_seconds","Age of newest accepted market data",("service","environment"))
 WORKER_JOB_LATENCY=Gauge("beyvra_worker_job_latency_seconds","Worker job latency",("service","environment"))
-RECONCILIATION_VIOLATIONS=Gauge("beyvra_reconciliation_violations_total","Current reconciliation violations",("service","environment"))
 HIGH_RISK_FLAG_UNSAFE=Gauge("beyvra_high_risk_flag_unsafe_configuration","Unsafe high-risk flag configurations",("service","environment"))
 BACKUP_LAST_SUCCESS=Gauge("beyvra_backup_last_success_timestamp_seconds","Last verified backup timestamp",("service","environment"))
 RESTORE_VERIFICATION=Gauge("beyvra_restore_verification_success","Restore verification status",("service","environment"))

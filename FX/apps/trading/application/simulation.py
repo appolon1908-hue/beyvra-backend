@@ -147,18 +147,24 @@ def create(user, data, idempotency_key, correlation_id=None):
     if eligibility is None or eligibility.result != EligibilityResult.ALLOWED:
         reasons = eligibility.reason_codes if eligibility else ("KYC_REQUIRED",)
         raise ValueError(reasons[0] if reasons else "COMPLIANCE_NOT_ELIGIBLE")
-    record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
-    if not fresh and record.response_body is not None:
-        return record.response_body, 200
-    payload, _account, result, surveillance, _available, _notional = evaluate(user, data)
-    if result.decision != "ALLOW":
-        raise ValueError(result.reason_codes[0] if result.reason_codes else "ORDER_REVIEW_REQUIRED")
-    if surveillance.decision != "ALLOW":
-        persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
-        raise ValueError(surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED")
-    body, status = _create_allowed(user, data, idempotency_key, correlation_id, idempotency_record=record)
-    if status == 0:
-        raise ValueError(body["reason_code"])
+    rejection = None
+    with transaction.atomic():
+        record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
+        if not fresh and record.response_body is not None:
+            return record.response_body, 200
+        payload, _account, result, surveillance, _available, _notional = evaluate(user, data)
+        if result.decision != "ALLOW":
+            raise ValueError(result.reason_codes[0] if result.reason_codes else "ORDER_REVIEW_REQUIRED")
+        if surveillance.decision != "ALLOW":
+            persist_findings(tenant_ref=tenant, account_ref=account_ref, instrument_id=payload["instrument_id"], findings=surveillance.findings, actor_ref=subject)
+            rejection = surveillance.reason_codes[0] if surveillance.reason_codes else "ORDER_REJECTED"
+            body, status = {}, 0
+        else:
+            body, status = _create_allowed(user, data, idempotency_key, correlation_id, idempotency_record=record)
+            if status == 0:
+                rejection = body["reason_code"]
+    if rejection:
+        raise ValueError(rejection)
     return body, status
 
 

@@ -145,7 +145,14 @@ class TenantIsolationApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
             response.json(),
-            {"code": "RESOURCE_NOT_FOUND", "message": "Resource not found."},
+            {
+                "error": {"code": "RESOURCE_NOT_FOUND", "message": "Resource not found.", "details": {}},
+                "code": "RESOURCE_NOT_FOUND",
+                "message": "Resource not found.",
+                "details": {},
+                "instance": f"/api/v1/support/cases/{case.pk}",
+                "request_id": "",
+            },
         )
 
     def test_internal_notes_never_reach_customer_timeline(self):
@@ -1033,8 +1040,12 @@ class ExportSafetyTests(TestCase):
         self.assertEqual(
             response.data,
             {
+                "error": {"code": "FEATURE_DISABLED", "message": "This feature is currently unavailable.", "details": {}},
                 "code": "FEATURE_DISABLED",
                 "message": "This feature is currently unavailable.",
+                "details": {},
+                "instance": "",
+                "request_id": "",
             },
         )
 
@@ -1047,8 +1058,12 @@ class ExportSafetyTests(TestCase):
         self.assertEqual(
             response.data,
             {
+                "error": {"code": "SERVICE_TEMPORARILY_UNAVAILABLE", "message": "The service is temporarily unavailable.", "details": {}},
                 "code": "SERVICE_TEMPORARILY_UNAVAILABLE",
                 "message": "The service is temporarily unavailable.",
+                "details": {},
+                "instance": "",
+                "request_id": "",
             },
         )
 

@@ -14,8 +14,6 @@ urlpatterns = [
     path("instruments/<str:instrument_id>/trading-rules", InstrumentTradingRulesV1View.as_view()),
     path("instruments/<str:instrument_id>/market-data-capabilities", InstrumentMarketDataCapabilitiesV1View.as_view()),
     path("instruments/<str:instrument_id>", InstrumentV1View.as_view()),
-    path("market/instruments", InstrumentRegistryView.as_view()),
-    path("market/instruments/<str:symbol>", InstrumentRegistryView.as_view()),
     path("market/candles", MarketCandlesView.as_view()),
     path("market/quotes", MarketQuotesView.as_view()),
     path("market/status/<str:symbol>", MarketStatusView.as_view()),

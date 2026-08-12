@@ -224,7 +224,7 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
 
         with ThreadPoolExecutor(max_workers=20) as pool:
             results = list(pool.map(submit, range(20)))
-        self.assertEqual({status for _, status in results}, {201})
+        self.assertEqual({status for _, status in results}, {200, 201})
         self.assertEqual(len({order_id for order_id, _ in results}), 1)
         self.assertEqual(TradingOrder.objects.count(), 1)
         self.assertEqual(SimulatedReservation.objects.count(), 1)

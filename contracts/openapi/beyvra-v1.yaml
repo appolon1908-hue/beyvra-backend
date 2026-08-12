@@ -6745,9 +6745,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/SafeComplianceErrorEnvelope'
           description: ''
+  /api/v1/compliance/profile/:
+    get:
+      operationId: v1_compliance_profile_retrieve_2
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceProfileResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafeComplianceErrorEnvelope'
+          description: ''
   /api/v1/compliance/requirements:
     get:
       operationId: v1_compliance_requirements_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceRequirementsResponse'
+          description: ''
+  /api/v1/compliance/requirements/:
+    get:
+      operationId: v1_compliance_requirements_retrieve_2
       tags:
       - v1
       responses:
@@ -7014,6 +7044,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/deposits/{operation_id}/:
+    get:
+      operationId: v1_deposits_retrieve_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_deposits_create_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/economic-calendar:
     get:
       operationId: v1_economic_calendar_retrieve
@@ -7193,6 +7271,18 @@ paths:
         schema:
           type: string
         required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/features/:
+    get:
+      operationId: v1_features_retrieve
       tags:
       - v1
       responses:
@@ -10660,26 +10750,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Instrument'
-          description: ''
-  /api/v1/market/instruments/{symbol}:
-    get:
-      operationId: v1_market_instruments_retrieve_2
-      parameters:
-      - in: path
-        name: symbol
-        schema:
-          type: string
-        required: true
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
           description: ''
   /api/v1/market/orderbook/{symbol}:
     get:
@@ -15558,6 +15628,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/transfers/{operation_id}/:
+    get:
+      operationId: v1_transfers_retrieve_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_transfers_create_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/transfers/preview/:
+    get:
+      operationId: v1_transfers_preview_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_transfers_preview_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/treasury/accounts:
     get:
       operationId: v1_treasury_accounts_retrieve
@@ -16545,6 +16697,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/wallets/{asset}/:
+    get:
+      operationId: v1_wallets_retrieve_3
+      parameters:
+      - in: path
+        name: asset
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_wallets_create_3
+      parameters:
+      - in: path
+        name: asset
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/withdrawals/:
     get:
       operationId: v1_withdrawals_retrieve
@@ -16627,6 +16825,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/withdrawals/{operation_id}/:
+    get:
+      operationId: v1_withdrawals_retrieve_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_withdrawals_create_3
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/withdrawals/{operation_id}/cancel:
     get:
       operationId: v1_withdrawals_cancel_retrieve
@@ -16655,6 +16901,88 @@ paths:
           type: string
           format: uuid
         required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/withdrawals/{operation_id}/cancel/:
+    get:
+      operationId: v1_withdrawals_cancel_retrieve_2
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_withdrawals_cancel_create_2
+      parameters:
+      - in: path
+        name: operation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/withdrawals/preview/:
+    get:
+      operationId: v1_withdrawals_preview_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_withdrawals_preview_create
       tags:
       - v1
       requestBody:

@@ -3,13 +3,14 @@ import json
 import time
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from users.models import User
 from .models import DemoAccount, DemoLedgerEntry, Organization, ServiceToken
 
 
+@override_settings(API_TOKEN_PEPPER="integration-test-pepper")
 class IntegrationApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()

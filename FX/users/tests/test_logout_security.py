@@ -55,7 +55,11 @@ class LogoutSecurityTests(TestCase):
         self.assertEqual(
             response.data,
             {
+                "error": {"code": "INVALID_REQUEST", "message": "The request could not be processed.", "details": {}},
                 "code": "INVALID_REQUEST",
                 "message": "The request could not be processed.",
+                "details": {},
+                "instance": "/api/user/token/logout/",
+                "request_id": "",
             },
         )

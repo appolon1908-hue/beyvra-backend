@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from wallet.models import Currency, Transaction, Wallet
+from wallet.models import Currency, Wallet
 
 
 @override_settings(PAPER_TRADING_ONLY=True, SIMULATED_TRADING_ENABLED=True)
@@ -25,7 +25,7 @@ class DemoTransactionTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
-    def test_demo_deposit_credits_wallet_and_records_success(self):
+    def test_duplicate_demo_deposit_authority_is_disabled(self):
         response = self.client.post(
             f"/api/wallet/wallets/{self.wallet.id}/deposit/",
             {"amount": "25.00", "currency": "USD", "gateway": "demo"},
@@ -33,14 +33,11 @@ class DemoTransactionTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance, Decimal("125.00"))
-        self.assertTrue(
-            Transaction.objects.filter(wallet=self.wallet, type="D", status="S", amount=25).exists()
-        )
+        self.assertEqual(self.wallet.balance, Decimal("100.00"))
 
-    def test_demo_withdrawal_debits_wallet_and_records_success(self):
+    def test_duplicate_demo_withdrawal_authority_is_disabled(self):
         response = self.client.post(
             f"/api/wallet/wallets/{self.wallet.id}/withdraw/",
             {"amount": 25, "gateway": "demo"},
@@ -48,12 +45,9 @@ class DemoTransactionTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance, Decimal("75.00"))
-        self.assertTrue(
-            Transaction.objects.filter(wallet=self.wallet, type="W", status="S", amount=25).exists()
-        )
+        self.assertEqual(self.wallet.balance, Decimal("100.00"))
 
     def test_real_wallet_rejects_staging_deposit(self):
         real_wallet = Wallet.objects.create(
@@ -70,7 +64,7 @@ class DemoTransactionTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
         real_wallet.refresh_from_db()
         self.assertEqual(real_wallet.balance, Decimal("100.00"))

@@ -182,8 +182,9 @@ def normalize_article(raw: dict[str,Any], *, delayed: bool) -> dict[str,Any]:
     instrument_refs=[]
     for symbol in _strings(raw.get("symbol") or raw.get("coin")):
         normalized=symbol.strip().upper()
-        canonical=CANONICAL_INSTRUMENTS.get(normalized)
-        if canonical: instrument_refs.append(canonical)
+        instrument_ref = CANONICAL_INSTRUMENTS.get(normalized)
+        if instrument_ref:
+            instrument_refs.append(instrument_ref)
     canonical={"news_id":f"newsdata:{provider_id}","headline":str(raw["title"]).strip()[:512],"summary":str(raw.get("description") or "")[:4000],"content_preview":str(raw.get("content") or "")[:1000],"source_name":str(raw.get("source_name") or "")[:255],"source_id":str(raw.get("source_id") or "")[:255],"source_url":safe_url(raw.get("source_url")),"article_url":safe_url(raw.get("link")),"image_url":safe_url(raw.get("image_url")),"published_at":published,"received_at":datetime.now(timezone.utc),"language":str(raw.get("language") or "")[:16],"countries":_strings(raw.get("country")),"categories":_strings(raw.get("category")),"instrument_refs":sorted(set(instrument_refs)),"keywords":_strings(raw.get("keywords")),"sentiment":str(raw.get("sentiment") or "")[:32],"provider_id":"newsdata","provider_article_id":provider_id,"provider_timestamp":published,"delayed":bool(delayed),"provenance":{"provider_id":"newsdata","normalizer_version":NORMALIZER_VERSION}}
     canonical["raw_payload_hash"]=hashlib.sha256(json.dumps(raw,sort_keys=True,separators=(",",":"),default=str).encode()).hexdigest()
     return canonical
