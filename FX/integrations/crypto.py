@@ -18,7 +18,10 @@ def _read_key(path_setting, env_setting, fallback=None):
                 return value
         except OSError:
             pass
-    value = os.getenv(env_setting, "")
+    # Settings are the canonical application configuration surface. Production
+    # settings populate these values from the protected environment, while
+    # tests may safely override them without mutating the process environment.
+    value = getattr(settings, env_setting, "") or os.getenv(env_setting, "")
     if value:
         return value.encode()
     return fallback

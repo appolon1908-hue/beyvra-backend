@@ -1,0 +1,23 @@
+groups:
+  - name: beyvra-backup-recovery
+    rules:
+      - alert: BeyvraBackupStale
+        expr: time() - beyvra_backup_last_success_timestamp_seconds > 90000
+        for: 15m
+        labels: {severity: sev3}
+        annotations: {summary: "Beyvra staging backup is stale"}
+      - alert: BeyvraBackupFailed
+        expr: increase(beyvra_backup_failures_total[15m]) > 0
+        labels: {severity: sev3}
+        annotations: {summary: "Beyvra staging backup failed"}
+      - alert: BeyvraBackupChecksumFailed
+        expr: beyvra_backup_checksum_valid == 0
+        for: 5m
+        labels: {severity: sev1}
+        annotations: {summary: "Beyvra backup checksum verification failed"}
+      - alert: BeyvraRestoreVerificationStale
+        expr: time() - beyvra_restore_verification_last_success_timestamp_seconds > 604800
+        for: 1h
+        labels: {severity: sev3}
+        annotations: {summary: "Beyvra isolated restore verification is stale"}
+

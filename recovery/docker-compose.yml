@@ -1,0 +1,89 @@
+name: beyvra-dr-verification
+
+services:
+  source-db:
+    image: beyvra-postgres16-dr-source:local
+    build:
+      context: ..
+      dockerfile: recovery/postgres.Dockerfile
+    environment:
+      POSTGRES_DB: beyvradr
+      POSTGRES_USER: dr_verifier
+      POSTGRES_PASSWORD: disposable-dr-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dr_verifier -d beyvradr"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  restore-db:
+    image: beyvra-postgres16-dr-restore:local
+    build:
+      context: ..
+      dockerfile: recovery/postgres.Dockerfile
+    environment:
+      POSTGRES_DB: beyvradr_restore
+      POSTGRES_USER: dr_verifier
+      POSTGRES_PASSWORD: disposable-dr-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dr_verifier -d beyvradr_restore"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  nats:
+    image: nats:2.11-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [recovery]
+
+  app:
+    image: beyvra-backend-dr:local
+    build: ../FX
+    working_dir: /app
+    command: ["sleep", "infinity"]
+    environment:
+      DJANGO_SETTINGS_MODULE: FX.test_settings
+      SECRET_KEY: isolated-disposable-secret-key-with-more-than-fifty-characters
+      API_ENV: test
+      DEPLOYMENT_ENV: isolated
+      DEBUG: "0"
+      ALLOWED_HOSTS: '["testserver","localhost"]'
+      CSRF_TRUSTED_ORIGINS: '[]'
+      DB_NAME: beyvradr
+      DB_USER: dr_verifier
+      DB_PASSWORD: disposable-dr-only
+      DB_HOST: source-db
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: disposable-dr-only
+      REDIS_DATABASE: "0"
+      NATS_URL: nats://nats:4222
+      NATS_JETSTREAM_ENABLED: "false"
+      REAL_TRADING_ENABLED: "false"
+      EXTERNAL_EXECUTION_ENABLED: "false"
+      REAL_MONEY_ENABLED: "false"
+      REAL_DEPOSITS_ENABLED: "false"
+      REAL_WITHDRAWALS_ENABLED: "false"
+      REAL_INTERNAL_TRANSFERS_ENABLED: "false"
+    networks: [recovery]
+
+networks:
+  recovery:
+    internal: true

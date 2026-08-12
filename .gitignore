@@ -151,3 +151,4 @@ venv/
 FX/dhelp_manage.py
 dhelp-docker-compose.yaml
 dhelp-docker-compose-dev.yaml
+.dr-artifacts/

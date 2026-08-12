@@ -30,3 +30,7 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 DEBUG = False
 SECURE_SSL_REDIRECT = False
 REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []  # noqa: F405
+
+# Synthetic test-only key material. Production settings remain fail-closed
+# unless the corresponding protected secret or secret-file reference exists.
+API_TOKEN_PEPPER = "isolated-test-only-api-token-pepper"
