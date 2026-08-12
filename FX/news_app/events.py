@@ -89,7 +89,7 @@ def _ingest_economic_event(payload, provider_id, instruments):
     ) if field in payload}
     item, created = EconomicCalendarEvent.objects.update_or_create(event_id=event_id, defaults=values)
     suffix = "cancelled" if status == EconomicCalendarEvent.Status.CANCELLED else "scheduled" if created else "updated"
-    event = _enqueue(event_type=f"economic.event.{suffix}", channel="economic-calendar", source=provider_id, data=_calendar(item), occurred_at=payload.get("occurred_at"))
+    event = _enqueue(event_type=f"news.economic.{suffix}", channel="economic-calendar", source=provider_id, data=_calendar(item), occurred_at=payload.get("occurred_at"))
     return item, event
 
 

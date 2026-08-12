@@ -113,7 +113,7 @@ def set_provider_halt(actor, provider_id, halted, reason):
     ApplicationAuditEvent.objects.create(actor_ref=str(actor.pk), action=f"execution.provider.{'halted' if halted else 'resumed'}",
         resource_type="execution_provider", resource_id=provider_id, request_id="operator", correlation_id=uuid.uuid4(),
         context={"mode": provider.mode}, reason=reason, occurred_at=timezone.now())
-    enqueue_event(aggregate_type="execution_provider", aggregate_id=provider_id, event_type=f"execution.provider.{'halted' if halted else 'resumed'}.v1",
+    enqueue_event(aggregate_type="execution_provider", aggregate_id=provider_id, event_type=f"trading.execution.provider.{'halted' if halted else 'resumed'}.v1",
         payload={"provider_id": provider_id, "mode": provider.mode, "health": provider.health, "live": False}, tenant_ref="default")
     return provider
 
@@ -129,7 +129,7 @@ def record_ambiguous_outcome(order, provider_id):
         exclusion_reasons=[{"provider_id": provider_id, "reasons": ["UNKNOWN_EXECUTION_OUTCOME", "RECONCILIATION_REQUIRED", "FAILOVER_PROHIBITED"]}],
         market_snapshot_hash=prior.market_snapshot_hash, request_hash=prior.request_hash, reference_price=prior.reference_price,
         pricing_snapshot_hash=prior.pricing_snapshot_hash,risk_snapshot_hash=prior.risk_snapshot_hash,revision=prior.revision+1,supersedes=prior)
-    enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="execution.unknown.v1",
+    enqueue_event(aggregate_type="execution", aggregate_id=order.id, event_type="trading.execution.unknown.v1",
         payload={"order_id": str(order.id), "provider_id": provider_id, "reconciliation_required": True, "retry_allowed": False,
             "failover_allowed": False, "live": False}, tenant_ref=order.tenant_ref)
     provider=ExecutionProviderRecord.objects.get(pk=provider_id); venue=ExecutionVenue.objects.get(pk=prior.selected_venue_id)

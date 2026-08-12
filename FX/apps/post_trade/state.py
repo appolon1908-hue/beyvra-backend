@@ -34,5 +34,5 @@ class PostTradeStateService:
         trade.version += 1
         trade.save(update_fields=("trade_state", "version", "updated_at"))
         audit(tenant_ref=trade.tenant_ref, actor_ref=actor_ref, action="post_trade.state.changed", resource_type="trade", resource_ref=trade.id, evidence={"from": previous, "to": target, "version": trade.version})
-        publish(trade=trade, event_type="trade.validated.v1" if target == "VALIDATED" else "post_trade.settlement.updated.v1", payload={"state": target, "version": trade.version})
+        publish(trade=trade, event_type="trading.trade.validated.v1" if target == "VALIDATED" else "post_trade.settlement.updated.v1", payload={"state": target, "version": trade.version})
         return trade

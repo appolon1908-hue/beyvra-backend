@@ -93,11 +93,11 @@ async def _run():
     api_url = os.getenv("CENTRIFUGO_PUBLISH_URL", "http://centrifugo:8000/api/publish")
     api_key = os.getenv("CENTRIFUGO_API_KEY", "")
     streams = (
-        ("MARKET_TICKS", "market.tick.*"), ("MARKET_QUOTES", "market.quote.*"),
-        ("MARKET_CANDLES", "market.candle.*.*"), ("MARKET_ORDERBOOK", "market.orderbook.*"),
-        ("MARKET_TRADES", "market.trade.*"), ("NEWS_EVENTS", "news.>"),
+        ("MARKET_EVENTS", "market.>"), ("NEWS_EVENTS", "news.>"),
         ("PRIVATE_ACCOUNT_EVENTS", "private.>"), ("SYSTEM_EVENTS", "system.>"),
-        ("TRADING_EVENTS", "trading.>"),
+        ("TRADING_EVENTS", "trading.>"), ("POST_TRADE_EVENTS", "post_trade.>"),
+        ("VALUATION_EVENTS", "valuation.>"), ("TREASURY_EVENTS", "treasury.>"),
+        ("REGULATORY_EVENTS", "regulatory.>"), ("COMPLIANCE_EVENTS", "compliance.>"),
     )
     await asyncio.gather(*(_bridge_stream(js, stream, subject, api_url, api_key) for stream, subject in streams))
 

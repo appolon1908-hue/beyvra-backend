@@ -12,13 +12,15 @@ create() {
     nats --server "$SERVER" $TLS_ARGS stream info "$name" >/dev/null
 }
 
-create MARKET_TICKS --subjects 'market.tick.*'
-create MARKET_QUOTES --subjects 'market.quote.*'
-create MARKET_CANDLES --subjects 'market.candle.*.*'
-create MARKET_ORDERBOOK --subjects 'market.orderbook.*'
-create MARKET_TRADES --subjects 'market.trade.*'
-create NEWS_EVENTS --subjects 'news.article.*' --subjects 'news.alert.*' --subjects 'news.economic.*'
-create PRIVATE_ACCOUNT_EVENTS --subjects 'private.trade.*' --subjects 'private.order.*' --subjects 'private.portfolio.*' --subjects 'private.wallet.*' --subjects 'private.notification.*'
-create SYSTEM_EVENTS --subjects 'system.status.*'
+create MARKET_EVENTS --subjects 'market.>'
+create NEWS_EVENTS --subjects 'news.>'
+create PRIVATE_ACCOUNT_EVENTS --subjects 'private.>'
+create SYSTEM_EVENTS --subjects 'system.>'
+create TRADING_EVENTS --subjects 'trading.>'
+create POST_TRADE_EVENTS --subjects 'post_trade.>'
+create VALUATION_EVENTS --subjects 'valuation.>'
+create TREASURY_EVENTS --subjects 'treasury.>'
+create REGULATORY_EVENTS --subjects 'regulatory.>'
+create COMPLIANCE_EVENTS --subjects 'compliance.>'
 
 nats --server "$SERVER" $TLS_ARGS server check jetstream

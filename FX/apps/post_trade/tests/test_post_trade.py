@@ -49,7 +49,7 @@ class PostTradeAuthorityTests(TestCase):
         self.assertTrue(hasattr(trade, "settlement_instruction"))
         self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "CONSUMED")
         self.assertEqual(PositionReconciler.run(persist=False)["status"], "PASS")
-        self.assertTrue(OutboxEvent.objects.filter(aggregate_id=str(trade.id), event_type="trade.captured.v1").exists())
+        self.assertTrue(OutboxEvent.objects.filter(aggregate_id=str(trade.id), event_type="trading.trade.captured.v1").exists())
 
     def test_duplicate_fill_creates_one_business_chain(self):
         order, trade = self.filled_trade("duplicate-chain")

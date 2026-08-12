@@ -26,7 +26,7 @@ class TradeCaptureService:
             return trade, False
         FeeSnapshot.objects.create(trade=trade, total_fee=fee, commission=fee, currency="USD", pricing_policy_version="simulation-fee-v1")
         audit(tenant_ref=trade.tenant_ref, actor_ref="system", action="trade.captured", resource_type="trade", resource_ref=trade.id, evidence={"execution_id": execution_id, "quantity": str(quantity), "price": str(price), "source_event_id": str(source_event_id)})
-        publish(trade=trade, event_type="trade.captured.v1", payload={"state": trade.trade_state, "instrument_id": trade.instrument_id, "quantity": str(quantity)})
+        publish(trade=trade, event_type="trading.trade.captured.v1", payload={"state": trade.trade_state, "instrument_id": trade.instrument_id, "quantity": str(quantity)})
         transaction.on_commit(lambda: TRADES_CAPTURED.labels("simulation", "created").inc())
         return trade, created
 

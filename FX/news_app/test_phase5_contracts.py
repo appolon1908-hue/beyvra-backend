@@ -73,4 +73,4 @@ class Phase5ContractTests(TestCase):
         ingest_economic_event(event)
         _, cancelled = ingest_economic_event({**event, "status": "CANCELLED"})
         self.assertEqual(retracted.event_type, "news.article.retracted")
-        self.assertEqual(cancelled.event_type, "economic.event.cancelled")
+        self.assertEqual(cancelled.event_type, "news.economic.cancelled")

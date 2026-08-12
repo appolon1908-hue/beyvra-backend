@@ -31,7 +31,7 @@ class TradeAllocationService:
             transaction.on_commit(lambda method=allocation.allocation_method: ALLOCATIONS.labels(method).inc())
         cls.validate(trade)
         audit(tenant_ref=trade.tenant_ref, actor_ref="system", action="trade.allocated", resource_type="trade", resource_ref=trade.id, evidence={"allocation_ids": [str(row.id) for row in result]})
-        publish(trade=trade, event_type="trade.allocated.v1", payload={"allocation_count": len(result)})
+        publish(trade=trade, event_type="trading.trade.allocated.v1", payload={"allocation_count": len(result)})
         return result
 
     @staticmethod

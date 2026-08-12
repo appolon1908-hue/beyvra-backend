@@ -12,7 +12,7 @@ def record(*, request, action, resource_type, resource_id, reason_code, context=
         correlation_id=correlation, context={"reason_code": reason_code, **(context or {})},
         reason=reason_code[:255], occurred_at=timezone.now(),
     )
-    enqueue_event(aggregate_type=resource_type, aggregate_id=resource_id, event_type=f"platform.{action}.v1", payload={"resource_type": resource_type, "resource_id": str(resource_id), "reason_code": reason_code}, tenant_ref="platform", correlation_id=correlation)
+    enqueue_event(aggregate_type=resource_type, aggregate_id=resource_id, event_type=f"system.platform.{action}.v1", payload={"resource_type": resource_type, "resource_id": str(resource_id), "reason_code": reason_code}, tenant_ref="platform", correlation_id=correlation)
     return event
 
 

@@ -56,7 +56,7 @@ def persist_findings(*, tenant_ref, account_ref, instrument_id, findings, source
         EVENTS.labels(finding.event_type, finding.severity).inc()
         HITS.labels(finding.event_type, finding.severity).inc()
         audit(tenant_ref=tenant_ref, actor_ref=actor_ref, action="surveillance.event.generated", resource_type="surveillance_event", resource_ref=event.id, reason=finding.event_type, evidence={"rule_id": finding.rule_id, "rule_version": finding.rule_version})
-        enqueue_event(aggregate_type="surveillance_event", aggregate_id=event.id, event_type="surveillance.alert.created.v1", payload={"event_id": str(event.id), "event_type": event.event_type, "severity": event.severity, "account_ref": account_ref, "instrument_id": instrument_id}, tenant_ref=tenant_ref)
+        enqueue_event(aggregate_type="surveillance_event", aggregate_id=event.id, event_type="regulatory.surveillance.alert.created.v1", payload={"event_id": str(event.id), "event_type": event.event_type, "severity": event.severity, "account_ref": account_ref, "instrument_id": instrument_id}, tenant_ref=tenant_ref)
         if finding.severity in {"HIGH", "CRITICAL"}:
             case = SurveillanceCase.objects.filter(tenant_ref=tenant_ref, account_ref=account_ref, case_type=finding.event_type, status__in=("OPEN", "IN_REVIEW", "ESCALATED", "RESTRICTED")).first()
             if case is None:
@@ -64,7 +64,7 @@ def persist_findings(*, tenant_ref, account_ref, instrument_id, findings, source
                 SurveillanceCaseEvent.objects.create(case=case, event_type="CASE_OPENED", actor_ref="system", reason=finding.event_type, evidence_hash=event.evidence_hash, occurred_at=now)
                 CASES.labels(finding.severity).inc()
                 audit(tenant_ref=tenant_ref, actor_ref="system", action="surveillance.case.opened", resource_type="surveillance_case", resource_ref=case.id, reason=finding.event_type)
-                enqueue_event(aggregate_type="surveillance_case", aggregate_id=case.id, event_type="surveillance.case.opened.v1", payload={"case_id": str(case.id), "case_type": case.case_type, "severity": case.severity, "account_ref": account_ref}, tenant_ref=tenant_ref)
+                enqueue_event(aggregate_type="surveillance_case", aggregate_id=case.id, event_type="regulatory.surveillance.case.opened.v1", payload={"case_id": str(case.id), "case_type": case.case_type, "severity": case.severity, "account_ref": account_ref}, tenant_ref=tenant_ref)
             case.events.add(event)
     return created
 

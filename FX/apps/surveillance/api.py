@@ -139,7 +139,7 @@ class ApproveRestriction(views.APIView):
         if row.created_by == str(request.user.pk): return error_response(request, "SELF_APPROVAL_FORBIDDEN", 403)
         row.approved_by = str(request.user.pk); row.status = "ACTIVE"; row.full_clean(); row.save()
         audit(tenant_ref=row.tenant_ref, actor_ref=request.user.pk, action="surveillance.restriction.approved", resource_type="trading_restriction", resource_ref=row.id, reason=str(request.data.get("reason", "independent approval")))
-        enqueue_event(aggregate_type="trading_restriction", aggregate_id=row.id, event_type="surveillance.restriction.applied.v1", payload={"restriction_id": str(row.id), "scope_type": row.scope_type, "scope_ref": row.scope_ref}, tenant_ref=row.tenant_ref)
+        enqueue_event(aggregate_type="trading_restriction", aggregate_id=row.id, event_type="regulatory.surveillance.restriction.applied.v1", payload={"restriction_id": str(row.id), "scope_type": row.scope_type, "scope_ref": row.scope_ref}, tenant_ref=row.tenant_ref)
         return Response(RestrictionSerializer(row).data)
 
 
@@ -154,7 +154,7 @@ class RemoveRestriction(views.APIView):
         if not reason: return error_response(request, "VALIDATION_ERROR", 400)
         row.status = "REMOVED"; row.effective_to = timezone.now(); row.save()
         audit(tenant_ref=row.tenant_ref, actor_ref=request.user.pk, action="surveillance.restriction.removed", resource_type="trading_restriction", resource_ref=row.id, reason=reason)
-        enqueue_event(aggregate_type="trading_restriction", aggregate_id=row.id, event_type="surveillance.restriction.removed.v1", payload={"restriction_id": str(row.id)}, tenant_ref=row.tenant_ref)
+        enqueue_event(aggregate_type="trading_restriction", aggregate_id=row.id, event_type="regulatory.surveillance.restriction.removed.v1", payload={"restriction_id": str(row.id)}, tenant_ref=row.tenant_ref)
         return Response(RestrictionSerializer(row).data)
 
 
