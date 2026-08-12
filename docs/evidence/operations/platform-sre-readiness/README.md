@@ -7,8 +7,8 @@ Generated 2026-08-12 UTC for branch `feat/platform-sre-release-safety`, based on
 - PostgreSQL 16 migration from zero: PASS (183 total applied migrations after platform changes)
 - Platform migrations: rollback PASS, reapply PASS, drift NONE
 - Django system check: PASS
-- Platform authority tests: 33 PASS
-- Full backend suite: 359 PASS
+- Platform authority tests: 36 PASS
+- Full backend suite: 365 PASS on PostgreSQL 16 and Redis 7.4
 - OpenAPI generation/validation: PASS; SHA-256 `1e6926f7905139f50e8e50e83dbe429954839339bd3f223a65999c55c6c9fa9b`
 - Operational routes: 28, duplicate paths: 0
 - Secret scan: PASS, findings 0
@@ -18,6 +18,9 @@ Generated 2026-08-12 UTC for branch `feat/platform-sre-release-safety`, based on
 - Local public-capability rate policy: 30 requests/test window before deliberate 429 backpressure; declared safe fixture limit 21 (70%)
 - Fixture latency at 30-request defined peak after warm-up: p50 0.9771 ms, p95 1.1041 ms, p99 1.1332 ms
 - In-process kill hierarchy evaluation across six consumers: 0.003807 ms; runtime propagation remains staging-blocked
+- Prometheus 3.13 `promtool` rule validation: PASS (15 alert rules)
+- Exact local candidate image: `beyvra-platform-ops@sha256:a682b73d2fab333e01b61c37e5c8cc4154a42355bfc9bbe245ef0a677596a90b`
+- Exact candidate CI: PASS (`secrets`, `validate`, `container`, and exact-head/base checks)
 
 ## External boundaries
 

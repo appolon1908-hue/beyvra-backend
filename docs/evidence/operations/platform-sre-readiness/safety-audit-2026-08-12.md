@@ -23,8 +23,11 @@ changed.
 - Django system check: `PASS`
 - Migration drift (`makemigrations --check --dry-run`): `NONE`
 - PostgreSQL 16 migration apply, including `platform_ops.0003`: `PASS`
+- PostgreSQL 16 `platform_ops.0003` rollback and reapply: `PASS`
 - `platform_ops.tests`: `36/36 PASS`
-- Temporary PostgreSQL, Redis, and network resources: removed after testing
+- Full backend test suite: `365/365 PASS`
+- Prometheus alert syntax: `15/15 rules PASS`
+- Temporary PostgreSQL, Redis, and network resources: removed after certification
 - Real-money/live execution flags: unchanged and false
 
 The local fixture result is not staging, load, chaos, PITR, or production
