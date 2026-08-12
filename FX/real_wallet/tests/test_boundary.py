@@ -55,7 +55,7 @@ class RealWalletBoundaryTests(TestCase):
     def test_real_wallet_routes_are_disabled_without_demo_fallback(self):
         client = APIClient()
         client.force_authenticate(self.user)
-        response = client.get("/api/v1/wallets/")
+        response = client.get("/api/v1/legacy-real-wallet/wallets/")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.data["code"], "FEATURE_DISABLED")
 
@@ -84,9 +84,9 @@ class RealWalletBoundaryTests(TestCase):
         self.asset.save(update_fields=["enabled"])
         AssetNetwork.objects.create(asset=self.asset, network=visible, enabled=True)
         client = APIClient()
-        assets = client.get("/api/v1/assets/")
-        networks = client.get("/api/v1/networks/")
-        pairs = client.get("/api/v1/asset-networks/")
+        assets = client.get("/api/v1/legacy-real-wallet/assets/")
+        networks = client.get("/api/v1/legacy-real-wallet/networks/")
+        pairs = client.get("/api/v1/legacy-real-wallet/asset-networks/")
         self.assertEqual(assets.status_code, 200)
         self.assertEqual([item["symbol"] for item in assets.data["results"]], ["TST"])
         self.assertEqual([item["code"] for item in networks.data["results"]], ["visible"])
@@ -107,9 +107,9 @@ class RealWalletBoundaryTests(TestCase):
         FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
         client = APIClient()
         client.force_authenticate(self.user)
-        self.assertEqual(client.get(f"/api/v1/wallets/{wallet.id}/addresses/").status_code, 200)
-        self.assertEqual(client.get("/api/v1/deposits/").data["results"][0]["amount_atomic"], "55")
-        self.assertEqual(client.get("/api/v1/withdrawals/").status_code, 200)
+        self.assertEqual(client.get(f"/api/v1/legacy-real-wallet/wallets/{wallet.id}/addresses/").status_code, 200)
+        self.assertEqual(client.get("/api/v1/legacy-real-wallet/deposits/").data["results"][0]["amount_atomic"], "55")
+        self.assertEqual(client.get("/api/v1/legacy-real-wallet/withdrawals/").status_code, 200)
 
     def test_enabled_read_is_tenant_scoped(self):
         wallet = RealWallet.objects.create(tenant=self.org, owner=self.user)
@@ -123,7 +123,7 @@ class RealWalletBoundaryTests(TestCase):
         FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
         client = APIClient()
         client.force_authenticate(self.user)
-        response = client.get("/api/v1/wallets/")
+        response = client.get("/api/v1/legacy-real-wallet/wallets/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data["results"]], [str(wallet.id)])
 
@@ -138,7 +138,7 @@ class RealWalletBoundaryTests(TestCase):
         FeatureFlag.objects.filter(key="real_wallet_read_enabled").update(enabled=True)
         client = APIClient()
         client.force_authenticate(self.user)
-        response = client.get(f"/api/v1/wallets/{wallet.id}/balances/")
+        response = client.get(f"/api/v1/legacy-real-wallet/wallets/{wallet.id}/balances/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["available_atomic"], "850000")
         self.assertIsInstance(response.data["results"][0]["posted_atomic"], str)
@@ -303,12 +303,12 @@ class RealWalletBoundaryTests(TestCase):
                 client = APIClient()
                 client.force_authenticate(self.user)
                 response = client.post(
-                    "/api/v1/webhook-subscriptions/",
+                    "/api/v1/legacy-real-wallet/webhook-subscriptions/",
                     {"endpoint": "https://example.com/codestra", "description": "Synthetic receiver"},
                     format="json",
                 )
                 rotate = client.post(
-                    f"/api/v1/webhook-subscriptions/{response.data['id']}/rotate-secret/",
+                    f"/api/v1/legacy-real-wallet/webhook-subscriptions/{response.data['id']}/rotate-secret/",
                     {}, format="json",
                 )
         self.assertEqual(response.status_code, 201)

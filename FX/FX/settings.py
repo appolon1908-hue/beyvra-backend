@@ -206,6 +206,7 @@ INSTALLED_APPS = [
     "real_wallet",
     "provider_governance",
     "financial_client",
+    "financial_boundary",
     "reference_data",
     "pricing_authority",
     "risk_authority",
@@ -301,6 +302,16 @@ FINANCIAL_SERVICE_URL = os.getenv("FINANCIAL_SERVICE_URL", "https://financial-mt
 FINANCIAL_SERVICE_CLIENT_CERT = os.getenv("FINANCIAL_SERVICE_CLIENT_CERT", "/run/secrets/financial/client.crt")
 FINANCIAL_SERVICE_CLIENT_KEY = os.getenv("FINANCIAL_SERVICE_CLIENT_KEY", "/run/secrets/financial/client.key")
 FINANCIAL_SERVICE_CA_CERT = os.getenv("FINANCIAL_SERVICE_CA_CERT", "/run/secrets/financial/ca.crt")
+FINANCIAL_SERVICE_API_VERSION = "v1"
+FINANCIAL_SERVICE_CALLER = "codestra-application-backend"
+FINANCIAL_SERVICE_SCOPES = "financial.wallet.read financial.deposit.read financial.withdrawal.read financial.withdrawal.request financial.transfer.request financial.reconciliation.read"
+FINANCIAL_SERVICE_AUDIENCE = "financial-service"
+FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS", "2"))
+FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS", "5"))
+FINANCIAL_SERVICE_RETRY_COUNT = int(os.getenv("FINANCIAL_SERVICE_RETRY_COUNT", "2"))
+FINANCIAL_SERVICE_OVERALL_DEADLINE_SECONDS = float(os.getenv("FINANCIAL_SERVICE_OVERALL_DEADLINE_SECONDS", "12"))
+FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD", "5"))
+FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS", "30"))
 
 # REDIS
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)
