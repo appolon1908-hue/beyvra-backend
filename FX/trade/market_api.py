@@ -131,7 +131,7 @@ class MarketSnapshotV1View(APIView):
             candles = get_market_history(symbol=definition["provider_symbol"], interval=interval, limit=limit)
             candles = _canonical_candles(candles, interval, instrument_id)
         except (ValueError, MarketDataError) as exc:
-            return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
+            return Response({"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable.", "details": {}}, "code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable.", "details": {}}, status=503)
         latest = candles[-1] if candles else None
         if latest is None:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": "No snapshot is currently available."}, status=503)

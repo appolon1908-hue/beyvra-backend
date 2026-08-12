@@ -11,47 +11,42 @@ SAFE_MESSAGES = {
 }
 
 
+def _safe_error(context, code, message, details=None):
+    request = context.get("request")
+    error = {"code": code, "message": message, "details": details or {}}
+    return {
+        "error": error,
+        "code": code,
+        "message": message,
+        "details": error["details"],
+        "instance": request.path if request is not None else "",
+        "request_id": str(getattr(request, "request_id", "")) if request is not None else "",
+    }
+
+
 def BeyvraErrorMapper(exc, context):  # noqa: N802 - public error-contract name
     response = exception_handler(exc, context)
     if response is None:
         if exc.__class__.__module__.startswith("redis"):
             from rest_framework.response import Response
 
-            return Response(
-                {
-                    "code": "SERVICE_TEMPORARILY_UNAVAILABLE",
-                    "message": "The service is temporarily unavailable.",
-                },
-                status=503,
-            )
+            return Response(_safe_error(context, "SERVICE_TEMPORARILY_UNAVAILABLE", "The service is temporarily unavailable."), status=503)
         return response
     if isinstance(exc, AuthenticationFailed):
-        response.data = {
-            "code": "INVALID_CREDENTIALS",
-            "message": "Invalid credentials.",
-        }
+        response.data = _safe_error(context, "INVALID_CREDENTIALS", "Invalid credentials.")
         return response
     detail = getattr(exc, "detail", {})
     if isinstance(detail, dict) and str(detail.get("code", "")) == "FINANCIAL_WALLET_ID_NOT_ACCEPTED":
-        response.data = {
-            "code": "FINANCIAL_WALLET_ID_NOT_ACCEPTED",
-            "message": "This wallet is not available for simulated trading.",
-        }
+        response.data = _safe_error(context, "FINANCIAL_WALLET_ID_NOT_ACCEPTED", "This wallet is not available for simulated trading.")
         return response
     if "Real-money trading is disabled" in str(getattr(exc, "detail", "")):
-        response.data = {
-            "code": "FEATURE_DISABLED",
-            "message": "This feature is currently unavailable.",
-        }
+        response.data = _safe_error(context, "FEATURE_DISABLED", "This feature is currently unavailable.")
         return response
     if "ACCOUNT_FROZEN" in str(getattr(exc, "detail", "")):
-        response.data = {
-            "code": "ACCOUNT_FROZEN",
-            "message": "This account is temporarily restricted.",
-        }
+        response.data = _safe_error(context, "ACCOUNT_FROZEN", "This account is temporarily restricted.")
         return response
     code, message = SAFE_MESSAGES.get(
         response.status_code, ("REQUEST_FAILED", "The request could not be completed.")
     )
-    response.data = {"code": code, "message": message}
+    response.data = _safe_error(context, code, message)
     return response

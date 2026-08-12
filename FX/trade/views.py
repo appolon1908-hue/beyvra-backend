@@ -140,6 +140,6 @@ class MarketHistoryView(views.APIView):
             return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except MarketDataError as exc:
             return response.Response(
-                {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+                {"error": {"code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable.", "details": {}}, "code": "TEMPORARILY_UNAVAILABLE", "message": "Market data is temporarily unavailable.", "details": {}}, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
         return response.Response({"symbol": symbol, "interval": interval, "results": candles})

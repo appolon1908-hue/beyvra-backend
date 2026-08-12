@@ -42,7 +42,6 @@ urlpatterns = [
     path("api/v1/auth/", include("users.google_urls")),
     path("api/v1/me/", ManageUserView.as_view(), name="me_v1"),
     path("api/v1/notifications/", include("notifications.urls")),
-    path("api/v1/", include("apps.platform_api.urls")),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
