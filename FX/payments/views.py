@@ -1,6 +1,7 @@
 import stripe
 from django.conf import settings
 from django.db import transaction as db_transaction
+from django.http import Http404
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
@@ -10,7 +11,14 @@ from wallet.models import Transaction, Wallet
 from decimal import Decimal
 
 from .models import PaymentMethod, Payment, PaymentsProvider
-from .serializers import BinancePaymentResponseSerializer, PaymentMethodSerializer, PaymentRequestSerializer, PaymentSerializer
+from .serializers import (
+    BinancePaymentResponseSerializer,
+    PaymentMethodSerializer,
+    PaymentProcessingSerializer,
+    PaymentRequestSerializer,
+    PaymentSerializer,
+    WalletTransferSerializer,
+)
 from django.shortcuts import get_object_or_404
 
 
@@ -106,8 +114,11 @@ class StripeCheckoutView(APIView):
             )
             checkout_url = checkout_session.url
             checkout_session_id = checkout_session.id
-        except Exception as e:
-            return Response({"error": str(e)})
+        except Exception:
+            return Response(
+                {"code": "PAYMENT_PROVIDER_ERROR", "detail": "The payment provider could not create a checkout session."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         transaction.reference = checkout_session_id
         transaction.save(update_fields=["reference", "updated_at"])
@@ -224,8 +235,11 @@ class PaymentView(APIView):
                 return Response({"data": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
             serializer.save(user=request.user)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({"data": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response(
+                {"code": "PAYMENT_REQUEST_REJECTED", "detail": "The payment request could not be processed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
 
     @extend_schema(
@@ -245,8 +259,11 @@ class PaymentView(APIView):
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response(
+                {"code": "PAYMENT_UPDATE_REJECTED", "detail": "The payment update could not be processed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     
 
 class DepositHistoryView(APIView):
@@ -273,32 +290,48 @@ class WalletTransferView(APIView):
     Transfer funds between wallets.
     """
     def post(self, request):
-        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'), is_real=False)
-        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'), is_real=False)
-        amount = Decimal(request.data.get('amount', 0))
+        serializer = WalletTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-        if source_wallet.balance < amount:
-            return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+        wallet_ids = sorted((data["source_wallet_id"], data["target_wallet_id"]))
+        with db_transaction.atomic():
+            locked_wallets = {
+                wallet.id: wallet
+                for wallet in Wallet.objects.select_for_update().filter(
+                    id__in=wallet_ids,
+                    user=request.user,
+                    is_real=False,
+                )
+            }
+            if len(locked_wallets) != 2:
+                raise Http404
 
-        source_wallet.balance -= amount
-        target_wallet.balance += amount
-        source_wallet.save()
-        target_wallet.save()
+            source_wallet = locked_wallets[data["source_wallet_id"]]
+            target_wallet = locked_wallets[data["target_wallet_id"]]
+            amount = data["amount"]
+            if source_wallet.balance < amount:
+                return Response({"error": "Insufficient balance"}, status=status.HTTP_400_BAD_REQUEST)
+
+            source_wallet.balance -= amount
+            target_wallet.balance += amount
+            source_wallet.save(update_fields=["balance", "updated_at"])
+            target_wallet.save(update_fields=["balance", "updated_at"])
 
         return Response({"message": "Funds transferred successfully"}, status=status.HTTP_200_OK)
 
 
-@extend_schema(request=PaymentRequestSerializer)
+@extend_schema(request=PaymentProcessingSerializer)
 class PaymentProcessingView(APIView):
     """
     Process payments using different payment methods.
     """
     @extend_schema(
-            request=PaymentRequestSerializer,
-            responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
+            request=PaymentProcessingSerializer,
+            responses={200: dict, 400: 'Bad Request'},
         )
     def post(self, request):
-        serializer = PaymentRequestSerializer(data=request.data)
+        serializer = PaymentProcessingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 

@@ -20,5 +20,8 @@ create MARKET_TRADES --subjects 'market.trade.*'
 create NEWS_EVENTS --subjects 'news.article.*' --subjects 'news.alert.*' --subjects 'news.economic.*'
 create PRIVATE_ACCOUNT_EVENTS --subjects 'private.trade.*' --subjects 'private.order.*' --subjects 'private.portfolio.*' --subjects 'private.wallet.*' --subjects 'private.notification.*'
 create SYSTEM_EVENTS --subjects 'system.status.*'
+# Canonical application outbox subjects are retained independently from the
+# realtime bridge. Domain consumers must use their own durable/inbox contract.
+create APPLICATION_EVENTS --subjects 'application.>'
 
 nats --server "$SERVER" $TLS_ARGS server check jetstream

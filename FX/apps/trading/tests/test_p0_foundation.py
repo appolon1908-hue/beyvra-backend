@@ -5,6 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import close_old_connections, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
@@ -130,6 +131,7 @@ class ControlAndCompatibilityTests(TestCase):
             self.assertEqual(ready.status_code, 200)
             self.assertEqual(ready.json()["status"], "ready")
         with override_settings(NATS_JETSTREAM_ENABLED=True):
+            cache.delete("health:outbox-worker")
             unavailable = self.client.get("/health/ready")
             self.assertEqual(unavailable.status_code, 503)
             self.assertEqual(unavailable.json()["checks"]["nats"], "worker_unavailable")

@@ -98,18 +98,6 @@ paths:
       responses:
         '200': {description: Tenant-scoped withdrawals}
         '503': {$ref: '#/components/responses/FeatureDisabled'}
-  /deposits/:
-    get:
-      operationId: listRealDeposits
-      security: [{bearerAuth: []}]
-      responses:
-        '503': {$ref: '#/components/responses/FeatureDisabled'}
-  /withdrawals/:
-    get:
-      operationId: listRealWithdrawals
-      security: [{bearerAuth: []}]
-      responses:
-        '503': {$ref: '#/components/responses/FeatureDisabled'}
   /transfers/:
     get:
       operationId: listRealTransfers

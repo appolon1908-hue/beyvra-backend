@@ -11,6 +11,25 @@ class PaymentRequestSerializer(serializers.Serializer):
     wallet_id = serializers.IntegerField()
 
 
+class PaymentProcessingSerializer(PaymentRequestSerializer):
+    payment_method_id = serializers.IntegerField(min_value=1)
+
+
+class WalletTransferSerializer(serializers.Serializer):
+    source_wallet_id = serializers.IntegerField(min_value=1)
+    target_wallet_id = serializers.IntegerField(min_value=1)
+    amount = serializers.DecimalField(
+        max_digits=20,
+        decimal_places=8,
+        min_value=Decimal("0.00000001"),
+    )
+
+    def validate(self, attrs):
+        if attrs["source_wallet_id"] == attrs["target_wallet_id"]:
+            raise serializers.ValidationError("Source and target wallets must differ.")
+        return attrs
+
+
 class BinancePaymentResponseSerializer(serializers.Serializer):
     payment_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
     qrcode_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
