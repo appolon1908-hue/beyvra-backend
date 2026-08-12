@@ -26,7 +26,8 @@ def validate_market(symbol: str, interval: str):
         raise ValueError(f"Unsupported interval: {interval}")
 
 
-def serialize_candle(candle: MarketCandle):
+def serialize_candle(candle: MarketCandle, *, stale: bool):
+    received_at = datetime.now(timezone.utc)
     return {
         "time": int(candle.timestamp.timestamp()),
         "open": str(candle.open),
@@ -34,6 +35,19 @@ def serialize_candle(candle: MarketCandle):
         "low": str(candle.low),
         "close": str(candle.close),
         "volume": str(candle.volume),
+        "provider_id": candle.provider,
+        "provider_timestamp": candle.timestamp.isoformat(),
+        "received_at": received_at.isoformat(),
+        "stale": stale,
+        "provenance": {
+            "provider_id": candle.provider,
+            "provider_message_type": "historical_candle",
+            "provider_timestamp": candle.timestamp.isoformat(),
+            "received_at": received_at.isoformat(),
+            "normalizer_version": "1.0.0",
+            "source_type": "REST",
+            "cache_hit": stale,
+        },
     }
 
 
@@ -94,7 +108,7 @@ def get_market_history(*, symbol: str, interval: str, limit: int, before: int | 
         cached = list(cached_query.order_by("-timestamp")[:limit])
         if not cached:
             raise MarketDataError("Market history is temporarily unavailable") from exc
-        return [serialize_candle(candle) for candle in reversed(cached)]
+        return [serialize_candle(candle, stale=True) for candle in reversed(cached)]
 
     candles = []
     for row in rows:
@@ -110,7 +124,7 @@ def get_market_history(*, symbol: str, interval: str, limit: int, before: int | 
                 "volume": Decimal(row[5]),
             },
         )
-        candles.append(serialize_candle(candle))
+        candles.append(serialize_candle(candle, stale=False))
     return candles
 
 
@@ -147,7 +161,7 @@ def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credentia
         cached = list(cached_query.order_by("-timestamp")[:limit])
         if not cached:
             raise MarketDataError("Stock and forex history is temporarily unavailable") from exc
-        return [serialize_candle(candle) for candle in reversed(cached)]
+        return [serialize_candle(candle, stale=True) for candle in reversed(cached)]
 
     candles = []
     for row in reversed(rows):
@@ -165,5 +179,5 @@ def get_twelve_data_history(*, symbol: str, interval: str, limit: int, credentia
                 "volume": Decimal(row.get("volume") or 0),
             },
         )
-        candles.append(serialize_candle(candle))
+        candles.append(serialize_candle(candle, stale=False))
     return candles

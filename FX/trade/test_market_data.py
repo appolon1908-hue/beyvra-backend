@@ -93,6 +93,8 @@ class MarketHistoryTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["results"][0]["close"], "105")
+        self.assertFalse(response.data["results"][0]["stale"])
+        self.assertEqual(response.data["results"][0]["provenance"]["source_type"], "REST")
         self.assertEqual(MarketCandle.objects.count(), 1)
 
     def test_unsupported_market_is_rejected(self):
@@ -124,6 +126,21 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(len(response.data["results"]), 3)
         self.assertIsInstance(response.data["results"][0]["close"], str)
         get.assert_not_called()
+
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
+    @patch("trade.market_data.requests.get")
+    def test_cached_candle_is_explicitly_stale_and_keeps_provenance(self, get):
+        import requests
+        approve_provider("binance")
+        self._credential("market/binance/v1/credential.key")
+        MarketCandle.objects.create(provider="binance",symbol="BTCUSDT",interval="1m",timestamp=timezone.now(),open="100",high="101",low="99",close="100",volume="1")
+        get.side_effect=requests.ConnectionError("fixture disconnect")
+        self.client.force_authenticate(self.user)
+        response=self.client.get("/api/trades/market/history/?symbol=BTCUSDT&interval=1m&limit=10",secure=True)
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertTrue(response.data["results"][0]["stale"])
+        self.assertTrue(response.data["results"][0]["provenance"]["cache_hit"])
+        self.assertEqual(response.data["results"][0]["provider_id"],"binance")
 
     @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
     @patch("trade.market_data.requests.get")
@@ -190,6 +207,8 @@ class MarketHistoryTests(TestCase):
         response = self.client.get("/api/v1/market-data/candles?instrument_id=ETH-USD&interval=5m&limit=50", secure=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         history.assert_called_once_with(symbol="ETHUSDT", interval="5m", limit=50)
+        self.assertIn("provider_timestamp", response.data["candles"][0])
+        self.assertIn("provenance", response.data["candles"][0])
 
     @patch("trade.market_api.get_market_history")
     def test_chart_candles_cursor_requests_exactly_one_older_page(self, history):

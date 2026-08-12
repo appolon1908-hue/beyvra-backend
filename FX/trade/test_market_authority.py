@@ -26,9 +26,9 @@ def tick(at, price, size="1", trade_id=None, sequence=None):
 
 class CanonicalContractTests(SimpleTestCase):
     def test_quote_never_fabricates_bid_ask_and_marks_crossed_quote_suspect(self):
-        last_only=Quote("BTC-USD",None,None,None,None,Decimal("10"),NOW,NOW,"fixture",None,False,False,provenance(message="quote"))
+        last_only=Quote("BTC-USD",None,None,None,None,Decimal("10"),NOW,NOW+timedelta(milliseconds=2),"fixture",None,False,False,provenance(message="quote"))
         self.assertIsNone(last_only.bid); self.assertIsNone(last_only.ask)
-        crossed=Quote("BTC-USD",Decimal("11"),Decimal("10"),1,1,None,NOW,NOW,"fixture","1",False,False,provenance(message="quote"))
+        crossed=Quote("BTC-USD",Decimal("11"),Decimal("10"),1,1,None,NOW,NOW+timedelta(milliseconds=2),"fixture","1",False,False,provenance(message="quote"))
         self.assertTrue(crossed.suspect)
 
     def test_invalid_values_and_impossible_mapping_are_rejected(self):
@@ -36,6 +36,10 @@ class CanonicalContractTests(SimpleTestCase):
         a=Instrument("A","A","A","EQUITY",None,None,"X",{"p":"SAME"},"ACTIVE",2,2,"UTC")
         b=Instrument("B","B","B","EQUITY",None,None,"X",{"p":"SAME"},"ACTIVE",2,2,"UTC")
         with self.assertRaises(AmbiguousSymbol): InstrumentRegistry([a,b])
+
+    def test_contract_timestamps_cannot_diverge_from_provenance(self):
+        with self.assertRaisesRegex(MalformedMarketData,"timestamps must match provenance"):
+            Quote("BTC-USD",Decimal("9"),Decimal("10"),None,None,None,NOW+timedelta(seconds=1),NOW,"fixture",None,False,False,provenance(message="quote"))
 
     def test_freshness_uses_both_provider_and_receive_clocks(self):
         self.assertEqual(assess_freshness(NOW,NOW,NOW+timedelta(milliseconds=50),degraded_ms=100,stale_ms=500),FreshnessState.FRESH)

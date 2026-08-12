@@ -68,7 +68,7 @@ def _require_available_interval(interval):
         raise MarketDataError("GENUINE_5S_SOURCE_UNAVAILABLE" if interval == "5s" else "TIMEFRAME_UNAVAILABLE")
 
 
-def _canonical_candles(candles, interval, before=None):
+def _canonical_candles(candles, interval, instrument_id, before=None):
     duration = INTERVAL_SECONDS[interval]
     normalized = []
     for candle in candles:
@@ -80,14 +80,29 @@ def _canonical_candles(candles, interval, before=None):
         low_value = str(candle["low"])
         close_value = str(candle["close"])
         volume_value = str(candle.get("volume", 0))
-        if not (float(high_value) >= max(float(open_value), float(close_value)) and float(low_value) <= min(float(open_value), float(close_value)) and float(high_value) >= float(low_value)):
+        from decimal import Decimal, InvalidOperation
+        try:
+            o,h,l,c,v = map(Decimal,(open_value,high_value,low_value,close_value,volume_value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise MarketDataError("MALFORMED_PROVIDER_CANDLE") from exc
+        if not all(value.is_finite() for value in (o,h,l,c,v)) or min(o,h,l,c) <= 0 or v < 0 or not (h >= max(o,c) and l <= min(o,c) and h >= l):
             raise MarketDataError("MALFORMED_PROVIDER_CANDLE")
+        open_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        close_time = datetime.fromtimestamp(timestamp + duration, tz=timezone.utc)
+        received_at = candle.get("received_at") or _server_time()
+        provider_timestamp = candle.get("provider_timestamp") or open_time.isoformat().replace("+00:00", "Z")
+        provider_id = candle.get("provider_id", "UNKNOWN")
         normalized.append({
-            "open_time": datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
-            "close_time": datetime.fromtimestamp(timestamp + duration, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "instrument_id": instrument_id, "timeframe": interval,
+            "open_time": open_time.isoformat().replace("+00:00", "Z"),
+            "close_time": close_time.isoformat().replace("+00:00", "Z"),
             "open": open_value, "high": high_value, "low": low_value,
             "close": close_value, "volume": volume_value,
-            "complete": True, "sequence": timestamp,
+            "trade_count": candle.get("trade_count"), "provider_id": provider_id,
+            "provider_timestamp": provider_timestamp, "received_at": received_at,
+            "complete": datetime.now(timezone.utc) >= close_time, "sequence": timestamp,
+            "stale": bool(candle.get("stale", False)),
+            "provenance": candle.get("provenance") or {"provider_id":provider_id,"provider_message_type":"historical_candle","provider_timestamp":provider_timestamp,"received_at":received_at,"normalizer_version":"1.0.0","source_type":"REST"},
         })
     return normalized
 
@@ -114,7 +129,7 @@ class MarketSnapshotV1View(APIView):
             instrument_id, definition, interval, limit = _chart_request(request)
             _require_available_interval(interval)
             candles = get_market_history(symbol=definition["provider_symbol"], interval=interval, limit=limit)
-            candles = _canonical_candles(candles, interval)
+            candles = _canonical_candles(candles, interval, instrument_id)
         except (ValueError, MarketDataError) as exc:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
         latest = candles[-1] if candles else None
@@ -147,7 +162,7 @@ class MarketCandlesV1View(APIView):
             if before is not None:
                 history_kwargs["before"] = before
             candles = get_market_history(**history_kwargs)
-            candles = _canonical_candles(candles, interval, before)
+            candles = _canonical_candles(candles, interval, instrument_id, before)
         except (ValueError, MarketDataError) as exc:
             return Response({"code": "MARKET_DATA_UNAVAILABLE", "detail": str(exc)}, status=503)
         sequence = int(candles[-1]["sequence"]) if candles else 0

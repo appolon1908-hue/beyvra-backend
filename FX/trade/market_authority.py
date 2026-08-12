@@ -114,6 +114,10 @@ class Quote:
     sequence: str | None; delayed: bool; stale: bool; provenance: Provenance
     suspect: bool = False
     def __post_init__(self):
+        object.__setattr__(self,"provider_timestamp",_utc(self.provider_timestamp,"provider_timestamp"))
+        object.__setattr__(self,"received_at",_utc(self.received_at,"received_at"))
+        if self.provider_timestamp != self.provenance.provider_timestamp or self.received_at != self.provenance.received_at:
+            raise MalformedMarketData("quote timestamps must match provenance")
         for name in ("bid","ask","bid_size","ask_size","last"):
             value=getattr(self,name)
             if value is not None: object.__setattr__(self,name,_positive(value,name,zero=name.endswith("size")))
@@ -126,6 +130,10 @@ class TradeTick:
     provider_timestamp: datetime; received_at: datetime; provider_id: str
     venue: str; sequence: str | None; conditions: tuple[str, ...]; provenance: Provenance
     def __post_init__(self):
+        object.__setattr__(self,"provider_timestamp",_utc(self.provider_timestamp,"provider_timestamp"))
+        object.__setattr__(self,"received_at",_utc(self.received_at,"received_at"))
+        if self.provider_timestamp != self.provenance.provider_timestamp or self.received_at != self.provenance.received_at:
+            raise MalformedMarketData("trade timestamps must match provenance")
         object.__setattr__(self,"price",_positive(self.price,"price")); object.__setattr__(self,"size",_positive(self.size,"size",zero=True))
 
 
@@ -139,6 +147,9 @@ class Candle:
         for name in ("open","high","low","close"): object.__setattr__(self,name,_positive(getattr(self,name),name))
         object.__setattr__(self,"volume",_positive(self.volume,"volume",zero=True))
         object.__setattr__(self,"open_time",_utc(self.open_time,"open_time")); object.__setattr__(self,"close_time",_utc(self.close_time,"close_time"))
+        object.__setattr__(self,"provider_timestamp",_utc(self.provider_timestamp,"provider_timestamp")); object.__setattr__(self,"received_at",_utc(self.received_at,"received_at"))
+        if self.provider_timestamp != self.provenance.provider_timestamp or self.received_at != self.provenance.received_at:
+            raise MalformedMarketData("candle timestamps must match provenance")
         if self.close_time <= self.open_time or not (self.low <= self.open <= self.high and self.low <= self.close <= self.high): raise MalformedMarketData("impossible OHLC")
 
 
@@ -146,6 +157,10 @@ class Candle:
 class MarketStatus:
     instrument_id: str; status: MarketState; provider_timestamp: datetime
     received_at: datetime; provider_id: str; halt_status_available: bool; provenance: Provenance
+    def __post_init__(self):
+        object.__setattr__(self,"provider_timestamp",_utc(self.provider_timestamp,"provider_timestamp")); object.__setattr__(self,"received_at",_utc(self.received_at,"received_at"))
+        if self.provider_timestamp != self.provenance.provider_timestamp or self.received_at != self.provenance.received_at:
+            raise MalformedMarketData("status timestamps must match provenance")
 
 
 @dataclass(frozen=True)
