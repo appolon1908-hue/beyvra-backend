@@ -19,4 +19,3 @@ The backend branch has no configured upstream. The other three primary checkouts
 - Unresolved conflict markers: `0`
 - Known remote PRs reported as conflicting by GitHub: backend PRs `#2`, `#19`, `#30`; frontend PR `#5`
 - Semantic architecture conflicts: present; tracked in `CONFLICT-REGISTER.md`
-

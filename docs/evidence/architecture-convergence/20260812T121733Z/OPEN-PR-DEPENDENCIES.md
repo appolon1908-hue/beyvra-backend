@@ -41,4 +41,3 @@ Open mission PRs include separate stacks for canonical API/realtime and charts (
 
 - Financial Service PRs `#5`, `#6`, and `#7` all target `main`, remain draft, require review, and are individually mergeable.
 - Financial governance PRs `#1` and `#3` target `main`, remain draft, require review, and are individually mergeable.
-

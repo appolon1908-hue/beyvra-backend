@@ -17,4 +17,3 @@ The checked-out backend defines at least 27 settings or model values resembling 
 | `PAYMENTS_ENABLED` | environment, default false | separate legacy capability |
 
 The application system check rejects any enabled real-money gate. Database `real_wallet.FeatureFlag` values cannot override a false settings gate. `LIVE_TRADING_ENABLED` versus `REAL_TRADING_ENABLED` is a high-risk naming duplication and must not become a second evaluator.
-

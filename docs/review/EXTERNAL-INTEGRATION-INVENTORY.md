@@ -12,4 +12,3 @@
 | Realtime | NATS/JetStream, Centrifugo, Redis/Channels | target and compatibility transports coexist |
 
 No hardcoded production provider activation was authorized or exercised during audit.
-

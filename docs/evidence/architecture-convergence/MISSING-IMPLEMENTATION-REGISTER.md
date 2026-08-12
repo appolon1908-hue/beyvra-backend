@@ -9,4 +9,3 @@
 | uniform V2 cursor/resume contract | registry claims replay but recovery differs by consumer | open |
 | canonical reconciliation for every authority | several missions exist only on branches | open |
 | one global kill-switch hierarchy | environment, DB and mission controls coexist | open |
-

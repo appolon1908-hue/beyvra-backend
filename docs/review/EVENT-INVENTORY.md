@@ -10,4 +10,3 @@
 | Provider market data | governed provider pipeline | `market.*` | bridge/frontend | implemented on unmerged mission stack |
 
 Canonical event identity must be the authoritative outbox UUID with `Nats-Msg-Id`; every business-effect consumer requires a durable inbox or equivalent unique database claim.
-

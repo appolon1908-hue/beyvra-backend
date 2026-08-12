@@ -10,4 +10,3 @@
 | `LIVE_TRADING_ENABLED` | PROBABLY_DEAD | full branch/config search |
 
 Nothing classified `UNKNOWN` or `LEGACY_IN_USE` is authorized for deletion.
-

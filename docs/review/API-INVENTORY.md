@@ -19,4 +19,3 @@ Static extraction found 318 backend route declarations across HTTP and WebSocket
 Known duplicates include slash/no-slash integration aliases, `deposit`/`deposite`, two demo-order registrations, two market route modules, and duplicate YAML path keys for real-wallet deposits and withdrawals.
 
 Detailed method/auth/serializer/OpenAPI/frontend-consumer status remains tracked in the conflict and missing-implementation registers because static URL declarations alone cannot prove runtime methods or authorization.
-

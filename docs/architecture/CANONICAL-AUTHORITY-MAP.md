@@ -27,4 +27,3 @@ This map records the target authority boundary. `CONFLICT` means the checked-out
 | Developer API key/OAuth scope | Backend developer platform authority | service-token/platform API mission | developer APIs/audit events | legacy admin RBAC | UNMERGED |
 
 Financial Service is separate from the application dependency chain and is never imported as an application database. Provider systems never replace platform authority.
-

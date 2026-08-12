@@ -12,4 +12,3 @@
 | CONFIG | live/real trading flag names | AUTHORITATIVE_DUPLICATION | open |
 | STATE_MACHINE | trade/order and wallet/financial lifecycles | AUTHORITATIVE_DUPLICATION | open |
 | TEST | isolated mission certification without combined candidate | TEST_SCOPE_DUPLICATION | open |
-

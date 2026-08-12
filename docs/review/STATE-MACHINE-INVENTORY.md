@@ -12,4 +12,3 @@
 | Incident | legacy security incidents, mission operational incidents, Financial Service incidents | AMBIGUOUS |
 
 Direct model `.save()` paths in legacy APIs bypass canonical transition services. Transition-level evidence and correction/reversal paths require the combined branch.
-

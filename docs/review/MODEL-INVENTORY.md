@@ -15,4 +15,3 @@ The checked-out backend defines 115 Django model classes. High-authority groups 
 | Webhook | notification and real-wallet subscriptions/deliveries plus provider/Financial Service inboxes | STRUCTURAL DUPLICATE |
 
 The application backend has no Financial PostgreSQL model or database alias. The `real_wallet` ledger is nevertheless a dormant application-owned shadow real-money implementation and is not canonical.
-

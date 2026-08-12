@@ -10,4 +10,3 @@ The checked-out backend graph is linear per installed application under Django i
 - Ordinary pairwise Git cleanliness does not establish a valid combined Django graph.
 
 Migration-from-zero, PostgreSQL 16 schema comparison, drift, rollback and reapply are certification gates after a combined candidate exists.
-
