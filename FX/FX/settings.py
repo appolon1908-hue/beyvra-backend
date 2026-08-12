@@ -200,7 +200,6 @@ INSTALLED_APPS = [
     "wsnotifications",
     "reporting",
     "integrations",
-    "real_wallet",
     "provider_governance",
     "financial_client",
     "financial_boundary",

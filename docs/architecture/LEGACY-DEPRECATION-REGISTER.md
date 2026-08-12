@@ -2,7 +2,7 @@
 
 | Component | Classification | Successor / disposition | Writable authority |
 |---|---|---|---|
-| `/api/v1/legacy-real-wallet/*` | DEPRECATED_COMPATIBILITY | `financial_boundary` canonical `/api/v1/*` money contract | none; fail closed/read projection only |
+| `real_wallet` application and former `/api/v1/legacy-real-wallet/*` | FROZEN_LEGACY | `financial_boundary` canonical `/api/v1/*` money contract | none; app is not installed/routed/imported; tables preserved pending owner-led archival |
 | `/api/wallet/*` | DEPRECATED_COMPATIBILITY | simulation wallet or Financial Service boundary by operation | demo-only; real value denied |
 | `/api/trades/*` and `trade.Trade` | DEPRECATED_COMPATIBILITY | `/api/v1/trading/*`, canonical trading/post-trade models | compatibility only |
 | `/api/payment/*` | DEPRECATED_COMPATIBILITY | Financial Service boundary | real movement denied |

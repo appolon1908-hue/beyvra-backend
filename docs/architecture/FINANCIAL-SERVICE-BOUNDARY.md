@@ -9,7 +9,7 @@ Financial Service is the only authority for real cash balances, ledger postings,
 | `FX/wallet` | LEGACY + SIMULATION | demo wallet only; legacy real-value handlers fail closed |
 | `FX/payments` | LEGACY | compatibility/provider webhook evidence; real movement disabled |
 | `FX/trade/demo_engine.py` | SIMULATION | demo orders, demo wallet projection, and demo events only |
-| `FX/real_wallet` | LEGACY + READ_MODEL | explicit legacy prefix; read/projection compatibility and fail-closed responses only |
+| `FX/real_wallet` | FROZEN LEGACY SCHEMA | not installed, routed, imported, or worker-discovered; retained only so historical source/migrations document preserved tables |
 | `FX/financial_boundary` | READ_MODEL + REAL_FINANCIAL CLIENT BOUNDARY | mTLS service calls, intent/idempotency/evidence, and projections; no local real ledger/balance mutation |
 | `FX/financial_client` | REAL_FINANCIAL CLIENT BOUNDARY | typed fail-closed transport to Financial Service only |
 | `FX/apps/trading` | SIMULATION | `SimulatedAccount`, `SimulatedReservation`, `SimulatedTrade`, and position projections |
@@ -24,6 +24,12 @@ FINANCIAL_SERVICE_OWNS=cash authority; ledger postings; real reservations; real 
 ```
 
 `post_trade.SettlementInstruction` is workflow intent. It cannot attest to monetary finality and cannot post cash or ledger entries.
+
+The former `real_wallet` application is deliberately absent from
+`INSTALLED_APPS`, root URLs, ASGI routing, and runtime imports. Its historical
+migrations are not deleted and no destructive migration drops its tables; an
+existing deployment can preserve those records while Financial Service owners
+coordinate any later archival or controlled data migration.
 
 ## Enforced safety
 

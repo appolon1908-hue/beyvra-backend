@@ -20,8 +20,6 @@ from apps.trading.repositories import transition_persisted_order
 from apps.trading.risk import RiskEngine
 from integrations.financial.client import FinancialClient
 from integrations.financial.exceptions import FinancialMutationDisabled
-from real_wallet.models import FeatureFlag
-from real_wallet.services import is_feature_enabled
 from users.models import User
 
 
@@ -259,11 +257,11 @@ class SafetyBoundaryTests(TestCase):
         with self.assertRaises(FinancialMutationDisabled):
             client.reserve_funds()
 
-    def test_database_flag_cannot_bypass_application_real_money_kill_switch(self):
-        FeatureFlag.objects.update_or_create(
-            key="real_wallet_deposits_enabled", defaults={"enabled": True}
-        )
-        self.assertFalse(is_feature_enabled("real_wallet_deposits_enabled"))
+    def test_legacy_shadow_ledger_is_not_installed_or_routed(self):
+        self.assertNotIn("real_wallet", settings.INSTALLED_APPS)
+        from FX import urls
+
+        self.assertNotIn("legacy-real-wallet", "\n".join(str(pattern.pattern) for pattern in urls.urlpatterns))
 
     def test_production_test_otp_route_is_not_resolved(self):
         from users import google_urls

@@ -21,7 +21,6 @@ from wsnotifications.routing import websocket_urlpatterns as wsnotifications_web
 from portfolio.routing import websocket_urlpatterns as portfolio_websocket_urlpatterns  # noqa
 from ws.routing import websocket_urlpatterns as ws_websocket_urlpatterns  # noqa
 from ws.channels_auth import CustomTokenAuthMiddleware  # noqa
-from real_wallet.routing import websocket_urlpatterns as real_wallet_websocket_urlpatterns
 from ws.gateway import CanonicalGatewayConsumer
 
 canonical_gateway_routes = [
@@ -40,7 +39,6 @@ application = ProtocolTypeRouter(
                 + portfolio_websocket_urlpatterns
                 + ws_websocket_urlpatterns
                 + wsnotifications_websocket_urlpatterns
-                + real_wallet_websocket_urlpatterns
             )
         ),
     }
