@@ -18,11 +18,10 @@ The only canonical market dialect is dotted, symbol-first V2 (`market.{symbol}.<
 | `simulation.execution.{account_id}` | 1 | trading outbox bridge | account clients | yes | yes | 100 / 300s | `/api/v1/trading/trades` |
 | `simulation.position.{account_id}` | 1 | trading outbox bridge | account clients | yes | yes | 100 / 300s | `/api/v1/trading/positions` |
 | `simulation.execution-quality.{account_id}` | 1 | execution authority | account clients | yes | yes | 100 / 300s | `/api/v1/execution/reports` |
-| `wallet.balance.{account_id}` | 1 | simulation projection bridge | account clients | yes | yes | 100 / 300s | `/api/v1/demo/wallet` |
 | `notification.{user_id}` | 1 | notification authority | user clients | yes | yes | 100 / 300s | `/api/v1/notifications/` |
 | `account.security.{user_id}` | 1 | account security authority | user clients | yes | yes | 100 / 300s | `/api/v1/session` |
 | `treasury.{tenant_id}` | 1 | treasury simulation read model | tenant clients | yes | no | 100 / 300s | `/api/v1/treasury/liquidity` |
 | `institutional.subaccount.updated.v1.{user_id}` | 1 | institutional projection | institutional user clients | yes | yes | 100 / 300s | `/api/v1/institutional/account/hierarchy` |
 | `system.status` | 1 | platform operations | public clients | no | no | none | `/api/v1/realtime/v2/health` |
 
-Legacy direct-gateway demo channels remain temporary compatibility-only channels for existing isolated demo tests. They do not define market-data channel syntax and must not be added to new frontend subscriptions.
+Legacy direct-gateway demo channels are retired and are not accepted by new frontend subscriptions.

@@ -333,11 +333,6 @@ CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
-    'settle_demo_orders': {
-        'task': 'api_trade.tasks.settle_demo_orders',
-        'schedule': 5.0,
-    },
-
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
         'schedule': crontab(minute="*/1"),

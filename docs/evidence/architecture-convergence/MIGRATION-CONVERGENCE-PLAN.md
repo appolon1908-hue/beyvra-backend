@@ -42,3 +42,14 @@ reapply -> latest
 makemigrations --check --dry-run -> no drift
 showmigrations/graph leaf count -> one canonical_trading leaf
 ```
+
+## Exact-candidate result (2026-08-12)
+
+- PostgreSQL server: 16 (disposable database `beyvra_convergence_cert_20260812`).
+- Current roots: 34 application/framework roots reported by `MigrationLoader`.
+- Current `canonical_trading` leaf: `0009_merge_converged_trading_graph`.
+- Conflicts reported by `MigrationLoader.detect_conflicts()`: `{}`.
+- Empty database to latest: PASS.
+- Reversible tranche (`valuation` latest to zero): PASS.
+- Reapply to latest: PASS.
+- `makemigrations --check --dry-run`: `No changes detected`.

@@ -21,7 +21,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import GuestDemoSessionView, ManageUserView, SessionResolveView
-from trade.demo_engine import DemoConfigView, DemoOrderView, DemoTradeListView, DemoWalletRefillView, DemoWalletView, WorkspaceBootstrapView
+from trade.demo_engine import DemoConfigView, WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
 from users import urls as user_urls
@@ -45,11 +45,7 @@ urlpatterns = [
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
-    path("api/v1/demo/orders", DemoOrderView.as_view(), name="demo_order_v1"),
     path("api/v1/demo/config", DemoConfigView.as_view(), name="demo_config_v1"),
-    path("api/v1/demo/trades", DemoTradeListView.as_view(), name="demo_trades_v1"),
-    path("api/v1/demo/wallet/refill", DemoWalletRefillView.as_view(), name="demo_wallet_refill_v1"),
-    path("api/v1/demo/wallet", DemoWalletView.as_view(), name="demo_wallet_v1"),
     path("api/v1/realtime/v2/connection-token", realtime_v2.connection_token, name="realtime_v2_connection_token"),
     path("api/v1/realtime/v2/subscription-token", realtime_v2.subscription_token, name="realtime_v2_subscription_token"),
     path("api/v1/realtime/v2/authorize-subscription", realtime_v2.authorize_subscription, name="realtime_v2_authorize_subscription"),
@@ -84,9 +80,7 @@ urlpatterns = [
     path("api/v1/news/<str:article_id>", news_views.news_detail_v1, name="news_detail_v1"),
     path("api/v1/economic-calendar", news_views.economic_calendar_v1, name="economic_calendar_v1"),
     path("api/", include("api_trade.urls")),
-    path("api/wallet/", include("wallet.urls")),
     path("api/notification/", include("notifications.urls")),
-    path("api/payment/", include("payments.urls")),
     path("api/news/", include("news_app.urls")),
     path("api/admin/", include("users.admin_urls")),
     path("api/admin/", include("tickets.admin_urls")),
