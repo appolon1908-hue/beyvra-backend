@@ -136,14 +136,11 @@ class GetUserView(APIView):
     """Get a user from the system."""
 
     def get(self, request, id):
-        user = request.user
-
-        try:
-            user = User.objects.get(id=id)
-        except User.DoesNotExist:
-            return Response(
-                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
-            )
+        if str(request.user.pk) != str(id) and not request.user.is_staff:
+            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+        user = User.objects.filter(id=id).first()
+        if not user:
+            return Response({"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
@@ -279,6 +276,7 @@ class PasswordResetRequestView(APIView):
 
     serializer_class = PasswordResetRequestSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "password_reset"
 
     @extend_schema(
         request=PasswordResetRequestSerializer,
@@ -424,6 +422,7 @@ class EnableMFAView(generics.GenericAPIView):
 
 
 class VerifyMFAView(generics.GenericAPIView):
+    throttle_scope = "mfa_verify"
     permission_classes = [permissions.AllowAny]
     serializer_class = AuthSerializer
 
@@ -494,6 +493,7 @@ def websocket_ticket(request):
 class LoginView(generics.CreateAPIView):
     serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "login"
 
     @extend_schema(
         request=LoginSerializer,

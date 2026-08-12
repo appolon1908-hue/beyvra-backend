@@ -12,6 +12,7 @@ services:
       timeout: 2s
       retries: 30
     networks: [chaos]
+    stop_grace_period: 1s
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -20,6 +21,7 @@ services:
       timeout: 2s
       retries: 30
     networks: [chaos]
+    stop_grace_period: 1s
   nats:
     image: nats:2.10-alpine
     command: ["-js", "-sd", "/data", "-m", "8222"]
@@ -29,11 +31,13 @@ services:
       timeout: 2s
       retries: 30
     networks: [chaos]
+    stop_grace_period: 1s
   centrifugo:
     image: centrifugo/centrifugo:v5
     command: ["centrifugo", "--config=/centrifugo/config.json"]
     volumes: ["./fixtures/centrifugo.json:/centrifugo/config.json:ro"]
     networks: [chaos]
+    stop_grace_period: 1s
   runner:
     image: python:3.11-slim
     working_dir: /work
@@ -48,6 +52,32 @@ services:
     volumes: ["..:/work:ro", "/var/run/docker.sock:/var/run/docker.sock"]
     networks: [chaos]
     command: ["python", "-m", "unittest", "discover", "-s", "chaos/tests", "-v"]
+  api:
+    image: python:3.11-slim
+    command: ["python", "-m", "http.server", "8080"]
+    expose: ["8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080',timeout=1)"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [chaos]
+    stop_grace_period: 1s
+  outbox-worker:
+    image: python:3.11-slim
+    command: ["python", "-c", "import time; time.sleep(86400)"]
+    networks: [chaos]
+    stop_grace_period: 1s
+  execution-consumer:
+    image: python:3.11-slim
+    command: ["python", "-c", "import time; time.sleep(86400)"]
+    networks: [chaos]
+    stop_grace_period: 1s
+  realtime-bridge:
+    image: python:3.11-slim
+    command: ["python", "-c", "import time; time.sleep(86400)"]
+    networks: [chaos]
+    stop_grace_period: 1s
 networks:
   chaos:
     internal: true

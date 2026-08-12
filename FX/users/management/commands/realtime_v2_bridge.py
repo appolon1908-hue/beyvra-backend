@@ -10,6 +10,7 @@ import os
 import ssl
 import urllib.request
 import logging
+from apps.foundation.observability import NATS_RECONNECTS, REALTIME_EVENTS, REALTIME_FAILURES, WORKER_FAILURES, WORKER_RESTARTS, WORKER_UP, worker_success
 
 from django.core.management.base import BaseCommand
 
@@ -63,7 +64,9 @@ async def _bridge_stream(js, stream, subject, api_url, api_key):
                 if result.get("error"):
                     raise RuntimeError(f"CENTRIFUGO_PUBLISH_{result['error'].get('code', 'FAILED')}")
                 await msg.ack()
+                REALTIME_EVENTS.labels("trading" if stream=="TRADING_EVENTS" else "market").inc(); worker_success("realtime_bridge")
             except Exception as exc:
+                REALTIME_FAILURES.labels("dependency").inc(); WORKER_FAILURES.labels("realtime_bridge","dependency").inc()
                 logger.error("realtime bridge publish failed: %s", type(exc).__name__)
                 continue
 
@@ -80,7 +83,8 @@ async def _run():
         key_file = os.getenv("NATS_TLS_KEY_FILE")
         if cert_file and key_file:
             tls_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
-    await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context)
+    async def reconnected(): NATS_RECONNECTS.labels("realtime_bridge").inc()
+    await nc.connect(os.getenv("NATS_URL", "nats://nats:4222"), tls=tls_context,reconnected_cb=reconnected)
     js = nc.jetstream()
     try:
         await js.add_stream(name="TRADING_EVENTS", subjects=["trading.>"])
@@ -105,4 +109,7 @@ class Command(BaseCommand):
         if os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() != "true":
             self.stdout.write("V2 bridge disabled")
             return
-        asyncio.run(_run())
+        WORKER_RESTARTS.labels("realtime_bridge").inc(); WORKER_UP.labels("realtime_bridge").set(1)
+        try: asyncio.run(_run())
+        except Exception:
+            WORKER_UP.labels("realtime_bridge").set(0); WORKER_FAILURES.labels("realtime_bridge","dependency").inc(); raise

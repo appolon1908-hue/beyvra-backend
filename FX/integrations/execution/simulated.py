@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from django.conf import settings
+from .provider import ExecutionProvider
 
 
 @dataclass(frozen=True)
@@ -14,7 +15,7 @@ class SimulatedExecution:
     outcome: str = "FILL"
 
 
-class SimulatedExecutionProvider:
+class SimulatedExecutionProvider(ExecutionProvider):
     scenarios = {"IMMEDIATE_FULL_FILL", "PARTIAL_THEN_FILL", "OPEN_THEN_CANCEL", "REJECT", "EXPIRE"}
 
     def __init__(self, scenario=None):
@@ -33,7 +34,12 @@ class SimulatedExecutionProvider:
             return [SimulatedExecution(prefix + ":1", first, price, False), SimulatedExecution(prefix + ":2", order.quantity - first, price, True)]
         return [SimulatedExecution(prefix + ":1", order.quantity, price, True)]
 
+    def capabilities(self): return {"mode":"SIMULATION","network":False,"submit":True,"cancel":True,"replace":True}
+    def preview_order(self, order): return {"reference_price":str(settings.SIMULATED_EXECUTION_PRICES[order.instrument_id]),"simulation":True}
     def cancel_order(self, provider_order_id): return {"provider_order_id": str(provider_order_id), "state": "CANCELLED", "simulated": True}
+    def replace_order(self, provider_order_id, changes): return {"provider_order_id":str(provider_order_id),"state":"REPLACED","changes":dict(changes),"simulated":True}
     def get_order(self, provider_order_id): return {"provider_order_id": str(provider_order_id), "simulated": True}
-    def get_positions(self, account_ref): return []
+    def list_orders(self, account_ref): return []
+    def get_executions(self, provider_order_id): return []
+    def resolve_unknown_operation(self, client_order_id): return {"client_order_id":str(client_order_id),"state":"NOT_FOUND","simulated":True}
     def health(self): return {"state": "HEALTHY", "simulated": True, "outbound_requests": 0}

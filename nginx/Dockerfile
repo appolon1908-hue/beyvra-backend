@@ -25,6 +25,4 @@ EXPOSE 8080
 
 USER 101
 
-USER nginx
-
 CMD ["nginx", "-g", "daemon off;"]

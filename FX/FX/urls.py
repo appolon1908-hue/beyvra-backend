@@ -64,6 +64,8 @@ urlpatterns = [
     path("api/v1/", include("risk_authority.urls")),
     path("api/v1/", include("trade.market_urls")),
     path("api/v1/trading/", include("apps.trading.api.urls")),
+    path("api/v1/execution/", include("apps.trading.api.execution_urls")),
+    path("api/v1/operator/execution/", include("apps.trading.api.operator_execution_urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/operator/surveillance/", include("apps.surveillance.urls")),
     path("api/v1/post-trade/", include("apps.post_trade.urls")),
