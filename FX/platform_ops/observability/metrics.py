@@ -1,0 +1,15 @@
+from prometheus_client import Counter,Gauge,Histogram
+HTTP_REQUESTS=Counter("beyvra_http_requests_total","HTTP request count",("service","route","method","status_class","environment","mode"))
+HTTP_DURATION=Histogram("beyvra_http_request_duration_seconds","HTTP duration",("service","route","method","environment","mode"))
+WS_CONNECTIONS=Gauge("beyvra_ws_connections","Active WS connections",("service","environment","mode"))
+WS_LAG=Histogram("beyvra_ws_delivery_lag_seconds","WS delivery lag",("service","environment","mode"))
+OUTBOX_PENDING=Gauge("beyvra_outbox_pending","Pending outbox events",("service","environment"))
+OUTBOX_AGE=Gauge("beyvra_outbox_oldest_age_seconds","Oldest pending outbox age",("service","environment"))
+CONSUMER_LAG=Gauge("beyvra_consumer_lag","Consumer lag",("service","dependency","environment"))
+REDIS_DURATION=Histogram("beyvra_redis_operation_duration_seconds","Redis operation duration",("service","environment"))
+DB_POOL=Gauge("beyvra_db_pool_utilization","DB pool utilization",("service","environment"))
+DB_LOCK=Histogram("beyvra_db_lock_wait_seconds","DB lock wait",("service","environment"))
+DEPENDENCY_HEALTH=Gauge("beyvra_dependency_health","Dependency health",("service","dependency","environment"))
+KILL_SWITCH=Gauge("beyvra_kill_switch_state","Kill switch state",("service","environment","mode"))
+RELEASE_INFO=Gauge("beyvra_release_info","Release identity",("service","environment"))
+ALLOWED_LABELS={"service","route","method","status_class","dependency","environment","mode"}

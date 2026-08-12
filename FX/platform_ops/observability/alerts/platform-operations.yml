@@ -1,0 +1,28 @@
+groups:
+  - name: beyvra-platform-operations
+    rules:
+      - alert: BeyvraApiUnavailable
+        expr: up{service="web-api"} == 0
+        for: 2m
+        labels: {severity: SEV1}
+        annotations: {summary: "Beyvra API unavailable"}
+      - alert: BeyvraOutboxBacklog
+        expr: beyvra_outbox_oldest_age_seconds > 300
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "Transactional outbox is delayed"}
+      - alert: BeyvraConsumerLag
+        expr: beyvra_consumer_lag > 1000
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "Durable consumer lag exceeds policy"}
+      - alert: BeyvraDatabasePoolSaturation
+        expr: beyvra_db_pool_utilization > 0.85
+        for: 5m
+        labels: {severity: SEV2}
+        annotations: {summary: "Database pool utilization is high"}
+      - alert: BeyvraKillSwitchActive
+        expr: beyvra_kill_switch_state == 1
+        for: 0m
+        labels: {severity: SEV1}
+        annotations: {summary: "A platform kill switch is active"}

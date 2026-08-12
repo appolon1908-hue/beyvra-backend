@@ -28,6 +28,8 @@ from users import urls as user_urls
 from treasury.api import LiquidityView as InstitutionalLiquidityView
 
 urlpatterns = [
+    path("health", include("platform_ops.health.urls")),
+    path("ready", include("platform_ops.health.ready_urls")),
     path("health/", include("apps.foundation.health_urls")),
     path("", include("django_prometheus.urls")),
     path("admin/", admin.site.urls),
@@ -82,6 +84,8 @@ urlpatterns = [
     path("api/v1/treasury/", include("treasury.urls")),
     path("api/v1/institutional/liquidity", InstitutionalLiquidityView.as_view(), name="institutional_liquidity_v1"),
     path("api/v1/operator/treasury/", include("treasury.operator_urls")),
+    path("api/v1/system/", include("platform_ops.public_urls")),
+    path("api/v1/operator/system/", include("platform_ops.operator_urls")),
     path("api/internal/v1/", include("operations.operator_urls")),
 ]
 

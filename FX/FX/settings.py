@@ -84,6 +84,7 @@ LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "tr
 REAL_TRADING_ENABLED = False
 EXTERNAL_EXECUTION_ENABLED = False
 DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "local").lower()
+RELEASE_SHA = os.getenv("RELEASE_SHA", "").strip()
 SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"
 SIMULATED_TRADING_ENABLED = SIMULATED_TRADING_REQUESTED and DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATED_EXECUTION_SCENARIO = os.getenv("SIMULATED_EXECUTION_SCENARIO", "IMMEDIATE_FULL_FILL")
@@ -172,6 +173,7 @@ INSTALLED_APPS = [
     "apps.compliance",
     "operations",
     "treasury",
+    "platform_ops",
 ]
 
 # Treasury is an application-side simulation/read-model boundary. These flags
@@ -185,6 +187,8 @@ REAL_CREDIT_ENABLED = False
 REAL_SETTLEMENT_ENABLED = False
 LIVE_CUSTODY_ENABLED = False
 LIVE_CLEARING_ENABLED = False
+LIVE_BROKER_ROUTING_ENABLED = False
+FIX_LIVE_SESSION_ENABLED = False
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
