@@ -29,6 +29,11 @@ class SimulatedExecutionProvider(ExecutionProvider):
         if self.scenario == "REJECT": return [SimulatedExecution(prefix + ":reject", Decimal("0"), price, True, "REJECT")]
         if self.scenario == "EXPIRE": return [SimulatedExecution(prefix + ":expire", Decimal("0"), price, True, "EXPIRE")]
         if self.scenario == "OPEN_THEN_CANCEL": return []
+        if order.order_type == "LIMIT" and (
+            (order.side == "BUY" and price > order.limit_price)
+            or (order.side == "SELL" and price < order.limit_price)
+        ):
+            return []
         if self.scenario == "PARTIAL_THEN_FILL":
             first = Decimal("4") if order.quantity == Decimal("10") else order.quantity * Decimal("0.4")
             return [SimulatedExecution(prefix + ":1", first, price, False), SimulatedExecution(prefix + ":2", order.quantity - first, price, True)]

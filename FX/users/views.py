@@ -576,16 +576,6 @@ class GuestDemoSessionView(APIView):
         if not getattr(settings, "GUEST_DEMO_ENABLED", False) or not getattr(settings, "PAPER_TRADING_ONLY", True):
             return Response({"code": "GUEST_DEMO_DISABLED", "message": "Demo access is unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        idempotency_key = request.headers.get("Idempotency-Key", "").strip()
-        cache_key = f"guest-demo-session:{idempotency_key}" if idempotency_key else ""
-        if cache_key:
-            cached = cache.get(cache_key)
-            if cached:
-                response = Response(cached, status=status.HTTP_201_CREATED)
-                response.set_cookie("codestra_guest_session", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
-                response.set_cookie("access_token", cached["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
-                return response
-
         expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
         with transaction.atomic():
             guest = User.objects.create_user(
@@ -625,8 +615,6 @@ class GuestDemoSessionView(APIView):
         access["guest_expires_at"] = int(expires_at.timestamp())
         access.set_exp(lifetime=timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS))
         payload = {"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}
-        if cache_key:
-            cache.set(cache_key, payload, timeout=settings.GUEST_DEMO_TTL_SECONDS)
         response = Response(payload, status=status.HTTP_201_CREATED)
         response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
         response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")

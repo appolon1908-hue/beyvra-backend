@@ -18,6 +18,34 @@ from django.core.management.base import BaseCommand
 logger = logging.getLogger(__name__)
 
 
+def _normalize_envelope(stream, envelope, sequence):
+    """Convert canonical outbox envelopes into the public realtime shape."""
+    channel = envelope.get("channel")
+    event_type = str(envelope.get("event_type", ""))
+    payload = envelope.get("payload", {})
+    if stream == "TRADING_EVENTS":
+        account_ref = payload.get("account_ref") if isinstance(payload, dict) else None
+        if isinstance(account_ref, str) and account_ref.startswith("sim:"):
+            channel_account_ref = "sim-" + account_ref.removeprefix("sim:")
+            category = "execution" if event_type.startswith(("trading.execution.", "trading.trade.")) or "filled" in event_type else "position" if event_type.startswith("trading.position.") or "balance_projection" in event_type else "order"
+            channel = f"simulation.{category}.{channel_account_ref}"
+    if not isinstance(channel, str):
+        return None
+    if envelope.get("type") == "event":
+        return envelope
+    if not event_type:
+        return None
+    return {
+        **envelope,
+        "type": "event",
+        "event_type": event_type,
+        "event_version": envelope.get("schema_version", 1),
+        "channel": channel,
+        "sequence": sequence,
+        "data": payload,
+    }
+
+
 async def _bridge_stream(js, stream, subject, api_url, api_key):
     durable = f"codestra-v2-{stream.lower()}"
     try:
@@ -33,27 +61,11 @@ async def _bridge_stream(js, stream, subject, api_url, api_key):
         for msg in messages:
             try:
                 envelope = json.loads(msg.data)
-                channel = envelope.get("channel")
-                if stream == "TRADING_EVENTS":
-                    event_type = str(envelope.get("event_type", ""))
-                    payload = envelope.get("payload", {})
-                    account_ref = payload.get("account_ref") if isinstance(payload, dict) else None
-                    if isinstance(account_ref, str) and account_ref.startswith("sim:"):
-                        channel_account_ref = "sim-" + account_ref.removeprefix("sim:")
-                        category = "execution" if event_type.startswith(("trading.execution.", "trading.trade.")) or "filled" in event_type else "position" if event_type.startswith("trading.position.") or "balance_projection" in event_type else "order"
-                        channel = f"simulation.{category}.{channel_account_ref}"
-                        envelope = {
-                            **envelope,
-                            "type": event_type,
-                            "event_version": envelope.get("schema_version", 1),
-                            "channel": channel,
-                            "sequence": msg.metadata.sequence.stream,
-                            "data": payload,
-                        }
-                if not isinstance(channel, str) or envelope.get("type") != "event":
-                    if stream != "TRADING_EVENTS":
-                        await msg.ack()
-                        continue
+                envelope = _normalize_envelope(stream, envelope, msg.metadata.sequence.stream)
+                if envelope is None:
+                    await msg.ack()
+                    continue
+                channel = envelope["channel"]
                 body = json.dumps({"channel": channel, "data": envelope}).encode()
                 request = urllib.request.Request(
                     api_url, data=body, method="POST",

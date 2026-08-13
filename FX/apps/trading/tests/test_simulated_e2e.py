@@ -2,6 +2,7 @@ import uuid
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.db import close_old_connections
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -12,7 +13,7 @@ from apps.foundation.checks import financial_database_isolation
 from apps.trading.application.simulation import apply_execution, cancel, create, process_created_order
 from apps.trading.domain.orders import OrderState, TRANSITIONS, InvalidOrderTransition, transition_order
 from apps.trading.models import RiskDecision, SimulatedPosition, SimulatedReservation, SimulatedTrade, TradingOrder
-from integrations.execution.simulated import SimulatedExecution
+from integrations.execution.simulated import SimulatedExecution, SimulatedExecutionProvider
 from users.models import User
 from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
 from apps.compliance.models import ComplianceProfile
@@ -80,6 +81,16 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertEqual(list(SimulatedTrade.objects.filter(order=order).values_list("quantity", flat=True)), [Decimal("4"), Decimal("6")])
         self.assertEqual(SimulatedPosition.objects.get(instrument_id="BTC-USD").quantity, Decimal("10"))
         self.assertEqual(order.average_fill_price, Decimal("100"))
+
+    def test_non_marketable_limits_remain_open(self):
+        provider = SimulatedExecutionProvider("IMMEDIATE_FULL_FILL")
+        buy = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("99"), quantity=Decimal("1"))
+        sell = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="SELL", limit_price=Decimal("101"), quantity=Decimal("1"))
+        marketable_buy = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("100"), quantity=Decimal("1"))
+
+        self.assertEqual(provider.submit_order(buy), [])
+        self.assertEqual(provider.submit_order(sell), [])
+        self.assertEqual(provider.submit_order(marketable_buy)[0].price, Decimal("100.00"))
 
     def test_position_increase_partial_reduction_and_full_close(self):
         first = TradingOrder.objects.get(pk=self.post_order({**self.payload, "quantity": "4"}, key="position-open").json()["id"])
