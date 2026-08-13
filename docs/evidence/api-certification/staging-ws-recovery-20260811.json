@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "target": "https://staging.beyvra.com",
+  "executed_at": "2026-08-11T21:24:56Z",
+  "authenticated_principal": "synthetic_guest_demo",
+  "centrifugo_restart": "PASS",
+  "nats_restart": "PASS",
+  "authenticated_connection_before_restart": "PASS",
+  "authenticated_connection_after_restart": "PASS",
+  "readiness_after_restart": "PASS",
+  "gap_detection_unit_tests": {
+    "result": "PASS",
+    "passed": 4,
+    "failed": 0,
+    "behavior": "sequence gaps require canonical REST snapshot replacement before stream resume"
+  },
+  "lost_real_financial_events": 0,
+  "real_financial_effects": 0,
+  "result": "PASS"
+}

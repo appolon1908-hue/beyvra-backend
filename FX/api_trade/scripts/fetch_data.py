@@ -22,7 +22,6 @@ if not settings.configured:
 
 
 from api_trade.scripts.utils import get_mock_bar_data  # noqa
-from api_trade.tasks import update_active_trades  # noqa
 from ws.constants import BARS_DATA_GROUP  # noqa
 
 channel_layer = get_channel_layer()
@@ -146,7 +145,6 @@ async def run_fake_fetch_data():
             symbol,
             update_room,
         )
-        update_active_trades.delay(open=bar_data["o"], close=bar_data["c"], time=bar_data["t"])
         i += 1
         await asyncio.sleep(1)
 

@@ -1,9 +1,10 @@
 from django.urls import path
-from .views import CryptoMarketDataView, StockMarketDataView, AssetView, CreateAssetView, TotalBalanceView, TotalProfitLossView
+from .views import CryptoMarketDataView, StockMarketDataView, AssetView, CreateAssetView, TotalBalanceView, TotalProfitLossView, PortfolioSummaryView
 
 app_name = "portfolio"
 
 urlpatterns = [
+    path("summary/", PortfolioSummaryView.as_view(), name="summary"),
     path("crypto-market-data/", CryptoMarketDataView.as_view(), name="crypto-market-data"),
     path("stock-market-data/", StockMarketDataView.as_view(), name="stock-market-data"),
     path("asset/<int:id>/", AssetView.as_view(), name="asset"),

@@ -1,0 +1,51 @@
+name: beyvara-observability
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml","--storage.tsdb.retention.time=15d"]
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro","./prometheus/beyvra-alerts.yml:/etc/prometheus/rules/beyvra-alerts.yml:ro","prometheus-data:/prometheus"]
+    expose: ["9090"]
+    restart: unless-stopped
+    networks: [observability, application]
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    volumes: ["./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    expose: ["9093"]
+    restart: unless-stopped
+    networks: [observability]
+  grafana:
+    image: grafana/grafana:13.1.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+    secrets: [grafana_admin_password]
+    volumes: ["./grafana/provisioning:/etc/grafana/provisioning:ro","./grafana:/var/lib/grafana/dashboards:ro","grafana-data:/var/lib/grafana"]
+    expose: ["3000"]
+    restart: unless-stopped
+    networks: [observability]
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    environment: {DATA_SOURCE_NAME_FILE: /run/secrets/postgres_exporter_dsn}
+    secrets: [postgres_exporter_dsn]
+    expose: ["9187"]
+    networks: [observability, application]
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.77.0
+    environment: {REDIS_ADDR: redis://redis:6379, REDIS_PASSWORD_FILE: /run/secrets/redis_exporter_password}
+    secrets: [redis_exporter_password]
+    expose: ["9121"]
+    networks: [observability, application]
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.17.3
+    command: ["-varz","-jsz=all","http://nats:8222"]
+    expose: ["7777"]
+    networks: [observability, application]
+secrets:
+  grafana_admin_password: {file: "${GRAFANA_ADMIN_PASSWORD_FILE:?required}"}
+  postgres_exporter_dsn: {file: "${POSTGRES_EXPORTER_DSN_FILE:?required}"}
+  redis_exporter_password: {file: "${REDIS_EXPORTER_PASSWORD_FILE:?required}"}
+networks:
+  observability: {internal: true}
+  application: {external: true, name: "${BEYVRA_APPLICATION_NETWORK:-trading-network}"}
+volumes: {prometheus-data: {}, grafana-data: {}}

@@ -46,4 +46,4 @@ def log(
         with transaction.atomic():
             UserActivity.objects.create(**data)
     except Exception as e:
-        logger.warning(f"Error logging user update activity in middleware: {str(e)}")
+        logger.warning("Error logging user update activity in middleware")

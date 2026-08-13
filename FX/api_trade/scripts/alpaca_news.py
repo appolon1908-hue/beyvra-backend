@@ -3,17 +3,27 @@ import datetime
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from provider_governance.service import ProviderNotAvailable, resolve_provider
 
 
 def get_news(request):
     """Get the latest news from Alpaca API."""
     req = request.query_params
+    resolved = resolve_provider(
+        provider_id="alpaca_news", provider_type="FINANCIAL_NEWS", product="HEADLINES",
+        symbol="*", region="GLOBAL", request_id=request.headers.get("X-Request-ID", ""),
+        correlation_id=request.headers.get("X-Correlation-ID", ""), caller_service="alpaca-news-api",
+    )
+    if not resolved.credential_path:
+        raise ProviderNotAvailable("PROVIDER_NOT_AVAILABLE")
+    with open(resolved.credential_path, encoding="utf-8") as credential_file:
+        api_key, api_secret = credential_file.read().strip().split(":", 1)
     url = f"https://data.alpaca.markets/v1beta1/news?&limit={req.get('limit')}&sort={req.get('sort')}&include_content={req.get('include_content')}&exclude_contentless={req.get('exclude_contentless')}"  # noqa
 
     headers = {
         "accept": "application/json",
-        "APCA-API-KEY-ID": settings.API_KEY_ALPACA,
-        "APCA-API-SECRET-KEY": settings.SECRET_KEY_ALPACA,
+        "APCA-API-KEY-ID": api_key,
+        "APCA-API-SECRET-KEY": api_secret,
     }
     cached_response = cache.get(url)
     if cached_response:

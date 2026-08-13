@@ -15,6 +15,11 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError(_("The Email must be set"))
         email = self.normalize_email(email)
+        # Optional phone identities (for example verified OIDC accounts) must
+        # use SQL NULL. Persisting an empty string would make the unique phone
+        # constraint reject every phone-less user after the first one.
+        if not extra_fields.get("phone_number"):
+            extra_fields["phone_number"] = None
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save()

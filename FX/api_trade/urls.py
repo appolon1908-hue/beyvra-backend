@@ -70,7 +70,12 @@ urlpatterns = [
 ]
 
 # Paper deployments expose read-only market data but never broker order routes.
-if settings.PAPER_TRADING_ONLY:
+if (
+    settings.PAPER_TRADING_ONLY
+    or not settings.REAL_TRADING_ENABLED
+    or not settings.EXTERNAL_EXECUTION_ENABLED
+    or not settings.REAL_MONEY_ENABLED
+):
     urlpatterns = [
         route for route in urlpatterns
         if route.name not in {"orders", "orders-detail", "trail-order"}

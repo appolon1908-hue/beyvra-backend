@@ -1,0 +1,15 @@
+groups:
+  - name: beyvra-compliance
+    rules:
+      - alert: ComplianceProviderUnavailable
+        expr: increase(beyvra_compliance_provider_failures_total[10m]) > 5
+      - alert: ComplianceEligibilityEngineFailures
+        expr: increase(beyvra_compliance_eligibility_engine_failures_total[5m]) > 0
+      - alert: ComplianceRestrictionEnforcementFailure
+        expr: beyvra_compliance_reconciliation_violations{kind="restricted_allowed"} > 0
+      - alert: ComplianceEventProcessingFailure
+        expr: increase(beyvra_compliance_event_processing_failures_total[5m]) > 0
+      - alert: ComplianceWebhookSignatureFailures
+        expr: increase(beyvra_compliance_webhook_signature_failures_total[5m]) > 0
+      - alert: ComplianceCaseBacklogHigh
+        expr: sum(beyvra_compliance_cases_open) > 100

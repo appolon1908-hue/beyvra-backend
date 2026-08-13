@@ -1,0 +1,1 @@
+"""Canonical Beyvra application domains."""

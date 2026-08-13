@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: Beyvra Real Wallet Boundary
+  version: 1.0.0
+  description: >-
+    Separate real-wallet and immutable-ledger boundary. All value-moving
+    features are disabled by default and return FEATURE_DISABLED until an
+    approved staging activation.
+servers:
+  - url: https://api.beyvra.com/api/v1
+    description: Beyvra production API target; real-value features remain disabled.
+paths:
+  /features/:
+    get:
+      operationId: realWalletFeatures
+      responses:
+        '200': {description: Feature states; real-value flags default false}
+  /assets/:
+    get:
+      operationId: listEnabledAssets
+      responses:
+        '200': {description: Enabled assets only}
+  /networks/:
+    get:
+      operationId: listEnabledNetworks
+      responses:
+        '200': {description: Enabled networks only}
+  /asset-networks/:
+    get:
+      operationId: listEnabledAssetNetworks
+      responses:
+        '200': {description: Enabled asset/network pairs only}
+  /status/:
+    get:
+      operationId: realWalletStatus
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Feature state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, mode, demo_isolation]
+                properties:
+                  enabled: {type: boolean, example: false}
+                  mode: {type: string, example: disabled}
+                  demo_isolation: {type: boolean, example: true}
+  /wallets/:
+    get:
+      operationId: listRealWallets
+      security: [{bearerAuth: []}]
+      responses:
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /wallets/{wallet_id}/balances/:
+    get:
+      operationId: listRealWalletBalances
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: wallet_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Tenant-scoped balance projection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: {$ref: '#/components/schemas/Balance'}
+        '404': {description: Wallet not found in caller tenant}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /wallets/{wallet_id}/addresses/:
+    get:
+      operationId: listWithdrawalAddresses
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: wallet_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Tenant-scoped saved addresses}
+        '404': {description: Wallet not found in caller tenant}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /deposits/:
+    get:
+      operationId: listDeposits
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tenant-scoped deposits}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /withdrawals/:
+    get:
+      operationId: listWithdrawals
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tenant-scoped withdrawals}
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /transfers/:
+    get:
+      operationId: listRealTransfers
+      security: [{bearerAuth: []}]
+      responses:
+        '503': {$ref: '#/components/responses/FeatureDisabled'}
+  /webhook-subscriptions/:
+    get:
+      operationId: listWebhookSubscriptions
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tenant-scoped subscriptions}
+    post:
+      operationId: createWebhookSubscription
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: {type: string, format: uri, description: HTTPS destination only}
+                description: {type: string, maxLength: 160}
+      responses:
+        '201':
+          description: Created; secret is returned only once
+        '400': {description: Validation or SSRF protection failure}
+        '403': {description: Organization membership required}
+  /webhook-subscriptions/{subscription_id}/rotate-secret/:
+    post:
+      operationId: rotateWebhookSubscriptionSecret
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: subscription_id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Replacement secret displayed once}
+        '404': {description: Subscription not found in caller tenant}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance, code, request_id, errors]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string}
+        code: {type: string, example: FEATURE_DISABLED}
+        request_id: {type: string}
+        errors: {type: array, items: {type: object}}
+    Balance:
+      type: object
+      required: [id, asset, network, posted_atomic, pending_credit_atomic, held_atomic, reserved_atomic, available_atomic]
+      properties:
+        id: {type: string, format: uuid}
+        asset:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            symbol: {type: string}
+            decimals: {type: integer}
+        network:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            code: {type: string}
+        posted_atomic: {type: string, pattern: '^[0-9]+$'}
+        pending_credit_atomic: {type: string, pattern: '^[0-9]+$'}
+        held_atomic: {type: string, pattern: '^[0-9]+$'}
+        reserved_atomic: {type: string, pattern: '^[0-9]+$'}
+        available_atomic: {type: string, pattern: '^[0-9]+$'}
+  responses:
+    FeatureDisabled:
+      description: Real-value feature is disabled
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}

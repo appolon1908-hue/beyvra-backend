@@ -1,0 +1,77 @@
+openapi: 3.1.0
+info:
+  title: Codestra Financial Internal API
+  version: 1.0.0-staging
+  description: Private mTLS API. Tenant and subject context are derived from the authenticated service request. All money-moving capabilities are feature-disabled.
+servers:
+  - url: https://financial-mtls:8443/internal/v1
+    description: Private staging network only
+security: [{mutualTLS: []}]
+paths:
+  /health/live:
+    get: {security: [], responses: {'200': {description: Process is live}}}
+  /health/ready:
+    get: {security: [], responses: {'200': {description: Service and database are ready}}}
+  /wallets:
+    get: {x-required-scope: financial.wallet.read, responses: {'200': {description: Tenant wallet list}, '401': {$ref: '#/components/responses/AuthenticationRequired'}, '403': {$ref: '#/components/responses/AuthorizationDenied'}}}
+  /wallets/{wallet_id}:
+    parameters: [{$ref: '#/components/parameters/WalletId'}]
+    get: {x-required-scope: financial.wallet.read, responses: {'200': {description: Tenant wallet}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /wallets/{wallet_id}/balances:
+    parameters: [{$ref: '#/components/parameters/WalletId'}]
+    get: {x-required-scope: financial.wallet.read, responses: {'200': {description: Wallet balance projections}}}
+  /deposits:
+    get: {x-required-scope: financial.deposit.read, responses: {'200': {description: Tenant deposits}}}
+  /deposits/{deposit_id}:
+    parameters: [{name: deposit_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {x-required-scope: financial.deposit.read, responses: {'200': {description: Deposit}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /withdrawals:
+    get: {x-required-scope: financial.withdrawal.read, responses: {'200': {description: Tenant withdrawals}}}
+    post: {x-required-scope: financial.withdrawal.request, parameters: [{$ref: '#/components/parameters/IdempotencyKey'}], responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /withdrawals/preview:
+    post: {x-required-scope: financial.withdrawal.request, parameters: [{$ref: '#/components/parameters/IdempotencyKey'}], responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /withdrawals/{withdrawal_id}:
+    parameters: [{name: withdrawal_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {x-required-scope: financial.withdrawal.read, responses: {'200': {description: Withdrawal}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /transfers:
+    post: {x-required-scope: financial.transfer.request, parameters: [{$ref: '#/components/parameters/IdempotencyKey'}], responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /transfers/preview:
+    post: {x-required-scope: financial.transfer.request, parameters: [{$ref: '#/components/parameters/IdempotencyKey'}], responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /ledger/transactions/{transaction_id}:
+    parameters: [{name: transaction_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {x-required-scope: financial.wallet.read, responses: {'200': {description: Ledger transaction}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /ledger/holds:
+    post: {responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /ledger/holds/{hold_id}/{action}:
+    parameters:
+      - {name: hold_id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: action, in: path, required: true, schema: {type: string, enum: [capture, release]}}
+    post: {responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /reconciliation/runs:
+    post: {responses: {'503': {$ref: '#/components/responses/FeatureDisabled'}}}
+  /reconciliation/runs/{run_id}:
+    parameters: [{name: run_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {x-required-scope: financial.reconciliation.read, responses: {'404': {$ref: '#/components/responses/NotFound'}}}
+components:
+  securitySchemes:
+    mutualTLS: {type: mutualTLS, description: Codestra staging financial client certificate}
+  parameters:
+    WalletId: {name: wallet_id, in: path, required: true, schema: {type: string, format: uuid}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 255}}
+  schemas:
+    Problem:
+      type: object
+      required: [type,title,status,detail,code,request_id,errors]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string, enum: [AUTHENTICATION_REQUIRED,AUTHORIZATION_DENIED,FEATURE_DISABLED,VALIDATION_FAILED,RESOURCE_NOT_FOUND,IDEMPOTENCY_CONFLICT,TENANT_MISMATCH,LEDGER_TRANSACTION_UNBALANCED,LEDGER_TRANSACTION_ALREADY_POSTED,LEDGER_IMMUTABLE,LEDGER_ACCOUNT_INACTIVE,INSUFFICIENT_AVAILABLE_BALANCE,HOLD_ALREADY_CAPTURED,HOLD_ALREADY_RELEASED,HOLD_INVALID_TRANSITION,DEPOSIT_ALREADY_CREDITED,DUPLICATE_BLOCKCHAIN_EVENT,WITHDRAWAL_NOT_CANCELLABLE,WITHDRAWAL_ALREADY_PROCESSED,RECONCILIATION_EXCEPTION]}
+        request_id: {type: string}
+        errors: {type: array, items: {type: object}}
+  responses:
+    AuthenticationRequired: {description: Missing or invalid mTLS service identity, content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    AuthorizationDenied: {description: Service scope denied, content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    FeatureDisabled: {description: Mutation capability disabled, content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    NotFound: {description: Tenant-scoped resource not found, content: {application/json: {schema: {$ref: '#/components/schemas/Problem'}}}}

@@ -1,9 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException, ValidationError
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from rest_framework.decorators import api_view
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 from urllib.parse import urlencode
@@ -29,7 +31,7 @@ class CryptocurrencyMapView(APIView):
         api_url = os.getenv('COINMARKETCAP_URL', '')
         api_key = os.getenv('COINMARKETCAP_API_KEY', '')
         if not api_url or not api_key:
-            return Response({"detail": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable")
 
         endpoint = '/v1/cryptocurrency/map'
 
@@ -39,7 +41,7 @@ class CryptocurrencyMapView(APIView):
             start = max(1, int(request.GET.get('start', 1)))  # Ensure start is at least 1
             limit = max(1, int(request.GET.get('limit', 1000)))  # Ensure limit is positive
         except ValueError:
-            return Response({"detail": "Invalid type for 'start' or 'limit'."}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Invalid pagination parameters")
 
         sort = request.GET.get('sort', 'id')
         symbol = request.GET.get('symbol', '')
@@ -62,14 +64,14 @@ class CryptocurrencyMapView(APIView):
         }
 
         try:
+            authorize_coinmarketcap(product="ASSET_MAP")
             response = requests.get(url, headers=headers)
             response_data = response.json()
         except requests.RequestException as e:
-            return Response({"detail": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError:
-            return Response({"detail": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable") from e
+        except ValueError as e:
+            raise APIException("Market data is temporarily unavailable") from e
 
         if response.status_code == 200:
             return Response(response_data, status=status.HTTP_200_OK)
-        else:
-            return Response(response_data, status=response.status_code)
+        raise APIException("Market data is temporarily unavailable")

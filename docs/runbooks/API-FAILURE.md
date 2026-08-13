@@ -1,0 +1,2 @@
+# API Failure
+Symptoms: readiness fails, 5xx ratio or p95 rises. Dashboard: Platform Overview. Alert: BeyvraApiAvailability/Latency. Verify `/health/live`, internal `/health/ready`, DB and dependency targets. Mitigate by stopping unsafe releases and restoring the failed dependency; never enable providers. Roll back the observability deployment if it caused load. Escalate to platform and trading owners. Confirm readiness, normal 5xx/p95, and no invariant alerts.

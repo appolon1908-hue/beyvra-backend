@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -12,18 +11,18 @@ class PaymentRequestSerializer(serializers.Serializer):
 
 
 class BinancePaymentResponseSerializer(serializers.Serializer):
-    payment_url = serializers.CharField(required=False, allow_blank=True, default="https://tradx.io/")
-    qrcode_url = serializers.CharField(required=False, allow_blank=True, default="https://tradx.io/")
+    payment_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
+    qrcode_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
     order_id = serializers.IntegerField(required=False, default=1)
     merchant_trade_no = serializers.CharField(required=False, allow_blank=True, default="ABC")
     status = serializers.CharField(required=False, allow_blank=True, default="Active")
-    expiration_time = serializers.DateTimeField(required=False, default=datetime.now() + timedelta(hours=3))
+    expiration_time = serializers.DateTimeField(required=False, allow_null=True)
     currency = serializers.CharField(required=False, allow_blank=True, default=None)
     amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, default=None)
     merchant_name = serializers.CharField(required=False, allow_blank=True, default="Seaflux")
     product_name = serializers.CharField(required=False, allow_blank=True, default=None)
-    return_url = serializers.CharField(required=False, allow_blank=True, default="https://tradx.io/")
-    cancel_url = serializers.CharField(required=False, allow_blank=True, default="https://tradx.io/")
+    return_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
+    cancel_url = serializers.CharField(required=False, allow_blank=True, default="https://beyvra.com/")
 
 
 class PaymentMethodSerializer(serializers.ModelSerializer):

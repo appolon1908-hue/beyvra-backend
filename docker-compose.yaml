@@ -8,7 +8,7 @@ services:
 
   web:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: ./web-init-prod.sh
     restart: unless-stopped
     env_file:
@@ -18,6 +18,8 @@ services:
     volumes:
       - static_files:/app/static
       - ./media:/app/media
+      - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
     depends_on:
       static-init:
         condition: service_completed_successfully
@@ -27,16 +29,23 @@ services:
         condition: service_healthy
     networks:
       - fx-network
+      - financial-api
 
   daphne:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     expose:
       - 8001
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     depends_on:
       - web
     extra_hosts:
@@ -87,6 +96,10 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     expose:
       - 6379
     environment:
@@ -102,13 +115,173 @@ services:
       timeout: 5s
       retries: 10
 
+  nats:
+    image: nats:2.10.22-alpine
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    expose:
+      - "4222"
+      - "8222"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - nats_data:/data
+      - ./infra/realtime-v2/nats.conf:/etc/nats/nats.conf:ro
+      - ./infra/realtime-v2/tls:/etc/nats/tls:ro
+    networks:
+      - fx-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8222/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6.2.0
+    restart: unless-stopped
+    command: ["sh", "-c", "export CENTRIFUGO_BROKER_NATS_TLS_SERVER_CA_PEM=\"$$(cat /etc/centrifugo/tls/ca.crt)\"; export CENTRIFUGO_BROKER_NATS_TLS_CERT_PEM=\"$$(cat /etc/centrifugo/tls/client.crt)\"; export CENTRIFUGO_BROKER_NATS_TLS_KEY_PEM=\"$$(cat /etc/centrifugo/tls/client.key)\"; exec centrifugo -c /etc/centrifugo/config.json"]
+    expose:
+      - "8000"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    environment:
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?CENTRIFUGO_TOKEN_HMAC_SECRET is required}
+      CENTRIFUGO_CLIENT_SUBSCRIPTION_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?CENTRIFUGO_TOKEN_HMAC_SECRET is required}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+      CENTRIFUGO_HEALTH_ENABLED: "true"
+      CENTRIFUGO_PROMETHEUS_ENABLED: "true"
+      CENTRIFUGO_BROKER_ENABLED: "true"
+      CENTRIFUGO_BROKER_TYPE: nats
+      CENTRIFUGO_BROKER_NATS_URL: nats://nats:4222
+      CENTRIFUGO_BROKER_NATS_TLS_ENABLED: "true"
+      CENTRIFUGO_BROKER_NATS_TLS_SERVER_NAME: nats
+      CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:?CENTRIFUGO_PROXY_SECRET is required}
+      CENTRIFUGO_CHANNEL_PROXY_SUBSCRIBE_HTTP_STATIC_HEADERS: '{"X-Codestra-Proxy-Secret":"${CENTRIFUGO_PROXY_SECRET}","X-Forwarded-Proto":"https","Host":"staging.beyvra.com"}'
+    volumes:
+      - ./infra/realtime-v2/centrifugo.json:/etc/centrifugo/config.json:ro
+      - ./infra/realtime-v2/tls/ca.crt:/etc/centrifugo/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.crt:/etc/centrifugo/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.key:/etc/centrifugo/tls/client.key:ro
+    networks:
+      - fx-network
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8000/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  realtime_bridge:
+    image: ${BACKEND_IMAGE:-backend-app:local}
+    command: python manage.py realtime_v2_bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
+      CENTRIFUGO_PUBLISH_URL: http://centrifugo:8000/api/publish
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+    depends_on:
+      nats:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
+    networks:
+      - fx-network
+
+  demo-event-publisher:
+    image: ${BACKEND_IMAGE:-backend-app:local}
+    command: python manage.py publish_demo_events
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
+    depends_on:
+      nats:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
+    networks:
+      - fx-network
+
+  canonical-outbox-publisher:
+    image: ${BACKEND_IMAGE:-backend-app:local}
+    command: python manage.py publish_outbox
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
+    depends_on:
+      nats:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
+    networks:
+      - fx-network
+
+  simulated-execution-consumer:
+    image: ${BACKEND_IMAGE:-backend-app:local}
+    command: python manage.py consume_simulated_orders
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NATS_URL: tls://nats:4222
+      NATS_TLS_CA_FILE: /etc/nats/tls/ca.crt
+      NATS_TLS_CERT_FILE: /etc/nats/tls/client.crt
+      NATS_TLS_KEY_FILE: /etc/nats/tls/client.key
+    depends_on:
+      nats:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - ./infra/realtime-v2/tls/ca.crt:/etc/nats/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/etc/nats/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/etc/nats/tls/client.key:ro
+    networks:
+      - fx-network
+
   celery_worker:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     entrypoint: ["./worker-entrypoint.sh"]
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:
@@ -117,11 +290,13 @@ services:
 
   celery_beat:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     entrypoint: ["./beat-entrypoint.sh"]
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:
@@ -149,11 +324,13 @@ services:
 
   chart-data-publisher:
     image: ${BACKEND_IMAGE:-backend-app:local}
-    build: ./FX
+    build: {context: ., dockerfile: FX/Dockerfile}
     command: python3 api_trade/scripts/fetch_data.py
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
     networks:
       - fx-network
     depends_on:
@@ -167,21 +344,28 @@ services:
       args:
         CONFIG_FILE: nginx.prod.conf.template
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
-      - "127.0.0.1:${PORT}:80"
+      - "127.0.0.1:${PORT}:8080"
     volumes:
       - static_files:/app/static
       - ./media:/app/media
     environment:
       - WEB_HOST=web:8000
       - DAPHNE_HOST=daphne:8001
+      - CENTRIFUGO_HOST=centrifugo:8000
+      - PUBLIC_SERVER_NAME=${PUBLIC_SERVER_NAME:-staging.beyvra.com}
     networks:
       - fx-network
     depends_on:
       - web
       - daphne
+      - centrifugo
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -199,6 +383,7 @@ services:
       - "--statsd.mapping-config=/statsd/statsd.conf"
     networks:
       - fx-network
+      - monitoring
     depends_on:
       - web
 
@@ -206,8 +391,14 @@ volumes:
   static_files:
   postgres_data:
   redis_data:
+  nats_data:
 
 networks:
   fx-network:
-    name: trading-network
     driver: bridge
+  financial-api:
+    external: true
+    name: codestra-financial-staging_financial-api
+  monitoring:
+    external: true
+    name: codestra-observability_monitoring

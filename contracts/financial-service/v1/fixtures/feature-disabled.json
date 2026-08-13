@@ -1,0 +1,9 @@
+{
+  "type": "https://errors.codestra.example/feature-disabled",
+  "title": "Feature disabled",
+  "status": 503,
+  "detail": "This financial capability is disabled.",
+  "code": "FEATURE_DISABLED",
+  "request_id": "fixture-request-id",
+  "errors": []
+}

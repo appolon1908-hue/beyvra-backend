@@ -1,0 +1,35 @@
+{
+  "api_version": "v1",
+  "openapi_info_version": "1.0.0-staging",
+  "required_security_scheme": "mutualTLS",
+  "operations": [
+    {"path": "/health/live", "method": "get", "responses": ["200"]},
+    {"path": "/health/ready", "method": "get", "responses": ["200"]},
+    {"path": "/wallets", "method": "get", "scope": "financial.wallet.read", "responses": ["200", "401", "403"]},
+    {"path": "/wallets/{wallet_id}", "method": "get", "scope": "financial.wallet.read", "responses": ["200", "404"]},
+    {"path": "/wallets/{wallet_id}/balances", "method": "get", "scope": "financial.wallet.read", "responses": ["200"]},
+    {"path": "/deposits", "method": "get", "scope": "financial.deposit.read", "responses": ["200"]},
+    {"path": "/deposits/{deposit_id}", "method": "get", "scope": "financial.deposit.read", "responses": ["200", "404"]},
+    {"path": "/withdrawals", "method": "get", "scope": "financial.withdrawal.read", "responses": ["200"]},
+    {"path": "/withdrawals", "method": "post", "scope": "financial.withdrawal.request", "idempotency_required": true, "responses": ["503"]},
+    {"path": "/transfers", "method": "post", "scope": "financial.transfer.request", "idempotency_required": true, "responses": ["503"]},
+    {"path": "/ledger/transactions/{transaction_id}", "method": "get", "scope": "financial.wallet.read", "responses": ["200", "404"]}
+  ],
+  "required_error_codes": [
+    "AUTHENTICATION_REQUIRED",
+    "AUTHORIZATION_DENIED",
+    "FEATURE_DISABLED",
+    "VALIDATION_FAILED",
+    "RESOURCE_NOT_FOUND",
+    "IDEMPOTENCY_CONFLICT",
+    "TENANT_MISMATCH",
+    "INSUFFICIENT_AVAILABLE_BALANCE"
+  ],
+  "required_absent_operations": [
+    {"path": "/reservations", "method": "post", "reason": "owner contract required"},
+    {"path": "/reservations/{reservation_id}/release", "method": "post", "reason": "owner contract required"},
+    {"path": "/settlements", "method": "post", "reason": "owner contract required"},
+    {"path": "/deposits", "method": "post", "reason": "owner contract required"},
+    {"path": "/operations/{reference}", "method": "get", "reason": "owner contract required"}
+  ]
+}

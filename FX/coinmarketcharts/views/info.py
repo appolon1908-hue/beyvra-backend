@@ -1,9 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from dotenv import load_dotenv
 import os
 import requests
+from coinmarketcharts.governance import authorize_coinmarketcap
 from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiTypes
 
 load_dotenv()
@@ -81,7 +83,7 @@ class CryptocurrencyInfoView(APIView):
         api_key = os.getenv("COINMARKETCAP_API_KEY", '')
 
         if not api_key or not api_url:
-            return Response({"error": "API configuration is missing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable")
 
         # Headers
         headers = {
@@ -111,14 +113,14 @@ class CryptocurrencyInfoView(APIView):
 
         try:
             # Make the API request
+            authorize_coinmarketcap(product="ASSET_INFO", symbol=str(filtered_params.get("symbol", "*")))
             response = requests.get(api_url, headers=headers, params=filtered_params)
             response_data = response.json()
 
             if response.status_code == 200:
                 return Response(response_data, status=status.HTTP_200_OK)
-            else:
-                return Response(response_data, status=response.status_code)
+            raise APIException("Market data is temporarily unavailable")
         except requests.RequestException as e:
-            return Response({"error": f"Error connecting to the API: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError:
-            return Response({"error": "Invalid response from the API."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise APIException("Market data is temporarily unavailable") from e
+        except ValueError as e:
+            raise APIException("Market data is temporarily unavailable") from e

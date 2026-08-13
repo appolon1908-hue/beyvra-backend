@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from provider_governance.service import resolve_provider
 from uuid import UUID
 
 from alpaca.data.historical import CryptoHistoricalDataClient
@@ -70,6 +71,14 @@ class AlpacaIntegrationAccount:
         """Get calendar."""
         start = request.query_params.get("start", None)
         end = request.query_params.get("end", None)
+
+        resolve_provider(
+            provider_id="alpaca_calendar", provider_type="ECONOMIC_CALENDAR",
+            product="MARKET_SESSIONS", symbol="*", region="US",
+            request_id=request.headers.get("X-Request-ID", ""),
+            correlation_id=request.headers.get("X-Correlation-ID", ""),
+            caller_service="calendar-api",
+        )
 
         redis_dates_filters = f"calendar_{start}_{end}"
         cached = cache.get(redis_dates_filters)
@@ -277,8 +286,8 @@ class AlpacaIntegrationAssets:
             )
             asset = asset.model_dump()
             return asset, None
-        except Exception as e:
-            return None, str(e)
+        except Exception:
+            return None, "External execution request failed"
 
     def add_asset_to_watchlist_by_id(self, asset_id):
         """Get asset by id."""

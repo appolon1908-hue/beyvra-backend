@@ -12,16 +12,42 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import json
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _provider_credential(name: str) -> str:
+    """Load a provider credential from one environment or mounted-file source."""
+    value = os.getenv(name, "").strip()
+    file_reference = os.getenv(f"{name}_FILE", "").strip()
+    if value and file_reference:
+        raise ImproperlyConfigured(f"Configure only one source for {name}")
+    if not file_reference:
+        return value
+    try:
+        secret = Path(file_reference).read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ImproperlyConfigured(f"Unable to read configured secret file for {name}") from exc
+    if not secret:
+        raise ImproperlyConfigured(f"Configured secret file for {name} is empty")
+    return secret
+
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
-PAPER_TRADING_ONLY = os.getenv("PAPER_TRADING_ONLY", "true").lower() in {"1", "true", "yes"}
+NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
+# This candidate is structurally paper/simulation-only. Environment input may
+# not expose legacy broker mutation routes.
+PAPER_TRADING_ONLY = True
+DEMO_MARKET_FIXTURE_ENABLED = False
+REAL_WALLET_REQUIRE_MFA = os.getenv("REAL_WALLET_REQUIRE_MFA", "true").lower() in {"1", "true", "yes"}
+GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
+GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,11 +57,96 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
+EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+EMAIL_OTP_LENGTH = 6
+EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
+EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
+EMAIL_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("EMAIL_OTP_RESEND_COOLDOWN_SECONDS", "60"))
+EMAIL_OTP_MAX_SENDS_PER_HOUR = int(os.getenv("EMAIL_OTP_MAX_SENDS_PER_HOUR", "5"))
+EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
+STAGING_TEST_OTP_SECRET = os.getenv("STAGING_TEST_OTP_SECRET", "")
+PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
+TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
+WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
+GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
+GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
+GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
+GOOGLE_OIDC_REDIRECT_URI = os.getenv(
+    "GOOGLE_OIDC_REDIRECT_URI", "https://api.beyvra.com/api/v1/auth/google/callback"
+)
+GOOGLE_OIDC_SCOPES = os.getenv("GOOGLE_OIDC_SCOPES", "openid email profile")
+REALTIME_V2_ENABLED = os.getenv("REALTIME_V2_ENABLED", "false").lower() == "true"
+REALTIME_V2_STAGING_ENABLED = os.getenv("REALTIME_V2_STAGING_ENABLED", "false").lower() == "true"
+REALTIME_V2_V1_FALLBACK_ENABLED = os.getenv("REALTIME_V2_V1_FALLBACK_ENABLED", "true").lower() == "true"
+CENTRIFUGO_ENABLED = os.getenv("CENTRIFUGO_ENABLED", "false").lower() == "true"
+NATS_JETSTREAM_ENABLED = os.getenv("NATS_JETSTREAM_ENABLED", "false").lower() == "true"
+PRODUCTION_REALTIME_V2_ENABLED = os.getenv("PRODUCTION_REALTIME_V2_ENABLED", "false").lower() == "true"
+REAL_MONEY_ENABLED = False
+REAL_SETTLEMENT_ENABLED = False
+REAL_TAX_REPORTING_ENABLED = False
+REAL_NAV_PUBLICATION_ENABLED = False
+REAL_MARGIN_ENABLED = False
+REAL_LIQUIDATION_ENABLED = False
+LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+REAL_TRADING_ENABLED = False
+EXTERNAL_EXECUTION_ENABLED = False
+LIVE_BROKER_ROUTING_ENABLED = False
+FIX_LIVE_SESSION_ENABLED = False
+ALL_EXECUTION_HALTED = False
+DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "local").lower()
+RELEASE_SHA = os.getenv("RELEASE_SHA", "").strip()
+PAPER_TRADING_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
+SIMULATION_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
+SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"
+SIMULATED_TRADING_ENABLED = SIMULATED_TRADING_REQUESTED and DEPLOYMENT_ENV in {"local", "test", "staging"}
+SIMULATED_EXECUTION_SCENARIO = os.getenv("SIMULATED_EXECUTION_SCENARIO", "IMMEDIATE_FULL_FILL")
+SIMULATED_EXECUTION_PRICES = {"BTC-USD": "50000.00", "ETH-USD": "3000.00"}
+SIMULATED_EXECUTION_PRICE_SOURCE = os.getenv("SIMULATED_EXECUTION_PRICE_SOURCE", "deterministic_fixture")
+SIMULATED_MARKET_DATA_STALE = os.getenv("SIMULATED_MARKET_DATA_STALE", "false").lower() == "true"
+SIMULATED_EXECUTION_INLINE = os.getenv("SIMULATED_EXECUTION_INLINE", "false").lower() == "true"
+REAL_WALLET_READ_ENABLED = False
+REAL_LEVERAGE_ENABLED = False
+REAL_SHORT_SELLING_ENABLED = False
+REAL_DEPOSITS_ENABLED = False
+REAL_WITHDRAWALS_ENABLED = False
+REAL_INTERNAL_TRANSFERS_ENABLED = False
+SURVEILLANCE_ENABLED = os.getenv("SURVEILLANCE_ENABLED", "true").lower() == "true"
+SELF_TRADE_PREVENTION_ENABLED = os.getenv("SELF_TRADE_PREVENTION_ENABLED", "true").lower() == "true"
+LIVE_CLEARING_ENABLED = False
+LIVE_CUSTODIAN_SETTLEMENT_ENABLED = False
+LIVE_OMNIBUS_ENABLED = False
+LIVE_SEGREGATED_CUSTODY_ENABLED = False
+NEWSDATA_API_KEY = _provider_credential("NEWSDATA_API_KEY")
+NEWSDATA_LATEST_ENTITLED = os.getenv("NEWSDATA_LATEST_ENTITLED", "false").lower() == "true"
+NEWSDATA_CRYPTO_ENTITLED = os.getenv("NEWSDATA_CRYPTO_ENTITLED", "false").lower() == "true"
+NEWSDATA_MARKET_ENTITLED = os.getenv("NEWSDATA_MARKET_ENTITLED", "false").lower() == "true"
+NEWSDATA_SOURCES_ENTITLED = os.getenv("NEWSDATA_SOURCES_ENTITLED", "false").lower() == "true"
+NEWSDATA_ARCHIVE_ENTITLED = os.getenv("NEWSDATA_ARCHIVE_ENTITLED", "false").lower() == "true"
+NEWSDATA_DELAYED = os.getenv("NEWSDATA_DELAYED", "true").lower() == "true"
+COMPLIANCE_PROVIDER_ENABLED = False
+COMPLIANCE_POLICY_VERSION = "compliance-2026-08-11.v1"
+COMPLIANCE_WEBHOOK_SECRET = os.getenv("COMPLIANCE_WEBHOOK_SECRET", "")
+COMPLIANCE_WEBHOOK_MAX_AGE_SECONDS = 300
+COMPLIANCE_PROVIDER_RESULT_MAX_AGE_SECONDS = 86400
+PLATFORM_WEBHOOK_SECRETS = {}
+PLATFORM_WEBHOOK_EVENT_TYPES = {}
+PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "false").lower() == "true"
+GOOGLE_OIDC_TRANSACTION_TTL_SECONDS = int(os.getenv("GOOGLE_OIDC_TRANSACTION_TTL_SECONDS", "600"))
+AUTH_ALLOWED_RETURN_PATHS = ["/platform", "/platform/trades", "/platform/profile", "/platform/settings"]
+LEGAL_SERVICE_AGREEMENT_VERSION = os.getenv("LEGAL_SERVICE_AGREEMENT_VERSION", "demo-v1")
+LEGAL_PRIVACY_POLICY_VERSION = os.getenv("LEGAL_PRIVACY_POLICY_VERSION", "demo-v1")
+LEGAL_RISK_DISCLOSURE_VERSION = os.getenv("LEGAL_RISK_DISCLOSURE_VERSION", "demo-v1")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "0").lower() in {"1", "true", "yes"}
 
 ALLOWED_HOSTS = json.loads(os.getenv("ALLOWED_HOSTS"))
 CSRF_TRUSTED_ORIGINS = json.loads(os.getenv("CSRF_TRUSTED_ORIGINS"))
+PUBLIC_BRAND_NAME = os.getenv("PUBLIC_BRAND_NAME", "Beyvra")
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "https://beyvra.com").rstrip("/")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "https://api.beyvra.com").rstrip("/")
+PUBLIC_WS_URL = os.getenv("PUBLIC_WS_URL", "wss://api.beyvra.com/ws/v2/")
+PUBLIC_STATUS_URL = os.getenv("PUBLIC_STATUS_URL", "https://api.beyvra.com/health/ready").rstrip("/")
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
 CORS_ALLOWED_ORIGINS = json.loads(os.getenv("CORS_ALLOWED_ORIGINS", "[]"))
@@ -88,14 +199,43 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "wsnotifications",
     "reporting",
+    "integrations",
+    "provider_governance",
+    "financial_client",
+    "financial_boundary",
+    "reference_data",
+    "pricing_authority",
+    "risk_authority",
+    "apps.foundation",
+    "apps.trading",
+    "apps.compliance",
+    "operations",
+    "treasury",
+    "platform_ops",
+    "apps.surveillance",
+    "apps.post_trade",
+    "apps.valuation",
+    "apps.institutional",
 ]
+
+# Treasury is an application-side simulation/read-model boundary. These flags
+# are deliberately non-overridable in this candidate: live authority belongs
+# to Financial Service and separately approved providers.
+REAL_TREASURY_TRANSFERS_ENABLED = False
+REAL_CASH_MANAGEMENT_ENABLED = False
+REAL_COLLATERAL_MOVEMENT_ENABLED = False
+REAL_INTRADAY_FUNDING_ENABLED = False
+REAL_CREDIT_ENABLED = False
+LIVE_CUSTODY_ENABLED = False
 
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    "apps.foundation.middleware.CanonicalHTTPMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "middleware.deprecation.LegacyApiDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -105,6 +245,7 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "middleware.user_preferred_language.UserPreferredLanguageMiddleware",
 ]
+MIDDLEWARE.insert(0, "middleware.correlation.CorrelationIdMiddleware")
 
 ROOT_URLCONF = "FX.urls"
 
@@ -138,8 +279,30 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
+        "TEST": {
+            # Keep automated tests isolated from the staging database and
+            # allow CI to provide its own disposable database name.
+            "NAME": os.getenv("TEST_DB_NAME", "test_tradi_staging_ci"),
+        },
     }
 }
+
+# Private service boundary only. Financial PostgreSQL is intentionally absent
+# from DATABASES and its credentials must never be supplied to this process.
+FINANCIAL_SERVICE_URL = os.getenv("FINANCIAL_SERVICE_URL", "https://financial-mtls:8443")
+FINANCIAL_SERVICE_CLIENT_CERT = os.getenv("FINANCIAL_SERVICE_CLIENT_CERT", "/run/secrets/financial/client.crt")
+FINANCIAL_SERVICE_CLIENT_KEY = os.getenv("FINANCIAL_SERVICE_CLIENT_KEY", "/run/secrets/financial/client.key")
+FINANCIAL_SERVICE_CA_CERT = os.getenv("FINANCIAL_SERVICE_CA_CERT", "/run/secrets/financial/ca.crt")
+FINANCIAL_SERVICE_API_VERSION = "v1"
+FINANCIAL_SERVICE_CALLER = "codestra-application-backend"
+FINANCIAL_SERVICE_SCOPES = "financial.wallet.read financial.deposit.read financial.withdrawal.read financial.withdrawal.request financial.transfer.request financial.reconciliation.read"
+FINANCIAL_SERVICE_AUDIENCE = "financial-service"
+FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_CONNECT_TIMEOUT_SECONDS", "2"))
+FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS = float(os.getenv("FINANCIAL_SERVICE_REQUEST_TIMEOUT_SECONDS", "5"))
+FINANCIAL_SERVICE_RETRY_COUNT = int(os.getenv("FINANCIAL_SERVICE_RETRY_COUNT", "2"))
+FINANCIAL_SERVICE_OVERALL_DEADLINE_SECONDS = float(os.getenv("FINANCIAL_SERVICE_OVERALL_DEADLINE_SECONDS", "12"))
+FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_FAILURE_THRESHOLD", "5"))
+FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS = int(os.getenv("FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS", "30"))
 
 # REDIS
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)
@@ -159,32 +322,52 @@ CACHES = {
 }
 
 
-
 # CELERY
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = {"application/json"}
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TASK_SERIALIZER = "json"
-CELERY_TIMEZONE = 'UTC'
+CELERY_TIMEZONE = "UTC"
 CELERY_ENABLE_UTC = True
 
 
 CELERY_BEAT_SCHEDULE = {
-    
     'periodic_price_updates': {
         'task': 'wsnotifications.tasks.periodic_price_updates',
-        'schedule': crontab(minute="*/1")
+        'schedule': crontab(minute="*/1"),
     },
-    'send_asset_specific_updates': {
-        'task': 'wsnotifications.tasks.send_asset_specific_updates',
-        'schedule': crontab(minute="*/2")
+    "send_asset_specific_updates": {
+        "task": "wsnotifications.tasks.send_asset_specific_updates",
+        "schedule": crontab(minute="*/2"),
     },
-    'send_email_verification_reminder': {
-        'task': 'wsnotifications.tasks.send_email_verification_reminder',
-        'schedule': crontab(minute="*/1")
-    }
+    "send_email_verification_reminder": {
+        "task": "wsnotifications.tasks.send_email_verification_reminder",
+        "schedule": crontab(minute="*/1"),
+    },
+    'purge_expired_notifications': {
+        'task': 'notifications.tasks.purge_expired_notifications',
+        'schedule': crontab(hour=3, minute=15),
+    },
 }
+
+NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90"))
+WEBHOOK_TIMEOUT_SECONDS = int(os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"))
+STAGING_WEBHOOK_RECEIVER_SECRET = os.getenv("STAGING_WEBHOOK_RECEIVER_SECRET", "")
+STAGING_WEBHOOK_RECEIVER_SECRET_FILE = os.getenv("STAGING_WEBHOOK_RECEIVER_SECRET_FILE", "")
+if STAGING_WEBHOOK_RECEIVER_SECRET_FILE:
+    try:
+        STAGING_WEBHOOK_RECEIVER_SECRET = open(STAGING_WEBHOOK_RECEIVER_SECRET_FILE, "r", encoding="utf-8").read().strip()
+    except OSError:
+        STAGING_WEBHOOK_RECEIVER_SECRET = ""
+STAGING_WEBHOOK_RECEIVER_ENABLED = API_ENV == "staging" and bool(STAGING_WEBHOOK_RECEIVER_SECRET)
+DATA_ENCRYPTION_KEY_FILE = os.getenv("DATA_ENCRYPTION_KEY_FILE", "")
+API_TOKEN_PEPPER_FILE = os.getenv("API_TOKEN_PEPPER_FILE", "")
+WEBHOOK_MASTER_KEY_FILE = os.getenv("WEBHOOK_MASTER_KEY_FILE", "")
+PASSWORD_RESET_SIGNING_KEY_FILE = os.getenv("PASSWORD_RESET_SIGNING_KEY_FILE", "")
+DATA_ENCRYPTION_KEY = os.getenv("DATA_ENCRYPTION_KEY", "")
+API_TOKEN_PEPPER = os.getenv("API_TOKEN_PEPPER", "")
+WEBHOOK_MASTER_KEY = os.getenv("WEBHOOK_MASTER_KEY", "")
 
 # CHANNELS
 CHANNEL_LAYERS = {
@@ -232,6 +415,9 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = "/app/static"
+OPERATIONS_PRIVATE_ARTIFACT_ROOT = os.getenv(
+    "OPERATIONS_PRIVATE_ARTIFACT_ROOT", "/var/lib/beyvra/private-artifacts"
+)
 
 
 # Default primary key field type
@@ -240,21 +426,46 @@ STATIC_ROOT = "/app/static"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "operations.authentication.SessionBoundJWTAuthentication",
+    ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    "EXCEPTION_HANDLER": "operations.errors.BeyvraErrorMapper",
 }
+
+# Server-authoritative kill switches. Enabling requires a separately governed release.
+POLYGON_OMS_ENABLED = False
+POLYGON_OMS_PRODUCTION_ENABLED = False
+POLYGON_OMS_HALTED = True
+CROSS_CHAIN_TRANSFERS_ENABLED = False
+ALL_FINANCIAL_MUTATIONS_HALTED = True
+SUPPORT_IMPERSONATION = False
 
 if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
     ]
     REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
-        "anon": "30/minute",
-        "user": "60/minute",
+        "anon": os.getenv("ANON_RATE_LIMIT", "30/minute"),
+        "user": os.getenv("USER_RATE_LIMIT", "300/minute"),
+        "integration": "300/minute",
+        "user_create": "30/minute",
+        "import_upload": "5/hour",
+        "import_action": "10/hour",
+        "crm_inbound": "120/minute",
+        "webhook_test": "5/minute",
+        "webhook_retry": "10/hour",
+        "guest_demo": "5/hour",
+        "login": os.getenv("LOGIN_RATE_LIMIT", "10/minute"),
+        "password_reset": os.getenv("PASSWORD_RESET_RATE_LIMIT", "5/hour"),
+        "mfa_verify": os.getenv("MFA_VERIFY_RATE_LIMIT", "10/minute"),
+        "order_preview": os.getenv("ORDER_PREVIEW_RATE_LIMIT", "120/minute"),
+        "order_create": os.getenv("ORDER_CREATE_RATE_LIMIT", "60/minute"),
     }
 
 # Simple-jwt
@@ -279,7 +490,9 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_ENDPOINT_SECRET = os.getenv("STRIPE_ENDPOINT_SECRET")
 
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL", PUBLIC_SITE_URL).rstrip("/")
+SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN") or None
+CSRF_COOKIE_DOMAIN = os.getenv("CSRF_COOKIE_DOMAIN") or None
 SPECTACULAR_SETTINGS = {
     "TITLE": "Tradi Trading API",
     "DESCRIPTION": "Versioned API contract for the Tradi paper-trading platform.",
@@ -324,6 +537,7 @@ LOGGING = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "json",
         },
         "mail_admins": {
             "level": "ERROR",
@@ -331,6 +545,7 @@ LOGGING = {
             "include_html": True,
         },
     },
+    "formatters": {"json": {"()": "fx_utils.json_logging.JsonFormatter"}},
     "root": {
         "handlers": ["console"],
         "level": LOG_LEVEL,
@@ -362,8 +577,18 @@ if not DEBUG:
     PROMETHEUS_METRICS_EXPORT_PORT_RANGE = range(7001, 7100)
 
 
-NEWS_DATA_API_KEY: str = os.getenv("NEWS_DATA_API_KEY", "")
-POLYGON_API_KEY: str = os.getenv("POLYGON_API_KEY", "")
+NEWS_DATA_API_KEY: str = _provider_credential("NEWS_DATA_API_KEY")
+POLYGON_API_KEY: str = _provider_credential("POLYGON_API_KEY")
+TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+PROVIDER_CREDENTIAL_ROOT: str = os.getenv("PROVIDER_CREDENTIAL_ROOT", "/etc/codestra/providers")
+COINGECKO_API_KEY: str = _provider_credential("COINGECKO_API_KEY")
+SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
+TWELVE_DATA_REST_URL: str = os.getenv(
+    "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"
+)
+TWELVE_DATA_WEBSOCKET_URL: str = os.getenv(
+    "TWELVE_DATA_WEBSOCKET_URL", "wss://ws.twelvedata.com/v1/quotes/price"
+)
 FIXER_API_KEY: str = os.getenv("FIXER_API_KEY", "")
 
 SESSION_COOKIE_SECURE = not DEBUG
@@ -378,3 +603,12 @@ SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django's test client uses HTTP unless every call opts into TLS. Disable only
+# the redirect middleware during test execution; deployed security stays intact.
+if "test" in sys.argv:
+    SECURE_SSL_REDIRECT = False
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    REST_FRAMEWORK.pop("DEFAULT_THROTTLE_CLASSES", None)
+    REST_FRAMEWORK.pop("DEFAULT_THROTTLE_RATES", None)

@@ -62,5 +62,7 @@ class BankAccountSecurityTests(TestCase):
             secure=True,
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # Legacy wallet withdrawals are deliberately retired: callers receive
+        # no writable compatibility surface and no request is created.
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(attacker.withdrawal_requests.count(), 0)

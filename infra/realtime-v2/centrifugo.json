@@ -1,0 +1,39 @@
+{
+  "broker": {
+    "enabled": true,
+    "type": "nats",
+    "nats": {
+      "url": "nats://nats:4222",
+      "prefix": "codestra-centrifugo"
+    }
+  },
+  "client": {
+    "token": {"hmac_secret_key": "replace-at-runtime"},
+    "subscription_token": {"enabled": true, "hmac_secret_key": "replace-at-runtime"},
+    "allowed_origins": ["https://staging.beyvra.com"],
+    "connection_limit": 1000,
+    "channel_limit": 64,
+    "connection_rate_limit": 10000
+  },
+  "admin": {"enabled": false},
+  "http_api": {"key": "${CENTRIFUGO_API_KEY}"},
+  "prometheus": {"enabled": true, "handler_prefix": "/metrics"},
+  "health": {"enabled": true, "handler_prefix": "/health"},
+  "channel": {
+    "proxy": {
+      "subscribe": {
+        "endpoint": "http://web:8000/api/v1/realtime/v2/authorize-subscription",
+        "timeout": "2s"
+      }
+    },
+    "without_namespace": {
+      "history_size": 100,
+      "history_ttl": "5m",
+      "allow_subscribe_for_client": false,
+      "allow_history_for_client": true,
+      "allow_recovery": true,
+      "subscribe_proxy_enabled": true,
+      "subscribe_proxy_name": "default"
+    }
+  }
+}

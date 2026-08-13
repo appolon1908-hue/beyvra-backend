@@ -1,0 +1,39 @@
+rule_files: [beyvra-alerts.yml]
+evaluation_interval: 1m
+tests:
+- interval: 1m
+  input_series:
+  - series: 'beyvra_outbox_oldest_pending_age_seconds'
+    values: '0 0 45 45 45 45 45 45 0 0'
+  - series: 'beyvra_outbox_worker_last_success_timestamp_seconds'
+    values: '0+60x10'
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: BeyvraOutboxBacklogCritical
+    exp_alerts: []
+  - eval_time: 7m
+    alertname: BeyvraOutboxBacklogCritical
+    exp_alerts:
+    - exp_labels: {severity: critical, owner: trading}
+      exp_annotations: {summary: "Outbox publication is delayed", runbook: "docs/runbooks/OUTBOX-BACKLOG.md"}
+  - eval_time: 9m
+    alertname: BeyvraOutboxBacklogCritical
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: 'beyvra_duplicate_business_effect_detected_total'
+    values: '0 0 1 1 1'
+  - series: 'beyvra_sim_duplicate_settlement_detected_total'
+    values: '0 0 0 0 0'
+  alert_rule_test:
+  - eval_time: 1m
+    alertname: BeyvraDuplicateBusinessEffectCritical
+    exp_alerts: []
+  - eval_time: 3m
+    alertname: BeyvraDuplicateBusinessEffectCritical
+    exp_alerts:
+    - exp_labels: {severity: critical, owner: trading}
+      exp_annotations: {summary: "Duplicate business effect detected", runbook: "docs/runbooks/DUPLICATE-EFFECT-DETECTED.md"}
+  - eval_time: 8m
+    alertname: BeyvraDuplicateBusinessEffectCritical
+    exp_alerts: []

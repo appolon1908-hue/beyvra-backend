@@ -140,8 +140,13 @@ Thumbs.db
 # Environment file
 *.env
 .env.staging
+secrets/
+infra/realtime-v2/tls/
 backups/*.dump
 backups/*.tmp
+backups/*.sql
+backups/*.sql.gz
+backups/*-web-inspect.json
 venv/
 .venv/
 
@@ -149,3 +154,4 @@ venv/
 FX/dhelp_manage.py
 dhelp-docker-compose.yaml
 dhelp-docker-compose-dev.yaml
+.dr-artifacts/

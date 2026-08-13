@@ -11,6 +11,19 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from users.models import User
 from drf_spectacular.utils import extend_schema
+from rest_framework.exceptions import ValidationError
+
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
+
+
+def deny_withdrawal_mutation(user):
+    try:
+        assert_sensitive_mutation_allowed(
+            tenant_id=tenant_for(user), account=user, action="withdrawal"
+        )
+    except PermissionError as exc:
+        raise ValidationError("ACCOUNT_FROZEN") from exc
+    raise ValidationError("Real-money trading is disabled in this environment.")
 
 class BankAccountView(APIView):
     """ APIs to get, create, update and delete a bank account for a user. """
@@ -36,7 +49,7 @@ class BankAccountView(APIView):
                 bank_account_serializer.save()
                 return Response({"data": bank_account_serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
         
     @extend_schema(
         request=BankAccountSerializer,
@@ -54,7 +67,7 @@ class BankAccountView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
 
     def delete(self, request):
         try:
@@ -71,7 +84,7 @@ class BankAccountView(APIView):
             return Response({"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)
         
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Bank account request failed") from e
         
 
 class WithdrawalRequestView(APIView):
@@ -103,6 +116,7 @@ class WithdrawalRequestView(APIView):
         responses={201: WithdrawalRequestSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        deny_withdrawal_mutation(request.user)
         try:
             bank_account = BankAccount.objects.filter(
                 bank_name=request.data['bank_name'],
@@ -119,13 +133,14 @@ class WithdrawalRequestView(APIView):
             serializer.save(user=request.user, bank_account=bank_account)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Withdrawal request failed") from e
 
     @extend_schema(
         request=WithdrawalRequestSerializer,
         responses={201: WithdrawalRequestSerializer, 400: 'Bad Request'},
     )
     def patch(self, request):
+        deny_withdrawal_mutation(request.user)
         try:
             withdrawal_id = request.data.get('withdrawal_id', None)
             if not withdrawal_id:
@@ -141,7 +156,7 @@ class WithdrawalRequestView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Withdrawal request failed") from e
 
     
 class AdminBankAccountView(APIView):

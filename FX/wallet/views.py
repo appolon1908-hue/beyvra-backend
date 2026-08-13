@@ -1,11 +1,13 @@
 import json
-from django.db import transaction
+from django.db import transaction as db_transaction
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema, extend_schema_view
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+from operations.services import assert_sensitive_mutation_allowed, tenant_for
 from bank_account_app.models import WithdrawalRequest
 from wallet.models import Currency, Transaction, Wallet, ManualBalanceUpdate
 from wallet.permissions import IsOwner
@@ -33,9 +35,34 @@ from .pagination import PaginationMeta
 from decimal import Decimal
 import pycountry
 import logging
+from django.conf import settings
+from notifications.services import emit_notification
+from integrations.permissions import organization_for_request
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def simulation_wallet_mutations_enabled():
+    # The legacy wallet API is read-only. Simulation funding is owned by the
+    # explicit /api/v1/demo/wallet endpoints; real value is owned by Financial
+    # Service. Enabling mutations here would create a second balance authority.
+    return False
+
+
+def _tenant_wallet_queryset(request, queryset):
+    organization = organization_for_request(request)
+    queryset.filter(user=request.user, organization__isnull=True).update(organization=organization)
+    return queryset.filter(user=request.user, organization=organization)
+
+
+def enforce_wallet_mutation_authority(user, action):
+    try:
+        assert_sensitive_mutation_allowed(
+            tenant_id=tenant_for(user), account=user, action=action
+        )
+    except PermissionError as exc:
+        raise ValidationError("ACCOUNT_FROZEN") from exc
 
 
 class CurrencyList(generics.ListAPIView):
@@ -45,7 +72,7 @@ class CurrencyList(generics.ListAPIView):
 
 class WalletListCreateView(generics.ListCreateAPIView):
     queryset = Wallet.objects.select_related("currency").filter(
-        is_archived=False).order_by("-created_at")
+        is_archived=False, is_real=False).order_by("-created_at")
     serializer_class = WalletListSerializer
     permission_classes = [IsAuthenticated, IsOwner]
 
@@ -57,15 +84,18 @@ class WalletListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         """Fiter queryset to authenticated user."""
         queryset = self.queryset
-        queryset = queryset.filter(user=self.request.user)
+        queryset = _tenant_wallet_queryset(self.request, queryset)
         return queryset
 
 
 class WalletDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Wallet.objects.filter(is_archived=False)
+    queryset = Wallet.objects.filter(is_archived=False, is_real=False)
     serializer_class = WalletDetailSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return _tenant_wallet_queryset(self.request, self.queryset)
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -79,10 +109,13 @@ class WalletDetailView(generics.RetrieveUpdateAPIView):
 
 
 class WalletRefillView(generics.RetrieveAPIView):
-    queryset = Wallet.objects.filter(is_archived=False)
+    queryset = Wallet.objects.filter(is_archived=False, is_real=False)
     serializer_class = WalletDetailSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return _tenant_wallet_queryset(self.request, self.queryset)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -95,10 +128,13 @@ class WalletRefillView(generics.RetrieveAPIView):
 
 
 class WalletArchiveView(generics.GenericAPIView):
-    queryset = Wallet.objects.all()
+    queryset = Wallet.objects.filter(is_real=False)
     serializer_class = WalletArchivedSerializer
     lookup_field = "pk"
     permission_classes = [IsAuthenticated, IsOwner]
+
+    def get_queryset(self):
+        return _tenant_wallet_queryset(self.request, self.queryset)
 
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -179,7 +215,13 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         wallet_id = self.request.query_params.get("wallet_id")
 
         queryset = self.queryset
-        queryset = queryset.filter(wallet__user=self.request.user)
+        organization = organization_for_request(self.request)
+        Wallet.objects.filter(user=self.request.user, organization__isnull=True).update(organization=organization)
+        queryset = queryset.filter(
+            wallet__user=self.request.user,
+            wallet__organization=organization,
+            wallet__is_real=False,
+        )
 
         if date_from:
             queryset = queryset.filter(created_at__date__gte=date_from)
@@ -213,6 +255,9 @@ class DepositToWalletView(APIView):
     serializer_class = DepositSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "deposit")
+        if not simulation_wallet_mutations_enabled():
+            raise ValidationError("Real-money trading is disabled in this environment.")
         # Input Validations:
         try:
             wallet = Wallet.objects.get(id=wallet_id)
@@ -225,6 +270,8 @@ class DepositToWalletView(APIView):
             response = {
                 "detail": "You do not have permission to perform this action."}
             return Response(response, status=status.HTTP_403_FORBIDDEN)
+        if wallet.is_real:
+            return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
 
         # Validate input using the serializer
         serializer = DepositSerializer(data=request.data)
@@ -238,6 +285,30 @@ class DepositToWalletView(APIView):
         payment_method = validated_data.get('payment_method', '')
         paymentMethodTagName = validated_data.get('paymentMethodTagName', '')
         token = validated_data.get('token', '')
+
+        if settings.PAPER_TRADING_ONLY:
+            if wallet.is_real:
+                emit_notification(
+                    user_id=request.user.id, title="Deposit rejected",
+                    message="Real-money deposits are disabled in staging.", category="DEPOSIT",
+                    payload={"wallet_id": wallet.id, "status": "rejected"},
+                )
+                return Response(
+                    {"detail": "Real-money deposits are disabled in staging."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            with db_transaction.atomic():
+                locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
+                simulated = Transaction.objects.create(
+                    amount=amount, type="D", status="S", wallet=locked_wallet,
+                    gateway="demo", description="Staging demo deposit",
+                )
+                locked_wallet.balance += amount
+                locked_wallet.save(update_fields=["balance", "updated_at"])
+            return Response(
+                {"detail": "Demo deposit completed.", "transaction_id": simulated.transaction_id},
+                status=status.HTTP_200_OK,
+            )
 
         try:
             # Create a pending transaction
@@ -272,12 +343,16 @@ class DepositToWalletView(APIView):
                 result = binance_service.get_deposit_address(currency, amount)
 
             else:
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({
                     "detail": f"Unsupported payment gateway: {gateway}"},
                     status=status.HTTP_400_BAD_REQUEST)
 
             if "error" in result:
                 logger.error(f"Payment gateway error: {result['error']}")
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({
                     "detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -288,7 +363,7 @@ class DepositToWalletView(APIView):
                 }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Deposit to wallet failed: {str(e)}", exc_info=True)
+            logger.error("Deposit to wallet failed")
             return Response({
                 "detail": "An unexpected error occurred during the deposit process."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -301,6 +376,9 @@ class WithdrawFromWalletView(APIView):
     serializer_class = WithdrawSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "withdrawal")
+        if not simulation_wallet_mutations_enabled():
+            raise ValidationError("Real-money trading is disabled in this environment.")
         # Validate the incoming data using the serializer
         serializer = WithdrawSerializer(data=request.data)
         if not serializer.is_valid():
@@ -317,6 +395,40 @@ class WithdrawFromWalletView(APIView):
             return Response({
                 "detail": "You do not have permission to perform this action."},
                 status=status.HTTP_403_FORBIDDEN)
+        if wallet.is_real:
+            return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
+
+        if settings.PAPER_TRADING_ONLY:
+            if wallet.is_real:
+                emit_notification(
+                    user_id=request.user.id, title="Withdrawal rejected",
+                    message="Real-money withdrawals are disabled in staging.", category="WITHDRAWAL",
+                    payload={"wallet_id": wallet.id, "status": "rejected"},
+                )
+                return Response(
+                    {"detail": "Real-money withdrawals are disabled in staging."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            amount = Decimal(str(serializer.validated_data['amount']))
+            with db_transaction.atomic():
+                locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
+                if locked_wallet.balance < amount:
+                    emit_notification(
+                        user_id=request.user.id, title="Withdrawal rejected",
+                        message="Your withdrawal was rejected because the balance is insufficient.",
+                        category="WITHDRAWAL", payload={"wallet_id": wallet.id, "status": "rejected"},
+                    )
+                    return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+                simulated = Transaction.objects.create(
+                    amount=amount, type="W", status="S", wallet=locked_wallet,
+                    gateway="demo", description="Staging demo withdrawal",
+                )
+                locked_wallet.balance -= amount
+                locked_wallet.save(update_fields=["balance", "updated_at"])
+            return Response(
+                {"detail": "Demo withdrawal completed.", "transaction_id": simulated.transaction_id},
+                status=status.HTTP_200_OK,
+            )
 
         amount = serializer.validated_data['amount']
         gateway = serializer.validated_data['gateway']
@@ -372,17 +484,21 @@ class WithdrawFromWalletView(APIView):
                     wallet.currency, amount, address)
 
             else:
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({"detail": f"Unsupported payment gateway: {gateway}"}, status=status.HTTP_400_BAD_REQUEST)
 
             if "error" in result:
                 logger.error(f"Withdrawal error: {result['error']}")
+                transaction.status = "F"
+                transaction.save(update_fields=["status", "updated_at"])
                 return Response({"detail": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
             # Success
             return Response({"detail": "Withdrawal request successfully processed."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Withdrawal from wallet failed: {str(e)}", exc_info=True)
+            logger.error("Withdrawal from wallet failed")
             return Response({"detail": "An unexpected error occurred during the withdrawal process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -393,6 +509,9 @@ class TransferFromWalletView(APIView):
     serializer_class = TransferSerializer
 
     def post(self, request, wallet_id):
+        enforce_wallet_mutation_authority(request.user, "transfer")
+        if not simulation_wallet_mutations_enabled():
+            raise ValidationError("Real-money trading is disabled in this environment.")
         # Validate the incoming data using the serializer
         serializer = TransferSerializer(data=request.data)
         if not serializer.is_valid():
@@ -408,7 +527,7 @@ class TransferFromWalletView(APIView):
             # Lock both rows in a stable order so concurrent transfers cannot
             # spend the same balance. The source wallet must belong to the
             # authenticated user; returning 404 avoids disclosing its owner.
-            with transaction.atomic():
+            with db_transaction.atomic():
                 wallets = {
                     wallet.id: wallet
                     for wallet in Wallet.objects.select_for_update()
@@ -421,6 +540,8 @@ class TransferFromWalletView(APIView):
                     return Response({"detail": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
                 if recipient_wallet is None:
                     return Response({"detail": "Recipient wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+                if wallet.is_real or recipient_wallet.is_real:
+                    return Response({"code": "FEATURE_DISABLED", "detail": "Real balances are Financial Service authoritative."}, status=503)
                 if wallet.balance < amount:
                     return Response({"detail": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -431,7 +552,7 @@ class TransferFromWalletView(APIView):
             return Response({"detail": "Transfer successful."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Transfer from wallet failed: {str(e)}", exc_info=True)
+            logger.error("Transfer from wallet failed")
             return Response({"detail": "An unexpected error occurred during the transfer process."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -457,7 +578,7 @@ class ManualBalanceUpdateListCreateView(generics.ListCreateAPIView):
     """
     
     permission_classes = [IsAdminUser]
-    queryset = ManualBalanceUpdate.objects.all()
+    queryset = ManualBalanceUpdate.objects.filter(wallet__is_real=False)
     serializer_class = ManualBalanceUpdateSerializer
 
 
@@ -469,5 +590,5 @@ class ManualBalanceUpdateDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     
     permission_classes = [IsAdminUser]
-    queryset = ManualBalanceUpdate.objects.all()
+    queryset = ManualBalanceUpdate.objects.filter(wallet__is_real=False)
     serializer_class = ManualBalanceUpdateSerializer

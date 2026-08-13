@@ -1,0 +1,5 @@
+RESERVE_FUNDS = "reserve_funds"
+RELEASE_RESERVATION = "release_reservation"
+SETTLE_TRADE = "settle_trade"
+REQUEST_WITHDRAWAL = "request_withdrawal"
+CREATE_TRANSFER = "create_transfer"

@@ -1,44 +1,54 @@
-FROM python:3.11-slim-bookworm
+ARG PYTHON_IMAGE=python:3.11-alpine3.22
+
+FROM ${PYTHON_IMAGE} AS builder
+
+RUN apk add --no-cache --virtual .build-deps \
+        build-base \
+        libffi-dev \
+        linux-headers \
+        postgresql-dev
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+
+COPY FX/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
+    && pip install --no-cache-dir --requirement /tmp/requirements.txt \
+    && sed -i '/    Example input:/,/    :param keydata:/{ /    Example input:/!{ /    :param keydata:/!d; }; }' /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
+    && find /opt/venv -type d -name __pycache__ -prune -exec rm -rf '{}' + \
+    && find /opt/venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
+    && pip uninstall --yes pip setuptools wheel \
+    && rm -rf /root/.cache /tmp/requirements.txt
+
+FROM ${PYTHON_IMAGE} AS runtime
+
+ENV PATH="/opt/venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app/
 
-# # Install system dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-    build-essential \
-    python3-dev \
-    gcc \
-    libc-dev \
-    libffi-dev \
-    libpq-dev \
-    postgresql-client \
-    redis-tools \
-    netcat-openbsd \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system app \
-    && useradd --system --gid app --create-home app
+RUN apk upgrade --no-cache \
+    && python -m pip uninstall --yes pip setuptools wheel \
+    && rm -rf /root/.cache \
+    && addgroup --system app \
+    && adduser --system --ingroup app --home /home/app app \
+    && mkdir -p /logs \
+    && chown app:app /logs
 
-# Create logs directory
-RUN mkdir -p /logs && chown app:app /logs
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=app:app FX/ /app/
+COPY --chown=app:app contracts/ /contracts/
+COPY --chown=app:app scripts/ /scripts/
 
-# Install python dependencies
-COPY requirements.txt /app/requirements.txt
+RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
-    && pip install --no-cache-dir --requirement /app/requirements.txt \
-    && pip uninstall --yes pip setuptools wheel
-
-# Copy the source code
-COPY . /app/
-
-COPY worker-entrypoint.sh /app/worker-entrypoint.sh
-COPY beat-entrypoint.sh /app/beat-entrypoint.sh
-
-RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh \
-    && chown -R app:app /app
+ARG VCS_REF=unknown
+ARG BUILD_VERSION=unreleased
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.source="https://github.com/appolon1908-hue/trading-backend" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
+      org.opencontainers.image.created="$BUILD_DATE"
 
 USER app

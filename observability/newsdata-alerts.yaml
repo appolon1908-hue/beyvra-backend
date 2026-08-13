@@ -1,0 +1,7 @@
+groups:
+  - name: beyvra-newsdata
+    rules:
+      - {alert: NewsProviderUnavailable, expr: "sum(increase(beyvra_news_provider_failures_total{provider=\"newsdata\"}[15m])) > 5 and on() beyvra_news_provider_enabled{provider=\"newsdata\"} == 1", for: 10m}
+      - {alert: NewsIngestionFailure, expr: "sum(increase(beyvra_news_ingestion_failures_total{provider=\"newsdata\"}[15m])) > 3", for: 10m}
+      - {alert: NewsRateLimitExhaustion, expr: "sum(increase(beyvra_news_provider_rate_limited_total{provider=\"newsdata\"}[30m])) > 5", for: 10m}
+      - {alert: NewsFeedStale, expr: "time() - beyvra_news_last_success_timestamp_seconds{provider=\"newsdata\"} > 46800 and on() beyvra_news_provider_enabled{provider=\"newsdata\"} == 1", for: 15m}

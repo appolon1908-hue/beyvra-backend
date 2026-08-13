@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "RFC 6455 WebSocket handshake fixture used by the staging health probe"
+regexTarget = "match"
+regexes = [
+  '''Sec-WebSocket-Key:\s+Y2VydGlmaWNhdGlvbi10ZXN0''',
+]
+
+[[allowlists]]
+description = "Deleted generated Trivy image inventory contained the public Python image GPG key metadata"
+paths = [
+  '''^docs/evidence/disaster-recovery/latest/container-scans/backend\.json$''',
+]

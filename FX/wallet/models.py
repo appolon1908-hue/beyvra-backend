@@ -5,6 +5,7 @@ from users.models import User
 from uuid import uuid4
 from decimal import Decimal
 from .utils import ExchangeRateService
+from integrations.models import Organization
 
 def validate_file_size(file_obj):
     filesize = file_obj.size
@@ -45,13 +46,16 @@ class Wallet(TimeStampedModel):
     name = models.CharField(max_length=25, null=False, blank=False)
     currency = models.ForeignKey(Currency, blank=False, null=False, on_delete=models.RESTRICT)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE, related_name="wallets")
     balance = models.DecimalField(blank=False, null=False, decimal_places=2, max_digits=12, default=0)
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
-    is_real = models.BooleanField(default=True)
+    # Application-created wallets are demo-only unless explicitly marked.
+    # Real balances remain Financial Service authoritative.
+    is_real = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ["user", "name"]
+        unique_together = ["user", "organization", "name"]
 
     def __str__(self):
         return f"{self.user}-{self.name}"
@@ -60,6 +64,8 @@ class Wallet(TimeStampedModel):
         """
         Add funds to the wallet. Converts amount to wallet's currency if needed.
         """
+        if self.is_real:
+            raise ValidationError("FEATURE_DISABLED: real balances are Financial Service authoritative")
         rate = ExchangeRateService().get_rate(currency, self.currency)
         if rate is None:
             # Handle the case where the exchange rate is not available
@@ -73,6 +79,8 @@ class Wallet(TimeStampedModel):
         """
         Subtract funds from the wallet. Converts amount to wallet's currency if needed.
         """
+        if self.is_real:
+            raise ValidationError("FEATURE_DISABLED: real balances are Financial Service authoritative")
         rate = ExchangeRateService().get_rate(currency, self.currency)
         if rate is None:
             # Handle the case where the exchange rate is not available

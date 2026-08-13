@@ -187,7 +187,7 @@ class UserActivitiesMiddleware(MiddlewareMixin):
                 data = request.POST
             self.user_email = data.get("email")
         except Exception as e:
-            logger.warning(f"Error parsing request data in middleware: {str(e)}")
+            logger.warning("Error parsing request data in middleware")
 
         user = User.objects.filter(email__iexact=self.user_email).first()
 

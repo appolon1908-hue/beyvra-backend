@@ -1,0 +1,2 @@
+# Execution Consumer Lag
+Symptoms: JetStream lag or worker staleness. Dashboard: Trading Pipeline. Alert: BeyvraJetStreamLagWarning/BeyvraWorkerCritical. Verify durable availability, ACK pending, redeliveries, DB, and worker heartbeat. Safely restart the simulation consumer; do not purge streams. Roll back the consumer deployment if needed. Escalate to trading/platform. Confirm lag drains and reconciliation passes without duplicate trades or settlements.

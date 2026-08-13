@@ -15,7 +15,7 @@ class DashboardMetricsTestCase(APITestCase):
     def setUp(self):
         self.dashboard_metrics_url = reverse("dashboard_metrics")
         tz = timezone.get_current_timezone()
-    
+
         user1_data = {
             "first_name": 'Ronald',
             "last_name": 'Wall',
@@ -33,6 +33,7 @@ class DashboardMetricsTestCase(APITestCase):
         # Adding users        
         user1 = User.objects.create(**user1_data)
         user2 = User.objects.create(**user2_data)
+        self.user1 = user1
 
         # Create test user
         test_user_details = {
@@ -150,7 +151,7 @@ class DashboardMetricsTestCase(APITestCase):
         #self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(json.loads(response.content), expected_result, 'Returned metrics don\'t match with expected result')
-    
+
     # Test related with checking if filters are empty
 
     def test_is_categories_empty(self):
@@ -310,7 +311,8 @@ class DashboardMetricsTestCase(APITestCase):
         response = self.client.post(self.dashboard_metrics_url, payload, HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         expected_result = b'{"categories_filters":["Filter operator \\"random_string\\" is not allowed for \\"decimal\\" field"]}'
 
-        self.assertTrue(response.status_code == 400 and response.content == expected_result, 'Validation "invalid operator for field" is failed')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Filter operator "random_string" is not allowed for "decimal" field', str(response.data))
     
     def test_invalid_type_of_value_for_field(self):
         
@@ -391,7 +393,7 @@ class DashboardMetricsTestCase(APITestCase):
                                                             {
                                                                 'field': 'user',
                                                                 'operator': '=',
-                                                                'value': 1,
+                                                                'value': self.user1.id,
                                                             },
                                                             {
                                                                 'field': 'amount',
@@ -436,7 +438,7 @@ class DashboardMetricsTestCase(APITestCase):
                                                             {
                                                                 'field': 'user',
                                                                 'operator': '=',
-                                                                'value': 1,
+                                                                'value': self.user1.id,
                                                             },
                                                             {
                                                                 'field': 'last_active',
@@ -456,7 +458,7 @@ class DashboardMetricsTestCase(APITestCase):
                                                             {
                                                                 'field': 'user',
                                                                 'operator': '=',
-                                                                'value': 1,
+                                                                'value': self.user1.id,
                                                             },
                                                             {
                                                                 'field': 'asset',
@@ -493,4 +495,3 @@ class DashboardMetricsTestCase(APITestCase):
         #self.assertTrue(response.status_code == 200 and response.content == expected_result, 'Returned metrics doesn\'t match with expected result')
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(json.loads(response.content), expected_result, 'Returned metrics don\'t match with expected result')
-    

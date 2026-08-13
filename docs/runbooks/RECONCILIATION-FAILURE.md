@@ -1,0 +1,3 @@
+# Reconciliation Failure
+
+Symptoms: any reconciliation check fails or immutable evidence records violations. Dashboard: Release Readiness. Alert: BeyvraReconciliationIntegrityCritical. Run the relevant read-only scope and preserve run ID, candidate SHA, and summary hash. Stop simulated acceptance for integrity-class failures; never auto-repair, delete evidence, or touch Financial Service. Roll back the implicated release. Escalate trading/platform/security according to severity. Resume only after root cause, reviewed repair plan if needed, full PASS, and clean post-recovery audit verification.

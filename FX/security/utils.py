@@ -35,7 +35,7 @@ class PasswordPolicyValidator:
 def send_user_anomaly_alert_to_admin(user, details, dynamic_msg):
     """Send an email alert to the admin about a detected anomaly activity"""
 
-    subject = "User Suspicious Activity Detected | Tradx.io"
+    subject = "Suspicious activity detected | Beyvra"
     email_template = template.loader.get_template("user_anomaly_info.html")
 
     context = {

@@ -9,7 +9,7 @@ from wallet.models import Currency, Transaction, Wallet
 
 
 class StripeWebhookSecurityTests(TestCase):
-    def test_completed_webhook_is_idempotent(self):
+    def test_completed_webhook_is_fail_closed_without_financial_effect(self):
         user = get_user_model().objects.create_user(
             email="stripe@example.com", password="test-pass", phone_number="+12025550141"
         )
@@ -28,7 +28,9 @@ class StripeWebhookSecurityTests(TestCase):
         }
         client = APIClient()
 
-        with patch("payments.views.stripe.Webhook.construct_event", return_value=event):
+        with patch(
+            "payments.views.stripe.Webhook.construct_event", return_value=event
+        ) as stripe_construct:
             first = client.post(
                 "/api/payment/stripe_webhook/", b"{}", content_type="application/json",
                 HTTP_STRIPE_SIGNATURE="test", secure=True,
@@ -38,9 +40,12 @@ class StripeWebhookSecurityTests(TestCase):
                 HTTP_STRIPE_SIGNATURE="test", secure=True,
             )
 
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 200)
+        # The application no longer exposes provider payment webhooks; real
+        # callbacks belong at the Financial Service boundary.
+        self.assertEqual(first.status_code, 404)
+        self.assertEqual(second.status_code, 404)
+        self.assertEqual(stripe_construct.call_count, 0)
         wallet.refresh_from_db()
         transaction.refresh_from_db()
-        self.assertEqual(wallet.balance, Decimal("125.00"))
-        self.assertEqual(transaction.status, "S")
+        self.assertEqual(wallet.balance, Decimal("100.00"))
+        self.assertEqual(transaction.status, "P")

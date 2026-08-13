@@ -1,4 +1,6 @@
-FROM nginx:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.29-alpine
+
+USER root
 
 ARG CONFIG_FILE=nginx.prod.conf.template
 
@@ -16,9 +18,11 @@ RUN mkdir /etc/nginx/templates
 
 COPY $CONFIG_FILE /etc/nginx/templates
 
-RUN chgrp -R 0 /etc/nginx/conf.d && \
-    chmod -R g=u /etc/nginx/conf.d
+RUN chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/templates && \
+    chmod -R u=rwX,go=rX /etc/nginx/conf.d /etc/nginx/templates
 
-EXPOSE 80
+EXPOSE 8080
+
+USER 101
 
 CMD ["nginx", "-g", "daemon off;"]

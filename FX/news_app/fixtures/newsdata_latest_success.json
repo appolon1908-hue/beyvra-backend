@@ -1,0 +1,2 @@
+{"status":"success","totalResults":1,"results":[{"article_id":"fixture-article-1","title":"Fixture market headline","link":"https://example.invalid/articles/1","description":"Sanitized fixture summary.","content":"Sanitized fixture preview.","pubDate":"2026-08-11 08:00:00","source_id":"fixture-source","source_name":"Fixture Source","source_url":"https://example.invalid","language":"en","country":["us"],"category":["business"],"keywords":["market"]}],"nextPage":"fixture-page-token"}
+

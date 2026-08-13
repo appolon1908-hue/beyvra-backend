@@ -1,0 +1,15 @@
+groups:
+  - name: beyvra-treasury-simulation
+    rules:
+      - alert: TreasuryFundingShortfall
+        expr: increase(beyvra_treasury_funding_shortfalls_total[10m]) > 0
+        labels: {severity: warning, environment: simulation}
+        annotations: {summary: "A simulated treasury funding shortfall was detected"}
+      - alert: TreasuryLiquidityBufferBreach
+        expr: increase(beyvra_treasury_liquidity_buffer_breaches_total[10m]) > 0
+        labels: {severity: warning, environment: simulation}
+        annotations: {summary: "A simulated liquidity buffer breach was detected"}
+      - alert: TreasuryReconciliationViolation
+        expr: increase(beyvra_treasury_reconciliation_violations_total[10m]) > 0
+        labels: {severity: critical, environment: simulation}
+        annotations: {summary: "Treasury reconciliation found a discrepancy"}

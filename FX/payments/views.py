@@ -6,6 +6,7 @@ from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 from wallet.models import Transaction, Wallet
 from decimal import Decimal
 
@@ -16,6 +17,19 @@ from django.shortcuts import get_object_or_404
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+def deny_financial_mutation(user=None, action="deposit"):
+    if user is not None and user.is_authenticated:
+        from operations.services import assert_sensitive_mutation_allowed, tenant_for
+
+        try:
+            assert_sensitive_mutation_allowed(
+                tenant_id=tenant_for(user), account=user, action=action
+            )
+        except PermissionError as exc:
+            raise ValidationError("ACCOUNT_FROZEN") from exc
+    raise ValidationError("Real-money trading is disabled in this environment.")
 
 
 @extend_schema(request=PaymentRequestSerializer)
@@ -31,6 +45,7 @@ class StripeCheckoutView(APIView):
         responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        deny_financial_mutation(request.user, "deposit")
         serializer = PaymentRequestSerializer(data=request.data)
 
         if not serializer.is_valid():
@@ -107,7 +122,7 @@ class StripeCheckoutView(APIView):
             checkout_url = checkout_session.url
             checkout_session_id = checkout_session.id
         except Exception as e:
-            return Response({"error": str(e)})
+            raise ValidationError("Payment request failed") from e
 
         transaction.reference = checkout_session_id
         transaction.save(update_fields=["reference", "updated_at"])
@@ -120,6 +135,7 @@ class StripeWebhook(APIView):
     permission_classes = []
 
     def post(self, request):
+        deny_financial_mutation()
         # webhook_recieved_time = timezone.now()
         endpoint_secret = settings.STRIPE_ENDPOINT_SECRET
         payload = request.body
@@ -130,11 +146,9 @@ class StripeWebhook(APIView):
             event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
         except ValueError:
             # Invalid payload
-            # print("Error occured during processing webhook data /n", str(e))
             return Response(status=400)
         except stripe.error.SignatureVerificationError:
             # Invalid signature
-            # print("Error occured during processing webhook data /n", str(e))
             return Response(status=400)
 
         # Handle the checkout.session.completed event
@@ -151,6 +165,8 @@ class StripeWebhook(APIView):
                     if transaction.status != "P":
                         return Response(status=status.HTTP_200_OK)
                     wallet = Wallet.objects.select_for_update().get(pk=transaction.wallet_id)
+                    if wallet.is_real:
+                        return Response({"code": "FEATURE_DISABLED"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
                     if transaction.type == "D":
                         wallet.balance += transaction.amount
                     elif transaction.type == "W":
@@ -188,6 +204,7 @@ class BinancePay(APIView):
         responses={201: BinancePaymentResponseSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        deny_financial_mutation(request.user, "deposit")
         serializer = BinancePaymentResponseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         response_data = serializer.data
@@ -205,8 +222,7 @@ class PaymentView(APIView):
     """ APIs to create, update a Payment """
 
     def get(self, request):
-        # List of all payments
-        payments = Payment.objects.filter(user=request.user)
+        payments = Payment.objects.none()
         serializer = PaymentSerializer(payments, many=True)
         return Response({"data": serializer.data}, status=status.HTTP_200_OK)
     
@@ -215,6 +231,7 @@ class PaymentView(APIView):
         responses={201: PaymentSerializer, 400: 'Bad Request'},
     )
     def post(self, request):
+        deny_financial_mutation(request.user, "deposit")
         try:
             data = request.data
             serializer = PaymentSerializer(data=data, context={'request': request})
@@ -223,7 +240,7 @@ class PaymentView(APIView):
             serializer.save(user=request.user)
             return Response({"data": serializer.data}, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"data": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Payment request failed") from e
         
 
     @extend_schema(
@@ -231,6 +248,7 @@ class PaymentView(APIView):
         responses={201: PaymentSerializer, 400: 'Bad Request'},
     )
     def patch(self, request):
+        deny_financial_mutation(request.user, "deposit")
         try:
             payment_id = request.data.get('payment_id', None)
             if not payment_id:
@@ -244,7 +262,7 @@ class PaymentView(APIView):
             serializer.save()
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"Error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            raise ValidationError("Payment request failed") from e
     
 
 class DepositHistoryView(APIView):
@@ -252,7 +270,7 @@ class DepositHistoryView(APIView):
     View deposit history for authenticated users.
     """
     def get(self, request):
-        deposits = Payment.objects.filter(user=request.user, type='Deposit').order_by('-payment_date')
+        deposits = Payment.objects.none()
         serializer = PaymentSerializer(deposits, many=True)
         return Response({"data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -262,7 +280,7 @@ class WalletBalanceView(APIView):
     View wallet balance for authenticated users.
     """
     def get(self, request):
-        wallet = get_object_or_404(Wallet, user=request.user)
+        wallet = get_object_or_404(Wallet, user=request.user, is_real=False)
         return Response({"balance": wallet.balance, "currency": wallet.currency.symbol}, status=status.HTTP_200_OK)
 
 
@@ -271,8 +289,9 @@ class WalletTransferView(APIView):
     Transfer funds between wallets.
     """
     def post(self, request):
-        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'))
-        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'))
+        deny_financial_mutation(request.user, "transfer")
+        source_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('source_wallet_id'), is_real=False)
+        target_wallet = get_object_or_404(Wallet, user=request.user, id=request.data.get('target_wallet_id'), is_real=False)
         amount = Decimal(request.data.get('amount', 0))
 
         if source_wallet.balance < amount:
@@ -296,6 +315,7 @@ class PaymentProcessingView(APIView):
             responses={201: PaymentRequestSerializer, 400: 'Bad Request'},
         )
     def post(self, request):
+        deny_financial_mutation(request.user, "deposit")
         serializer = PaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
