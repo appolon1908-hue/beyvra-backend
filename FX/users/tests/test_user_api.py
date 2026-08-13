@@ -46,6 +46,14 @@ class PublicTransactionsApiTests(TestCase):
         self.assertIn("refresh", res.data)
         self.assertEqual(res.data["user"]["email"], payload["email"])
 
+    def test_multiple_email_only_users_have_distinct_identities(self):
+        first = create_user(email="oidc-one@example.com", password="testpass123")
+        second = create_user(email="oidc-two@example.com", password="testpass123", phone_number="")
+
+        self.assertIsNone(first.phone_number)
+        self.assertIsNone(second.phone_number)
+        self.assertNotEqual(first.pk, second.pk)
+
     def test_user_with_email_exists_error(self):
         """Test error returned if user with email exists."""
         payload = {

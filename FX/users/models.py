@@ -91,7 +91,13 @@ class User(AbstractUser, TimeStampedModel):
     email = models.EmailField(_("email address"), unique=True)
     first_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
     last_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
-    phone_number = models.CharField(max_length=16, validators=[PHONE_REGEX_VALIDATOR], unique=True)
+    phone_number = models.CharField(
+        max_length=16,
+        validators=[PHONE_REGEX_VALIDATOR],
+        unique=True,
+        blank=True,
+        null=True,
+    )
     profile_picture = models.ImageField(
         upload_to="user_profile_pictures",
         blank=True,
