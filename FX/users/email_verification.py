@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -83,6 +83,16 @@ def _wallet(user):
         DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=DEMO_BALANCE, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
 
 
+def _pending_registration_response(pending, email, now):
+    return Response({
+        "registrationId": f"reg_{pending.pk}",
+        "status": pending.status,
+        "maskedEmail": mask_email(email),
+        "expiresIn": max(0, int((pending.expires_at - now).total_seconds())),
+        "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+    }, status=202)
+
+
 def _activate_registration(pending, request):
     now = timezone.now()
     first, _, last = pending.display_name.partition(" ")
@@ -115,19 +125,72 @@ class EmailRegistrationView(APIView):
             return Response({"code": "REGISTRATION_INVALID", "message": "Please provide valid registration details and accept the required agreement."}, status=400)
         if User.objects.filter(email__iexact=email).exists():
             return Response({"status": "pending_email_verification", "message": "If this address can be registered, a verification code will be sent."}, status=202)
-        existing = PendingRegistration.objects.filter(email_normalized=email, status="pending_email_verification", expires_at__gt=timezone.now()).first()
-        if existing:
-            return Response({"registrationId": f"reg_{existing.pk}", "status": existing.status, "maskedEmail": mask_email(email), "expiresIn": max(0, int((existing.expires_at - timezone.now()).total_seconds())), "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS}, status=202)
         now = timezone.now()
-        code = generate_otp()
         versions = _active_legal_versions()
         versions = {key: value or "current" for key, value in versions.items()}
         with transaction.atomic():
-            pending = PendingRegistration.objects.create(email_normalized=email, display_name=display_name, password_hash=make_password(password), locale=request.data.get("locale", "en")[:16], legal_confirmation=True, legal_document_versions=versions, expires_at=now + timedelta(seconds=settings.PENDING_REGISTRATION_TTL_SECONDS), request_ip=request.META.get("REMOTE_ADDR"), request_user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000])
-            EmailVerificationChallenge.objects.create(registration=pending, email_normalized=email, otp_hash=hash_otp(code), expires_at=now + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS), max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS)
-            queue_email(event_type="email_otp_created", email=email, template_key="email_otp", payload={"code_encrypted": _encrypted_code(code), "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS // 60, "purpose": "registration"}, idempotency_key=f"otp:{pending.pk}:1", locale=pending.locale)
+            expired = PendingRegistration.objects.filter(
+                email_normalized=email,
+                status="pending_email_verification",
+                expires_at__lte=now,
+            )
+            expired_ids = list(expired.values_list("pk", flat=True))
+            if expired_ids:
+                expired.update(status="expired")
+                EmailVerificationChallenge.objects.filter(
+                    registration_id__in=expired_ids,
+                    status="active",
+                ).update(status="invalidated", invalidated_at=now)
+
+            existing = PendingRegistration.objects.filter(
+                email_normalized=email,
+                status="pending_email_verification",
+            ).first()
+            if existing:
+                return _pending_registration_response(existing, email, now)
+
+            try:
+                # The nested savepoint lets a concurrent uniqueness conflict
+                # roll back without poisoning the outer transaction.
+                with transaction.atomic():
+                    pending = PendingRegistration.objects.create(
+                        email_normalized=email,
+                        display_name=display_name,
+                        password_hash=make_password(password),
+                        locale=request.data.get("locale", "en")[:16],
+                        legal_confirmation=True,
+                        legal_document_versions=versions,
+                        expires_at=now + timedelta(seconds=settings.PENDING_REGISTRATION_TTL_SECONDS),
+                        request_ip=request.META.get("REMOTE_ADDR"),
+                        request_user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000],
+                    )
+                    code = generate_otp()
+                    EmailVerificationChallenge.objects.create(
+                        registration=pending,
+                        email_normalized=email,
+                        otp_hash=hash_otp(code),
+                        expires_at=now + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS),
+                        max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS,
+                    )
+                    queue_email(
+                        event_type="email_otp_created",
+                        email=email,
+                        template_key="email_otp",
+                        payload={"code_encrypted": _encrypted_code(code), "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS // 60, "purpose": "registration"},
+                        idempotency_key=f"otp:{pending.pk}:1",
+                        locale=pending.locale,
+                    )
+            except IntegrityError:
+                pending = PendingRegistration.objects.filter(
+                    email_normalized=email,
+                    status="pending_email_verification",
+                ).first()
+                if pending is None:
+                    raise
+                return _pending_registration_response(pending, email, now)
+
             _audit("registration_pending_email_verification", transaction_id=pending.id, result="accepted", request=request)
-        return Response({"registrationId": f"reg_{pending.pk}", "status": pending.status, "maskedEmail": mask_email(email), "expiresIn": settings.EMAIL_OTP_TTL_SECONDS, "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS}, status=202)
+            return _pending_registration_response(pending, email, now)
 
 
 def _pending_id(value):

@@ -182,6 +182,15 @@ class PendingRegistration(models.Model):
     request_ip = models.GenericIPAddressField(null=True, blank=True)
     request_user_agent = models.TextField(blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("email_normalized",),
+                condition=models.Q(status="pending_email_verification"),
+                name="unique_active_pending_registration_email",
+            ),
+        ]
+
 
 class EmailVerificationChallenge(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -199,6 +208,15 @@ class EmailVerificationChallenge(models.Model):
     invalidated_at = models.DateTimeField(null=True, blank=True)
     last_attempt_at = models.DateTimeField(null=True, blank=True)
     last_sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("registration",),
+                condition=models.Q(status="active", registration__isnull=False),
+                name="unique_active_otp_per_registration",
+            ),
+        ]
 
 
 class TransactionalEmailOutbox(models.Model):

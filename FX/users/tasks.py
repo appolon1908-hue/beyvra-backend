@@ -1,8 +1,9 @@
 import smtplib
+import logging
 from datetime import timedelta
 
 from celery import shared_task
-from users.models import PhoneVerificationCode, TransactionalEmailOutbox, User, UserDeviceInfo
+from users.models import PendingRegistration, PhoneVerificationCode, TransactionalEmailOutbox, User, UserDeviceInfo
 
 from .utils import (
     send_email_verification_email,
@@ -15,6 +16,24 @@ from .utils import (
 from .email_verification import send_outbox_message
 from django.db import transaction
 from django.utils import timezone
+
+
+logger = logging.getLogger("beyvra.transactional_email")
+
+
+def _otp_delivery_is_current(item, now):
+    if item.template_key != "email_otp":
+        return True
+    key_parts = item.idempotency_key.split(":", 2)
+    if len(key_parts) != 3 or key_parts[0] != "otp":
+        return False
+    return PendingRegistration.objects.filter(
+        pk=key_parts[1],
+        status="pending_email_verification",
+        expires_at__gt=now,
+        challenges__status="active",
+        challenges__expires_at__gt=now,
+    ).exists()
 
 
 @shared_task
@@ -65,32 +84,56 @@ def async_send_user_ban_email(user_id):
     send_user_ban_email(user)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def process_transactional_email_outbox(self):
-    item = None
-    try:
-        with transaction.atomic():
-            item = TransactionalEmailOutbox.objects.select_for_update(skip_locked=True).filter(status="pending", next_attempt_at__lte=timezone.now()).first()
-            if not item:
-                return "empty"
-            item.status = "processing"
-            item.attempt_count += 1
-            item.save(update_fields=["status", "attempt_count"])
-        result = send_outbox_message(item)
-        if result == "disabled":
-            item.status = "pending"
-            item.next_attempt_at = timezone.now() + timedelta(minutes=5)
-            item.save(update_fields=["status", "next_attempt_at"])
-            return result
-        item.status = "sent"
-        item.sent_at = timezone.now()
-        item.last_error_code = ""
-        item.save(update_fields=["status", "sent_at", "last_error_code"])
-        return "sent"
-    except Exception as exc:
-        if item is not None:
-            item.status = "dead_letter" if item.attempt_count >= 3 else "pending"
-            item.last_error_code = type(exc).__name__[:64]
-            item.next_attempt_at = timezone.now() + timedelta(minutes=2)
-            item.save(update_fields=["status", "last_error_code", "next_attempt_at"])
-        return "failed"
+@shared_task
+def process_transactional_email_outbox(batch_size=25):
+    results = {"sent": 0, "failed": 0, "disabled": 0}
+    for _ in range(max(1, min(int(batch_size), 100))):
+        item = None
+        try:
+            with transaction.atomic():
+                item = (
+                    TransactionalEmailOutbox.objects
+                    .select_for_update(skip_locked=True)
+                    .filter(status="pending", next_attempt_at__lte=timezone.now())
+                    .order_by("created_at")
+                    .first()
+                )
+                if not item:
+                    break
+                item.status = "processing"
+                item.attempt_count += 1
+                item.save(update_fields=["status", "attempt_count"])
+
+            if not _otp_delivery_is_current(item, timezone.now()):
+                item.status = "dead_letter"
+                item.last_error_code = "OTP_EXPIRED_BEFORE_DELIVERY"
+                item.save(update_fields=["status", "last_error_code"])
+                results["failed"] += 1
+                continue
+
+            result = send_outbox_message(item)
+            if result == "disabled":
+                item.status = "pending"
+                item.next_attempt_at = timezone.now() + timedelta(minutes=5)
+                item.save(update_fields=["status", "next_attempt_at"])
+                results["disabled"] += 1
+                continue
+
+            item.status = "sent"
+            item.sent_at = timezone.now()
+            item.last_error_code = ""
+            item.save(update_fields=["status", "sent_at", "last_error_code"])
+            results["sent"] += 1
+        except Exception as exc:
+            error_code = type(exc).__name__[:64]
+            if item is not None:
+                item.status = "dead_letter" if item.attempt_count >= 5 else "pending"
+                item.last_error_code = error_code
+                item.next_attempt_at = timezone.now() + timedelta(minutes=min(30, 2 ** min(item.attempt_count, 4)))
+                item.save(update_fields=["status", "last_error_code", "next_attempt_at"])
+                logger.warning(
+                    "transactional_email_delivery_failed",
+                    extra={"outbox_id": str(item.pk), "error_code": error_code, "attempt_count": item.attempt_count},
+                )
+            results["failed"] += 1
+    return results

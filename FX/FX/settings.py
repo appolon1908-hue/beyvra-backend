@@ -57,8 +57,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
-EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
-EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "false").lower() == "true"
+EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "false").lower() == "true"
 EMAIL_OTP_LENGTH = 6
 EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
 EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
@@ -349,6 +349,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'notifications.tasks.purge_expired_notifications',
         'schedule': crontab(hour=3, minute=15),
     },
+    'process_transactional_email_outbox': {
+        'task': 'users.tasks.process_transactional_email_outbox',
+        'schedule': 15.0,
+    },
 }
 
 NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90"))
@@ -521,6 +525,8 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
+EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", os.getenv("DEFAULT_FROM_EMAIL", ""))
+DEFAULT_FROM_EMAIL = EMAIL_FROM_ADDRESS or "webmaster@localhost"
 
 GEOIP_PATH = os.path.join(BASE_DIR, "GeoLite2-Country.mmdb")
 
