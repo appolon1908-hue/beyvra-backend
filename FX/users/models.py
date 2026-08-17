@@ -176,6 +176,15 @@ class PendingRegistration(models.Model):
     request_ip = models.GenericIPAddressField(null=True, blank=True)
     request_user_agent = models.TextField(blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("email_normalized",),
+                condition=models.Q(status="pending_email_verification"),
+                name="unique_pending_registration_email",
+            ),
+        ]
+
 
 class EmailVerificationChallenge(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

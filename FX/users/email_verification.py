@@ -115,15 +115,35 @@ class EmailRegistrationView(APIView):
             return Response({"code": "REGISTRATION_INVALID", "message": "Please provide valid registration details and accept the required agreement."}, status=400)
         if User.objects.filter(email__iexact=email).exists():
             return Response({"status": "pending_email_verification", "message": "If this address can be registered, a verification code will be sent."}, status=202)
-        existing = PendingRegistration.objects.filter(email_normalized=email, status="pending_email_verification", expires_at__gt=timezone.now()).first()
-        if existing:
-            return Response({"registrationId": f"reg_{existing.pk}", "status": existing.status, "maskedEmail": mask_email(email), "expiresIn": max(0, int((existing.expires_at - timezone.now()).total_seconds())), "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS}, status=202)
         now = timezone.now()
         code = generate_otp()
         versions = _active_legal_versions()
         versions = {key: value or "current" for key, value in versions.items()}
         with transaction.atomic():
-            pending = PendingRegistration.objects.create(email_normalized=email, display_name=display_name, password_hash=make_password(password), locale=request.data.get("locale", "en")[:16], legal_confirmation=True, legal_document_versions=versions, expires_at=now + timedelta(seconds=settings.PENDING_REGISTRATION_TTL_SECONDS), request_ip=request.META.get("REMOTE_ADDR"), request_user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000])
+            # Expiration is persisted before creation so the conditional
+            # database constraint remains the authority under concurrent
+            # registration requests.
+            PendingRegistration.objects.filter(
+                email_normalized=email,
+                status="pending_email_verification",
+                expires_at__lte=now,
+            ).update(status="expired")
+            pending, created = PendingRegistration.objects.get_or_create(
+                email_normalized=email,
+                status="pending_email_verification",
+                defaults={
+                    "display_name": display_name,
+                    "password_hash": make_password(password),
+                    "locale": request.data.get("locale", "en")[:16],
+                    "legal_confirmation": True,
+                    "legal_document_versions": versions,
+                    "expires_at": now + timedelta(seconds=settings.PENDING_REGISTRATION_TTL_SECONDS),
+                    "request_ip": request.META.get("REMOTE_ADDR"),
+                    "request_user_agent": request.META.get("HTTP_USER_AGENT", "")[:1000],
+                },
+            )
+            if not created:
+                return Response({"registrationId": f"reg_{pending.pk}", "status": pending.status, "maskedEmail": mask_email(email), "expiresIn": max(0, int((pending.expires_at - now).total_seconds())), "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS}, status=202)
             EmailVerificationChallenge.objects.create(registration=pending, email_normalized=email, otp_hash=hash_otp(code), expires_at=now + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS), max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS)
             queue_email(event_type="email_otp_created", email=email, template_key="email_otp", payload={"code_encrypted": _encrypted_code(code), "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS // 60, "purpose": "registration"}, idempotency_key=f"otp:{pending.pk}:1", locale=pending.locale)
             _audit("registration_pending_email_verification", transaction_id=pending.id, result="accepted", request=request)

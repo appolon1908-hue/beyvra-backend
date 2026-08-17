@@ -31,6 +31,19 @@ class EmailVerificationTests(TestCase):
         self.assertEqual(TransactionalEmailOutbox.objects.filter(template_key="email_otp").count(), 1)
 
     @patch("users.email_verification.generate_otp", return_value="482913")
+    def test_repeated_registration_reuses_one_pending_record(self, _):
+        payload = {"email": "repeat@example.com", "password": "StrongPass9!", "displayName": "Repeat User", "legalAccepted": True}
+        first = self.client.post("/api/v1/auth/register", payload, format="json")
+        second = self.client.post("/api/v1/auth/register", payload, format="json")
+
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 202)
+        self.assertEqual(first.data["registrationId"], second.data["registrationId"])
+        self.assertEqual(PendingRegistration.objects.filter(email_normalized="repeat@example.com", status="pending_email_verification").count(), 1)
+        self.assertEqual(EmailVerificationChallenge.objects.filter(email_normalized="repeat@example.com").count(), 1)
+        self.assertEqual(TransactionalEmailOutbox.objects.filter(recipient_email="repeat@example.com", template_key="email_otp").count(), 1)
+
+    @patch("users.email_verification.generate_otp", return_value="482913")
     def test_valid_otp_activates_once_and_queues_welcome(self, _):
         registration = self.client.post("/api/v1/auth/register", {"email": "activate@example.com", "password": "StrongPass9!", "displayName": "Activate User", "legalAccepted": True}, format="json").data["registrationId"]
         response = self.client.post("/api/v1/auth/email-verification/verify", {"registrationId": registration, "code": "482913"}, format="json")
