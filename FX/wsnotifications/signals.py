@@ -1,5 +1,7 @@
+from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.utils import timezone
 from wsnotifications.service import UserNotificationService
 from django.contrib.auth import get_user_model
 from trade.models import Trade
@@ -8,8 +10,9 @@ from django.contrib.auth.signals import user_logged_in
 import geoip2.database 
 from users.models import UserDeviceInfo, KYC
 from notifications.models import UserNotifications, Notifications
-from notifications.services import emit_notification
+from notifications.services import emit_email_notification, emit_notification
 import os
+import uuid
 
 User = get_user_model()
 import logging
@@ -81,6 +84,12 @@ def handling_deposit(sender, instance, **kwargs):
             category="DEPOSIT" if str(instance.type).lower() == "deposit" else "WITHDRAWAL",
             payload={"payment_id": str(instance.id), "status": instance.status},
         )
+        template_id = "deposit_completed" if str(instance.type).lower() == "deposit" else "withdrawal_completed"
+        transaction.on_commit(lambda: emit_email_notification(
+            event_type=f"funds.{template_id}", user=instance.user, event_id=str(instance.id),
+            correlation_id=instance.id, template_id=template_id,
+            template_parameters={"action": f"Your {instance.type} status is approved. Confirm details only in authenticated Beyvra."},
+        ))
         logger.info(f" executed: {instance}")
     elif instance.status == 'Declined':
         message = {
@@ -95,6 +104,12 @@ def handling_deposit(sender, instance, **kwargs):
             category="DEPOSIT" if str(instance.type).lower() == "deposit" else "WITHDRAWAL",
             payload={"payment_id": str(instance.id), "status": instance.status},
         )
+        template_id = "deposit_failed" if str(instance.type).lower() == "deposit" else "withdrawal_rejected"
+        transaction.on_commit(lambda: emit_email_notification(
+            event_type=f"funds.{template_id}", user=instance.user, event_id=str(instance.id),
+            correlation_id=instance.id, template_id=template_id,
+            template_parameters={"action": f"Your {instance.type} status is declined. Review it only in authenticated Beyvra."},
+        ))
         # Trade has been executed
        
        
@@ -112,7 +127,9 @@ def send_reset_password_notification(sender, **kwargs):
             old_password = User.objects.get(id=user.id).password
         except User.DoesNotExist:
             old_password = None
-        if new_password != old_password:
+        # A missing prior row means account creation, not a password change.
+        if old_password is not None and new_password != old_password:
+            password_event = uuid.uuid5(uuid.NAMESPACE_URL, f"beyvra:password:{user.pk}:{new_password}")
             UserNotificationService.password_changed_confirmation(user_id, message)
             emit_notification(
                 user_id=user_id,
@@ -120,6 +137,11 @@ def send_reset_password_notification(sender, **kwargs):
                 message="Your password was changed successfully.",
                 category="SECURITY",
             )
+            transaction.on_commit(lambda: emit_email_notification(
+                event_type="security.password_changed", user=user, event_id=f"password:{password_event}",
+                correlation_id=user.pk, template_id="password_changed",
+                template_parameters={"action": "Your password was changed. Review active sessions in Beyvra if this was not you."},
+            ))
             
             
 
@@ -141,6 +163,11 @@ def login_alert(sender, request, user, **kwargs):
             category="SECURITY",
             payload={"ip_address": ip_address, "user_agent": user_agent},
         )
+        transaction.on_commit(lambda: emit_email_notification(
+            event_type="security.new_login", user=user, event_id=f"login:{user.pk}:{request.session.session_key or 'session'}",
+            correlation_id=user.pk, template_id="new_login",
+            template_parameters={"action": f"New login at {timezone.now().isoformat()} from {ip_address or 'unknown network'}. Review active sessions if this was not you."},
+        ))
         
         
 @receiver(post_save, sender=User)

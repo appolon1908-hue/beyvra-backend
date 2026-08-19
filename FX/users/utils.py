@@ -1,13 +1,12 @@
+import hashlib
 import os
 from datetime import datetime
 from random import randint
 
 import pycountry
 import requests
-from django import template
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import EmailMultiAlternatives
 from django.core.validators import RegexValidator
 from django.http import JsonResponse
 from django.utils.encoding import force_bytes
@@ -29,62 +28,32 @@ ALPHABETS_REGEX_VALIDATOR = RegexValidator(
 
 
 def send_welcome_email(user_email, first_name, temp_password=None):
-    subject = "Welcome | Beyvra"
-    email_template = template.loader.get_template("welcome_email.html")
-
-    context = {
-        "email": user_email,
-        "first_name": first_name,
-        "frontend_url": settings.FRONTEND_URL,
-        "temp_password": temp_password,
-    }
-
-    html_content = email_template.render(context)
-    text_content = " "
-
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [user_email])
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)
+    from users.email_verification import queue_email
+    # Temporary passwords are intentionally never placed into notifications.
+    key = hashlib.sha256(user_email.strip().lower().encode()).hexdigest()[:24]
+    return queue_email(event_type="account.welcome", email=user_email, template_key="welcome",
+                       payload={"action": f"Welcome, {first_name or 'Customer'}. Sign in through the Beyvra application."},
+                       idempotency_key=f"welcome:{key}")
 
 
 def send_email_verification_email(user):
-    subject = "Email verification required | Beyvra"
-    email_template = template.loader.get_template("email_verify_email.html")
-
-    context = {
-        "email": user.email,
-        "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-        "user": user,
-        "token": default_token_generator.make_token(user),
-        "frontend_url": settings.FRONTEND_URL,
-    }
-
-    html_content = email_template.render(context)
-    text_content = " "
-
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [user.email])
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)
+    from users.email_verification import queue_email
+    token = default_token_generator.make_token(user)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    link = f"{settings.FRONTEND_URL.rstrip('/')}/verify-email?uid={uid}&token={token}"
+    return queue_email(event_type="account.verification_requested", email=user.email,
+                       template_key="account_verification", payload={"action": f"Verify your email in Beyvra: {link}"},
+                       idempotency_key=f"verification:{user.pk}:{hashlib.sha256(token.encode()).hexdigest()[:16]}", user_id=user.pk)
 
 
 def send_password_reset_link_email(user):
-    subject = "Password reset requested | Beyvra"
-    email_template = template.loader.get_template("password_reset_email.html")
-
-    context = {
-        "email": user.email,
-        "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-        "user": user,
-        "token": default_token_generator.make_token(user),
-        "frontend_url": settings.FRONTEND_URL,
-    }
-
-    html_content = email_template.render(context)
-    text_content = " "
-
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [user.email])
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)
+    from users.email_verification import queue_email
+    token = default_token_generator.make_token(user)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    link = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?uid={uid}&token={token}"
+    return queue_email(event_type="account.password_reset_requested", email=user.email,
+                       template_key="password_reset", payload={"action": f"Continue the authenticated password reset flow: {link}"},
+                       idempotency_key=f"password-reset:{user.pk}:{hashlib.sha256(token.encode()).hexdigest()[:16]}", user_id=user.pk)
 
 
 def generate_verification_code():
@@ -245,43 +214,19 @@ def get_user_agent(request) -> dict:
 
 
 def send_user_device_info_alert(user, details):
-    subject = "New device detected | Beyvra"
-    email_template = template.loader.get_template("device_info_alert_email.html")
-
-    context = {
-        "user": user,
-        "details": details,
-        "frontend_url": settings.FRONTEND_URL,
-        "twitter_url": os.getenv("TWITTER_URL"),
-        "facebook_url": os.getenv("FACEBOOK_URL"),
-        "linkedin_url": os.getenv("LINKEDIN_URL"),
-    }
-
-    html_content = email_template.render(context)
-    text_content = " "
-
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [user.email])
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)
+    from users.email_verification import queue_email
+    device = getattr(details, "device_type", "unknown device")
+    return queue_email(event_type="security.new_device", email=user.email, template_key="new_device",
+                       payload={"action": f"A new login was detected from {device}. Review active sessions in Beyvra if this was not you."},
+                       idempotency_key=f"new-device:{user.pk}:{details.pk}", user_id=user.pk)
 
 
 def send_user_ban_email(user):
-    subject = "Account suspended | Beyvra"
-    email_template = template.loader.get_template("user_ban_email.html")
-
-    context = {
-        "user": user,
-        "ban_date": datetime.now(),
-        "frontend_url": settings.FRONTEND_URL,
-    }
-
-    html_content = email_template.render(context)
-    text_content = " "
-
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [user.email])
-    msg.attach_alternative(html_content, "text/html")
-    print("Sending user ban email")
-    msg.send(fail_silently=False)
+    from users.email_verification import queue_email
+    stamp = datetime.now().date().isoformat()
+    return queue_email(event_type="account.locked", email=user.email, template_key="account_locked",
+                       payload={"action": "Your account is locked. Sign in to the authenticated Beyvra support flow for assistance."},
+                       idempotency_key=f"account-locked:{user.pk}:{stamp}", user_id=user.pk)
 
 
 def confirm_action(request) -> bool | Response:

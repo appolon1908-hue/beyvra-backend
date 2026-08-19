@@ -30,7 +30,8 @@ jobs:
         run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
-          context: FX
+          context: .
+          file: FX/Dockerfile
           push: true
           tags: ${{ steps.image.outputs.ref }}
           cache-from: type=gha

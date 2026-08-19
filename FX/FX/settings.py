@@ -68,6 +68,9 @@ EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
 STAGING_TEST_OTP_SECRET = os.getenv("STAGING_TEST_OTP_SECRET", "")
 PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
 TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
+BEYVRA_EMAIL_API_URL = os.getenv("BEYVRA_EMAIL_API_URL", "https://api.codestra.co").rstrip("/")
+BEYVRA_EMAIL_TOKEN_URL = os.getenv("BEYVRA_EMAIL_TOKEN_URL", "https://auth.codestra.agency/realms/codestra/protocol/openid-connect/token")
+BEYVRA_EMAIL_CLIENT_SECRET_FILE = os.getenv("BEYVRA_EMAIL_CLIENT_SECRET_FILE", "/run/secrets/beyvra_email_client_secret")
 WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
 GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")

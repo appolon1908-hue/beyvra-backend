@@ -8,6 +8,22 @@ from rest_framework import serializers
 from .models import *
 
 
+class EmailNotificationPreferenceSerializer(serializers.ModelSerializer):
+    account = serializers.SerializerMethodField()
+    security = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailNotificationPreference
+        fields = ("account", "security", "trading", "funds", "statements", "support", "marketing", "updated_at")
+        read_only_fields = ("account", "security", "marketing", "updated_at")
+
+    def get_account(self, obj):
+        return True
+
+    def get_security(self, obj):
+        return True
+
+
 class UserNotificationSerializer(serializers.ModelSerializer):
     """User Notification serializer"""
 
