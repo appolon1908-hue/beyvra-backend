@@ -57,8 +57,32 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+# Keycloak is the sole human credential, MFA, and recovery authority when enabled.
+# The browser uses Authorization Code + PKCE; this backend remains a confidential
+# token-handling boundary and never accepts a Keycloak password.
+KEYCLOAK_IDENTITY_ENABLED = os.getenv("KEYCLOAK_IDENTITY_ENABLED", "false").lower() in {"1", "true", "yes"}
+LOCAL_PASSWORD_AUTH_ENABLED = os.getenv("LOCAL_PASSWORD_AUTH_ENABLED", "true").lower() in {"1", "true", "yes"}
 EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
 EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", "https://auth.codestra.co/realms/codestra").rstrip("/")
+KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "beyvra-web-production")
+KEYCLOAK_REDIRECT_URI = os.getenv("KEYCLOAK_REDIRECT_URI", "https://beyvra.com/api/v1/auth/oidc/callback/")
+KEYCLOAK_FRONTEND_CALLBACK = os.getenv("KEYCLOAK_FRONTEND_CALLBACK", "https://beyvra.com/auth/callback").rstrip("/")
+KEYCLOAK_POST_LOGOUT_URI = os.getenv("KEYCLOAK_POST_LOGOUT_URI", "https://beyvra.com/signIn?logged_out=1")
+KEYCLOAK_TOKEN_URI = f"{KEYCLOAK_ISSUER}/protocol/openid-connect/token"
+KEYCLOAK_JWKS_URI = f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
+KEYCLOAK_END_SESSION_URI = f"{KEYCLOAK_ISSUER}/protocol/openid-connect/logout"
+KEYCLOAK_TRANSACTION_TTL_SECONDS = int(os.getenv("KEYCLOAK_TRANSACTION_TTL_SECONDS", "300"))
+KEYCLOAK_SESSION_HINT_TTL_SECONDS = int(os.getenv("KEYCLOAK_SESSION_HINT_TTL_SECONDS", "604800"))
+if KEYCLOAK_IDENTITY_ENABLED:
+    if KEYCLOAK_ISSUER != "https://auth.codestra.co/realms/codestra":
+        raise ImproperlyConfigured("Beyvra must use the canonical Codestra Keycloak issuer")
+    if LOCAL_PASSWORD_AUTH_ENABLED or EMAIL_REGISTRATION_ENABLED:
+        raise ImproperlyConfigured(
+            "Disable local password authentication and email registration before enabling Keycloak"
+        )
+
 EMAIL_OTP_LENGTH = 6
 EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
 EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
@@ -69,7 +93,7 @@ STAGING_TEST_OTP_SECRET = os.getenv("STAGING_TEST_OTP_SECRET", "")
 PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
 TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
 BEYVRA_EMAIL_API_URL = os.getenv("BEYVRA_EMAIL_API_URL", "https://api.codestra.co").rstrip("/")
-BEYVRA_EMAIL_TOKEN_URL = os.getenv("BEYVRA_EMAIL_TOKEN_URL", "https://auth.codestra.agency/realms/codestra/protocol/openid-connect/token")
+BEYVRA_EMAIL_TOKEN_URL = os.getenv("BEYVRA_EMAIL_TOKEN_URL", "https://auth.codestra.co/realms/codestra/protocol/openid-connect/token")
 BEYVRA_EMAIL_CLIENT_SECRET_FILE = os.getenv("BEYVRA_EMAIL_CLIENT_SECRET_FILE", "/run/secrets/beyvra_email_client_secret")
 WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
 GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
@@ -479,10 +503,10 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
 if DEBUG:
     # Token expiration time higher for dev environment
     SIMPLE_JWT = {
-        "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1200),
-        "REFRESH_TOKEN_LIFETIME": timedelta(hours=1200),
+        "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+        "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
         "BLACKLIST_AFTER_ROTATION": True,
-        "ROTATE_REFRESH_TOKENS": False,
+        "ROTATE_REFRESH_TOKENS": True,
     }
 
 AUTH_USER_MODEL = "users.User"

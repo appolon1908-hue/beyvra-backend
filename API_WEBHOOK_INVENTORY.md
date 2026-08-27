@@ -2,6 +2,34 @@
 
 This inventory reflects the staging Django route tree. All authenticated routes require the existing session/JWT authentication; organization-scoped routes additionally resolve `X-Organization-ID` or the caller's authorized membership.
 
+## Identity, registration, recovery and session
+
+| Method | URL | Purpose | Authority/state |
+|---|---|---|---|
+| GET | `/api/v1/auth/oidc/config/` | Public, non-secret client capability metadata | Returns 503 while the reviewed Keycloak client is disabled |
+| GET | `/api/v1/auth/oidc/login/?next=<path>` | Start Authorization Code + PKCE S256 login | Keycloak owns human authentication |
+| GET | `/api/v1/auth/oidc/register/?next=<path>` | Start Keycloak self-registration | Keycloak owns registration, terms and verified email |
+| GET | `/api/v1/auth/oidc/password-reset/?next=<path>` | Start Keycloak UPDATE_PASSWORD action | Keycloak owns lookup, token and password consumption |
+| GET | `/api/v1/auth/oidc/callback/` | Validate state/nonce, exchange code server-side and bind identity | Exact issuer + immutable subject; browser receives no Keycloak token |
+| GET | `/api/v1/auth/oidc/csrf/` | Bootstrap the same-origin CSRF token | Public, non-secret response |
+| POST | `/api/v1/auth/oidc/logout/` | Revoke Beyvra session and return Keycloak end-session redirect | Requires CSRF and the HttpOnly session |
+| POST | `/api/v1/auth/token/refresh/` | Rotate the Beyvra HttpOnly session cookies | No access or refresh token in the response body |
+| GET | `/api/v1/session` | Resolve anonymous, guest or registered state | HttpOnly cookie authentication |
+
+When `KEYCLOAK_IDENTITY_ENABLED=true`, `LOCAL_PASSWORD_AUTH_ENABLED` must be false and local login, email-OTP registration, password reset/change and local MFA routes are not registered. Beyvra administrator profile/status operations remain available, but administrator creation, credential reset, role assignment and MFA authority remain in Keycloak. Keycloak roles are synchronized to the local application profile at login.
+
+Successful first binding emits `identity.account.provisioned` through the transactional outbox/NATS boundary. It contains only hashed identity reference, local user reference, role and authority. It is not a synchronous login dependency and no password, OTP, authorization code, verifier or token is allowed in the event.
+
+## Klyrow email and callback boundary
+
+| Direction | Endpoint/transport | Contract |
+|---|---|---|
+| Beyvra backend → Klyrow | `POST /v1/internal/email/beyvra/send` | OAuth service credential, idempotency key and transactional outbox for ordinary Beyvra mail |
+| Keycloak → Klyrow | Private SECURITY SMTP | Password-reset exception; bypasses Beyvra API, Middleware, Odoo and n8n |
+| Klyrow → Middleware | `POST /api/v1/klyrow/events` | OIDC bearer + HMAC + event ID/idempotency headers; not a Beyvra backend route |
+
+There is no Beyvra authentication webhook. Source contracts confirm these routes and guards; production delivery, DNS and SMTP remain unconfirmed until the required runtime probes pass.
+
 ## Demo trading
 
 | Method | URL | Purpose | Tenant behavior |

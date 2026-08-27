@@ -32,6 +32,7 @@ pandas==2.3.3
 pre-commit==3.6.0
 psycopg2-binary==2.9.9
 pycountry==24.6.1
+PyJWT[crypto]==2.13.0
 pyotp==2.9.0
 python-dotenv==1.2.2
 pytz==2024.1

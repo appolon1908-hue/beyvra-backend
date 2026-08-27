@@ -19,6 +19,7 @@ CANONICAL_SUBJECT_DOMAINS = {
     "news",
     "private",
     "system",
+    "identity",
 }
 
 

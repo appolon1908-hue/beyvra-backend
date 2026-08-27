@@ -22,14 +22,18 @@ class GoogleUnavailableView(APIView):
 
 urlpatterns = [
     path("providers", AuthProvidersView.as_view(), name="auth_providers"),
-    path("register", EmailRegistrationView.as_view(), name="register"),
-    path("email-verification/verify", EmailVerificationVerifyView.as_view(), name="email_verification_verify"),
-    path("email-verification/resend", EmailVerificationResendView.as_view(), name="email_verification_resend"),
-    path("email-verification/status", EmailVerificationStatusView.as_view(), name="email_verification_status"),
     path("google/start", GoogleUnavailableView.as_view(), name="google_start"),
     path("google/callback", GoogleUnavailableView.as_view(), name="google_callback"),
     path("google/credential", GoogleUnavailableView.as_view(), name="google_credential"),
 ]
 
-if settings.API_ENV == "staging":
+if settings.LOCAL_PASSWORD_AUTH_ENABLED:
+    urlpatterns += [
+        path("register", EmailRegistrationView.as_view(), name="register"),
+        path("email-verification/verify", EmailVerificationVerifyView.as_view(), name="email_verification_verify"),
+        path("email-verification/resend", EmailVerificationResendView.as_view(), name="email_verification_resend"),
+        path("email-verification/status", EmailVerificationStatusView.as_view(), name="email_verification_status"),
+    ]
+
+if settings.API_ENV == "staging" and settings.LOCAL_PASSWORD_AUTH_ENABLED:
     urlpatterns.append(path("test/otp", StagingTestOtpView.as_view(), name="staging_test_otp"))

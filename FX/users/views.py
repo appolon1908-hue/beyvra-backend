@@ -618,6 +618,9 @@ class GuestDemoSessionView(APIView):
         response = Response(payload, status=status.HTTP_201_CREATED)
         response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
         response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        # The SPA uses this HttpOnly cookie and discards the demo bearer body.
+        # Explicit API clients may retain the response token for compatibility.
+        response.set_cookie("beyvra_access", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Strict", path="/")
         return response
 
 
@@ -708,15 +711,20 @@ class CookieTokenRefreshView(TokenRefreshView):
             serializer.is_valid(raise_exception=True)
         except TokenError as exc:
             raise InvalidToken("Refresh token is invalid or expired.") from exc
-        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
-        response.set_cookie(
-            "beyvra_access",
-            serializer.validated_data["access"],
-            path="/",
-            secure=True,
-            httponly=True,
-            samesite="Strict",
-        )
+        # A cookie-authenticated browser receives no bearer token in its
+        # JavaScript-visible response body. Legacy explicit-token clients retain
+        # the existing response contract until local password auth is retired.
+        payload = serializer.validated_data if body_supplied else {"detail": "Token refreshed"}
+        response = Response(payload, status=status.HTTP_200_OK)
+        cookie_options = {
+            "path": "/",
+            "secure": True,
+            "httponly": True,
+            "samesite": "Strict",
+        }
+        response.set_cookie("beyvra_access", serializer.validated_data["access"], **cookie_options)
+        if not body_supplied and serializer.validated_data.get("refresh"):
+            response.set_cookie("beyvra_refresh", serializer.validated_data["refresh"], **cookie_options)
         return response
 
 
