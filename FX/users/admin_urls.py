@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import path
 from wallet import views as wallet_views
 
@@ -6,7 +7,6 @@ from . import views
 urlpatterns = [
     path("users/", views.FetchUserView.as_view(), name="admin_user_list"),
     path("users/<int:user_id>/", views.FetchUserDetailView.as_view(), name="admin_user_detail"),
-    path("users/bulk/create/", views.BulkCreateUserView.as_view(), name="admin_bulk_create_user"),
     path("users/<int:user_id>/ban/", views.ban_user, name="admin_user_update"),
     path("users/<int:user_id>/unban/", views.unban_user, name="admin_user_update"),
     path("dashboard/over_views", views.admin_dashboard_overview, name="admin_dashboard_overview_view"),
@@ -24,24 +24,31 @@ urlpatterns = [
     path("users/<int:user_id>/verification/status/", views.UserVerificationStatus.as_view()),
     path("users/search/", views.UserSearchView.as_view(), name="admin_user_search"),
     path("users/statuses/", views.UserStatusView.as_view(), name="admin_user_statuses"),
-    path("users/import/", views.import_users, name="import_users"),
     path("users/export/", views.export_users, name="export_users"),
     path("users/search_users/", views.search_users, name="search_users"),
-    path("users/<int:user_id>/roles/", views.user_roles, name="user-roles"),
     path("users/rbac/roles/", views.list_roles, name="list_roles"),
-    path("users/rbac/roles/assign-permissions/", views.assign_permissions_to_role, name="assign_permissions_to_role"),
-    path("users/rbac/users/assign-role/", views.assign_user_to_role, name="assign_user_to_role"),
     path("users/rbac/users/check-permissions/", views.check_user_permissions, name="check_user_permissions"),
     path("users/<int:user_id>/toggle-status/", views.toggle_user_status, name="toggle_user_status"),
     path("users/<int:user_id>/update-status/", views.update_user_status, name="update_user_status"),
-    path("users/create/", views.create_user, name="create_user"),
-    path("users/<int:user_id>/update/", views.update_user, name="update_user"),
     path("users/<int:user_id>/delete/", views.delete_user, name="delete_user"),
-    path("users/bulk/", views.bulk_actions, name="bulk-actions"),
     path("users/filters/", views.filter_users, name="filter-users"),
     path("users/<int:user_id>/details/", views.user_details_view, name="user-details"),
-    path("users/<int:user_id>/reset-password/", views.ResetUserPasswordView.as_view(), name="reset-user-password"),
-    path("users/bulk-reset-password/", views.BulkResetPasswordView.as_view(), name="bulk-reset-password"),
     path("users/update-language/", views.UpdatePreferredLanguageView.as_view(), name="update-language"),
-    path("users/global-2fa-method/", views.SetGlobal2FAMethodView.as_view(), name="admin_set_global_two_factor"),
 ]
+
+# With Keycloak active, administrator creation, roles, passwords, and MFA are
+# managed in Keycloak. Beyvra keeps only application-profile/status operations.
+if settings.LOCAL_PASSWORD_AUTH_ENABLED:
+    urlpatterns += [
+        path("users/bulk/create/", views.BulkCreateUserView.as_view(), name="admin_bulk_create_user"),
+        path("users/import/", views.import_users, name="import_users"),
+        path("users/<int:user_id>/roles/", views.user_roles, name="user-roles"),
+        path("users/rbac/roles/assign-permissions/", views.assign_permissions_to_role, name="assign_permissions_to_role"),
+        path("users/rbac/users/assign-role/", views.assign_user_to_role, name="assign_user_to_role"),
+        path("users/create/", views.create_user, name="create_user"),
+        path("users/<int:user_id>/update/", views.update_user, name="update_user"),
+        path("users/bulk/", views.bulk_actions, name="bulk-actions"),
+        path("users/<int:user_id>/reset-password/", views.ResetUserPasswordView.as_view(), name="reset-user-password"),
+        path("users/bulk-reset-password/", views.BulkResetPasswordView.as_view(), name="bulk-reset-password"),
+        path("users/global-2fa-method/", views.SetGlobal2FAMethodView.as_view(), name="admin_set_global_two_factor"),
+    ]

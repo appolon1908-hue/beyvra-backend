@@ -89,6 +89,10 @@ class User(AbstractUser, TimeStampedModel):
     )
     username = None
     email = models.EmailField(_("email address"), unique=True)
+    # Human credentials remain in Keycloak. These fields bind the local read model
+    # to one immutable OIDC identity without storing passwords or provider tokens.
+    identity_issuer = models.URLField(max_length=255, blank=True, default="")
+    identity_subject = models.CharField(max_length=255, blank=True, default="")
     first_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
     last_name = models.CharField(max_length=20, validators=[ALPHABETS_REGEX_VALIDATOR])
     phone_number = models.CharField(
@@ -154,6 +158,15 @@ class User(AbstractUser, TimeStampedModel):
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("identity_issuer", "identity_subject"),
+                condition=~models.Q(identity_subject=""),
+                name="user_identity_issuer_subject_unique",
+            )
+        ]
 
     def __str__(self):
         return self.email
