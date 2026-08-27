@@ -114,6 +114,14 @@ class KeycloakBffTests(APITestCase):
         state = query["state"][0]
         self.assertEqual(cache.get(f"beyvra:oidc:transaction:{state}")["next_path"], "/platform")
 
+    def test_protected_deep_link_is_preserved(self):
+        query = self._begin("/api/v1/auth/oidc/login/?next=/platform/trades/42")
+        state = query["state"][0]
+        self.assertEqual(
+            cache.get(f"beyvra:oidc:transaction:{state}")["next_path"],
+            "/platform/trades/42",
+        )
+
     @patch("users.keycloak_bff.jwt.decode")
     @patch("users.keycloak_bff.jwt.PyJWKClient")
     def test_unverified_email_is_rejected(self, jwks, decode):

@@ -9,7 +9,7 @@ import base64
 import hashlib
 import re
 import secrets
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import jwt
 import requests
@@ -52,7 +52,21 @@ def _unavailable():
 
 def _safe_return_path(value):
     candidate = str(value or "/platform")
-    return candidate if candidate in settings.AUTH_ALLOWED_RETURN_PATHS else "/platform"
+    parsed = urlsplit(candidate)
+    if (
+        not candidate.startswith("/")
+        or candidate.startswith("//")
+        or "\\" in candidate
+        or parsed.scheme
+        or parsed.netloc
+        or parsed.fragment
+    ):
+        return "/platform"
+    allowed = any(
+        parsed.path == base or parsed.path.startswith(f"{base}/")
+        for base in settings.AUTH_ALLOWED_RETURN_PATHS
+    )
+    return candidate if allowed else "/platform"
 
 
 def _pkce_challenge(verifier):
@@ -229,6 +243,7 @@ def _clear_session_cookies(response):
 
 class KeycloakLoginView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         return _start_authorization(request)
@@ -236,6 +251,7 @@ class KeycloakLoginView(APIView):
 
 class KeycloakRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         return _start_authorization(request, registration=True)
@@ -243,6 +259,7 @@ class KeycloakRegistrationView(APIView):
 
 class KeycloakPasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         # Keycloak owns the generic account lookup, reset token, and SECURITY mail.
