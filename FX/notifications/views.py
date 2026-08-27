@@ -36,6 +36,26 @@ class NotificationListing(generics.GenericAPIView):
         return Response({"notifications": notifications_data}, status=status.HTTP_200_OK)
 
 
+class EmailNotificationPreferences(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmailNotificationPreferenceSerializer
+
+    def get_object(self):
+        value, _ = EmailNotificationPreference.objects.get_or_create(
+            user=self.request.user, defaults={"organization": organization_for_request(self.request)}
+        )
+        return value
+
+    def get(self, request):
+        return Response(self.serializer_class(self.get_object()).data)
+
+    def patch(self, request):
+        serializer = self.serializer_class(self.get_object(), data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(marketing=False)
+        return Response(serializer.data)
+
+
 class UpdateNotifications(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 

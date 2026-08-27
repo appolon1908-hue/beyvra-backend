@@ -6,7 +6,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 
-from .models import NotificationEvent, Notifications, UserNotifications, WebhookDelivery, WebhookSubscription
+from .models import EmailNotificationPreference, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
 from integrations.crypto import encrypt_secret, fingerprint
 from integrations.permissions import organization_for_user
 
@@ -85,3 +85,21 @@ def encrypted_webhook_fields(secret):
     return {"secret": None, "secret_ciphertext": ciphertext, "secret_nonce": nonce,
             "secret_key_version": version, "secret_fingerprint": fingerprint(secret),
             "secret_created_at": timezone.now()}
+
+
+def emit_email_notification(*, event_type, user, event_id, correlation_id, template_parameters, template_id=None, account_id=None):
+    """Persist a deterministic email event without performing network I/O."""
+    from users.email_verification import queue_email
+    category = __import__("notifications.email_client", fromlist=["category_for"]).category_for(template_id or event_type)
+    preference, _ = EmailNotificationPreference.objects.get_or_create(user=user, defaults={"organization": organization_for_user(user.id)})
+    optional = {"TRADING": preference.trading, "FUNDS": preference.funds, "STATEMENTS": preference.statements, "SUPPORT": preference.support}
+    if category in optional and not optional[category]:
+        return None
+    if category == "MARKETING":
+        return None
+    return queue_email(
+        event_type=event_type, email=user.email, template_key=template_id or event_type,
+        payload=template_parameters, idempotency_key=f"{event_type}:{event_id}",
+        locale=getattr(user, "preferred_language", "en") or "en", user_id=user.pk,
+        account_id=account_id or user.pk, event_id=event_id, correlation_id=correlation_id,
+    )

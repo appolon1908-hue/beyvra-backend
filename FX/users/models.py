@@ -204,6 +204,12 @@ class EmailVerificationChallenge(models.Model):
 class TransactionalEmailOutbox(models.Model):
     STATUS_CHOICES = (("pending", "Pending"), ("processing", "Processing"), ("sent", "Sent"), ("failed", "Failed"), ("dead_letter", "Dead letter"))
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    notification_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    event_id = models.CharField(max_length=255, db_index=True)
+    correlation_id = models.UUIDField(default=uuid.uuid4, db_index=True, editable=False)
+    user_id_ref = models.CharField(max_length=255)
+    account_id_ref = models.CharField(max_length=255)
+    tenant_id = models.CharField(max_length=255, default="beyvra", db_index=True)
     event_type = models.CharField(max_length=64)
     recipient_email = models.EmailField()
     template_key = models.CharField(max_length=64)
@@ -213,11 +219,19 @@ class TransactionalEmailOutbox(models.Model):
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="pending")
     attempt_count = models.PositiveSmallIntegerField(default=0)
     next_attempt_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     provider_message_id = models.CharField(max_length=255, blank=True)
+    provider_status = models.CharField(max_length=32, blank=True)
     last_error_code = models.CharField(max_length=64, blank=True)
     idempotency_key = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["status", "next_attempt_at", "lease_expires_at"], name="email_outbox_claim_idx"),
+            models.Index(fields=["tenant_id", "created_at"], name="email_outbox_tenant_idx"),
+        ]
 
 
 class DemoLegalAcceptance(models.Model):

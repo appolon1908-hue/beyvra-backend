@@ -39,6 +39,21 @@ class UserNotifications(models.Model):
         return f"Notification for {self.user_id}"
 
 
+class EmailNotificationPreference(models.Model):
+    """Transactional email preferences; security and account mail remain mandatory."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="email_notification_preferences")
+    organization = models.ForeignKey(Organization, null=True, blank=True, on_delete=models.CASCADE)
+    trading = models.BooleanField(default=True)
+    funds = models.BooleanField(default=True)
+    statements = models.BooleanField(default=True)
+    support = models.BooleanField(default=True)
+    marketing = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(marketing=False), name="marketing_email_phase1_disabled")]
+
+
 class UserAlerts(models.Model):
     DIRECTION_CHOICES = (
         ("UP", "UP"),
