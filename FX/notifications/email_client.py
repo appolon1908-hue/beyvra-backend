@@ -27,9 +27,10 @@ class EmailMiddlewareClient:
         return value
 
     def token(self) -> str:
-        with self._lock:
-            if self._token and self._expires_at > time.monotonic() + 30:
-                return self._token
+        cls = type(self)
+        with cls._lock:
+            if cls._token and cls._expires_at > time.monotonic() + 30:
+                return cls._token
             try:
                 response = requests.post(
                     settings.BEYVRA_EMAIL_TOKEN_URL,
@@ -39,8 +40,9 @@ class EmailMiddlewareClient:
                 )
                 response.raise_for_status()
                 value = response.json()
-                self._token, self._expires_at = str(value["access_token"]), time.monotonic() + min(int(value.get("expires_in", 300)), 300)
-                return self._token
+                cls._token = str(value["access_token"])
+                cls._expires_at = time.monotonic() + min(int(value.get("expires_in", 300)), 300)
+                return cls._token
             except (OSError, requests.RequestException, KeyError, ValueError) as exc:
                 raise EmailMiddlewareError("AUTHENTICATION_FAILURE", isinstance(exc, requests.RequestException)) from exc
 

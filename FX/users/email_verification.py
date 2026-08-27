@@ -72,15 +72,41 @@ def _encrypted_code(code: str) -> str:
 
 
 def queue_email(*, event_type, email, template_key, payload, idempotency_key, locale="en", user_id=None, account_id=None, event_id=None, correlation_id=None):
-    """Write the Beyvra side of the transactional outbox in the caller's transaction."""
-    opaque_recipient = hashlib.sha256(email.strip().lower().encode()).hexdigest()
-    return TransactionalEmailOutbox.objects.create(
-        event_type=event_type, event_id=event_id or idempotency_key,
-        correlation_id=correlation_id or uuid.uuid4(), user_id_ref=str(user_id or opaque_recipient),
-        account_id_ref=str(account_id or user_id or opaque_recipient), tenant_id="beyvra",
-        recipient_email=email, template_key=template_key, locale=locale, payload=payload,
-        idempotency_key=idempotency_key, next_attempt_at=timezone.now(),
+    """Persist one idempotent email intent and schedule its durable worker."""
+    normalized_email = email.strip().lower()
+    opaque_recipient = hashlib.sha256(normalized_email.encode()).hexdigest()
+    defaults = {
+        "event_type": event_type,
+        "event_id": event_id or idempotency_key,
+        "correlation_id": correlation_id or uuid.uuid4(),
+        "user_id_ref": str(user_id or opaque_recipient),
+        "account_id_ref": str(account_id or user_id or opaque_recipient),
+        "tenant_id": "beyvra",
+        "recipient_email": normalized_email,
+        "template_key": template_key,
+        "locale": locale,
+        "payload": payload,
+        "next_attempt_at": timezone.now(),
+    }
+    item, created = TransactionalEmailOutbox.objects.get_or_create(
+        idempotency_key=idempotency_key,
+        defaults=defaults,
     )
+    if not created:
+        immutable_fields = (
+            "event_type", "event_id", "user_id_ref", "account_id_ref",
+            "tenant_id", "recipient_email", "template_key", "locale", "payload",
+        )
+        if any(getattr(item, field) != defaults[field] for field in immutable_fields):
+            raise ValueError("transactional email idempotency conflict")
+
+    if getattr(settings, "TRANSACTIONAL_EMAIL_ENABLED", False) and item.status == "pending":
+        def _dispatch():
+            from users.tasks import process_transactional_email_outbox
+            process_transactional_email_outbox.delay()
+
+        transaction.on_commit(_dispatch)
+    return item
 
 
 def _wallet(user):
@@ -241,7 +267,7 @@ def send_outbox_message(item):
         code = Fernet(key).decrypt(payload["code_encrypted"].encode()).decode()
         parameters = {"action": f"Verification code: {code}. Expires in {payload.get('expires_minutes', 10)} minutes."}
     else:
-        parameters = {"action": f"Welcome, {payload.get('display_name', 'Customer')}. Sign in through the Beyvra application."}
+        parameters = dict(payload)
     if not settings.TRANSACTIONAL_EMAIL_ENABLED:
         return "disabled"
     from notifications.email_client import EmailMiddlewareClient

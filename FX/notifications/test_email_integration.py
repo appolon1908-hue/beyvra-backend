@@ -1,13 +1,15 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import uuid
 
 import requests
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.test import TestCase, override_settings
 
 from notifications.email_client import EmailMiddlewareClient, EmailMiddlewareError
 from notifications.models import EmailNotificationPreference
 from notifications.services import emit_email_notification
+from users.email_verification import queue_email
 from users.tasks import process_transactional_email_outbox
 
 
@@ -58,3 +60,52 @@ class EmailIntegrationTests(TestCase):
             with self.assertRaises(EmailMiddlewareError) as raised:
                 EmailMiddlewareClient().token()
         self.assertEqual(raised.exception.error_class, "AUTHENTICATION_FAILURE")
+
+    @override_settings(TRANSACTIONAL_EMAIL_ENABLED=True)
+    @patch("notifications.email_client.EmailMiddlewareClient.submit")
+    def test_non_otp_template_preserves_queued_parameters(self, submit):
+        submit.return_value = {"notification_id": "provider-notification", "status": "QUEUED"}
+        parameters = {"action": "Use the one-time reset link.", "reset_path": "/reset/opaque"}
+        emit_email_notification(
+            event_type="account.password_reset_requested",
+            user=self.user,
+            event_id="password-reset-1",
+            correlation_id=uuid.uuid4(),
+            template_id="password_reset",
+            template_parameters=parameters,
+        )
+        self.assertEqual(process_transactional_email_outbox.run(), "sent")
+        self.assertEqual(submit.call_args.args[1], parameters)
+
+    def test_duplicate_email_intent_returns_existing_row(self):
+        kwargs = {
+            "event_type": "funds.deposit_completed",
+            "email": self.user.email,
+            "template_key": "deposit_completed",
+            "payload": {"action": "Deposit approved."},
+            "idempotency_key": "funds.deposit_completed:payment-1",
+            "user_id": self.user.pk,
+        }
+        first = queue_email(**kwargs)
+        second = queue_email(**kwargs)
+        self.assertEqual(first.pk, second.pk)
+
+    def test_email_outbox_has_durable_periodic_recovery(self):
+        self.assertEqual(
+            settings.CELERY_BEAT_SCHEDULE["process_transactional_email_outbox"]["task"],
+            "users.tasks.process_transactional_email_outbox",
+        )
+
+    @patch("notifications.email_client.requests.post")
+    def test_oauth_token_cache_is_shared_between_client_instances(self, post):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"access_token": "cached-token", "expires_in": 300}
+        post.return_value = response
+        EmailMiddlewareClient._token = ""
+        EmailMiddlewareClient._expires_at = 0.0
+        with patch.object(EmailMiddlewareClient, "_credential", return_value="secret"):
+            self.assertEqual(EmailMiddlewareClient().token(), "cached-token")
+            self.assertEqual(EmailMiddlewareClient().token(), "cached-token")
+        self.assertEqual(post.call_count, 1)
+

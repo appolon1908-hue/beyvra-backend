@@ -352,6 +352,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'notifications.tasks.purge_expired_notifications',
         'schedule': crontab(hour=3, minute=15),
     },
+    'process_transactional_email_outbox': {
+        'task': 'users.tasks.process_transactional_email_outbox',
+        'schedule': crontab(minute="*/1"),
+    },
 }
 
 NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90"))
