@@ -140,9 +140,10 @@ A provider or delivery timeout produces an unknown result. Middleware reconciles
 ## Dependencies
 
 ```text
-N8N governance baseline and control-plane contract
-Middleware operation-policy and durable-job contract
-Keycloak machine-identity contract
+N8N PR #1 governance baseline
+Middleware PR #15 operation policy
+Keycloak PR #10 machine identities
+N8N PR #9 control-plane contract
 N8N automation/beyvra-operations-v2-20260827
 beyvra-frontend integration/automation-status-ui-v2-20260827
 ```
