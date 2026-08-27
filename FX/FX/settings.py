@@ -503,10 +503,10 @@ if os.getenv("RATE_LIMIT", "true").lower() in {"1", "true", "yes"}:
 if DEBUG:
     # Token expiration time higher for dev environment
     SIMPLE_JWT = {
-        "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1200),
-        "REFRESH_TOKEN_LIFETIME": timedelta(hours=1200),
+        "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+        "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
         "BLACKLIST_AFTER_ROTATION": True,
-        "ROTATE_REFRESH_TOKENS": False,
+        "ROTATE_REFRESH_TOKENS": True,
     }
 
 AUTH_USER_MODEL = "users.User"

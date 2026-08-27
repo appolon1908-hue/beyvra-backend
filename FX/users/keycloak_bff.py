@@ -111,6 +111,11 @@ def _identity_reference(issuer, subject):
     return hashlib.sha256(f"{issuer}|{subject}".encode()).hexdigest()
 
 
+def _mfa_verified(claims):
+    methods = {str(value).lower() for value in (claims.get("amr") or [])}
+    return bool(methods & {"mfa", "otp", "webauthn", "hwk"})
+
+
 def _bind_user(claims):
     issuer = claims["iss"]
     subject = claims["sub"]
@@ -279,7 +284,9 @@ class KeycloakCallbackView(APIView):
             user = _bind_user(claims)
             if not user.is_active:
                 raise PermissionError("ACCOUNT_DISABLED")
-            credentials = issue_session_token_pair(user=user, request=request, mfa_verified=True)
+            credentials = issue_session_token_pair(
+                user=user, request=request, mfa_verified=_mfa_verified(claims)
+            )
         except (KeyError, TypeError, ValueError, PermissionError, requests.RequestException, jwt.PyJWTError):
             return HttpResponseRedirect(f"{settings.KEYCLOAK_FRONTEND_CALLBACK}?error=authentication_failed")
 
