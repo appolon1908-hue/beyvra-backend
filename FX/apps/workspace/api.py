@@ -93,7 +93,19 @@ class WatchlistItemCollectionView(WorkspaceOwnedView):
         row = self.watchlist(watchlist_id)
         if row is None:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
-        serializer = WatchlistItemSerializer(data=request.data)
+        try:
+            instrument = resolve_active_instrument(request.data.get("instrument_id"))
+        except InstrumentResolutionError as exc:
+            status_code = {
+                "INSTRUMENT_REQUIRED": 400,
+                "INSTRUMENT_UNAVAILABLE": 404,
+                "INSTRUMENT_AMBIGUOUS": 409,
+            }.get(exc.code, 400)
+            return error_response(request, exc.code, status_code)
+        serializer = WatchlistItemSerializer(
+            data=request.data,
+            context={"resolved_instrument": instrument},
+        )
         serializer.is_valid(raise_exception=True)
         item, created = WatchlistItem.objects.get_or_create(
             watchlist=row,

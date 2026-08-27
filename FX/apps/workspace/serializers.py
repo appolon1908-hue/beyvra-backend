@@ -14,6 +14,9 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "symbol", "created_at")
 
     def validate_instrument_id(self, value):
+        resolved = self.context.get("resolved_instrument")
+        if resolved is not None:
+            return str(resolved.instrument_id)
         try:
             instrument = resolve_active_instrument(value)
         except InstrumentResolutionError as exc:
@@ -21,8 +24,10 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
         return str(instrument.instrument_id)
 
     def get_symbol(self, obj):
-        instrument = Instrument.objects.filter(instrument_id=obj.instrument_id).first()
-        return instrument.canonical_symbol if instrument else None
+        try:
+            return resolve_active_instrument(obj.instrument_id).canonical_symbol
+        except InstrumentResolutionError:
+            return None
 
 
 class WatchlistSerializer(serializers.ModelSerializer):

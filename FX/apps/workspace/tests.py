@@ -100,8 +100,8 @@ class WatchlistApiTests(TestCase):
             format="json",
             **self.headers,
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"]["code"], "INVALID_REQUEST")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "INSTRUMENT_UNAVAILABLE")
 
     def test_ambiguous_symbol_requires_the_canonical_uuid(self):
         venue = Venue.objects.create(code="SECOND", name="Second venue")
@@ -127,5 +127,5 @@ class WatchlistApiTests(TestCase):
             format="json",
             **self.headers,
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("INSTRUMENT_AMBIGUOUS", str(response.json()))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "INSTRUMENT_AMBIGUOUS")
