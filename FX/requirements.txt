@@ -41,6 +41,6 @@ redis==5.0.1
 requests==2.33.0
 shortuuid==1.0.12
 sqlparse==0.6.0
-stripe==8.3.0
+stripe==15.5.1
 twilio==9.0.0
 user-agents==2.2.0
