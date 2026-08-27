@@ -1,13 +1,10 @@
-import uuid
-
 from django.db import IntegrityError, transaction
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
 
 from apps.trading.api.errors import error_response
 from integrations.permissions import organization_for_request
-from reference_data.models import Instrument
-
+from .instruments import InstrumentResolutionError, resolve_active_instrument
 from .models import Watchlist, WatchlistItem
 from .serializers import WatchlistItemSerializer, WatchlistSerializer
 
@@ -114,15 +111,11 @@ class WatchlistItemDetailView(WorkspaceOwnedView):
         row = self.watchlist(watchlist_id)
         if row is None:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
-        reference = instrument_id
-        instrument = Instrument.objects.filter(canonical_symbol=instrument_id.upper()).first()
-        if instrument is not None:
-            reference = str(instrument.instrument_id)
-        else:
-            try:
-                reference = str(uuid.UUID(instrument_id))
-            except (TypeError, ValueError):
-                return error_response(request, "RESOURCE_NOT_FOUND", 404)
+        try:
+            reference = str(resolve_active_instrument(instrument_id).instrument_id)
+        except InstrumentResolutionError as exc:
+            status_code = 409 if exc.code == "INSTRUMENT_AMBIGUOUS" else 404
+            return error_response(request, exc.code, status_code)
         deleted, _ = WatchlistItem.objects.filter(
             watchlist=row,
             instrument_id=reference,

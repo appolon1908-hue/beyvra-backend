@@ -266,6 +266,7 @@ MIDDLEWARE = [
     "apps.foundation.middleware.CanonicalHTTPMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "middleware.no_store.SensitiveResponseNoStoreMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "middleware.deprecation.LegacyApiDeprecationMiddleware",

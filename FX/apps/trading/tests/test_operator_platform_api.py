@@ -34,6 +34,26 @@ class OperatorPlatformApiTests(TestCase):
         client.force_authenticate(self.password_only)
         self.assertEqual(client.get("/api/v1/operator/orders").status_code, 403)
 
+        client.force_authenticate(
+            self.operator,
+            token={
+                "auth_strength": "PASSWORD",
+                "mfa_verified_at": 1,
+                "session_id": "password-session",
+            },
+        )
+        self.assertEqual(client.get("/api/v1/operator/orders").status_code, 403)
+
+        client.force_authenticate(
+            self.operator,
+            token={
+                "auth_strength": "MFA",
+                "mfa_verified_at": 1,
+                "session_id": "mfa-session",
+            },
+        )
+        self.assertEqual(client.get("/api/v1/operator/orders").status_code, 200)
+
     def test_operator_read_models_are_safe_and_bounded(self):
         client = APIClient()
         client.force_authenticate(self.operator)

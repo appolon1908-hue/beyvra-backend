@@ -23,6 +23,9 @@ MESSAGES = {
     "POST_TRADE_EXCEPTION": "This trade requires review.",
     "SETTLEMENT_PENDING": "Settlement is pending.",
     "SETTLEMENT_UNAVAILABLE": "Settlement information is temporarily unavailable.",
+    "INSTRUMENT_REQUIRED": "An instrument is required.",
+    "INSTRUMENT_UNAVAILABLE": "The instrument is not active in the canonical reference-data authority.",
+    "INSTRUMENT_AMBIGUOUS": "The symbol identifies more than one active instrument; use its canonical UUID.",
 }
 
 

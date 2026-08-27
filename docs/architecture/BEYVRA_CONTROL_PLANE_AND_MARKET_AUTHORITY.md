@@ -77,6 +77,9 @@ authority.
   runtime instrument registry.
 - A symbol that resolves to more than one canonical instrument is rejected as
   `INSTRUMENT_AMBIGUOUS`.
+- Watchlists call the same canonical active-instrument resolver for add and
+  delete operations; no workspace-owned symbol registry or venue fallback
+  exists.
 - An instrument without an active mapping to a governed provider is rejected as
   `INSTRUMENT_MAPPING_UNAVAILABLE`.
 - The local demo table is compatibility-only and is reachable only when
