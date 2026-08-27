@@ -160,6 +160,9 @@ class User(AbstractUser, TimeStampedModel):
     objects = UserManager()
 
     class Meta:
+        verbose_name = _("user")
+        verbose_name_plural = _("users")
+        abstract = False
         constraints = [
             models.UniqueConstraint(
                 fields=("identity_issuer", "identity_subject"),
