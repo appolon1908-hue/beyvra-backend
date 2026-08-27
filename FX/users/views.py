@@ -618,6 +618,9 @@ class GuestDemoSessionView(APIView):
         response = Response(payload, status=status.HTTP_201_CREATED)
         response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
         response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
+        # The SPA uses this HttpOnly cookie and discards the demo bearer body.
+        # Explicit API clients may retain the response token for compatibility.
+        response.set_cookie("beyvra_access", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Strict", path="/")
         return response
 
 
