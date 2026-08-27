@@ -23,6 +23,7 @@ from .throttles import CRMInboundThrottle, ImportActionThrottle, ImportThrottle,
 from .observability import IMPORT_ROWS_TOTAL, INVALID_SIGNATURE_TOTAL, USER_CREATE_TOTAL, count
 from notifications.models import WebhookSubscription
 from .services import emit_crm_event
+from .control_plane import build_control_plane_context
 
 ALLOWED_COLUMNS = {"external_user_id", "first_name", "last_name", "email", "phone", "organization_id", "locale", "country", "source", "tags", "terms_accepted", "marketing_allowed"}
 FORBIDDEN_COLUMNS = {"password", "role", "admin", "permissions", "demo_balance", "real_balance", "account_type", "api_key", "authentication_secret"}
@@ -35,15 +36,30 @@ class TenantContextView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        organization = organization_for_request(request)
-        membership = organization.memberships.filter(user=request.user).values("role").first()
-        return Response({
-            "tenantId": str(organization.id),
-            "name": organization.name,
-            "active": organization.is_active,
-            "role": membership["role"] if membership else "service",
+        context = build_control_plane_context(request)
+        tenant = context["tenant"]
+        result = Response({
+            "tenantId": tenant["tenant_id"],
+            "name": tenant["name"],
+            "active": tenant["active"],
+            "role": tenant["role"],
             "environment": "staging" if getattr(request, "service_token", None) is None else getattr(request.service_token, "environment", "staging"),
         })
+        result["Deprecation"] = "true"
+        result["Sunset"] = "Fri, 27 Feb 2027 00:00:00 GMT"
+        result["Link"] = '</api/v1/control-plane/context>; rel="successor-version"'
+        return result
+
+
+class ControlPlaneContextView(APIView):
+    """Compose the caller's canonical account, tenant and policy decisions."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        result = Response(build_control_plane_context(request))
+        result["Cache-Control"] = "private, no-store"
+        result["Vary"] = "Cookie, Authorization, X-Organization-ID"
+        return result
 
 
 def _create_user(attrs, organization, reference):

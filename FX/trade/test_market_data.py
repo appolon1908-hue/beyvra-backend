@@ -4,15 +4,20 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from trade.models import CanonicalMarketStatus, CanonicalQuote, CanonicalTradeTick, MarketCandle
 from provider_governance.models import ProviderApproval, ProviderDefinition, ProviderLicense
 from provider_governance.service import approval_payload_hash
+from reference_data.models import Instrument, ProviderSymbolMapping, TradingCalendar, Venue
 from django.utils import timezone
 import os
 
 
 def approve_provider(provider_id, provider_type="MARKET_DATA"):
+    existing = ProviderDefinition.objects.filter(provider_id=provider_id).first()
+    if existing is not None:
+        return existing
     provider = ProviderDefinition.objects.create(
         provider_id=provider_id, provider_type=provider_type, enabled=True,
         license_verified=True, security_approved=True, compliance_approved=True,
@@ -68,6 +73,34 @@ class MarketHistoryTests(TestCase):
             phone_number="+12025550124",
         )
         self.client = APIClient()
+        calendar = TradingCalendar.objects.create(
+            code="ALWAYS_OPEN",
+            name="Always open",
+            timezone="UTC",
+            continuous=True,
+        )
+        registry = (
+            ("BTC-USD", "Bitcoin / US Dollar", "CRYPTO", "BTCUSDT", "binance", "0.01", "0.00000001"),
+            ("ETH-USD", "Ether / US Dollar", "CRYPTO", "ETHUSDT", "binance", "0.01", "0.00000001"),
+            ("AAPL", "Apple Inc.", "EQUITY", "AAPL", "twelve_data", "0.01", "0.000001"),
+        )
+        for symbol, name, asset_class, provider_symbol, provider_id, tick_size, lot_size in registry:
+            instrument = Instrument.objects.create(
+                canonical_symbol=symbol,
+                name=name,
+                asset_class=asset_class,
+                currency="USD",
+                calendar=calendar,
+                tick_size=tick_size,
+                lot_size=lot_size,
+            )
+            ProviderSymbolMapping.objects.create(
+                provider_id=provider_id,
+                provider_symbol=provider_symbol,
+                instrument=instrument,
+                effective_from=timezone.now(),
+            )
+            approve_provider(provider_id)
 
     def test_market_history_requires_authentication(self):
         response = self.client.get("/api/trades/market/history/", secure=True)
@@ -233,6 +266,54 @@ class MarketHistoryTests(TestCase):
         self.assertFalse(response.data["real_trading_enabled"])
         self.assertIn("5s", response.data["supported_intervals"])
 
+    def test_ambiguous_canonical_symbol_is_rejected_instead_of_doubled(self):
+        venue = Venue.objects.create(code="XFIX", name="Fixture venue")
+        instrument = Instrument.objects.create(
+            canonical_symbol="BTC-USD",
+            name="Bitcoin venue listing",
+            asset_class="CRYPTO",
+            currency="USD",
+            venue=venue,
+            calendar=TradingCalendar.objects.get(code="ALWAYS_OPEN"),
+            tick_size="0.01",
+            lot_size="0.00000001",
+        )
+        ProviderSymbolMapping.objects.create(
+            provider_id="binance",
+            provider_symbol="XBTUSDT",
+            instrument=instrument,
+            effective_from=timezone.now(),
+        )
+
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/instruments/BTC-USD", secure=True)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "INSTRUMENT_AMBIGUOUS")
+
+    def test_ungoverned_provider_mapping_does_not_become_authority(self):
+        instrument = Instrument.objects.create(
+            canonical_symbol="SOL-USD",
+            name="Solana / US Dollar",
+            asset_class="CRYPTO",
+            currency="USD",
+            calendar=TradingCalendar.objects.get(code="ALWAYS_OPEN"),
+            tick_size="0.001",
+            lot_size="0.00000001",
+        )
+        ProviderSymbolMapping.objects.create(
+            provider_id="unapproved-provider",
+            provider_symbol="SOLUSD",
+            instrument=instrument,
+            effective_from=timezone.now(),
+        )
+
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/instruments/SOL-USD", secure=True)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["code"], "INSTRUMENT_MAPPING_UNAVAILABLE")
+
     def test_market_capabilities_disable_uncertified_five_seconds(self):
         self.client.force_authenticate(self.user)
         response = self.client.get("/api/v1/instruments/BTC-USD/market-data-capabilities", secure=True)
@@ -287,3 +368,19 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(self.client.get("/api/v1/market/quotes?instrument_id=BTC-USD",secure=True).status_code,503)
         self.assertEqual(self.client.get("/api/v1/market/trades/BTC-USD",secure=True).status_code,503)
         self.assertEqual(self.client.get("/api/v1/market/status/BTC-USD",secure=True).status_code,503)
+
+
+class MarketBffAuthenticationTests(TestCase):
+    def test_market_endpoint_accepts_the_bff_http_only_cookie(self):
+        user = get_user_model().objects.create_user(
+            email="market-cookie@example.com",
+            password="test-pass",
+            phone_number="+12025550125",
+        )
+        client = APIClient()
+        client.cookies["beyvra_access"] = str(AccessToken.for_user(user))
+
+        response = client.get("/api/v1/market/feed-health", secure=True)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "DISCONNECTED")

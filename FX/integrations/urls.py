@@ -1,7 +1,8 @@
 from django.urls import path
-from .views import CRMConnectionDetailView, CRMConnectionListView, CRMInboundUserView, CSVTemplateView, ImportCancelView, ImportCommitView, ImportDetailView, ImportRowsView, ServiceTokenActionView, ServiceTokenListView, TenantContextView, UserCreateView, UserImportView
+from .views import ControlPlaneContextView, CRMConnectionDetailView, CRMConnectionListView, CRMInboundUserView, CSVTemplateView, ImportCancelView, ImportCommitView, ImportDetailView, ImportRowsView, ServiceTokenActionView, ServiceTokenListView, TenantContextView, UserCreateView, UserImportView
 
 urlpatterns = [
+    path("v1/control-plane/context", ControlPlaneContextView.as_view()),
     path("v1/tenant/context", TenantContextView.as_view()),
     path("v1/users", UserCreateView.as_view()),
     path("v1/users/", UserCreateView.as_view()),
