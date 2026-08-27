@@ -185,9 +185,14 @@ CORS_ALLOW_HEADERS = [
     "authorization",
     "content-type",
     "dnt",
+    "idempotency-key",
     "origin",
     "user-agent",
+    "x-beyvra-simulation-mode",
+    "x-correlation-id",
     "x-csrftoken",
+    "x-organization-id",
+    "x-request-id",
     "x-requested-with",
 ]
 
@@ -243,6 +248,7 @@ INSTALLED_APPS = [
     "apps.post_trade",
     "apps.valuation",
     "apps.institutional",
+    "apps.workspace",
 ]
 
 # Treasury is an application-side simulation/read-model boundary. These flags

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.foundation.services import enqueue_event
 from apps.trading.api.errors import error_response
+from operations.permissions import current_session_has_mfa
 
 from .engine import evidence_hash
 from .models import SurveillanceCase, SurveillanceCaseEvent, SurveillanceEvent, SurveillanceRule, TradingRestriction
@@ -24,12 +25,12 @@ class SurveillanceViewer(permissions.BasePermission):
 
 class SurveillanceAnalyst(SurveillanceViewer):
     def has_permission(self, request, view):
-        return bool(super().has_permission(request, view) and (request.user.is_superuser or _roles(request.user) & {"surveillance_analyst", "surveillance_manager", "platform_admin"}))
+        return bool(super().has_permission(request, view) and current_session_has_mfa(request) and (request.user.is_superuser or _roles(request.user) & {"surveillance_analyst", "surveillance_manager", "platform_admin"}))
 
 
 class SurveillanceManager(SurveillanceViewer):
     def has_permission(self, request, view):
-        return bool(super().has_permission(request, view) and (request.user.is_superuser or _roles(request.user) & {"surveillance_manager", "platform_admin"}))
+        return bool(super().has_permission(request, view) and current_session_has_mfa(request) and (request.user.is_superuser or _roles(request.user) & {"surveillance_manager", "platform_admin"}))
 
 
 class EventSerializer(serializers.ModelSerializer):
