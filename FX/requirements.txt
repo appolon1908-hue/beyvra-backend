@@ -36,7 +36,7 @@ PyJWT[crypto]==2.13.0
 pyotp==2.9.0
 python-dotenv==1.2.2
 pytz==2024.1
-qrcode==7.4.2
+qrcode==8.2
 redis==5.0.1
 requests==2.33.0
 shortuuid==1.0.12
