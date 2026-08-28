@@ -5,6 +5,7 @@ from .api import (
     WatchlistDetailView,
     WatchlistItemCollectionView,
     WatchlistItemDetailView,
+    WatchlistItemReorderView,
 )
 
 
@@ -19,6 +20,11 @@ urlpatterns = [
         "watchlists/<uuid:watchlist_id>/items",
         WatchlistItemCollectionView.as_view(),
         name="watchlist-item-collection",
+    ),
+    path(
+        "watchlists/<uuid:watchlist_id>/items/reorder",
+        WatchlistItemReorderView.as_view(),
+        name="watchlist-item-reorder",
     ),
     path(
         "watchlists/<uuid:watchlist_id>/items/<str:instrument_id>",
