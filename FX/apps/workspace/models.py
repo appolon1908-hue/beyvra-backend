@@ -23,6 +23,7 @@ class Watchlist(models.Model):
     )
     name = models.CharField(max_length=80)
     is_default = models.BooleanField(default=False)
+    version = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

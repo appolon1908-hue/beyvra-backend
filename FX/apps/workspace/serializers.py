@@ -35,8 +35,8 @@ class WatchlistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Watchlist
-        fields = ("id", "name", "is_default", "items", "created_at", "updated_at")
-        read_only_fields = ("id", "is_default", "items", "created_at", "updated_at")
+        fields = ("id", "name", "is_default", "version", "items", "created_at", "updated_at")
+        read_only_fields = ("id", "is_default", "version", "items", "created_at", "updated_at")
 
     def validate_name(self, value):
         normalized = " ".join(value.split())

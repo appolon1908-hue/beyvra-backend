@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from django.db import IntegrityError, transaction
 from rest_framework import permissions, status, views
 from rest_framework.response import Response
@@ -140,22 +142,54 @@ class WatchlistItemDetailView(WorkspaceOwnedView):
 class WatchlistItemReorderView(WorkspaceOwnedView):
     @transaction.atomic
     def patch(self, request, watchlist_id):
-        row = self.watchlist(watchlist_id)
+        row = (
+            Watchlist.objects.select_for_update()
+            .filter(
+                organization=self.organization(),
+                user=request.user,
+                pk=watchlist_id,
+            )
+            .first()
+        )
         if row is None:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
 
-        if_match = request.headers.get("If-Match", "").strip('"')
-        expected_version = request.data.get("expected_version")
-
-        # Optimistic concurrency validation
-        current_version = getattr(row, "version", 1) if hasattr(row, "version") else 1
-        if if_match and if_match != str(current_version):
+        if_match = request.headers.get("If-Match")
+        if not if_match:
+            return error_response(request, "IF_MATCH_REQUIRED", 428)
+        expected_version = if_match.strip().strip('"')
+        if expected_version != str(row.version):
             return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
-        if expected_version is not None and expected_version != current_version:
+
+        body_version = request.data.get("expected_version")
+        if body_version is not None and str(body_version) != str(row.version):
             return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
 
         ordered_ids = request.data.get("item_ids") or request.data.get("ordered_item_ids") or []
-        for idx, item_id in enumerate(ordered_ids):
-            WatchlistItem.objects.filter(watchlist=row, pk=item_id).update(sort_order=idx)
+        if not isinstance(ordered_ids, list):
+            return error_response(request, "WATCHLIST_REORDER_INVALID", 400)
 
-        return Response(WatchlistSerializer(row).data)
+        try:
+            requested_ids = [UUID(str(item_id)) for item_id in ordered_ids]
+        except (TypeError, ValueError):
+            return error_response(request, "WATCHLIST_REORDER_INVALID", 400)
+
+        if len(requested_ids) != len(set(requested_ids)):
+            return error_response(request, "WATCHLIST_REORDER_INVALID", 400)
+
+        items = list(WatchlistItem.objects.select_for_update().filter(watchlist=row))
+        owned_ids = {item.id for item in items}
+        if set(requested_ids) != owned_ids:
+            return error_response(request, "WATCHLIST_REORDER_INVALID", 400)
+
+        item_by_id = {item.id: item for item in items}
+        for index, item_id in enumerate(requested_ids):
+            item_by_id[item_id].sort_order = index
+        WatchlistItem.objects.bulk_update(items, ["sort_order"])
+
+        row.version += 1
+        row.save(update_fields=("version", "updated_at"))
+        row = Watchlist.objects.prefetch_related("items").get(pk=row.pk)
+        response = Response(WatchlistSerializer(row).data)
+        response["ETag"] = f'"{row.version}"'
+        return response
