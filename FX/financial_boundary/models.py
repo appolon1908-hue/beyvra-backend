@@ -68,6 +68,45 @@ class DeadLetterEvent(models.Model):
         db_table = "financial_dead_letters"
 
 
+class ProviderWebhookInbox(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        PROCESSING = "PROCESSING"
+        PROCESSED = "PROCESSED"
+        DEAD_LETTER = "DEAD_LETTER"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provider = models.CharField(max_length=64)
+    external_event_id = models.CharField(max_length=128)
+    tenant_id = models.UUIDField()
+    payload_hash = models.CharField(max_length=64)
+    encrypted_payload = models.BinaryField(null=True, blank=True)
+    payload_reference = models.CharField(max_length=255, blank=True, default="")
+    received_at = models.DateTimeField(auto_now_add=True)
+    signature_timestamp = models.DateTimeField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    lease_owner = models.CharField(max_length=128, blank=True, default="")
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    failure_code = models.CharField(max_length=64, blank=True, default="")
+    request_id = models.CharField(max_length=128, blank=True, default="")
+
+    class Meta:
+        db_table = "financial_provider_webhook_inbox"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("provider", "external_event_id"),
+                name="financial_provider_webhook_unique",
+            )
+        ]
+        indexes = [
+            models.Index(fields=("status", "next_attempt_at"), name="fin_webhook_ready_idx"),
+            models.Index(fields=("tenant_id", "received_at"), name="fin_webhook_tenant_idx"),
+        ]
+
+
 class FinancialAuditEvent(ImmutableFinancialRecord):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     action = models.CharField(max_length=64)
