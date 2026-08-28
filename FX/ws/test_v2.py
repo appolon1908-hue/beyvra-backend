@@ -71,7 +71,7 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "REALTIME_V2_STAGING_ENABLED": "true",
         "CENTRIFUGO_ENABLED": "true",
         "NATS_JETSTREAM_ENABLED": "true",
-        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret-1",
     })
     def test_connection_token_is_short_lived_and_purpose_bound(self, _tenant):
         request = self.factory.post("/")
@@ -80,7 +80,7 @@ class RealtimeV2ContractTests(SimpleTestCase):
         response = v2.connection_token(request)
         self.assertEqual(response.status_code, 200)
         payload = json.loads(response.content)
-        claims = jwt.decode(payload["token"], "token-secret-token-secret-token-secret", algorithms=["HS256"], audience="centrifugo")
+        claims = jwt.decode(payload["token"], "token-secret-token-secret-token-secret-1", algorithms=["HS256"], audience="centrifugo")
 
         self.assertEqual(payload["expires_in"], 60)
         self.assertEqual(claims["sub"], "42")
@@ -97,14 +97,14 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "REALTIME_V2_STAGING_ENABLED": "true",
         "CENTRIFUGO_ENABLED": "true",
         "NATS_JETSTREAM_ENABLED": "true",
-        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret-1",
     })
     def test_subscription_token_is_channel_bound_and_denies_escalation(self, _tenant):
         request = self.factory.post("/", {"channel": "market.BTCUSDT.quote"}, format="json")
         force_authenticate(request, user=self.user)
         response = v2.subscription_token(request)
         self.assertEqual(response.status_code, 200)
-        claims = jwt.decode(json.loads(response.content)["token"], "token-secret-token-secret-token-secret", algorithms=["HS256"], audience="centrifugo-subscription")
+        claims = jwt.decode(json.loads(response.content)["token"], "token-secret-token-secret-token-secret-1", algorithms=["HS256"], audience="centrifugo-subscription")
         self.assertEqual(claims["channel"], "market.BTCUSDT.quote")
         self.assertEqual(claims["channel_pattern"], "market.{symbol}.quote")
 
@@ -117,7 +117,7 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "REALTIME_V2_STAGING_ENABLED": "true",
         "CENTRIFUGO_ENABLED": "true",
         "NATS_JETSTREAM_ENABLED": "true",
-        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret-1",
     })
     def test_subscription_token_rejects_unpublished_news_channels(self):
         request = self.factory.post("/", {"channel": "news.market"}, format="json")
@@ -130,7 +130,7 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "REALTIME_V2_STAGING_ENABLED": "true",
         "CENTRIFUGO_ENABLED": "true",
         "NATS_JETSTREAM_ENABLED": "true",
-        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret-1",
     })
     def test_subscription_token_enforces_required_permission_for_public_channels(self, _tenant):
         inactive_user = type("User", (), {"id": 42, "is_authenticated": True, "is_active": False})()
