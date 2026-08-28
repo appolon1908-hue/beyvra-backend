@@ -1,5 +1,6 @@
 import uuid
 from django.test import TestCase, override_settings
+from django.core.cache import cache
 from rest_framework.test import APIClient
 from users.models import User
 from integrations.models import Organization, OrganizationMembership
@@ -32,6 +33,10 @@ class RealtimeV1ContractTests(TestCase):
         self.assertEqual(res.status_code, 201)
         self.assertIn("ticket", res.json())
         self.assertEqual(res.json()["user_id"], str(self.user.pk))
+        cached = cache.get(res.json()["ticket"])
+        self.assertEqual(cached["user_id"], self.user.pk)
+        self.assertEqual(cached["tenant_id"], str(self.org.pk))
+        self.assertEqual(res.json()["expires_in_seconds"], 60)
 
     def test_get_realtime_snapshot(self):
         res = self.client.get("/api/v1/realtime/snapshot?topic=orders")

@@ -21,6 +21,15 @@ from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
 CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
+FORBIDDEN_BROWSER_PUBLISH_ACTIONS = {
+    "publish",
+    "broadcast",
+    "emit",
+    "push",
+    "send_market",
+    "send_news",
+    "inject_event",
+}
 legacy_ws_connections = Counter(
     "legacy_ws_connections_total",
     "Connections to compatibility WebSocket routes",
@@ -96,6 +105,97 @@ def _resolve_realtime_instrument(reference: str) -> tuple[str, str] | None:
     return str(instrument.instrument_id), mapping.provider_symbol
 
 
+def _serialize_news_article(article):
+    return {
+        "article_id": article.article_id,
+        "news_id": article.article_id,
+        "provider_id": article.provider_id,
+        "provider_article_id": article.provider_article_id,
+        "headline": article.headline,
+        "summary": article.summary,
+        "content_preview": article.content_preview,
+        "source_name": article.publisher,
+        "source_id": article.source_id,
+        "source_url": article.source_url,
+        "article_url": article.canonical_url,
+        "image_url": article.image_url,
+        "published_at": article.published_at.isoformat(),
+        "received_at": article.received_at.isoformat(),
+        "language": article.language,
+        "countries": article.countries,
+        "categories": article.categories,
+        "instrument_refs": article.affected_instruments,
+        "keywords": article.keywords,
+        "sentiment": article.sentiment,
+        "provider_timestamp": article.provider_timestamp.isoformat() if article.provider_timestamp else None,
+        "delayed": article.delayed,
+        "stale": False,
+        "provenance": {
+            "provider_id": article.provider_id,
+            "normalizer_version": article.normalizer_version,
+        },
+    }
+
+
+def _serialize_economic_event(event):
+    return {
+        "event_id": event.event_id,
+        "provider_id": event.provider_id,
+        "title": event.title,
+        "country": event.country,
+        "currency": event.currency,
+        "importance": event.importance,
+        "scheduled_at": event.scheduled_at.isoformat(),
+        "actual_at": event.actual_at.isoformat() if event.actual_at else None,
+        "previous_value": event.previous_value,
+        "forecast_value": event.forecast_value,
+        "actual_value": event.actual_value,
+        "unit": event.unit,
+        "affected_instruments": event.affected_instruments,
+        "status": event.status,
+    }
+
+
+@database_sync_to_async
+def _fetch_news_channel_events(channel: str, seen_ids: set[str], limit: int = 25):
+    from news_app.models import EconomicCalendarEvent, NewsArticle
+
+    if channel == "news.economic":
+        rows = EconomicCalendarEvent.objects.order_by("-scheduled_at", "event_id")[:limit]
+        return [
+            {
+                "id": event.event_id,
+                "channel": channel,
+                "event_type": "news.economic.updated.v1",
+                "occurred_at": event.actual_at or event.scheduled_at,
+                "data": _serialize_economic_event(event),
+            }
+            for event in rows
+            if event.event_id not in seen_ids
+        ]
+
+    articles = NewsArticle.objects.exclude(status=NewsArticle.Status.RETRACTED).order_by("-published_at", "article_id")[: limit * 4]
+    symbol = channel.split(".", 1)[1].upper() if channel.startswith("news.") and channel != "news.market" else None
+    events = []
+    for article in articles:
+        if article.article_id in seen_ids:
+            continue
+        if symbol and symbol not in {str(item).upper() for item in article.affected_instruments}:
+            continue
+        events.append(
+            {
+                "id": article.article_id,
+                "channel": channel,
+                "event_type": "news.article.updated.v1",
+                "occurred_at": article.published_at,
+                "data": _serialize_news_article(article),
+            }
+        )
+        if len(events) >= limit:
+            break
+    return events
+
+
 class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
     """Multiplex market and demo events over one authenticated connection."""
 
@@ -107,6 +207,7 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         self.tenant_id = "default"
         self.subscriptions: set[str] = set()
         self.market_tasks: dict[str, asyncio.Task] = {}
+        self.news_tasks: dict[str, asyncio.Task] = {}
         self.sequence = defaultdict(int)
 
     async def connect(self):
@@ -116,6 +217,10 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return
         query = parse_qs(self.scope.get("query_string", b"").decode())
         self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
+        ticket_tenant = (self.scope.get("realtime_ticket") or {}).get("tenant_id")
+        if ticket_tenant and ticket_tenant != self.tenant_id:
+            await self.close(code=4403)
+            return
         route = self.scope.get("path", "")
         legacy = route.startswith("/ws/v1/")
         if legacy:
@@ -137,8 +242,12 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         for task in self.market_tasks.values():
             task.cancel()
+        for task in self.news_tasks.values():
+            task.cancel()
         if self.market_tasks:
             await asyncio.gather(*self.market_tasks.values(), return_exceptions=True)
+        if self.news_tasks:
+            await asyncio.gather(*self.news_tasks.values(), return_exceptions=True)
         user = self.scope.get("user")
         if user and user.is_authenticated:
             await self.channel_layer.group_discard(f"trades_updates_{self.tenant_id}_{user.id}", self.channel_name)
@@ -146,13 +255,17 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content, **kwargs):
         action = content.get("action")
-        if action == "ping":
+        action_key = action.lower() if isinstance(action, str) else action
+        if action_key in FORBIDDEN_BROWSER_PUBLISH_ACTIONS:
+            await self.send_json({"type": "error", "code": "FORBIDDEN_PUBLISH", "status": 403})
+            return
+        if action_key == "ping":
             await self.send_json({"type": "pong"})
             return
-        if action == "resume":
+        if action_key == "resume":
             await self.send_json({"type": "resume.ack", "channels": sorted(self.subscriptions)})
             return
-        if action == "subscribe":
+        if action_key == "subscribe":
             channels = content.get("channels", [])
             if not isinstance(channels, list):
                 await self.send_json({"type": "error", "code": "INVALID_CHANNELS"})
@@ -180,9 +293,11 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                         if quote_task:
                             quote_task.cancel()
                     self.market_tasks.setdefault(channel, asyncio.create_task(self._stream_market(channel)))
+                if channel.startswith("news."):
+                    self.news_tasks.setdefault(channel, asyncio.create_task(self._stream_news(channel)))
             await self.send_json({"type": "subscription.ack", "added": added, "channels": sorted(self.subscriptions)})
             return
-        if action == "unsubscribe":
+        if action_key == "unsubscribe":
             channels = content.get("channels", [])
             removed = []
             for channel in channels if isinstance(channels, list) else []:
@@ -191,6 +306,9 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
                 self.subscriptions.remove(channel)
                 removed.append(channel)
                 task = self.market_tasks.pop(channel, None)
+                if task:
+                    task.cancel()
+                task = self.news_tasks.pop(channel, None)
                 if task:
                     task.cancel()
             await self.send_json({"type": "subscription.ack", "removed": removed, "channels": sorted(self.subscriptions)})
@@ -208,6 +326,10 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])
         if len(dotted) == 4 and dotted[0] == "market" and dotted[2] == "candle":
             return (dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])) and dotted[3] in SUPPORTED_INTERVALS
+        if channel in {"news.market", "news.economic"}:
+            return True
+        if len(dotted) == 2 and dotted[0] == "news":
+            return bool(dotted[1]) and len(dotted[1]) <= 64
         return False
 
     async def _stream_market(self, channel: str):
@@ -262,22 +384,47 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         finally:
             self.market_tasks.pop(channel, None)
 
-    async def _emit(self, channel, data, *, instrument_id=None):
+    async def _stream_news(self, channel: str):
+        seen_ids: set[str] = set()
+        poll_seconds = max(5, int(getattr(settings, "NEWS_REALTIME_POLL_SECONDS", 15)))
+        try:
+            while channel in self.subscriptions:
+                events = await _fetch_news_channel_events(channel, seen_ids)
+                for event in reversed(events):
+                    seen_ids.add(event["id"])
+                    await self._emit(
+                        event["channel"],
+                        event["data"],
+                        event_type=event["event_type"],
+                        occurred_at=event["occurred_at"],
+                    )
+                await asyncio.sleep(poll_seconds)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            self.news_tasks.pop(channel, None)
+
+    async def _emit(self, channel, data, *, instrument_id=None, event_type=None, occurred_at=None):
         if self.sequence[channel] == 0 and isinstance(data, dict) and isinstance(data.get("time"), int):
             self.sequence[channel] = data["time"]
         else:
             self.sequence[channel] += 1
-        if channel == "demo.order":
+        if event_type:
+            pass
+        elif channel == "demo.order":
             event_type = "demo.order.updated.v1"
         elif channel == "demo.execution":
             event_type = "demo.execution.updated.v1"
         elif channel == "demo.position":
             event_type = "demo.position.updated.v1"
+        elif channel.startswith("news."):
+            event_type = "news.article.updated.v1" if channel != "news.economic" else "news.economic.updated.v1"
         else:
             event_type = "market.quote.updated.v1" if channel.endswith(".quote") else "market.candle.updated.v1" if ".candle." in channel else "market.status.changed.v1"
         now = datetime.now(timezone.utc).isoformat()
+        occurred = occurred_at.isoformat() if hasattr(occurred_at, "isoformat") else now
         instrument_id = instrument_id or (channel.split(".")[1] if channel.startswith("market.") and channel.count(".") >= 2 else None)
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "schema_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": now, "server_timestamp": now, "server_time": now, "source": "approved-provider", "payload": data, "data": data})
+        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "schema_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": occurred, "server_timestamp": now, "server_time": now, "source": "approved-provider", "payload": data, "data": data})
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))

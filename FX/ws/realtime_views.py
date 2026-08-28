@@ -1,4 +1,5 @@
 import uuid
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +14,11 @@ class RealtimeTicketView(APIView):
     def post(self, request):
         ticket_id = str(uuid.uuid4())
         tenant_id = _tenant(request.user)
+        cache.set(
+            ticket_id,
+            {"user_id": request.user.pk, "tenant_id": tenant_id},
+            timeout=60,
+        )
         return Response({
             "ticket": ticket_id,
             "tenant_id": tenant_id,

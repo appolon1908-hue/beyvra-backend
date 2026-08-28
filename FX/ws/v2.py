@@ -21,11 +21,8 @@ from integrations.models import OrganizationMembership
 
 
 CHANNEL_REGISTRY = {
-    "market.{symbol}.tick": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.quote": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.candle.{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
-    "market.{symbol}.orderbook": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 10},
-    "market.{symbol}.trades": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 10},
     "news.{symbol}": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
     "news.market": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
     "news.economic": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
@@ -67,6 +64,8 @@ def _enabled():
 
 
 def _channel_entry(channel):
+    if channel in CHANNEL_REGISTRY:
+        return channel, CHANNEL_REGISTRY[channel]
     for pattern, entry in CHANNEL_REGISTRY.items():
         if _PATTERN_RE[pattern].match(channel):
             return pattern, entry
@@ -84,11 +83,7 @@ def _owns_demo_account(user_id, channel):
     return False
 
 
-from .realtime_views import RealtimeTicketView, RealtimeSnapshotView, RealtimeResumeView
-
-realtime_ticket_v1 = RealtimeTicketView.as_view()
-realtime_snapshot_v1 = RealtimeSnapshotView.as_view()
-realtime_resume_v1 = RealtimeResumeView.as_view()
+def _claims(request, audience, extra=None):
     secret = _secret()
     if not secret:
         return None
@@ -111,6 +106,13 @@ realtime_resume_v1 = RealtimeResumeView.as_view()
     if extra:
         claims.update(extra)
     return jwt.encode(claims, secret, algorithm="HS256")
+
+
+from .realtime_views import RealtimeTicketView, RealtimeSnapshotView, RealtimeResumeView
+
+realtime_ticket_v1 = RealtimeTicketView.as_view()
+realtime_snapshot_v1 = RealtimeSnapshotView.as_view()
+realtime_resume_v1 = RealtimeResumeView.as_view()
 
 
 @api_view(["POST"])
