@@ -50,7 +50,7 @@ def send_password_reset_link_email(user):
     from users.email_verification import queue_email
     token = default_token_generator.make_token(user)
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    link = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?uid={uid}&token={token}"
+    link = f"{settings.FRONTEND_URL.rstrip('/')}/password-reset?uidb64={uid}&token={token}"
     return queue_email(event_type="account.password_reset_requested", email=user.email,
                        template_key="password_reset", payload={"action": f"Continue the authenticated password reset flow: {link}"},
                        idempotency_key=f"password-reset:{user.pk}:{hashlib.sha256(token.encode()).hexdigest()[:16]}", user_id=user.pk)

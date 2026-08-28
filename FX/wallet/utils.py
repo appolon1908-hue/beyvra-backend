@@ -89,6 +89,6 @@ def send_balance_update_email(balance):
 
     html_content = email_template.render(context)
     text_content = " "
-    msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [context['email']])
+    msg = EmailMultiAlternatives(subject, text_content, settings.DEFAULT_FROM_EMAIL, [context['email']])
     msg.attach_alternative(html_content, "text/html")
     msg.send(fail_silently=False)

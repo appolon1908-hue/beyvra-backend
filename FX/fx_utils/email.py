@@ -12,7 +12,7 @@ def custom_mail_admins(subject=str, message=str, fail_silently=False, connection
     send_mail_async.delay(
         subject=subject,
         message=message,
-        from_email=settings.EMAIL_HOST_USER,
+        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[a[1] for a in settings.ADMINS],
         fail_silently=fail_silently,
         html_message=html_message,
