@@ -31,16 +31,22 @@ from django.core.exceptions import ValidationError
 from rest_framework import status
 
 
+def _trading_client():
+    return TradingClient(
+        settings.API_KEY_ALPACA,
+        settings.SECRET_KEY_ALPACA,
+        paper=settings.TRADING_MODE == "paper",
+        url_override=settings.ALPACA_TRADING_BASE_URL,
+    )
+
+
 class AlpacaIntegrationAccount:
     """Alpaca integration."""
 
     restricted_message = "Account is currently restricted from trading."
 
     def __init__(self):
-        self.trading_client = TradingClient(
-            settings.API_KEY_ALPACA,
-            settings.SECRET_KEY_ALPACA,
-        )
+        self.trading_client = _trading_client()
 
     def get_account_info(self):
         """Get account info."""
@@ -257,10 +263,7 @@ class AlpacaIntegrationAssets:
     """Alpaca integration assets."""
 
     def __init__(self):
-        self.trading_client = TradingClient(
-            settings.API_KEY_ALPACA,
-            settings.SECRET_KEY_ALPACA,
-        )
+        self.trading_client = _trading_client()
 
     def get_assets(self, request):
         """Get assets."""
@@ -329,11 +332,7 @@ class AlpacaIntegrationOrders:
     """Alpaca integration orders."""
 
     def __init__(self):
-        self.trading_client = TradingClient(
-            settings.API_KEY_ALPACA,
-            settings.SECRET_KEY_ALPACA,
-            paper=True,  # use paper trading environment
-        )
+        self.trading_client = _trading_client()
 
     def get_orders(self, request):
         """Get orders."""
@@ -441,10 +440,7 @@ class AlpacaIntegrationPositions:
     """Alpaca integration positions."""
 
     def __init__(self):
-        self.trading_client = TradingClient(
-            settings.API_KEY_ALPACA,
-            settings.SECRET_KEY_ALPACA,
-        )
+        self.trading_client = _trading_client()
 
     def get_positions(self):
         """Get positions."""

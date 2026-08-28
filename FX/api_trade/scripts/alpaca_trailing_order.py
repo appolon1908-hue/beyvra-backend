@@ -6,15 +6,20 @@ from api_trade.utils.alpaca_util import format_to_unix_order_dict
 from django.conf import settings
 
 
+def _trading_client():
+    return TradingClient(
+        settings.API_KEY_ALPACA,
+        settings.SECRET_KEY_ALPACA,
+        paper=settings.TRADING_MODE == "paper",
+        url_override=settings.ALPACA_TRADING_BASE_URL,
+    )
+
+
 class AlpacaTrailingStopOrder:
     """Alpaca trailing orders."""
 
     def __init__(self):
-        self.trading_client = TradingClient(
-            settings.API_KEY_ALPACA,
-            settings.SECRET_KEY_ALPACA,
-            paper=True,  # use paper trading environment
-        )
+        self.trading_client = _trading_client()
 
     def place_trail_order(self, request_data):
         """Trail order."""

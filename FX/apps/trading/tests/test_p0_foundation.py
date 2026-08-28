@@ -38,10 +38,18 @@ class OrderAndRiskTests(TestCase):
         self.assertFalse(eligibility.withdrawal_eligible)
 
     def test_transition_matrix_and_terminal_states(self):
-        self.assertEqual(transition_order("PENDING", "ACCEPTED"), OrderState.ACCEPTED)
-        self.assertEqual(transition_order("OPEN", "FILLED"), OrderState.FILLED)
+        self.assertEqual(transition_order("PENDING_SUBMIT", "ACKNOWLEDGED"), OrderState.ACKNOWLEDGED)
+        self.assertEqual(transition_order("ACKNOWLEDGED", "FILLED"), OrderState.FILLED)
         with self.assertRaises(InvalidOrderTransition):
-            transition_order("FILLED", "OPEN")
+            transition_order("FILLED", "ACKNOWLEDGED")
+
+    def test_order_state_vocabulary_has_no_duplicate_compatibility_states(self):
+        canonical = {state.value for state in OrderState}
+        self.assertNotIn("PENDING", canonical)
+        self.assertNotIn("ACCEPTED", canonical)
+        self.assertNotIn("OPEN", canonical)
+        self.assertNotIn("CANCELLED", canonical)
+        self.assertEqual(transition_order("PENDING", "ACCEPTED"), OrderState.ACKNOWLEDGED)
 
     def test_risk_allow_deny_review_and_stale(self):
         engine = RiskEngine()
@@ -218,7 +226,7 @@ class IdempotencyConcurrencyTests(TransactionTestCase):
             order_type="MARKET",
             side="BUY",
             quantity="1",
-            state="OPEN",
+            state="ACKNOWLEDGED",
         )
         barrier = threading.Barrier(2)
 
@@ -246,6 +254,14 @@ class SafetyBoundaryTests(TestCase):
         self.assertEqual(settings.PUBLIC_WS_URL, "wss://api.beyvra.com/ws/v2/")
         self.assertEqual(settings.PUBLIC_STATUS_URL, "https://api.beyvra.com/health/ready")
         self.assertNotIn("codestra.cloud", settings.GOOGLE_OIDC_REDIRECT_URI)
+
+    def test_alpaca_defaults_are_backend_sandbox_only(self):
+        self.assertEqual(settings.TRADING_MODE, "paper")
+        self.assertFalse(settings.REAL_MONEY_ENABLED)
+        self.assertFalse(settings.LIVE_BROKER_ROUTING_ENABLED)
+        self.assertEqual(settings.ALPACA_TRADING_BASE_URL, "https://paper-api.alpaca.markets")
+        self.assertEqual(settings.ALPACA_BROKER_BASE_URL, "https://broker-api.sandbox.alpaca.markets")
+        self.assertEqual(settings.ALPACA_DATA_BASE_URL, "https://data.alpaca.markets")
 
     def test_financial_database_alias_and_credentials_are_absent(self):
         self.assertEqual(set(settings.DATABASES), {"default"})

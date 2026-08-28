@@ -11,7 +11,7 @@ class AlpacaMarketData:
 
     def get_market_movers(self, request):
 
-        url = f"https://data.alpaca.markets/v1beta1/screener/{request.query_params.get('market_type', 'crypto')}/movers?top={request.query_params.get('top', 10)}"  # noqa
+        url = f"{settings.ALPACA_DATA_BASE_URL}/v1beta1/screener/{request.query_params.get('market_type', 'crypto')}/movers?top={request.query_params.get('top', 10)}"  # noqa
 
         headers = {
             "accept": "application/json",

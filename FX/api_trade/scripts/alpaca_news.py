@@ -18,7 +18,7 @@ def get_news(request):
         raise ProviderNotAvailable("PROVIDER_NOT_AVAILABLE")
     with open(resolved.credential_path, encoding="utf-8") as credential_file:
         api_key, api_secret = credential_file.read().strip().split(":", 1)
-    url = f"https://data.alpaca.markets/v1beta1/news?&limit={req.get('limit')}&sort={req.get('sort')}&include_content={req.get('include_content')}&exclude_contentless={req.get('exclude_contentless')}"  # noqa
+    url = f"{settings.ALPACA_DATA_BASE_URL}/v1beta1/news?&limit={req.get('limit')}&sort={req.get('sort')}&include_content={req.get('include_content')}&exclude_contentless={req.get('exclude_contentless')}"  # noqa
 
     headers = {
         "accept": "application/json",

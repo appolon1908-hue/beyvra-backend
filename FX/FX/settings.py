@@ -521,8 +521,17 @@ AUTH_USER_MODEL = "users.User"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+TRADING_MODE = os.getenv("TRADING_MODE", "paper").lower()
 API_KEY_ALPACA = os.getenv("API_KEY_ALPACA")
 SECRET_KEY_ALPACA = os.getenv("API_SECRET_ALPACA")
+ALPACA_TRADING_BASE_URL = os.getenv("ALPACA_TRADING_BASE_URL", "https://paper-api.alpaca.markets").rstrip("/")
+ALPACA_BROKER_BASE_URL = os.getenv("ALPACA_BROKER_BASE_URL", "https://broker-api.sandbox.alpaca.markets").rstrip("/")
+ALPACA_DATA_BASE_URL = os.getenv("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").rstrip("/")
+if TRADING_MODE == "paper" and (
+    ALPACA_TRADING_BASE_URL == "https://api.alpaca.markets"
+    or ALPACA_BROKER_BASE_URL == "https://broker-api.alpaca.markets"
+):
+    raise ImproperlyConfigured("Paper trading mode cannot use Alpaca production trading or broker URLs.")
 # Stripe Settings
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
