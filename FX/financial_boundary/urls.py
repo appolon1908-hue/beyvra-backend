@@ -1,8 +1,12 @@
 from django.urls import path
 from .views import DepositView, FinancialFeaturesView, TransferView, WalletView, WithdrawalView
+from .canonical_webhook_views import CanonicalProviderWebhookView
 
 
 urlpatterns = [
+    path("webhooks/executions/<str:provider>", CanonicalProviderWebhookView.as_view(), name="webhook-executions"),
+    path("webhooks/market-data/<str:provider>", CanonicalProviderWebhookView.as_view(), name="webhook-market-data"),
+    path("webhooks/custody/<str:provider>", CanonicalProviderWebhookView.as_view(), name="webhook-custody"),
     path("features/", FinancialFeaturesView.as_view(), name="canonical-financial-features"),
     path("wallets/", WalletView.as_view(), name="canonical-wallet-list"),
     path("wallets/<str:asset>", WalletView.as_view(), name="canonical-wallet-detail"),
