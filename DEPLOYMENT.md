@@ -9,7 +9,7 @@ Never commit the populated environment file. Rotate the API credentials that wer
 ## Validate
 
 ```sh
-docker build -t tradx-backend:release FX
+docker build -t beyvra-backend:release -f FX/Dockerfile .
 docker compose config
 docker compose up -d --build
 docker compose ps
@@ -17,6 +17,15 @@ curl --fail https://YOUR_HOST/metrics
 ```
 
 The production web entrypoint waits for PostgreSQL and Redis, applies migrations, collects static files, and starts Gunicorn. Celery worker and beat services must use the same image and environment.
+
+For a self-contained local stack, copy `.env.docker.example` to `.env` and run:
+
+```sh
+docker compose -f docker-compose.local.yaml up -d --build
+docker compose -f docker-compose.local.yaml ps
+```
+
+The local compose file includes PostgreSQL 16, Redis, NATS without TLS, Centrifugo, Gunicorn, Daphne, Celery, and realtime publisher workers. It is intentionally separate from production because the production stack expects external monitoring/financial networks and TLS assets for NATS/Centrifugo.
 
 Before directing traffic to a new release, back up PostgreSQL and run migrations as a distinct deployment step if your platform can execute more than one web replica concurrently.
 

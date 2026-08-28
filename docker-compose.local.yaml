@@ -1,0 +1,252 @@
+services:
+  web:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    command: ./web-init-prod.sh
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NATS_URL: nats://nats:4222
+      CENTRIFUGO_PUBLISH_URL: http://centrifugo:8000/api/publish
+    volumes:
+      - static_files:/app/static
+      - media_files:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  daphne:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    command: daphne -b 0.0.0.0 -p 8001 FX.asgi:application
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      web:
+        condition: service_started
+    networks:
+      - backend
+
+  celery_worker:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    entrypoint: ["./worker-entrypoint.sh"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      web:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  celery_beat:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    entrypoint: ["./beat-entrypoint.sh"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      web:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  realtime_bridge:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    command: python manage.py realtime_v2_bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NATS_URL: nats://nats:4222
+      CENTRIFUGO_PUBLISH_URL: http://centrifugo:8000/api/publish
+    depends_on:
+      nats:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - backend
+
+  canonical-outbox-publisher:
+    image: ${BACKEND_IMAGE:-beyvra-backend:local}
+    build:
+      context: .
+      dockerfile: FX/Dockerfile
+    command: python manage.py publish_outbox
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NATS_URL: nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - backend
+
+  nginx:
+    build:
+      context: ./nginx
+      args:
+        CONFIG_FILE: nginx.prod.conf.template
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORT:-8000}:8080"
+    volumes:
+      - static_files:/app/static:ro
+      - media_files:/app/media:ro
+    environment:
+      WEB_HOST: web:8000
+      DAPHNE_HOST: daphne:8001
+      CENTRIFUGO_HOST: centrifugo:8000
+      PUBLIC_SERVER_NAME: ${PUBLIC_SERVER_NAME:-localhost}
+    depends_on:
+      web:
+        condition: service_started
+      daphne:
+        condition: service_started
+      centrifugo:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-beyvra}
+      POSTGRES_USER: ${DB_USER:-beyvra}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-beyvra-local-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-beyvra-local-redis}
+    command: redis-server --requirepass ${REDIS_PASSWORD:-beyvra-local-redis}
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD:-beyvra-local-redis}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10.22-alpine
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    volumes:
+      - nats_data:/data
+      - ./infra/realtime-v2/nats.local.conf:/etc/nats/nats.conf:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8222/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6.2.0
+    restart: unless-stopped
+    command: ["centrifugo", "-c", "/etc/centrifugo/config.json"]
+    environment:
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:-local-centrifugo-token-change-me}
+      CENTRIFUGO_CLIENT_SUBSCRIPTION_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:-local-centrifugo-token-change-me}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:-local-centrifugo-api-key-change-me}
+      CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:-local-centrifugo-proxy-change-me}
+    volumes:
+      - ./infra/realtime-v2/centrifugo.local.json:/etc/centrifugo/config.json:ro
+    networks:
+      - backend
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8000/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  static_files:
+  media_files:
+  postgres_data:
+  redis_data:
+  nats_data:
+
+networks:
+  backend:
+    driver: bridge

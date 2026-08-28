@@ -6,9 +6,8 @@ Back-end for the FX portal.
 
 Make sure you have the following installed on your machine:
 
-- Python 3.x
-- Virtual Environment
-- PostgreSQL
+- Docker Engine with the Docker Compose plugin
+- Python 3.x and PostgreSQL only if you want to run the backend outside Docker
 
 ## Getting Started
 
@@ -19,24 +18,27 @@ Make sure you have the following installed on your machine:
     cd trading-backend
     ```
 
-2. **Copy .env.example file and create .env file**
-    - Environment variables will be pickedup from .env file.
+2. **Create the Docker environment file**
+    ```bash
+    cp .env.docker.example .env
+    ```
+    - Replace placeholder secrets before using shared or production environments.
 
 3. **Start containers (start project)**
     ```
-    ./start.sh
+    docker compose -f docker-compose.local.yaml up -d --build
     ```
     - (execute in git bash for windows users)
 
 4. **Create super user**
     ```bash
-    docker compose exec web python3 manage.py createsuperuser
+    docker compose -f docker-compose.local.yaml exec web python3 manage.py createsuperuser
     ```
     - (execute in git bash for windows users)
 
 5. **Stop containers (stop project).**
     ```
-    ./stop.sh
+    docker compose -f docker-compose.local.yaml down
     ```
     - (execute in git bash for windows users)
 
@@ -46,15 +48,14 @@ The swagger API documentation can be accessed at: {HOST}:{PORT}/api/docs
 
 ### Development Notes
 
-Run commands inside python (web) container
+Run commands inside python (web) container:
 
-**NOTE:** If you're running the `docker-compose-dev.yaml` file Make sure to set DEBUG=1 in environment vars. Because we're using promethues exporter and it clashes with django hot reload mode, We must disable the exporter in development environment.
 ```
-docker compose exec web python3 manage.py createsuperuser
-docker compose exec web python3 manage.py makemigrations
-docker compose exec web python3 manage.py migrate
-docker compose exec web python3 manage.py collectstatic --no-input --clear
-docker compose exec web python3 manage.py shell
+docker compose -f docker-compose.local.yaml exec web python3 manage.py createsuperuser
+docker compose -f docker-compose.local.yaml exec web python3 manage.py makemigrations --check --dry-run
+docker compose -f docker-compose.local.yaml exec web python3 manage.py migrate
+docker compose -f docker-compose.local.yaml exec web python3 manage.py collectstatic --no-input --clear
+docker compose -f docker-compose.local.yaml exec web python3 manage.py shell
 ```
 To test stripe payments in developement, following commands can be useful:
 

@@ -1,0 +1,44 @@
+{
+  "broker": {
+    "enabled": true,
+    "type": "nats",
+    "nats": {
+      "url": "nats://nats:4222",
+      "prefix": "beyvra-local-centrifugo"
+    }
+  },
+  "client": {
+    "token": {"hmac_secret_key": "${CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY}"},
+    "subscription_token": {"enabled": true, "hmac_secret_key": "${CENTRIFUGO_CLIENT_SUBSCRIPTION_TOKEN_HMAC_SECRET_KEY}"},
+    "allowed_origins": ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:3000", "http://127.0.0.1:3000"],
+    "connection_limit": 1000,
+    "channel_limit": 64,
+    "connection_rate_limit": 10000
+  },
+  "admin": {"enabled": false},
+  "http_api": {"key": "${CENTRIFUGO_HTTP_API_KEY}"},
+  "prometheus": {"enabled": true, "handler_prefix": "/metrics"},
+  "health": {"enabled": true, "handler_prefix": "/health"},
+  "channel": {
+    "proxy": {
+      "subscribe": {
+        "endpoint": "http://web:8000/api/v1/realtime/v2/authorize-subscription",
+        "timeout": "2s",
+        "static_headers": {
+          "X-Codestra-Proxy-Secret": "${CENTRIFUGO_PROXY_SECRET}",
+          "X-Forwarded-Proto": "http",
+          "Host": "localhost"
+        }
+      }
+    },
+    "without_namespace": {
+      "history_size": 100,
+      "history_ttl": "5m",
+      "allow_subscribe_for_client": false,
+      "allow_history_for_client": true,
+      "allow_recovery": true,
+      "subscribe_proxy_enabled": true,
+      "subscribe_proxy_name": "default"
+    }
+  }
+}
