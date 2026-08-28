@@ -1,5 +1,13 @@
 from django.urls import path
 
+from .account_projections_views import (
+    AccountBalancesProjectionView,
+    AccountBuyingPowerProjectionView,
+    AccountDetailProjectionView,
+    AccountStatementsProjectionView,
+    AccountTaxLotsProjectionView,
+    AccountTransactionsProjectionView,
+)
 from .views import (
     AccountsView,
     EmptyDetailView,
@@ -30,7 +38,12 @@ urlpatterns = [
     path("positions", PositionsView.as_view()),
     path("positions/<uuid:position_id>", EmptyDetailView.as_view()),
     path("accounts", AccountsView.as_view()),
+    path("accounts/<uuid:account_id>", AccountDetailProjectionView.as_view()),
+    path("accounts/<uuid:account_id>/balances", AccountBalancesProjectionView.as_view()),
+    path("accounts/<uuid:account_id>/buying-power", AccountBuyingPowerProjectionView.as_view()),
+    path("accounts/<uuid:account_id>/transactions", AccountTransactionsProjectionView.as_view()),
+    path("accounts/<uuid:account_id>/statements", AccountStatementsProjectionView.as_view()),
+    path("accounts/<uuid:account_id>/tax-lots", AccountTaxLotsProjectionView.as_view()),
     path("portfolio", PortfolioView.as_view()),
-    path("accounts/<uuid:account_id>", EmptyDetailView.as_view()),
     path("fees", FeesView.as_view()),
 ]
