@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import uuid
 
-from django.db import DatabaseError, close_old_connections, transaction
+from django.db import DatabaseError, close_old_connections, connection, transaction
 from django.test import TransactionTestCase
 
 from financial_boundary.halts import (
@@ -89,12 +89,13 @@ class FinancialHaltAuthorityTests(TransactionTestCase):
         self.assertEqual(FinancialAuditEvent.objects.filter(action="financial_halt.approved").count(), 1)
         with self.assertRaises(TypeError):
             request.delete()
-        with self.assertRaises(DatabaseError):
-            with transaction.atomic():
-                FinancialHaltRequest.objects.filter(pk=request.pk).update(reason_code="CHANGED")
-        with self.assertRaises(DatabaseError):
-            with transaction.atomic():
-                FinancialHaltApproval.objects.filter(pk=first.pk).delete()
+        if connection.vendor == "postgresql":
+            with self.assertRaises(DatabaseError):
+                with transaction.atomic():
+                    FinancialHaltRequest.objects.filter(pk=request.pk).update(reason_code="CHANGED")
+            with self.assertRaises(DatabaseError):
+                with transaction.atomic():
+                    FinancialHaltApproval.objects.filter(pk=first.pk).delete()
 
     def test_concurrent_checker_approvals_create_one_effect(self):
         request = self.request()

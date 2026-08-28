@@ -6,6 +6,54 @@ import uuid
 from django.db import migrations, models
 
 
+PROVIDER_GOVERNANCE_GUARD_SQL = """
+CREATE FUNCTION provider_governance_guard_approval() RETURNS trigger AS $$
+DECLARE current_id bigint; current_version integer; declared_type varchar; license_ok boolean;
+BEGIN
+  IF TG_OP IN ('UPDATE','DELETE') AND OLD.status = 'APPROVED' THEN
+    RAISE EXCEPTION 'approved provider approvals are immutable';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  SELECT provider_type INTO declared_type FROM provider_governance_providers WHERE id = NEW.provider_id;
+  IF declared_type IS NULL OR declared_type <> NEW.provider_type THEN RAISE EXCEPTION 'provider type mismatch'; END IF;
+  IF NEW.status = 'APPROVED' THEN
+    SELECT EXISTS(SELECT 1 FROM provider_governance_licenses l WHERE l.id=NEW.license_id AND l.provider_id=NEW.provider_id AND l.environment=NEW.environment AND l.status='APPROVED' AND (l.expires_at IS NULL OR l.expires_at > now())) INTO license_ok;
+    IF NOT license_ok THEN RAISE EXCEPTION 'approved license required'; END IF;
+    SELECT a.id,a.version INTO current_id,current_version FROM provider_governance_provider_approvals a
+      WHERE a.provider_id=NEW.provider_id AND a.environment=NEW.environment AND a.status='APPROVED'
+        AND NOT EXISTS(SELECT 1 FROM provider_governance_provider_approvals r WHERE r.supersedes_approval_id=a.id)
+      LIMIT 1;
+    IF current_id IS NOT NULL AND (NEW.supersedes_approval_id IS DISTINCT FROM current_id OR NEW.version <> current_version + 1) THEN
+      RAISE EXCEPTION 'approved replacement must supersede current version';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER provider_governance_approval_guard BEFORE INSERT OR UPDATE OR DELETE ON provider_governance_provider_approvals FOR EACH ROW EXECUTE FUNCTION provider_governance_guard_approval();
+CREATE FUNCTION provider_governance_guard_audit() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'provider governance audit is append-only'; END $$ LANGUAGE plpgsql;
+CREATE TRIGGER provider_governance_audit_guard BEFORE UPDATE OR DELETE ON provider_governance_audit FOR EACH ROW EXECUTE FUNCTION provider_governance_guard_audit();
+"""
+
+PROVIDER_GOVERNANCE_GUARD_REVERSE_SQL = """
+DROP TRIGGER IF EXISTS provider_governance_audit_guard ON provider_governance_audit;
+DROP FUNCTION IF EXISTS provider_governance_guard_audit();
+DROP TRIGGER IF EXISTS provider_governance_approval_guard ON provider_governance_provider_approvals;
+DROP FUNCTION IF EXISTS provider_governance_guard_approval();
+"""
+
+
+def install_provider_governance_guards(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(PROVIDER_GOVERNANCE_GUARD_SQL)
+
+
+def remove_provider_governance_guards(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(PROVIDER_GOVERNANCE_GUARD_REVERSE_SQL)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -178,39 +226,5 @@ class Migration(migrations.Migration):
             model_name='providerapproval',
             constraint=models.CheckConstraint(condition=models.Q(models.Q(('credential_policy', 'NONE'), ('credential_reference__isnull', True)), models.Q(('credential_policy', 'REQUIRED'), ('credential_reference__isnull', False)), _connector='OR'), name='credential_policy_satisfied'),
         ),
-        migrations.RunSQL(
-            sql="""
-            CREATE FUNCTION provider_governance_guard_approval() RETURNS trigger AS $$
-            DECLARE current_id bigint; current_version integer; declared_type varchar; license_ok boolean;
-            BEGIN
-              IF TG_OP IN ('UPDATE','DELETE') AND OLD.status = 'APPROVED' THEN
-                RAISE EXCEPTION 'approved provider approvals are immutable';
-              END IF;
-              IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-              SELECT provider_type INTO declared_type FROM provider_governance_providers WHERE id = NEW.provider_id;
-              IF declared_type IS NULL OR declared_type <> NEW.provider_type THEN RAISE EXCEPTION 'provider type mismatch'; END IF;
-              IF NEW.status = 'APPROVED' THEN
-                SELECT EXISTS(SELECT 1 FROM provider_governance_licenses l WHERE l.id=NEW.license_id AND l.provider_id=NEW.provider_id AND l.environment=NEW.environment AND l.status='APPROVED' AND (l.expires_at IS NULL OR l.expires_at > now())) INTO license_ok;
-                IF NOT license_ok THEN RAISE EXCEPTION 'approved license required'; END IF;
-                SELECT a.id,a.version INTO current_id,current_version FROM provider_governance_provider_approvals a
-                  WHERE a.provider_id=NEW.provider_id AND a.environment=NEW.environment AND a.status='APPROVED'
-                    AND NOT EXISTS(SELECT 1 FROM provider_governance_provider_approvals r WHERE r.supersedes_approval_id=a.id)
-                  LIMIT 1;
-                IF current_id IS NOT NULL AND (NEW.supersedes_approval_id IS DISTINCT FROM current_id OR NEW.version <> current_version + 1) THEN
-                  RAISE EXCEPTION 'approved replacement must supersede current version';
-                END IF;
-              END IF;
-              RETURN NEW;
-            END $$ LANGUAGE plpgsql;
-            CREATE TRIGGER provider_governance_approval_guard BEFORE INSERT OR UPDATE OR DELETE ON provider_governance_provider_approvals FOR EACH ROW EXECUTE FUNCTION provider_governance_guard_approval();
-            CREATE FUNCTION provider_governance_guard_audit() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'provider governance audit is append-only'; END $$ LANGUAGE plpgsql;
-            CREATE TRIGGER provider_governance_audit_guard BEFORE UPDATE OR DELETE ON provider_governance_audit FOR EACH ROW EXECUTE FUNCTION provider_governance_guard_audit();
-            """,
-            reverse_sql="""
-            DROP TRIGGER IF EXISTS provider_governance_audit_guard ON provider_governance_audit;
-            DROP FUNCTION IF EXISTS provider_governance_guard_audit();
-            DROP TRIGGER IF EXISTS provider_governance_approval_guard ON provider_governance_provider_approvals;
-            DROP FUNCTION IF EXISTS provider_governance_guard_approval();
-            """,
-        ),
+        migrations.RunPython(install_provider_governance_guards, remove_provider_governance_guards),
     ]

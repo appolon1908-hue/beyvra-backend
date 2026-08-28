@@ -36,6 +36,18 @@ DROP FUNCTION IF EXISTS post_trade_protect_trade_history();
 """
 
 
+def install_postgres_triggers(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(POSTGRES_TRIGGER)
+
+
+def remove_postgres_triggers(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(POSTGRES_REVERSE)
+
+
 class Migration(migrations.Migration):
     dependencies = [("post_trade", "0001_initial")]
-    operations = [migrations.RunPython(seed_calendar, migrations.RunPython.noop), migrations.RunSQL(POSTGRES_TRIGGER, POSTGRES_REVERSE)]
+    operations = [migrations.RunPython(seed_calendar, migrations.RunPython.noop), migrations.RunPython(install_postgres_triggers, remove_postgres_triggers)]

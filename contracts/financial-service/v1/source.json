@@ -3,6 +3,6 @@
   "branch": "feat/financial-boundary-foundation",
   "commit": "e27b9f67efca3dde5cb295712cb556133e4c00b3",
   "source_path": "contracts/openapi/financial-v1.yaml",
-  "sha256": "2131f7bcbb193085a75499c950a11ef1254886be7f04621df495af21d0d33547",
-  "verified_at": "2026-08-11T08:45:40Z"
+  "sha256": "f2cd10e3a9b360b31657d8c2ffd1a3cedb5d00bbbf0f4ec21edc12e3993fa031",
+  "verified_at": "2026-08-28T14:04:00Z"
 }

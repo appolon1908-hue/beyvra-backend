@@ -75,10 +75,14 @@ class CanonicalProviderWebhooksApiTests(TestCase):
             "HTTP_X_TIMESTAMP": str(now),
             "HTTP_X_SIGNATURE": sig,
             "HTTP_X_TENANT_REF": TENANT_REF,
-            "CONTENT_TYPE": "application/json"
         }
 
-        res = self.client.post(f"/api/v1/webhooks/executions/{provider}", body, **headers)
+        res = self.client.post(
+            f"/api/v1/webhooks/executions/{provider}",
+            body,
+            content_type="application/json",
+            **headers,
+        )
         self.assertEqual(res.status_code, 202)
         self.assertEqual(res.json()["status"], "accepted")
         self.assertEqual(ProviderWebhookInbox.objects.count(), 1)
@@ -89,19 +93,25 @@ class CanonicalProviderWebhooksApiTests(TestCase):
         self.assertEqual(inbox.status, ProviderWebhookInbox.Status.PENDING)
 
         # Duplicate submission
-        res_dup = self.client.post(f"/api/v1/webhooks/executions/{provider}", body, **headers)
+        res_dup = self.client.post(
+            f"/api/v1/webhooks/executions/{provider}",
+            body,
+            content_type="application/json",
+            **headers,
+        )
         self.assertEqual(res_dup.status_code, 200)
         self.assertEqual(res_dup.json()["status"], "duplicate")
         self.assertEqual(ProviderWebhookInbox.objects.count(), 1)
 
     def test_ingest_disallowed_provider(self):
-        res = self.client.post("/api/v1/webhooks/executions/untrusted_broker", b"{}")
+        res = self.client.post("/api/v1/webhooks/executions/untrusted_broker", b"{}", content_type="application/json")
         self.assertEqual(res.status_code, 403)
 
     def test_missing_provider_secret_fails_closed(self):
         res = self.client.post(
             "/api/v1/webhooks/executions/alpaca",
             b"{}",
+            content_type="application/json",
             HTTP_X_TENANT_REF=TENANT_REF,
         )
         self.assertEqual(res.status_code, 503)
@@ -109,5 +119,5 @@ class CanonicalProviderWebhooksApiTests(TestCase):
         self.assertFalse(ProviderWebhookInbox.objects.exists())
 
     def test_tenant_header_is_required(self):
-        res = self.client.post("/api/v1/webhooks/executions/alpaca", b"{}")
+        res = self.client.post("/api/v1/webhooks/executions/alpaca", b"{}", content_type="application/json")
         self.assertEqual(res.status_code, 400)

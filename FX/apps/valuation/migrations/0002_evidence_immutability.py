@@ -26,6 +26,18 @@ DROP FUNCTION IF EXISTS valuation_reject_evidence_mutation();
 """
 
 
+def install_immutability(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(FORWARD)
+
+
+def remove_immutability(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(REVERSE)
+
+
 class Migration(migrations.Migration):
     dependencies = [("valuation", "0001_initial")]
-    operations = [migrations.RunSQL(FORWARD, REVERSE)]
+    operations = [migrations.RunPython(install_immutability, remove_immutability)]

@@ -98,6 +98,7 @@ class CanonicalProviderWebhookView(APIView):
                     external_event_id=verified.provider_event_id,
                     tenant_id=tenant_ref,
                     payload_hash=payload_hash,
+                    encrypted_payload=request.body,
                     payload_reference=payload_reference,
                     signature_timestamp=_signature_timestamp(headers),
                     status=ProviderWebhookInbox.Status.PENDING,

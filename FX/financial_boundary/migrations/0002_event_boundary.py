@@ -20,6 +20,18 @@ DROP FUNCTION IF EXISTS financial_audit_append_only_guard();
 """
 
 
+def install_audit_guard(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(AUDIT_GUARD_SQL)
+
+
+def remove_audit_guard(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(AUDIT_GUARD_REVERSE_SQL)
+
+
 class Migration(migrations.Migration):
     dependencies = [("financial_boundary", "0001_initial")]
     operations = [
@@ -69,5 +81,5 @@ class Migration(migrations.Migration):
             model_name="financialauditevent",
             index=models.Index(fields=["tenant_ref", "occurred_at"], name="financial_audit_tenant_idx"),
         ),
-        migrations.RunSQL(AUDIT_GUARD_SQL, AUDIT_GUARD_REVERSE_SQL),
+        migrations.RunPython(install_audit_guard, remove_audit_guard),
     ]

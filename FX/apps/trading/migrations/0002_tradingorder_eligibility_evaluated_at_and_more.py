@@ -10,34 +10,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.SeparateDatabaseAndState(
-            database_operations=[
-                migrations.RunSQL(
-                    sql="""
-                        ALTER TABLE canonical_trading_tradingorder
-                            ADD COLUMN IF NOT EXISTS eligibility_evaluated_at timestamptz NULL,
-                            ADD COLUMN IF NOT EXISTS eligibility_policy_version varchar(32) NOT NULL DEFAULT '',
-                            ADD COLUMN IF NOT EXISTS eligibility_reason_codes jsonb NOT NULL DEFAULT '[]'::jsonb,
-                            ADD COLUMN IF NOT EXISTS eligibility_result varchar(20) NOT NULL DEFAULT 'DENIED',
-                            ADD COLUMN IF NOT EXISTS idempotency_key varchar(255) NOT NULL DEFAULT '',
-                            ADD COLUMN IF NOT EXISTS simulation boolean NOT NULL DEFAULT true;
-                        CREATE UNIQUE INDEX IF NOT EXISTS unique_sim_order_idempotency
-                            ON canonical_trading_tradingorder (tenant_ref, subject_ref, idempotency_key)
-                            WHERE NOT (idempotency_key = '');
-                    """,
-                    reverse_sql="""
-                        DROP INDEX IF EXISTS unique_sim_order_idempotency;
-                        ALTER TABLE canonical_trading_tradingorder
-                            DROP COLUMN IF EXISTS eligibility_evaluated_at,
-                            DROP COLUMN IF EXISTS eligibility_policy_version,
-                            DROP COLUMN IF EXISTS eligibility_reason_codes,
-                            DROP COLUMN IF EXISTS eligibility_result,
-                            DROP COLUMN IF EXISTS idempotency_key,
-                            DROP COLUMN IF EXISTS simulation;
-                    """,
-                ),
-            ],
-            state_operations=[
         migrations.AddField(
             model_name='tradingorder',
             name='eligibility_evaluated_at',
@@ -71,7 +43,5 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='tradingorder',
             constraint=models.UniqueConstraint(condition=models.Q(('idempotency_key', ''), _negated=True), fields=('tenant_ref', 'subject_ref', 'idempotency_key'), name='unique_sim_order_idempotency'),
-        ),
-            ],
         ),
     ]

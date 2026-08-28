@@ -7,10 +7,12 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 import re
+import threading
+import time
 import uuid
 from typing import Callable
 
-from django.db import IntegrityError, connection, transaction
+from django.db import IntegrityError, OperationalError, connection, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -29,6 +31,7 @@ AUDIT_ACTIONS = {
     "security_gate.denied",
     "financial_halt.requested", "financial_halt.approved",
 }
+_SQLITE_EVENT_LOCK = threading.RLock()
 
 
 class EventContractError(ValueError):
@@ -104,6 +107,28 @@ def enqueue_financial_event(envelope: FinancialEventEnvelope) -> FinancialOutbox
 
 def consume_financial_event(envelope: FinancialEventEnvelope, handler: Callable[[FinancialEventEnvelope], None]) -> bool:
     """Return True for the first committed effect and False for an exact duplicate."""
+    if connection.vendor == "sqlite":
+        with _SQLITE_EVENT_LOCK:
+            return _consume_financial_event_with_retry(envelope, handler)
+    return _consume_financial_event_with_retry(envelope, handler)
+
+
+def _consume_financial_event_with_retry(
+    envelope: FinancialEventEnvelope,
+    handler: Callable[[FinancialEventEnvelope], None],
+) -> bool:
+    attempts = 5 if connection.vendor == "sqlite" else 1
+    for attempt in range(attempts):
+        try:
+            return _consume_financial_event_once(envelope, handler)
+        except OperationalError as exc:
+            if connection.vendor != "sqlite" or "locked" not in str(exc).lower() or attempt == attempts - 1:
+                raise
+            time.sleep(0.02 * (attempt + 1))
+    raise RuntimeError("unreachable financial event retry state")
+
+
+def _consume_financial_event_once(envelope: FinancialEventEnvelope, handler: Callable[[FinancialEventEnvelope], None]) -> bool:
     try:
         with transaction.atomic():
             ProcessedEvent.objects.create(

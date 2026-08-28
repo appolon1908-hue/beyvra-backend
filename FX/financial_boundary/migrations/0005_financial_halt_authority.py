@@ -25,6 +25,18 @@ DROP FUNCTION IF EXISTS financial_halt_append_only_guard();
 """
 
 
+def install_halt_append_only(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(HALT_APPEND_ONLY_SQL)
+
+
+def remove_halt_append_only(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(HALT_APPEND_ONLY_REVERSE_SQL)
+
+
 class Migration(migrations.Migration):
     dependencies = [("financial_boundary", "0004_destination")]
     operations = [
@@ -69,5 +81,5 @@ class Migration(migrations.Migration):
             model_name="financialhaltapproval",
             index=models.Index(fields=["approved_at"], name="financial_halt_approved_idx"),
         ),
-        migrations.RunSQL(HALT_APPEND_ONLY_SQL, HALT_APPEND_ONLY_REVERSE_SQL),
+        migrations.RunPython(install_halt_append_only, remove_halt_append_only),
     ]

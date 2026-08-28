@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import threading
 import uuid
 
 from django.db import connection, transaction
@@ -24,6 +25,7 @@ _ALLOWED = {
     FinancialHaltRequest.State.READ_ONLY: frozenset(),
     FinancialHaltRequest.State.ALL_MUTATIONS_HALTED: frozenset(),
 }
+_SQLITE_HALT_LOCK = threading.RLock()
 
 
 class HaltDenied(PermissionError):
@@ -100,14 +102,34 @@ def request_financial_halt(*, tenant_ref, proposed_state: str, requested_by: int
 
 
 def _advisory_lock(tenant_ref: uuid.UUID):
+    if connection.vendor != "postgresql":
+        return
     key = int.from_bytes(hashlib.sha256(tenant_ref.bytes).digest()[:8], "big", signed=True)
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [key])
 
 
-@transaction.atomic
 def approve_financial_halt(*, request_id, approved_by: int, roles,
                            correlation_id) -> FinancialHaltApproval:
+    if connection.vendor == "sqlite":
+        with _SQLITE_HALT_LOCK:
+            return _approve_financial_halt(
+                request_id=request_id,
+                approved_by=approved_by,
+                roles=roles,
+                correlation_id=correlation_id,
+            )
+    return _approve_financial_halt(
+        request_id=request_id,
+        approved_by=approved_by,
+        roles=roles,
+        correlation_id=correlation_id,
+    )
+
+
+@transaction.atomic
+def _approve_financial_halt(*, request_id, approved_by: int, roles,
+                            correlation_id) -> FinancialHaltApproval:
     _validate_actor(approved_by)
     if FINANCIAL_MANAGER not in _roles(roles):
         raise HaltAuthorizationDenied("financial manager role required")
