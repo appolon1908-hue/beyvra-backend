@@ -135,3 +135,27 @@ class WatchlistItemDetailView(WorkspaceOwnedView):
         if not deleted:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class WatchlistItemReorderView(WorkspaceOwnedView):
+    @transaction.atomic
+    def patch(self, request, watchlist_id):
+        row = self.watchlist(watchlist_id)
+        if row is None:
+            return error_response(request, "RESOURCE_NOT_FOUND", 404)
+
+        if_match = request.headers.get("If-Match", "").strip('"')
+        expected_version = request.data.get("expected_version")
+
+        # Optimistic concurrency validation
+        current_version = getattr(row, "version", 1) if hasattr(row, "version") else 1
+        if if_match and if_match != str(current_version):
+            return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
+        if expected_version is not None and expected_version != current_version:
+            return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
+
+        ordered_ids = request.data.get("item_ids") or request.data.get("ordered_item_ids") or []
+        for idx, item_id in enumerate(ordered_ids):
+            WatchlistItem.objects.filter(watchlist=row, pk=item_id).update(sort_order=idx)
+
+        return Response(WatchlistSerializer(row).data)
