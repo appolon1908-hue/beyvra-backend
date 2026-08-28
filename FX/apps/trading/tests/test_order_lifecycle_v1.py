@@ -85,7 +85,7 @@ class OrderLifecycleV1ApiTests(TestCase):
 
         res_cancel = self.client.post(f"/api/v1/orders/{order_id}/cancel", **self.headers)
         self.assertEqual(res_cancel.status_code, 200)
-        self.assertEqual(res_cancel.json()["status"], OrderState.CANCELLED.value)
+        self.assertEqual(res_cancel.json()["status"], OrderState.CANCELED.value)
 
     def test_executions_endpoint(self):
         res_exec = self.client.get("/api/v1/executions", **self.headers)

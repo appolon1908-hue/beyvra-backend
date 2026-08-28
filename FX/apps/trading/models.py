@@ -23,7 +23,7 @@ class TradingOrder(models.Model):
     state = models.CharField(
         max_length=24,
         choices=[(value.value, value.value) for value in OrderState],
-        default=OrderState.PENDING.value,
+        default=OrderState.PENDING_SUBMIT.value,
     )
     simulation = models.BooleanField(default=True, editable=False)
     eligibility_policy_version = models.CharField(max_length=32, default="")

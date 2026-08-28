@@ -10,14 +10,10 @@ class OrderState(StrEnum):
     DRAFT = "DRAFT"
     PREVIEWED = "PREVIEWED"
     PENDING_SUBMIT = "PENDING_SUBMIT"
-    PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
     ACKNOWLEDGED = "ACKNOWLEDGED"
-    OPEN = "OPEN"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
     FILLED = "FILLED"
     CANCEL_PENDING = "CANCEL_PENDING"
-    CANCELLED = "CANCELLED"
     CANCELED = "CANCELED"
     REJECTED = "REJECTED"
     EXPIRED = "EXPIRED"
@@ -40,17 +36,20 @@ class OrderSide(StrEnum):
 TRANSITIONS = {
     OrderState.DRAFT: {OrderState.PREVIEWED, OrderState.REJECTED},
     OrderState.PREVIEWED: {OrderState.PENDING_SUBMIT, OrderState.REJECTED, OrderState.EXPIRED},
-    OrderState.PENDING_SUBMIT: {OrderState.ACKNOWLEDGED, OrderState.ACCEPTED, OrderState.REJECTED, OrderState.UNKNOWN},
-    OrderState.PENDING: {OrderState.ACCEPTED, OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.UNKNOWN},
-    OrderState.ACCEPTED: {OrderState.OPEN, OrderState.CANCEL_PENDING, OrderState.ACKNOWLEDGED},
-    OrderState.ACKNOWLEDGED: {OrderState.OPEN, OrderState.PARTIALLY_FILLED, OrderState.FILLED, OrderState.CANCEL_PENDING, OrderState.EXPIRED},
-    OrderState.OPEN: {OrderState.PARTIALLY_FILLED, OrderState.FILLED, OrderState.CANCEL_PENDING, OrderState.EXPIRED},
+    OrderState.PENDING_SUBMIT: {OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.UNKNOWN},
+    OrderState.ACKNOWLEDGED: {OrderState.PARTIALLY_FILLED, OrderState.FILLED, OrderState.CANCEL_PENDING, OrderState.EXPIRED},
     OrderState.PARTIALLY_FILLED: {OrderState.PARTIALLY_FILLED, OrderState.FILLED, OrderState.CANCEL_PENDING},
-    OrderState.CANCEL_PENDING: {OrderState.CANCELLED, OrderState.CANCELED},
-    OrderState.UNKNOWN: {OrderState.RECONCILIATION_REQUIRED, OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.FILLED, OrderState.CANCELED, OrderState.CANCELLED},
-    OrderState.RECONCILIATION_REQUIRED: {OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.FILLED, OrderState.CANCELED, OrderState.CANCELLED},
+    OrderState.CANCEL_PENDING: {OrderState.CANCELED},
+    OrderState.UNKNOWN: {OrderState.RECONCILIATION_REQUIRED, OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.FILLED, OrderState.CANCELED},
+    OrderState.RECONCILIATION_REQUIRED: {OrderState.ACKNOWLEDGED, OrderState.REJECTED, OrderState.FILLED, OrderState.CANCELED},
 }
-TERMINAL_STATES = {OrderState.FILLED, OrderState.CANCELLED, OrderState.CANCELED, OrderState.REJECTED, OrderState.EXPIRED}
+TERMINAL_STATES = {OrderState.FILLED, OrderState.CANCELED, OrderState.REJECTED, OrderState.EXPIRED}
+LEGACY_STATE_ALIASES = {
+    "PENDING": OrderState.PENDING_SUBMIT,
+    "ACCEPTED": OrderState.ACKNOWLEDGED,
+    "OPEN": OrderState.ACKNOWLEDGED,
+    "CANCELLED": OrderState.CANCELED,
+}
 
 
 class InvalidOrderTransition(ValueError):
@@ -58,6 +57,8 @@ class InvalidOrderTransition(ValueError):
 
 
 def transition_order(current, target):
+    current = LEGACY_STATE_ALIASES.get(str(current), current)
+    target = LEGACY_STATE_ALIASES.get(str(target), target)
     current, target = OrderState(current), OrderState(target)
     if target not in TRANSITIONS.get(current, set()):
         raise InvalidOrderTransition(f"ORDER_INVALID_STATE:{current}->{target}")

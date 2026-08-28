@@ -192,7 +192,7 @@ def _create_allowed(user, data, idempotency_key, correlation_id=None, idempotenc
         record, fresh = begin_idempotent_request(key=idempotency_key, tenant_ref=tenant, actor_ref=subject, endpoint="/api/v1/trading/orders", method="POST", request_data=data)
         if not fresh and record.response_body is not None:
             return record.response_body, 200
-    order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], limit_price=payload["limit_price"], state=OrderState.PENDING, simulation=True)
+    order = TradingOrder.objects.create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref, instrument_id=payload["instrument_id"], order_type=payload["order_type"], side=payload["side"], quantity=payload["quantity"], limit_price=payload["limit_price"], state=OrderState.PENDING_SUBMIT, simulation=True)
     eligibility = compliance_decision(user)
     if eligibility is not None:
         order.eligibility_policy_version = eligibility.policy_version
@@ -250,14 +250,12 @@ def apply_execution(order_id, execution):
             event_type = "trading.order.rejected.v1"
             transaction.on_commit(lambda: ORDERS_REJECTED.labels(ENVIRONMENT,"true").inc())
         elif execution.outcome == "EXPIRE":
-            if order.state == "PENDING": order.state = transition_order(order.state, "ACCEPTED")
-            if order.state == "ACCEPTED": order.state = transition_order(order.state, "OPEN")
+            if order.state == "PENDING_SUBMIT": order.state = transition_order(order.state, "ACKNOWLEDGED")
             order.state = transition_order(order.state, "EXPIRED")
             SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
             event_type = "trading.order.expired.v1"
         else:
-            if order.state == "PENDING": order.state = transition_order(order.state, "ACCEPTED")
-            if order.state == "ACCEPTED": order.state = transition_order(order.state, "OPEN")
+            if order.state == "PENDING_SUBMIT": order.state = transition_order(order.state, "ACKNOWLEDGED")
             next_filled = order.filled_quantity + execution.quantity
             if next_filled > order.quantity: raise ValueError("EXECUTION_OVERFILL")
             fee = execution.quantity * execution.price * FEE_RATE
@@ -310,16 +308,13 @@ def process_created_order(order_id, scenario=None):
     order = TradingOrder.objects.get(pk=order_id, simulation=True)
     correlation=order_correlation(order)
     selected = scenario or settings.SIMULATED_EXECUTION_SCENARIO
-    if order.state == "PENDING" and selected != "REJECT":
-        order.state = transition_order(order.state, "ACCEPTED"); order.save(update_fields=("state", "updated_at"))
-        enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.accepted.v1", payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
+    if order.state == "PENDING_SUBMIT" and selected != "REJECT":
+        order.state = transition_order(order.state, "ACKNOWLEDGED"); order.save(update_fields=("state", "updated_at"))
+        enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.acknowledged.v1", payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
         enqueue_event(aggregate_type="execution",aggregate_id=order.id,event_type="trading.execution.acknowledged.v1",payload=event_payload(order,execution_mode="SIMULATION"),tenant_ref=order.tenant_ref,correlation_id=correlation)
     for execution in SimulatedExecutionProvider(selected).submit_order(order):
         apply_execution(order.id, execution)
     order.refresh_from_db()
-    if order.state == "ACCEPTED":
-        order.state = transition_order(order.state, "OPEN"); order.save(update_fields=("state", "updated_at"))
-        enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.opened.v1", payload=event_payload(order), tenant_ref=order.tenant_ref,correlation_id=correlation)
     return order
 
 
@@ -328,11 +323,11 @@ def cancel(user, order_id):
     tenant, subject, _ = refs(user)
     order = TradingOrder.objects.select_for_update().get(pk=order_id, tenant_ref=tenant, subject_ref=subject, simulation=True)
     correlation=order_correlation(order)
-    if order.state not in {"ACCEPTED", "OPEN", "PARTIALLY_FILLED"}: raise ValueError("ORDER_INVALID_STATE")
+    if order.state not in {"ACKNOWLEDGED", "PARTIALLY_FILLED"}: raise ValueError("ORDER_INVALID_STATE")
     order.state = transition_order(order.state, "CANCEL_PENDING")
     order.save(update_fields=("state", "updated_at"))
     enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancel_requested.v1", payload=event_payload(order), tenant_ref=tenant,correlation_id=correlation)
-    order.state = transition_order(order.state, "CANCELLED")
+    order.state = transition_order(order.state, "CANCELED")
     order.save(update_fields=("state", "updated_at"))
     SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
     transaction.on_commit(lambda: SIM_RESERVATIONS["released"].inc())

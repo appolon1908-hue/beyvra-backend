@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from integrations.permissions import organization_for_request
-from .models import ComplianceProfile, ComplianceRestriction
+from .models import ComplianceProfile
 from .services import effective_profile_states, get_trading_eligibility
 
 
@@ -41,12 +41,11 @@ class ComplianceRestrictionsView(APIView):
         if not profile:
             return Response({"results": []})
 
-        now = timezone.now()
         restrictions = profile.restrictions.filter(active=True)
         return Response({
             "results": [
                 {
-                    "id": str(r.id),
+                    "id": str(r.restriction_id),
                     "restriction_type": r.restriction_type,
                     "reason_code": r.reason_code,
                     "active": r.active,

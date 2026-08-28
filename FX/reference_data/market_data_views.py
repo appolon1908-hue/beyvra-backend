@@ -6,7 +6,6 @@ from django.utils import timezone as django_timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from reference_data.models import Instrument, MarketStatus
 from apps.trading.api.errors import error_response
 
 

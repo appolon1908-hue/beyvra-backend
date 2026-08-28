@@ -47,7 +47,7 @@ def evaluate_snapshot(snapshot, scope="full"):
         for oid,order in orders.items():
             reservation=reservations.get(oid)
             if not reservation: leaks.append(_violation("MISSING_RESERVATION","order",oid,{})); continue
-            terminal=order["state"] in {"FILLED","CANCELLED","REJECTED","EXPIRED"}
+            terminal=order["state"] in {"FILLED","CANCELED","REJECTED","EXPIRED"}
             if terminal and (reservation["state"]=="ACTIVE" or Decimal(str(reservation["remaining_amount"])) != 0): leaks.append(_violation("RESERVATION_LEAK","order",oid,reservation))
         check("RESERVATION_CONSISTENCY",leaks)
     if scope in {"full","positions"}:

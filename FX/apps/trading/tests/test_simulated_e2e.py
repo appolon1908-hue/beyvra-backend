@@ -118,7 +118,7 @@ class SimulatedTradingE2ETests(TestCase):
     def test_open_then_cancel_releases_reservation(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
         response = self.client.post(f"/api/v1/trading/orders/{order.id}/cancel", {}, format="json", **self.headers)
-        self.assertEqual(response.status_code, 200); self.assertEqual(response.json()["state"], "CANCELLED")
+        self.assertEqual(response.status_code, 200); self.assertEqual(response.json()["state"], "CANCELED")
         self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "RELEASED")
 
     def test_reject_and_expire_are_deterministic_and_release_funds(self):
@@ -273,6 +273,6 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
             self.assertEqual(SimulatedTrade.objects.filter(order=order).count(), 1)
             self.assertEqual(reservation.state, "CONSUMED")
         else:
-            self.assertEqual(order.state, "CANCELLED")
+            self.assertEqual(order.state, "CANCELED")
             self.assertEqual(SimulatedTrade.objects.filter(order=order).count(), 0)
             self.assertEqual(reservation.state, "RELEASED")

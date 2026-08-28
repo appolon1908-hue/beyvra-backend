@@ -70,8 +70,21 @@ jobs:
           python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
           python manage.py test apps.workspace apps.valuation.test_portfolio_api portfolio.tests
+          python manage.py test platform_ops.tests.test_platform_capabilities_api
+          python manage.py test apps.trading.tests.test_order_lifecycle_v1
+          python manage.py test apps.trading.tests.test_account_projections_api
+          python manage.py test reference_data/tests
+          python manage.py test apps/workspace/tests
+          python manage.py test apps/compliance/tests
+          python manage.py test ws.test_realtime_v1_contract
+          python manage.py test financial_boundary.tests.test_canonical_webhooks_api
+          python ../scripts/validate_openapi.py
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
+      - name: Verify no unsafe webhook authority shortcuts
+        run: |
+          ! grep -R "default_super_secret_signing_key" -n FX
+          ! grep -R "WEBHOOK_INBOX_DEDUPLICATION" -n FX
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies
