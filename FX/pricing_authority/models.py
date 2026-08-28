@@ -44,7 +44,7 @@ class AccountPlanAssignment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("account",), condition=Q(effective_to__isnull=True, status="ACTIVE"), name="pricing_one_current_assignment")]
+        constraints = [models.UniqueConstraint(fields=("account", "tenant_ref"), condition=Q(effective_to__isnull=True, status="ACTIVE"), name="pricing_one_current_assignment_per_tenant")]
 
 
 class Entitlement(models.Model):
@@ -71,6 +71,7 @@ class PlanEntitlement(models.Model):
 
 class AccountEntitlementOverride(models.Model):
     account = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    tenant_ref = models.CharField(max_length=128, default="")
     entitlement = models.ForeignKey(Entitlement, on_delete=models.PROTECT)
     override_type = models.CharField(max_length=16, choices=((x,x) for x in ("ENABLE","DISABLE","LIMIT_OVERRIDE")))
     value = models.DecimalField(max_digits=30, decimal_places=8, null=True, blank=True)
@@ -79,6 +80,9 @@ class AccountEntitlementOverride(models.Model):
     effective_to = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="approved_entitlement_overrides")
     status = models.CharField(max_length=16, default="ACTIVE")
+
+    class Meta:
+        indexes = [models.Index(fields=("account", "tenant_ref", "entitlement", "status"), name="pricing_override_lookup")]
 
 
 class FeeSchedule(models.Model):

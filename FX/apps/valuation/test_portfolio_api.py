@@ -53,19 +53,38 @@ class CanonicalPortfolioApiTests(TestCase):
     def test_summary_allocations_and_risk_share_one_valuation(self):
         summary = self.client.get("/api/v1/portfolio/summary")
         self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary["Cache-Control"], "private, no-store")
+        self.assertEqual(summary["Pragma"], "no-cache")
         self.assertEqual(summary.json()["market_value"], "220.00000000")
         self.assertEqual(summary.json()["unrealized_pnl"], "20.00000000")
         self.assertEqual(summary.json()["valuation_quality"], "COMPLETE")
         self.assertFalse(summary.json()["live_trading_enabled"])
+
+        positions = self.client.get("/api/v1/portfolio/positions")
+        self.assertEqual(positions.status_code, 200)
+        self.assertEqual(positions.json()["quality"], "COMPLETE")
+        self.assertEqual(positions.json()["count"], 1)
+        self.assertEqual(positions.json()["results"][0]["market_value"], "220.00000000")
 
         allocations = self.client.get("/api/v1/portfolio/allocations")
         self.assertEqual(allocations.json()["results"][0]["weight"], "1")
 
         risk = self.client.get("/api/v1/portfolio/risk")
         self.assertEqual(risk.json()["gross_exposure"], "220.00000000")
+        self.assertEqual(risk.json()["net_exposure"], "220.00000000")
         self.assertEqual(risk.json()["largest_position_ratio"], "1")
         self.assertIsNone(risk.json()["value_at_risk"])
         self.assertEqual(risk.json()["advanced_risk_reason"], "CERTIFIED_HISTORY_AND_POLICY_REQUIRED")
+        self.assertEqual(
+            risk.json()["methodology"]["gross_exposure"],
+            "SUM_ABSOLUTE_PRICED_POSITION_MARKET_VALUE",
+        )
+
+        evidence = self.client.get("/api/v1/portfolio/evidence-quality")
+        self.assertEqual(evidence.status_code, 200)
+        self.assertEqual(evidence.json()["overall_quality"], "PARTIAL")
+        self.assertEqual(evidence.json()["valuation"]["priced_position_count"], 1)
+        self.assertFalse(evidence.json()["advanced_risk"]["fabricated_values"])
 
     def test_performance_returns_only_persisted_evidence(self):
         empty = self.client.get("/api/v1/portfolio/performance?range=1M")
@@ -91,3 +110,37 @@ class CanonicalPortfolioApiTests(TestCase):
         response = self.client.get("/api/v1/portfolio/performance?range=1M")
         self.assertEqual(response.json()["quality"], "COMPLETE")
         self.assertEqual(response.json()["results"][0]["return"], "0.010000000000000000")
+
+    def test_performance_range_is_enforced_server_side(self):
+        PerformanceSnapshot.objects.create(
+            tenant_ref="default",
+            account_ref=f"sim:{self.user.pk}",
+            period_start=self.now - timedelta(days=5),
+            period_end=self.now - timedelta(days=4),
+            opening_value=Decimal("10000"),
+            closing_value=Decimal("10010"),
+            external_flows=Decimal("0"),
+            income=Decimal("0"),
+            fees=Decimal("0"),
+            pnl=Decimal("10"),
+            return_value=Decimal("0.001"),
+            return_method="SIMPLE_RETURN",
+            quality_state="FRESH",
+            policy_version="1",
+        )
+        response = self.client.get("/api/v1/portfolio/performance?range=1D")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["range"], "1D")
+        self.assertEqual(response.json()["results"], [])
+        self.assertEqual(response.json()["quality"], "UNAVAILABLE")
+
+    def test_gross_exposure_uses_absolute_position_values(self):
+        position = SimulatedPosition.objects.get(account=self.account, instrument_id="BTC-USD")
+        position.quantity = Decimal("-2")
+        position.save(update_fields=("quantity", "updated_at"))
+
+        risk = self.client.get("/api/v1/portfolio/risk")
+        self.assertEqual(risk.status_code, 200)
+        self.assertEqual(risk.json()["gross_exposure"], "220.00000000")
+        self.assertEqual(risk.json()["net_exposure"], "-220.00000000")
+        self.assertEqual(risk.json()["largest_position_ratio"], "1")

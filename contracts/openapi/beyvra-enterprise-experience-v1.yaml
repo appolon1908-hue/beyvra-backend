@@ -85,6 +85,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortfolioSummary"
+  /portfolio/positions:
+    get:
+      operationId: listPortfolioPositions
+      responses:
+        "200":
+          description: Canonical position projection with explicit valuation quality and unpriced instruments.
   /portfolio/performance:
     get:
       operationId: getPortfolioPerformance
@@ -104,6 +110,16 @@ paths:
       operationId: getPortfolioRisk
       responses:
         "200": {description: Explainable exposure and concentration projection}
+  /portfolio/evidence-quality:
+    get:
+      operationId: getPortfolioEvidenceQuality
+      parameters:
+        - in: query
+          name: range
+          schema: {type: string, enum: [1D, 1W, 1M, 3M, 1Y, ALL]}
+      responses:
+        "200":
+          description: Evidence completeness for valuations, performance and advanced risk without estimated values.
   /operator/orders:
     get:
       operationId: listOperatorOrders
@@ -116,16 +132,47 @@ paths:
       operationId: listProviderHealth
       responses:
         "200": {description: Provider governance, connection and circuit health}
+        "403": {description: Staff and current-session MFA are required}
   /operator/reconciliation/breaks:
     get:
       operationId: listReconciliationBreaks
       responses:
         "200": {description: Unresolved execution outcomes; resolution remains fail-closed}
+        "403": {description: Staff and current-session MFA are required}
+  /operator/halts:
+    get:
+      operationId: listOperatorHalts
+      responses:
+        "200": {description: Current governed trading-control states}
+        "403": {description: Staff and current-session MFA are required}
+  /operator/limits/proposals:
+    get:
+      operationId: listOperatorLimitProposals
+      responses:
+        "200": {description: Bounded surveillance restriction projection}
+        "403": {description: An MFA-protected surveillance role is required}
+    post:
+      operationId: createOperatorLimitProposal
+      responses:
+        "201": {description: Pending maker proposal created}
+        "403": {description: An MFA-protected surveillance-manager role is required}
+  /operator/limits/{restriction_id}/approve:
+    parameters:
+      - in: path
+        name: restriction_id
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: approveOperatorLimitProposal
+      responses:
+        "200": {description: Independent checker approval recorded}
+        "403": {description: MFA, manager role and maker/checker separation are required}
   /operator/audit/events:
     get:
       operationId: listAuditEvents
       responses:
         "200": {description: Bounded append-only application audit projection}
+        "403": {description: Staff and current-session MFA are required}
 components:
   securitySchemes:
     cookieSession:

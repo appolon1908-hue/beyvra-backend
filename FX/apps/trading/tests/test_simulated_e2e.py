@@ -185,10 +185,14 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertEqual(sell.status_code, 409); self.assertEqual(TradingOrder.objects.count(), 0)
 
     def test_portfolio_is_canonical_and_simulation_only(self):
-        response = self.client.get("/api/v1/trading/portfolio", **self.headers)
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["simulation"])
-        self.assertIsNone(response.json()["margin_if_applicable"])
+        compatibility = self.client.get("/api/v1/trading/portfolio", **self.headers)
+        canonical = self.client.get("/api/v1/portfolio/summary", **self.headers)
+        self.assertEqual(compatibility.status_code, 200)
+        self.assertTrue(compatibility.json()["simulation"])
+        self.assertEqual(compatibility.json()["account_id"], canonical.json()["account_id"])
+        self.assertEqual(compatibility.json()["equity"], canonical.json()["equity"])
+        self.assertEqual(compatibility["Deprecation"], "true")
+        self.assertIn("/api/v1/portfolio/summary", compatibility["Link"])
 
     def test_replace_fails_closed_until_provider_capability_is_certified(self):
         order_id = self.post_order().json()["id"]
