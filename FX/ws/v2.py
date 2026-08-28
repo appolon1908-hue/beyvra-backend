@@ -23,9 +23,6 @@ from integrations.models import OrganizationMembership
 CHANNEL_REGISTRY = {
     "market.{symbol}.quote": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 30, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
     "market.{symbol}.candle.{timeframe}": {"visibility": "public", "required_permission": "market.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 500, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/market-data/snapshot", "rate_limit": 20},
-    "news.{symbol}": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
-    "news.market": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/news", "rate_limit": 10},
-    "news.economic": {"visibility": "public", "required_permission": "news.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/economic-calendar", "rate_limit": 10},
     "simulation.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/orders", "rate_limit": 10},
     "simulation.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/trades", "rate_limit": 10},
     "simulation.position.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/positions", "rate_limit": 10},
@@ -101,8 +98,8 @@ def _has_required_permission(user, required_permission):
         except (TypeError, ValueError):
             pass
     # Public read channels still require an authenticated active session, but
-    # deployments without Django permission rows should not lose market/news.
-    return required_permission in {"market.read", "news.read", "system.read"}
+    # deployments without Django permission rows should not lose market/system.
+    return required_permission in {"market.read", "system.read"}
 
 
 def _authorized_channel_patterns(user):

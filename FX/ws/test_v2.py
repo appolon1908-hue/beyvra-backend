@@ -19,11 +19,9 @@ class RealtimeV2ContractTests(SimpleTestCase):
         self.assertIsNone(v2._channel_entry("market.BTCUSDT.tick")[1])
         self.assertIsNone(v2._channel_entry("market.BTCUSDT.orderbook")[1])
         self.assertIsNone(v2._channel_entry("market.BTCUSDT.trades")[1])
-        self.assertIsNotNone(v2._channel_entry("news.BTC-USD")[1])
-        self.assertIsNotNone(v2._channel_entry("news.market")[1])
-        self.assertIsNotNone(v2._channel_entry("news.economic")[1])
-        self.assertEqual(v2._channel_entry("news.market")[0], "news.market")
-        self.assertEqual(v2._channel_entry("news.economic")[0], "news.economic")
+        self.assertIsNone(v2._channel_entry("news.BTC-USD")[1])
+        self.assertIsNone(v2._channel_entry("news.market")[1])
+        self.assertIsNone(v2._channel_entry("news.economic")[1])
         self.assertIsNone(v2._channel_entry("simulation.order.sim-42.evil")[1])
 
     @patch.dict("os.environ", {
@@ -36,8 +34,6 @@ class RealtimeV2ContractTests(SimpleTestCase):
     @patch("ws.v2._owns_demo_account", return_value=False)
     def test_proxy_allows_market_and_denies_other_account(self, owns_account):
         request = self.factory.post("/", {"channel": "market.BTCUSDT.quote", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
-        self.assertEqual(v2.authorize_subscription(request).status_code, 200)
-        request = self.factory.post("/", {"channel": "news.market", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
         self.assertEqual(v2.authorize_subscription(request).status_code, 200)
         request = self.factory.post("/", {"channel": "simulation.order.sim-99", "user": "42"}, format="json", HTTP_X_CODESTRA_PROXY_SECRET="proxy-secret")
         payload = json.loads(v2.authorize_subscription(request).content)
@@ -92,7 +88,7 @@ class RealtimeV2ContractTests(SimpleTestCase):
         self.assertEqual(claims["aud"], "centrifugo")
         self.assertLessEqual(claims["exp"] - claims["iat"], 60)
         self.assertIn("market.{symbol}.quote", claims["allowed_channel_patterns"])
-        self.assertIn("news.market", claims["allowed_channel_patterns"])
+        self.assertNotIn("news.market", claims["allowed_channel_patterns"])
         self.assertNotEqual(set(claims["allowed_channel_patterns"]), set(v2.CHANNEL_REGISTRY))
 
     @patch("ws.v2._tenant", return_value="tenant-42")
@@ -104,17 +100,29 @@ class RealtimeV2ContractTests(SimpleTestCase):
         "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
     })
     def test_subscription_token_is_channel_bound_and_denies_escalation(self, _tenant):
-        request = self.factory.post("/", {"channel": "news.market"}, format="json")
+        request = self.factory.post("/", {"channel": "market.BTCUSDT.quote"}, format="json")
         force_authenticate(request, user=self.user)
         response = v2.subscription_token(request)
         self.assertEqual(response.status_code, 200)
         claims = jwt.decode(json.loads(response.content)["token"], "token-secret-token-secret-token-secret", algorithms=["HS256"], audience="centrifugo-subscription")
-        self.assertEqual(claims["channel"], "news.market")
-        self.assertEqual(claims["channel_pattern"], "news.market")
+        self.assertEqual(claims["channel"], "market.BTCUSDT.quote")
+        self.assertEqual(claims["channel_pattern"], "market.{symbol}.quote")
 
         denied = self.factory.post("/", {"channel": "simulation.order.sim-99"}, format="json")
         force_authenticate(denied, user=self.user)
         self.assertEqual(v2.subscription_token(denied).status_code, 403)
+
+    @patch.dict("os.environ", {
+        "REALTIME_V2_ENABLED": "true",
+        "REALTIME_V2_STAGING_ENABLED": "true",
+        "CENTRIFUGO_ENABLED": "true",
+        "NATS_JETSTREAM_ENABLED": "true",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+    })
+    def test_subscription_token_rejects_unpublished_news_channels(self):
+        request = self.factory.post("/", {"channel": "news.market"}, format="json")
+        force_authenticate(request, user=self.user)
+        self.assertEqual(v2.subscription_token(request).status_code, 403)
 
     @patch("ws.v2._tenant", return_value="tenant-42")
     @patch.dict("os.environ", {

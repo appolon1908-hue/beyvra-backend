@@ -3,17 +3,14 @@
 Public WebSocket endpoint: `/ws/v2/`. `/connection/websocket` is an internal Centrifugo upstream and is never a browser contract.
 
 The only canonical market dialect is dotted, symbol-first V2 (`market.{symbol}.<kind>`). Colon-form and `market.compat.*` channels are deprecated and are not accepted by the V2 registry.
+News channels are intentionally not advertised by the Centrifugo/NATS V2 token
+registry until a durable publisher owns them. The app gateway may expose
+database-backed compatibility news subscriptions separately.
 
 | Name | Schema | Producer | Consumer | Tenant scope | Account scope | Replay | REST recovery endpoint |
 |---|---:|---|---|---|---|---|---|
-| `market.{symbol}.tick` | 1 | market data authority | public clients | yes | no | 100 / 30s | `/api/v1/market-data/snapshot` |
 | `market.{symbol}.quote` | 1 | market data authority | public clients | yes | no | 100 / 30s | `/api/v1/market-data/snapshot` |
 | `market.{symbol}.candle.{timeframe}` | 1 | market data authority | public clients | yes | no | 500 / 300s | `/api/v1/market-data/snapshot` |
-| `market.{symbol}.orderbook` | 1 | market data authority | public clients | yes | no | 100 / 30s | `/api/v1/market-data/snapshot` |
-| `market.{symbol}.trades` | 1 | market data authority | public clients | yes | no | 100 / 30s | `/api/v1/market-data/snapshot` |
-| `news.{symbol}` | 1 | news authority | public clients | yes | no | 100 / 300s | `/api/v1/news` |
-| `news.market` | 1 | news authority | public clients | yes | no | 100 / 300s | `/api/v1/news` |
-| `news.economic` | 1 | news authority | public clients | yes | no | 100 / 300s | `/api/v1/economic-calendar` |
 | `simulation.order.{account_id}` | 1 | trading outbox bridge | account clients | yes | yes | 100 / 300s | `/api/v1/trading/orders` |
 | `simulation.execution.{account_id}` | 1 | trading outbox bridge | account clients | yes | yes | 100 / 300s | `/api/v1/trading/trades` |
 | `simulation.position.{account_id}` | 1 | trading outbox bridge | account clients | yes | yes | 100 / 300s | `/api/v1/trading/positions` |
