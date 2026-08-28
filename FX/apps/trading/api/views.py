@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from apps.trading.application.simulation import account_for, cancel, create, preview, serialize_account, serialize_order, simulation_authorized
 from apps.trading.models import SimulatedPosition, SimulatedTrade, TradingOrder
+from apps.foundation.models import OutboxEvent
 from apps.post_trade.api import trade_payload
 from apps.post_trade.models import Trade
 from apps.foundation.services import IdempotencyConflict
@@ -65,6 +66,50 @@ class OrderCancelView(APIView):
         try: return Response(cancel(request.user, order_id))
         except TradingOrder.DoesNotExist: return error_response(request, "RESOURCE_NOT_FOUND", 404)
         except (ValueError, SimulationFinancialError) as error: return _failure(request, error)
+
+
+class OrderEventsView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request, order_id):
+        if not simulation_authorized(request): return error_response(request, "RESOURCE_NOT_FOUND", 404)
+        order = TradingOrder.objects.filter(pk=order_id, subject_ref=str(request.user.pk), tenant_ref="default", simulation=True).first()
+        if not order: return error_response(request, "RESOURCE_NOT_FOUND", 404)
+        events = OutboxEvent.objects.filter(aggregate_type="order", aggregate_id=str(order.id)).order_by("created_at")
+        results = [
+            {
+                "event_id": str(evt.event_id),
+                "order_id": str(order.id),
+                "event_type": evt.event_type,
+                "sequence": idx + 1,
+                "occurred_at": evt.created_at.isoformat(),
+                "payload": evt.payload,
+            }
+            for idx, evt in enumerate(events)
+        ]
+        return Response({"results": results})
+
+
+class ExecutionsView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request):
+        if not simulation_authorized(request): return Response({"results": []})
+        trades = SimulatedTrade.objects.filter(order__subject_ref=str(request.user.pk), order__tenant_ref="default").order_by("-executed_at")
+        results = [
+            {
+                "trade_id": str(t.trade_id),
+                "order_id": str(t.order_id),
+                "execution_id": t.execution_id,
+                "instrument_id": t.instrument_id,
+                "side": t.side,
+                "quantity": str(t.quantity),
+                "price": str(t.price),
+                "fee": str(t.fee),
+                "executed_at": t.executed_at.isoformat(),
+                "simulation": t.simulation,
+            }
+            for t in trades
+        ]
+        return Response({"results": results})
 
 
 class OrderReplaceView(APIView):

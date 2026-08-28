@@ -103,6 +103,9 @@ urlpatterns = [
     path("api/v1/operator/treasury/", include("treasury.operator_urls")),
     # Platform Capabilities & Public Config
     path("api/v1/platform/", include("platform_ops.platform_urls")),
+    # Canonical Order Management routes aliased at /api/v1/
+    path("api/v1/", include("apps.trading.api.urls")),
+    path("api/v1/trading/", include("apps.trading.api.urls")),
     path("api/v1/system/", include("platform_ops.public_urls")),
     path("api/v1/operator/system/", include("platform_ops.operator_urls")),
     path("api/internal/v1/", include("operations.operator_urls")),
