@@ -91,6 +91,9 @@ class RealtimeV2ContractTests(SimpleTestCase):
         self.assertEqual(claims["tenant_id"], "tenant-42")
         self.assertEqual(claims["aud"], "centrifugo")
         self.assertLessEqual(claims["exp"] - claims["iat"], 60)
+        self.assertIn("market.{symbol}.quote", claims["allowed_channel_patterns"])
+        self.assertIn("news.market", claims["allowed_channel_patterns"])
+        self.assertNotEqual(set(claims["allowed_channel_patterns"]), set(v2.CHANNEL_REGISTRY))
 
     @patch("ws.v2._tenant", return_value="tenant-42")
     @patch.dict("os.environ", {
@@ -112,3 +115,17 @@ class RealtimeV2ContractTests(SimpleTestCase):
         denied = self.factory.post("/", {"channel": "simulation.order.sim-99"}, format="json")
         force_authenticate(denied, user=self.user)
         self.assertEqual(v2.subscription_token(denied).status_code, 403)
+
+    @patch("ws.v2._tenant", return_value="tenant-42")
+    @patch.dict("os.environ", {
+        "REALTIME_V2_ENABLED": "true",
+        "REALTIME_V2_STAGING_ENABLED": "true",
+        "CENTRIFUGO_ENABLED": "true",
+        "NATS_JETSTREAM_ENABLED": "true",
+        "CENTRIFUGO_TOKEN_HMAC_SECRET": "token-secret-token-secret-token-secret",
+    })
+    def test_subscription_token_enforces_required_permission_for_public_channels(self, _tenant):
+        inactive_user = type("User", (), {"id": 42, "is_authenticated": True, "is_active": False})()
+        request = self.factory.post("/", {"channel": "market.BTCUSDT.quote"}, format="json")
+        force_authenticate(request, user=inactive_user)
+        self.assertEqual(v2.subscription_token(request).status_code, 403)

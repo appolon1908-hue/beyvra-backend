@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import uuid
-from collections import defaultdict
 from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
@@ -18,6 +17,7 @@ from integrations.models import OrganizationMembership
 from operations.services import notification_group, tenant_for
 from provider_governance.service import ProviderNotAvailable, resolve_provider
 from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
+from ws.recovery import append_event
 
 logger = logging.getLogger(__name__)
 CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
@@ -208,7 +208,6 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         self.subscriptions: set[str] = set()
         self.market_tasks: dict[str, asyncio.Task] = {}
         self.news_tasks: dict[str, asyncio.Task] = {}
-        self.sequence = defaultdict(int)
 
     async def connect(self):
         user = self.scope.get("user")
@@ -405,10 +404,6 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             self.news_tasks.pop(channel, None)
 
     async def _emit(self, channel, data, *, instrument_id=None, event_type=None, occurred_at=None):
-        if self.sequence[channel] == 0 and isinstance(data, dict) and isinstance(data.get("time"), int):
-            self.sequence[channel] = data["time"]
-        else:
-            self.sequence[channel] += 1
         if event_type:
             pass
         elif channel == "demo.order":
@@ -424,7 +419,17 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         now = datetime.now(timezone.utc).isoformat()
         occurred = occurred_at.isoformat() if hasattr(occurred_at, "isoformat") else now
         instrument_id = instrument_id or (channel.split(".")[1] if channel.startswith("market.") and channel.count(".") >= 2 else None)
-        await self.send_json({"event_id": f"{self.channel_name}:{channel}:{self.sequence[channel]}", "event_type": event_type, "event_version": 1, "schema_version": 1, "type": event_type, "version": 1, "channel": channel, "instrument_id": instrument_id, "sequence": self.sequence[channel], "occurred_at": occurred, "server_timestamp": now, "server_time": now, "source": "approved-provider", "payload": data, "data": data})
+        stored = await database_sync_to_async(append_event)(
+            tenant_ref=self.tenant_id,
+            channel=channel,
+            event_type=event_type,
+            source="approved-provider",
+            data=data,
+            occurred_at=occurred_at,
+        )
+        envelope = stored.envelope()
+        envelope["instrument_id"] = instrument_id
+        await self.send_json(envelope)
 
     async def send_price_update(self, event):
         await self._emit("demo.order", event.get("message", {}))

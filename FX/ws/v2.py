@@ -29,6 +29,9 @@ CHANNEL_REGISTRY = {
     "simulation.order.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/orders", "rate_limit": 10},
     "simulation.execution.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/trades", "rate_limit": 10},
     "simulation.position.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/positions", "rate_limit": 10},
+    "demo.order": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/orders", "rate_limit": 10},
+    "demo.execution": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/trades", "rate_limit": 10},
+    "demo.position": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/trading/positions", "rate_limit": 10},
     "simulation.execution-quality.{account_id}": {"visibility": "private", "required_permission": "demo.trade.read", "tenant_scope": True, "workspace_scope": True, "account_scope": True, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/execution/reports", "rate_limit": 10},
     "notification.{user_id}": {"visibility": "private", "required_permission": "notification.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/notification/inbox/", "rate_limit": 10},
     "account.security.{user_id}": {"visibility": "private", "required_permission": "account.security.read", "tenant_scope": True, "workspace_scope": False, "account_scope": False, "schema_version": 1, "history_size": 100, "history_ttl": 300, "resume_supported": True, "snapshot_provider": "/api/v1/session", "rate_limit": 5},
@@ -83,6 +86,49 @@ def _owns_demo_account(user_id, channel):
     return False
 
 
+def _has_required_permission(user, required_permission):
+    if not required_permission:
+        return True
+    if not getattr(user, "is_authenticated", False) or not getattr(user, "is_active", False):
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+    has_perm = getattr(user, "has_perm", None)
+    if callable(has_perm):
+        try:
+            if has_perm(required_permission):
+                return True
+        except (TypeError, ValueError):
+            pass
+    # Public read channels still require an authenticated active session, but
+    # deployments without Django permission rows should not lose market/news.
+    return required_permission in {"market.read", "news.read", "system.read"}
+
+
+def _authorized_channel_patterns(user):
+    patterns = []
+    for pattern, entry in CHANNEL_REGISTRY.items():
+        if not _has_required_permission(user, entry.get("required_permission")):
+            continue
+        if entry["visibility"] == "public":
+            patterns.append(pattern)
+            continue
+        if pattern.startswith("simulation.") and getattr(user, "is_active", False):
+            patterns.append(pattern)
+            continue
+        if pattern.startswith("demo.") and getattr(user, "is_active", False):
+            patterns.append(pattern)
+            continue
+        if pattern in {
+            "notification.{user_id}",
+            "account.security.{user_id}",
+            "institutional.subaccount.updated.v1.{user_id}",
+            "treasury.{tenant_id}",
+        }:
+            patterns.append(pattern)
+    return patterns
+
+
 def _claims(request, audience, extra=None):
     secret = _secret()
     if not secret:
@@ -95,7 +141,7 @@ def _claims(request, audience, extra=None):
         "tenant_id": tenant_id,
         "workspace_id": "default",
         "account_scope": [f"demo:{request.user.id}"],
-        "allowed_channel_patterns": list(CHANNEL_REGISTRY),
+        "allowed_channel_patterns": _authorized_channel_patterns(request.user),
         "iat": now,
         "exp": now + 60,
         "nonce": uuid.uuid4().hex,
@@ -147,7 +193,7 @@ def subscription_token(request):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if entry["account_scope"] and not (user_id in channel or _owns_demo_account(request.user.id, channel)):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
-    if entry["required_permission"].startswith("demo.") and not request.user.is_active:
+    if not _has_required_permission(request.user, entry.get("required_permission")):
         return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
     token = _claims(request, audience="centrifugo-subscription", extra={"channel": channel, "channel_pattern": pattern})
     if token is None:
@@ -171,12 +217,13 @@ def authorize_subscription(request):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     if entry["visibility"] == "private" and pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(type('UserRef', (), {'id': user_id})())}":
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
+    demo_scoped = pattern in {"demo.order", "demo.execution", "demo.position"} and bool(user_id)
     user_scoped = pattern in {
         "notification.{user_id}",
         "account.security.{user_id}",
         "institutional.subaccount.updated.v1.{user_id}",
     } and channel.rsplit(".", 1)[-1] == user_id
-    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_scoped or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
+    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (demo_scoped or user_scoped or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     return JsonResponse({"result": {}})
 
