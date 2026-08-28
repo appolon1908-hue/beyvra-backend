@@ -27,7 +27,7 @@ PERFORMANCE_WINDOWS = {
 
 
 def _money(value):
-    return str(value.quantize(Decimal("0.00000001")))
+    return str(Decimal(str(value)).quantize(Decimal("0.00000001")))
 
 
 def _account_ref(request):
