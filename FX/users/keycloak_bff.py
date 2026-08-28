@@ -226,6 +226,9 @@ def _set_session_cookies(response, request, credentials, id_token):
     cookie_options = {"secure": True, "httponly": True, "samesite": "Strict", "path": "/"}
     response.set_cookie("beyvra_access", credentials["access"], **cookie_options)
     response.set_cookie("beyvra_refresh", credentials["refresh"], **cookie_options)
+    marker_options = {"secure": True, "httponly": False, "samesite": "Strict", "path": "/"}
+    response.set_cookie("access_token", "session", **marker_options)
+    response.set_cookie("refresh_token", "session", **marker_options)
     handle = secrets.token_urlsafe(32)
     cache.set(
         f"{SESSION_PREFIX}{handle}",
@@ -237,7 +240,7 @@ def _set_session_cookies(response, request, credentials, id_token):
 
 
 def _clear_session_cookies(response):
-    for name in ("beyvra_access", "beyvra_refresh", "beyvra_oidc_session", "csrftoken"):
+    for name in ("beyvra_access", "beyvra_refresh", "beyvra_oidc_session", "access_token", "refresh_token", "csrftoken"):
         response.delete_cookie(name, path="/", samesite="Strict")
 
 

@@ -124,6 +124,10 @@ class AccountEnumerationTests(APITestCase):
             self.assertTrue(login.cookies[name]["httponly"])
             self.assertTrue(login.cookies[name]["secure"])
             self.assertEqual(login.cookies[name]["samesite"], "Strict")
+        for name in ("access_token", "refresh_token"):
+            self.assertEqual(login.cookies[name].value, "session")
+            self.assertFalse(login.cookies[name]["httponly"])
+            self.assertNotIn(".", login.cookies[name].value)
         self.assertEqual(client.get("/api/v1/security/sessions").status_code, 200)
         self.assertEqual(client.post("/api/v1/notifications/read-all").status_code, 403)
         csrf_token = login.cookies["csrftoken"].value

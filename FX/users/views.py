@@ -676,6 +676,18 @@ def set_browser_auth_cookies(response, request, credentials):
         path="/",
         **cookie_options,
     )
+    # Compatibility marker only. The browser must not receive bearer tokens in
+    # JavaScript-readable storage; legacy frontend code still uses these cookie
+    # names as session-present signals while requests authenticate via HttpOnly
+    # beyvra_* cookies.
+    marker_options = {
+        "path": "/",
+        "secure": True,
+        "httponly": False,
+        "samesite": "Strict",
+    }
+    response.set_cookie("access_token", "session", **marker_options)
+    response.set_cookie("refresh_token", "session", **marker_options)
     response.set_cookie(
         "csrftoken",
         get_token(request),
@@ -691,6 +703,8 @@ def clear_browser_auth_cookies(response):
     response.delete_cookie(
         "beyvra_refresh", path="/", samesite="Strict"
     )
+    response.delete_cookie("access_token", path="/", samesite="Strict")
+    response.delete_cookie("refresh_token", path="/", samesite="Strict")
     response.delete_cookie("csrftoken", path="/", samesite="Strict")
 
 

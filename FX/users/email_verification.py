@@ -10,12 +10,13 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.cache import cache
 from django.db import transaction
+from django.middleware.csrf import get_token
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from operations.services import issue_session_token_pair
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 from trade.models import DemoLedgerEntry
@@ -36,6 +37,16 @@ def _audit(event_type, **kwargs):
     # until the shared security-event model is migrated.
     import logging
     logging.getLogger("codestra.auth").info("%s %s", event_type, {k: v for k, v in kwargs.items() if k not in {"request"}})
+
+
+def _set_browser_auth_cookies(response, request, credentials):
+    cookie_options = {"secure": True, "httponly": True, "samesite": "Strict", "path": "/"}
+    response.set_cookie("beyvra_access", credentials["access"], **cookie_options)
+    response.set_cookie("beyvra_refresh", credentials["refresh"], **cookie_options)
+    marker_options = {"secure": True, "httponly": False, "samesite": "Strict", "path": "/"}
+    response.set_cookie("access_token", "session", **marker_options)
+    response.set_cookie("refresh_token", "session", **marker_options)
+    response.set_cookie("csrftoken", get_token(request), secure=True, httponly=False, samesite="Strict", path="/")
 
 
 def mask_email(email: str) -> str:
@@ -194,10 +205,13 @@ class EmailVerificationVerifyView(APIView):
                     return Response({"code": "OTP_INVALID", "message": "The verification code is invalid or expired."}, status=400)
                 challenge.status = "consumed"; challenge.consumed_at = timezone.now(); challenge.save(update_fields=["status", "consumed_at", "attempt_count", "last_attempt_at"])
                 user = _activate_registration(pending, request)
-            refresh = TokenObtainPairSerializer.get_token(user)
+            credentials = issue_session_token_pair(
+                user=user,
+                request=request,
+                mfa_verified=False,
+            )
             response = Response({"status": "verified", "accountStatus": "active", "welcomeEmailQueued": True, "nextPath": "/platform", "user": {"id": user.pk, "email": user.email, "is_walkthrough": user.is_walkthrough}})
-            response.set_cookie("access_token", str(refresh.access_token), max_age=3600, secure=True, httponly=True, samesite="Lax", path="/")
-            response.set_cookie("refresh_token", str(refresh), max_age=604800, secure=True, httponly=True, samesite="Lax", path="/")
+            _set_browser_auth_cookies(response, request, credentials)
             return response
         except PendingRegistration.DoesNotExist:
             return Response({"code": "OTP_INVALID", "message": "The verification code is invalid or expired."}, status=400)
