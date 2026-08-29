@@ -1,0 +1,88 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: beyvra-backend-django
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - beyvra-backend:8000
+        labels:
+          service: beyvra-backend
+          component: django
+          environment: production
+
+  - job_name: beyvra-backend-exporter
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - beyvra-backend:7001
+        labels:
+          service: beyvra-backend
+          component: prometheus-exporter
+          environment: production
+
+  - job_name: beyvra-redis
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+        labels:
+          service: redis
+          environment: production
+
+  - job_name: beyvra-postgres
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+        labels:
+          service: postgres
+          environment: production
+
+  - job_name: beyvra-node
+    static_configs:
+      - targets:
+          - node-exporter:9100
+        labels:
+          service: node
+          environment: production
+
+  - job_name: beyvra-cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+        labels:
+          service: cadvisor
+          environment: production
+
+  - job_name: beyvra-blackbox-http
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx
+    static_configs:
+      - targets:
+          - https://beyvra.com/
+          - https://beyvra.com/signIn?tab=login
+          - https://beyvra.com/privacy
+          - https://beyvra.com/cookies
+          - https://beyvra.com/sitemap.xml
+          - https://api.beyvra.com/health
+          - https://api.beyvra.com/ready
+        labels:
+          service: beyvra-public
+          environment: production
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+rule_files:
+  - /etc/prometheus/rules/beyvra-alerts.yml

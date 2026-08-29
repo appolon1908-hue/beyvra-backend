@@ -1,0 +1,114 @@
+groups:
+  - name: beyvra.platform
+    rules:
+      - alert: BeyvraBackendMetricsDown
+        expr: up{job="beyvra-backend-django"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: beyvra-backend
+        annotations:
+          summary: Beyvra backend metrics endpoint is down
+          description: Prometheus cannot scrape the Django metrics endpoint.
+
+      - alert: BeyvraExporterDown
+        expr: up{job="beyvra-backend-exporter"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: beyvra-backend
+        annotations:
+          summary: Beyvra backend exporter thread is down
+          description: The production Prometheus exporter port is unavailable.
+
+      - alert: BeyvraPublicProbeFailed
+        expr: probe_success{job="beyvra-blackbox-http"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: beyvra-public
+        annotations:
+          summary: Beyvra public HTTP probe failed
+          description: Blackbox probe failed for {{ $labels.instance }}.
+
+      - alert: BeyvraOutboxPublishFailures
+        expr: increase(beyvra_outbox_publish_failures_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: beyvra-backend
+        annotations:
+          summary: Beyvra outbox publish failures detected
+          description: Event publication failures occurred in the last ten minutes.
+
+      - alert: BeyvraOutboxBacklogGrowing
+        expr: beyvra_outbox_pending_events > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: beyvra-backend
+        annotations:
+          summary: Beyvra outbox backlog is high
+          description: Pending outbox events have stayed above the production threshold.
+
+      - alert: BeyvraRealtimePublishFailures
+        expr: increase(beyvra_realtime_publish_failures_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: beyvra-realtime
+        annotations:
+          summary: Beyvra realtime publishing failures detected
+          description: Realtime publish failures occurred in the last ten minutes.
+
+      - alert: BeyvraProviderFailures
+        expr: increase(beyvra_provider_failures_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: beyvra-provider-gateway
+        annotations:
+          summary: Beyvra provider failures detected
+          description: Governed market, data, or execution provider failures increased.
+
+      - alert: BeyvraExecutionProviderUnhealthy
+        expr: beyvra_execution_provider_health < 1
+        for: 5m
+        labels:
+          severity: warning
+          service: beyvra-execution
+        annotations:
+          summary: Beyvra execution provider is unhealthy
+          description: Execution provider {{ $labels.provider }} in mode {{ $labels.mode }} is not healthy.
+
+      - alert: BeyvraSafetyFlagEnabled
+        expr: beyvra_safety_flag_enabled{flag=~"real_trading_enabled|external_execution_enabled|real_money_enabled|real_deposits_enabled|real_withdrawals_enabled|real_internal_transfers_enabled"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: beyvra-backend
+        annotations:
+          summary: Beyvra real-money safety flag is enabled
+          description: A real-money or external execution flag is enabled and must match approved production change evidence.
+
+  - name: beyvra.infrastructure
+    rules:
+      - alert: BeyvraRedisExporterDown
+        expr: up{job="beyvra-redis"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: Beyvra Redis exporter is down
+          description: Redis metrics are unavailable.
+
+      - alert: BeyvraPostgresExporterDown
+        expr: up{job="beyvra-postgres"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: Beyvra PostgreSQL exporter is down
+          description: PostgreSQL metrics are unavailable.
