@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.test.utils import override_settings
 from django.utils import timezone
 
-from platform_ops.health.checks import check_email_delivery_configuration, check_identity_provider_configuration
+from platform_ops.health.checks import check_beyvra_mail_domain_activation, check_email_delivery_configuration, check_identity_provider_configuration
 
 
 class Command(BaseCommand):
@@ -22,6 +22,7 @@ class Command(BaseCommand):
         try:
             email_ok, email_latency, email_reason = check_email_delivery_configuration()
             identity_ok, identity_latency, identity_reason = check_identity_provider_configuration()
+            domain_ok, domain_latency, domain_reason = check_beyvra_mail_domain_activation()
         finally:
             if context:
                 context.disable()
@@ -40,6 +41,11 @@ class Command(BaseCommand):
                     "ok": identity_ok,
                     "reason": identity_reason,
                     "latency_ms": round(identity_latency, 3),
+                },
+                "beyvra_mail_domain": {
+                    "ok": domain_ok,
+                    "reason": domain_reason,
+                    "latency_ms": round(domain_latency, 3),
                 },
             },
         }

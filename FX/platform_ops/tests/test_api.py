@@ -21,7 +21,7 @@ class PublicApiTests(APITestCase):
         response=self.client.get("/ready")
         self.assertEqual(response.status_code,503)
         self.assertEqual(response.json()["checks"]["email_delivery"]["reason"],"TRANSACTIONAL_EMAIL_DISABLED")
-    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=True,EMAIL_REGISTRATION_ENABLED=True,TRANSACTIONAL_EMAIL_ENABLED=True,KEYCLOAK_IDENTITY_ENABLED=False,BEYVRA_EMAIL_API_URL="https://api.example.test",BEYVRA_EMAIL_TOKEN_URL="https://auth.example.test/token")
+    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=True,EMAIL_REGISTRATION_ENABLED=True,TRANSACTIONAL_EMAIL_ENABLED=True,KEYCLOAK_IDENTITY_ENABLED=False,BEYVRA_EMAIL_API_URL="https://api.example.test",BEYVRA_EMAIL_TOKEN_URL="https://auth.example.test/token",BEYVRA_FROM_DOMAIN="beyvra.com",KLYROW_SMTP_CONNECTIVITY="PASS",STARTTLS="PASS",SPF="PASS",DKIM="PASS",DMARC="PASS",DIRECT_APP_SMTP_ACCESS="BLOCKED",DIRECT_APP_KLYROW_ACCESS="BLOCKED",PLAINTEXT_SMTP_SECRET_IN_GIT="BLOCKED")
     def test_readiness_accepts_configured_local_identity_and_email_secret(self):
         with TemporaryDirectory() as folder:
             secret=Path(folder)/"email-client-secret"; secret.write_text("secret",encoding="utf-8")
@@ -30,6 +30,12 @@ class PublicApiTests(APITestCase):
         self.assertEqual(response.status_code,200)
         self.assertTrue(response.json()["checks"]["email_delivery"]["ok"])
         self.assertEqual(response.json()["checks"]["identity_provider"]["reason"],"LOCAL_AUTHORITY")
+        self.assertTrue(response.json()["checks"]["beyvra_mail_domain"]["ok"])
+    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=True,EMAIL_REGISTRATION_ENABLED=False,TRANSACTIONAL_EMAIL_ENABLED=False,KEYCLOAK_IDENTITY_ENABLED=False,BEYVRA_FROM_DOMAIN="beyvra.com",KLYROW_SMTP_CONNECTIVITY="PASS",STARTTLS="PASS",SPF="PASS",DKIM="PASS",DMARC="FAIL",DIRECT_APP_SMTP_ACCESS="BLOCKED",DIRECT_APP_KLYROW_ACCESS="BLOCKED",PLAINTEXT_SMTP_SECRET_IN_GIT="BLOCKED")
+    def test_readiness_fails_when_beyvra_mail_domain_evidence_is_incomplete(self):
+        response=self.client.get("/ready")
+        self.assertEqual(response.status_code,503)
+        self.assertEqual(response.json()["checks"]["beyvra_mail_domain"]["reason"],"DMARC_NOT_VERIFIED")
     @override_settings(
         READINESS_ENFORCE_IDENTITY_EMAIL=True,
         READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE=True,
@@ -37,6 +43,9 @@ class PublicApiTests(APITestCase):
         WELCOME_EMAIL_ENABLED=True,
         TRANSACTIONAL_EMAIL_ENABLED=True,
         KEYCLOAK_IDENTITY_ENABLED=True,
+        KEYCLOAK_REGISTRATION_ENABLED="PASS",
+        KEYCLOAK_RESET_PASSWORD_ENABLED="PASS",
+        KEYCLOAK_EMAIL_VERIFICATION="PASS",
         LOCAL_PASSWORD_AUTH_ENABLED=False,
         KEYCLOAK_ISSUER="https://auth.codestra.co/realms/codestra",
         KEYCLOAK_CLIENT_ID="beyvra-web-production",
@@ -47,6 +56,16 @@ class PublicApiTests(APITestCase):
         KEYCLOAK_JWKS_URI="https://auth.codestra.co/realms/codestra/protocol/openid-connect/certs",
         BEYVRA_EMAIL_API_URL="https://api.codestra.co",
         BEYVRA_EMAIL_TOKEN_URL="https://auth.codestra.co/realms/codestra/protocol/openid-connect/token",
+        BEYVRA_FROM_DOMAIN="beyvra.com",
+        KLYROW_SMTP_CONNECTIVITY="PASS",
+        STARTTLS="PASS",
+        SPF="PASS",
+        DKIM="PASS",
+        DMARC="PASS",
+        DIRECT_APP_SMTP_ACCESS="BLOCKED",
+        DIRECT_APP_KLYROW_ACCESS="BLOCKED",
+        RESET_TOKEN_OUTSIDE_KEYCLOAK="BLOCKED",
+        PLAINTEXT_SMTP_SECRET_IN_GIT="BLOCKED",
     )
     @patch("platform_ops.health.checks.requests.get")
     @patch("notifications.email_client.EmailMiddlewareClient.token",return_value="evidence-token")
@@ -59,6 +78,7 @@ class PublicApiTests(APITestCase):
         self.assertEqual(response.status_code,200)
         self.assertTrue(response.json()["checks"]["email_delivery"]["ok"])
         self.assertTrue(response.json()["checks"]["identity_provider"]["ok"])
+        self.assertTrue(response.json()["checks"]["beyvra_mail_domain"]["ok"])
         token.assert_called_once()
         get.assert_called_once()
         self.assertNotIn("secret",str(response.json()).lower())

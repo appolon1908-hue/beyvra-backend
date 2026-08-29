@@ -23,6 +23,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _env_enabled(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "pass", "passed", "enabled"}
+
+
 def _provider_credential(name: str) -> str:
     """Load a provider credential from one environment or mounted-file source."""
     value = os.getenv(name, "").strip()
@@ -45,8 +49,8 @@ NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
 # not expose legacy broker mutation routes.
 PAPER_TRADING_ONLY = True
 DEMO_MARKET_FIXTURE_ENABLED = False
-REAL_WALLET_REQUIRE_MFA = os.getenv("REAL_WALLET_REQUIRE_MFA", "true").lower() in {"1", "true", "yes"}
-GUEST_DEMO_ENABLED = os.getenv("GUEST_DEMO_ENABLED", "true").lower() in {"1", "true", "yes"}
+REAL_WALLET_REQUIRE_MFA = _env_enabled("REAL_WALLET_REQUIRE_MFA", "true")
+GUEST_DEMO_ENABLED = _env_enabled("GUEST_DEMO_ENABLED", "true")
 GUEST_DEMO_TTL_SECONDS = int(os.getenv("GUEST_DEMO_TTL_SECONDS", "1800"))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -61,10 +65,13 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # Keycloak is the sole human credential, MFA, and recovery authority when enabled.
 # The browser uses Authorization Code + PKCE; this backend remains a confidential
 # token-handling boundary and never accepts a Keycloak password.
-KEYCLOAK_IDENTITY_ENABLED = os.getenv("KEYCLOAK_IDENTITY_ENABLED", "false").lower() in {"1", "true", "yes"}
-LOCAL_PASSWORD_AUTH_ENABLED = os.getenv("LOCAL_PASSWORD_AUTH_ENABLED", "true").lower() in {"1", "true", "yes"}
-EMAIL_REGISTRATION_ENABLED = os.getenv("EMAIL_REGISTRATION_ENABLED", "true").lower() == "true"
-EMAIL_OTP_VERIFICATION_ENABLED = os.getenv("EMAIL_OTP_VERIFICATION_ENABLED", "true").lower() == "true"
+KEYCLOAK_IDENTITY_ENABLED = _env_enabled("KEYCLOAK_IDENTITY_ENABLED")
+KEYCLOAK_REGISTRATION_ENABLED = _env_enabled("KEYCLOAK_REGISTRATION_ENABLED")
+KEYCLOAK_RESET_PASSWORD_ENABLED = _env_enabled("KEYCLOAK_RESET_PASSWORD_ENABLED")
+KEYCLOAK_EMAIL_VERIFICATION = _env_enabled("KEYCLOAK_EMAIL_VERIFICATION")
+LOCAL_PASSWORD_AUTH_ENABLED = _env_enabled("LOCAL_PASSWORD_AUTH_ENABLED", "true")
+EMAIL_REGISTRATION_ENABLED = _env_enabled("EMAIL_REGISTRATION_ENABLED", "true")
+EMAIL_OTP_VERIFICATION_ENABLED = _env_enabled("EMAIL_OTP_VERIFICATION_ENABLED", "true")
 KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", "https://auth.codestra.co/realms/codestra").rstrip("/")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "beyvra-web-production")
 KEYCLOAK_REDIRECT_URI = os.getenv("KEYCLOAK_REDIRECT_URI", "https://beyvra.com/api/v1/auth/oidc/callback/")
@@ -91,12 +98,12 @@ EMAIL_OTP_MAX_SENDS_PER_HOUR = int(os.getenv("EMAIL_OTP_MAX_SENDS_PER_HOUR", "5"
 EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
 STAGING_TEST_OTP_SECRET = os.getenv("STAGING_TEST_OTP_SECRET", "")
 PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
-TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
+TRANSACTIONAL_EMAIL_ENABLED = _env_enabled("TRANSACTIONAL_EMAIL_ENABLED")
 BEYVRA_EMAIL_API_URL = os.getenv("BEYVRA_EMAIL_API_URL", "https://api.codestra.co").rstrip("/")
 BEYVRA_EMAIL_TOKEN_URL = os.getenv("BEYVRA_EMAIL_TOKEN_URL", "https://auth.codestra.co/realms/codestra/protocol/openid-connect/token")
 BEYVRA_EMAIL_CLIENT_SECRET_FILE = os.getenv("BEYVRA_EMAIL_CLIENT_SECRET_FILE", "/run/secrets/beyvra_email_client_secret")
-WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
-GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
+WELCOME_EMAIL_ENABLED = _env_enabled("WELCOME_EMAIL_ENABLED")
+GOOGLE_AUTH_ENABLED = _env_enabled("GOOGLE_AUTH_ENABLED")
 GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
 GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
 GOOGLE_OIDC_REDIRECT_URI = os.getenv(
@@ -126,10 +133,20 @@ RELEASE_SHA = os.getenv("RELEASE_SHA", "").strip()
 READINESS_ENFORCE_IDENTITY_EMAIL = os.getenv(
     "READINESS_ENFORCE_IDENTITY_EMAIL",
     "true" if DEPLOYMENT_ENV in {"staging", "production"} else "false",
-).lower() in {"1", "true", "yes"}
+).strip().lower() in {"1", "true", "yes", "pass", "passed", "enabled"}
 READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE = os.getenv(
     "READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE", "false"
-).lower() in {"1", "true", "yes"}
+).lower() in {"1", "true", "yes", "pass", "passed", "enabled"}
+BEYVRA_FROM_DOMAIN = os.getenv("BEYVRA_FROM_DOMAIN", "").strip().lower()
+KLYROW_SMTP_CONNECTIVITY = os.getenv("KLYROW_SMTP_CONNECTIVITY", "").strip()
+STARTTLS = os.getenv("STARTTLS", "").strip()
+SPF = os.getenv("SPF", "").strip()
+DKIM = os.getenv("DKIM", "").strip()
+DMARC = os.getenv("DMARC", "").strip()
+DIRECT_APP_SMTP_ACCESS = os.getenv("DIRECT_APP_SMTP_ACCESS", "").strip()
+DIRECT_APP_KLYROW_ACCESS = os.getenv("DIRECT_APP_KLYROW_ACCESS", "").strip()
+RESET_TOKEN_OUTSIDE_KEYCLOAK = os.getenv("RESET_TOKEN_OUTSIDE_KEYCLOAK", "").strip()
+PLAINTEXT_SMTP_SECRET_IN_GIT = os.getenv("PLAINTEXT_SMTP_SECRET_IN_GIT", "").strip()
 PAPER_TRADING_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATION_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"
