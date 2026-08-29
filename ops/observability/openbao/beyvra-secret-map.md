@@ -8,7 +8,8 @@ only; it must never include secret values.
 | Path | Consumer | Required keys |
 | --- | --- | --- |
 | `kv/beyvra/production/django` | Backend API | `SECRET_KEY`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD` |
-| `kv/beyvra/production/database` | Backend API, workers, PostgreSQL exporter | `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `kv/beyvra/production/database` | Backend API, workers | `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| `kv/beyvra/production/postgres-exporter` | PostgreSQL exporter | `POSTGRES_EXPORTER_URI`, `POSTGRES_EXPORTER_USER`, `POSTGRES_EXPORTER_PASSWORD` |
 | `kv/beyvra/production/redis` | Backend API, workers, Redis exporter | `REDIS_URL`, `REDIS_PASSWORD` |
 | `kv/beyvra/production/keycloak` | Backend identity BFF | `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET` |
 | `kv/beyvra/production/email` | Backend identity/email readiness | `SMTP_HOST`, `SMTP_PORT`, `SMTP_STARTTLS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` |
@@ -21,7 +22,7 @@ only; it must never include secret values.
 ## Policy Requirements
 
 - Backend API can read only its own Beyvra production paths.
-- Exporters can read only the one credential path they need.
+- Exporters can read only the one credential path they need. PostgreSQL exporter credentials must come from the dedicated monitoring role, not the Beyvra app database owner.
 - Grafana can read datasource credentials and admin bootstrap credentials only.
 - Superset uses a read-only analytics database credential, never the application owner credential.
 - CI can validate secret presence and freshness but cannot read secret values into logs.

@@ -23,6 +23,23 @@ Keycloak client secrets, and OpenBao root or recovery material must stay out of 
 | Grafana Alloy | `Codestra-Alloy` | Collect Docker logs and scrape Beyvra metrics from `alloy/beyvra.alloy`. |
 | OpenBao / Secrets | `Codestra-OpenBao` | Store Beyvra runtime secrets using `openbao/beyvra-secret-map.md`. |
 
+## PostgreSQL Exporter Contract
+
+`Codestra-Postgres-Exporter` is the PostgreSQL metrics authority for Beyvra. Its private service
+identity is `postgres-exporter:9187`, its metrics path is `/metrics`, and no public hostname or
+published host port is allowed. Prometheus is the only routine scrape consumer.
+
+The exporter must use a dedicated monitoring role. It must not use the Beyvra application database
+owner, a superuser, a replication administrator, or any write-capable application identity.
+Runtime credentials are supplied through OpenBao or approved runtime secret files:
+
+- `/run/secrets/postgres_exporter_uri`
+- `/run/secrets/postgres_exporter_user`
+- `/run/secrets/postgres_exporter_password`
+
+Production activation requires `pg_up == 1`, private-network scrape proof, least-privilege review,
+cardinality review, immutable image evidence, and rollback evidence.
+
 ## Beyvra Backend Signals Already Available
 
 - `/health` platform health entrypoint.
@@ -59,4 +76,5 @@ python manage.py runserver 127.0.0.1:8000 --noreload
 - Loki receives JSON logs with `service=beyvra-backend`.
 - Alertmanager receives a controlled test alert and routes it to the expected receiver.
 - OpenBao audit logging is enabled and application secret access uses least-privilege policies.
+- PostgreSQL exporter reports `pg_up == 1` from `postgres-exporter:9187` on the private monitoring network.
 - Password reset and registration email evidence is attached to readiness, not only documented.

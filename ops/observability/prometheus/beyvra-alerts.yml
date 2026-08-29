@@ -112,3 +112,13 @@ groups:
         annotations:
           summary: Beyvra PostgreSQL exporter is down
           description: PostgreSQL metrics are unavailable.
+
+      - alert: BeyvraPostgresUnavailable
+        expr: pg_up{job="beyvra-postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: Beyvra PostgreSQL is unavailable to the exporter
+          description: PostgreSQL exporter is reachable, but its database health metric is not healthy.
