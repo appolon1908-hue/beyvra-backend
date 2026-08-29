@@ -72,6 +72,7 @@ urlpatterns = [
     path("api/v1/compliance/", include("apps.compliance.urls")),
     path("api/v1/institutional/", include("apps.institutional.urls")),
     path("api/v1/operator/institutional/", include("apps.institutional.operator_urls")),
+    path("api/v1/admin/portal/", include("users.admin_portal_urls")),
     path("api/v1/admin/compliance/", include("apps.compliance.admin_urls")),
     path("api/v1/admin/", include("apps.trading.api.admin_urls")),
     path("api/v1/operator/surveillance/", include("apps.surveillance.urls")),
