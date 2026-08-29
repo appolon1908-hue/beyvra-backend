@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from integrations.permissions import organization_for_request
 from .models import ComplianceProfile
-from .services import effective_profile_states, get_trading_eligibility
+from .services import build_underwriting_workflow, get_trading_eligibility
 
 
 class ComplianceStatusView(APIView):
@@ -28,8 +28,33 @@ class ComplianceStatusView(APIView):
             "policy_version": eligibility.policy_version,
             "evaluated_at": eligibility.evaluated_at.isoformat(),
             "reason_codes": eligibility.reason_codes,
-            "requirements": eligibility.requirements,
+            "requirements": [],
         })
+
+
+class UnderwritingWorkflowView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        organization = organization_for_request(request)
+        profile = ComplianceProfile.objects.filter(user=request.user, organization=organization).first()
+        if not profile:
+            return Response({
+                "workflow": "trading_underwriting",
+                "status": "ACTION_REQUIRED",
+                "policy_version": "compliance-2026-08-11.v1",
+                "evaluated_at": timezone.now().isoformat(),
+                "phases": [],
+                "requirements": ["IDENTITY_VERIFICATION"],
+                "eligibility": {
+                    "trading": {"result": "DENIED", "reason_codes": ["PROFILE_REQUIRED"]},
+                    "deposit": {"result": "DENIED", "reason_codes": ["PROFILE_REQUIRED"]},
+                    "withdrawal": {"result": "DENIED", "reason_codes": ["PROFILE_REQUIRED"]},
+                    "transfer": {"result": "DENIED", "reason_codes": ["PROFILE_REQUIRED"]},
+                },
+            }, status=409)
+        payload = build_underwriting_workflow(profile)
+        return Response(payload)
 
 
 class ComplianceRestrictionsView(APIView):

@@ -123,6 +123,13 @@ FIX_LIVE_SESSION_ENABLED = False
 ALL_EXECUTION_HALTED = False
 DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "local").lower()
 RELEASE_SHA = os.getenv("RELEASE_SHA", "").strip()
+READINESS_ENFORCE_IDENTITY_EMAIL = os.getenv(
+    "READINESS_ENFORCE_IDENTITY_EMAIL",
+    "true" if DEPLOYMENT_ENV in {"staging", "production"} else "false",
+).lower() in {"1", "true", "yes"}
+READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE = os.getenv(
+    "READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE", "false"
+).lower() in {"1", "true", "yes"}
 PAPER_TRADING_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATION_ALLOWED = DEPLOYMENT_ENV in {"local", "test", "staging"}
 SIMULATED_TRADING_REQUESTED = os.getenv("SIMULATED_TRADING_ENABLED", "false").lower() == "true"

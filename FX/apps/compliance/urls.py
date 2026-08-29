@@ -5,10 +5,12 @@ from .workflow_views import (
     ComplianceDocumentsView,
     ComplianceRestrictionsView,
     ComplianceStatusView,
+    UnderwritingWorkflowView,
 )
 
 urlpatterns = [
     path("status", ComplianceStatusView.as_view(), name="compliance-status"),
+    path("underwriting/workflow", UnderwritingWorkflowView.as_view(), name="compliance-underwriting-workflow"),
     path("restrictions", ComplianceRestrictionsView.as_view(), name="compliance-restrictions"),
     path("documents", ComplianceDocumentsView.as_view(), name="compliance-documents"),
     path("acknowledgements", ComplianceAcknowledgementsView.as_view(), name="compliance-acknowledgements"),

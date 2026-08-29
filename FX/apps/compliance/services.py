@@ -105,6 +105,58 @@ def get_withdrawal_eligibility(account, **kwargs): return _evaluate(_canonical_p
 def get_transfer_eligibility(account, **kwargs): return _evaluate(_canonical_profile(account), "TRANSFER", **kwargs)
 
 
+def build_underwriting_workflow(profile):
+    """Trading-readiness workflow backed by the authoritative compliance gates."""
+    now = timezone.now()
+    states = effective_profile_states(profile, now)
+    requirements = list(profile.requirements.filter(required=True).exclude(status__in=("COMPLETED", "WAIVED")).values_list("type", flat=True))
+    if states["kyc_state"] in (KycState.NOT_STARTED, KycState.EXPIRED, KycState.REQUIRES_UPDATE):
+        requirements.append("IDENTITY_VERIFICATION")
+    if states["aml_state"] in (AmlState.NOT_SCREENED, AmlState.PENDING, AmlState.REVIEW_REQUIRED):
+        requirements.append("SOURCE_OF_FUNDS")
+    if states["jurisdiction_state"] == JurisdictionState.UNKNOWN:
+        requirements.append("ADDRESS_VERIFICATION")
+    if states["sanctions_state"] in (SanctionsState.POSSIBLE_MATCH, SanctionsState.MANUAL_REVIEW):
+        requirements.append("MANUAL_REVIEW")
+    requirements = list(dict.fromkeys(requirements))
+    decisions = {
+        "trading": get_trading_eligibility(profile, persist=False),
+        "deposit": get_deposit_eligibility(profile, persist=False),
+        "withdrawal": get_withdrawal_eligibility(profile, persist=False),
+        "transfer": get_transfer_eligibility(profile, persist=False),
+    }
+    if all(decision.result == EligibilityResult.ALLOWED for decision in decisions.values()):
+        status = "APPROVED"
+    elif any(decision.result == EligibilityResult.REVIEW_REQUIRED for decision in decisions.values()):
+        status = "REVIEW_REQUIRED"
+    else:
+        status = "ACTION_REQUIRED"
+    phases = [
+        {"code": "identity_verification", "state": states["kyc_state"].value, "complete": states["kyc_state"] == KycState.APPROVED},
+        {"code": "aml_screening", "state": states["aml_state"].value, "complete": states["aml_state"] == AmlState.CLEARED},
+        {"code": "sanctions_screening", "state": states["sanctions_state"].value, "complete": states["sanctions_state"] == SanctionsState.CLEAR},
+        {"code": "jurisdiction_review", "state": states["jurisdiction_state"].value, "complete": states["jurisdiction_state"] == JurisdictionState.SUPPORTED},
+        {"code": "account_activation", "state": states["account_state"].value, "complete": states["account_state"] == AccountState.ACTIVE},
+    ]
+    return {
+        "workflow": "trading_underwriting",
+        "status": status,
+        "policy_version": POLICY_VERSION,
+        "evaluated_at": now,
+        "phases": phases,
+        "requirements": requirements,
+        "eligibility": {
+            capability: {
+                "result": decision.result.value,
+                "reason_codes": list(decision.reason_codes),
+                "policy_version": decision.policy_version,
+                "evaluated_at": decision.evaluated_at,
+            }
+            for capability, decision in decisions.items()
+        },
+    }
+
+
 @transaction.atomic
 def transition_kyc(account_id, new_state, *, actor_ref="SYSTEM", evidence_ref=""):
     profile = ComplianceProfile.objects.select_for_update().get(pk=account_id)

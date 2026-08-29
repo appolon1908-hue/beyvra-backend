@@ -1,15 +1,75 @@
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from platform_ops.health.models import HealthCheckResult,ServiceDefinition
 from platform_ops.incidents.models import OperationalIncident
+from io import StringIO
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 class PublicApiTests(APITestCase):
     def test_liveness_is_fast_and_dependency_free(self):self.assertEqual(self.client.get("/health").status_code,200)
     @override_settings(NATS_JETSTREAM_ENABLED=True)
     def test_readiness_fails_without_outbox_heartbeat(self):
         cache.delete("health:outbox-worker");self.assertEqual(self.client.get("/ready").status_code,503)
+    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=True,EMAIL_REGISTRATION_ENABLED=True,TRANSACTIONAL_EMAIL_ENABLED=False,KEYCLOAK_IDENTITY_ENABLED=False)
+    def test_readiness_fails_when_email_delivery_required_but_disabled(self):
+        response=self.client.get("/ready")
+        self.assertEqual(response.status_code,503)
+        self.assertEqual(response.json()["checks"]["email_delivery"]["reason"],"TRANSACTIONAL_EMAIL_DISABLED")
+    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=True,EMAIL_REGISTRATION_ENABLED=True,TRANSACTIONAL_EMAIL_ENABLED=True,KEYCLOAK_IDENTITY_ENABLED=False,BEYVRA_EMAIL_API_URL="https://api.example.test",BEYVRA_EMAIL_TOKEN_URL="https://auth.example.test/token")
+    def test_readiness_accepts_configured_local_identity_and_email_secret(self):
+        with TemporaryDirectory() as folder:
+            secret=Path(folder)/"email-client-secret"; secret.write_text("secret",encoding="utf-8")
+            with override_settings(BEYVRA_EMAIL_CLIENT_SECRET_FILE=str(secret)):
+                response=self.client.get("/ready")
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.json()["checks"]["email_delivery"]["ok"])
+        self.assertEqual(response.json()["checks"]["identity_provider"]["reason"],"LOCAL_AUTHORITY")
+    @override_settings(
+        READINESS_ENFORCE_IDENTITY_EMAIL=True,
+        READINESS_COLLECT_LIVE_IDENTITY_EMAIL_EVIDENCE=True,
+        EMAIL_REGISTRATION_ENABLED=False,
+        WELCOME_EMAIL_ENABLED=True,
+        TRANSACTIONAL_EMAIL_ENABLED=True,
+        KEYCLOAK_IDENTITY_ENABLED=True,
+        LOCAL_PASSWORD_AUTH_ENABLED=False,
+        KEYCLOAK_ISSUER="https://auth.codestra.co/realms/codestra",
+        KEYCLOAK_CLIENT_ID="beyvra-web-production",
+        KEYCLOAK_REDIRECT_URI="https://beyvra.com/api/v1/auth/oidc/callback/",
+        KEYCLOAK_FRONTEND_CALLBACK="https://beyvra.com/auth/callback",
+        KEYCLOAK_POST_LOGOUT_URI="https://beyvra.com/signIn?logged_out=1",
+        KEYCLOAK_TOKEN_URI="https://auth.codestra.co/realms/codestra/protocol/openid-connect/token",
+        KEYCLOAK_JWKS_URI="https://auth.codestra.co/realms/codestra/protocol/openid-connect/certs",
+        BEYVRA_EMAIL_API_URL="https://api.codestra.co",
+        BEYVRA_EMAIL_TOKEN_URL="https://auth.codestra.co/realms/codestra/protocol/openid-connect/token",
+    )
+    @patch("platform_ops.health.checks.requests.get")
+    @patch("notifications.email_client.EmailMiddlewareClient.token",return_value="evidence-token")
+    def test_readiness_collects_live_identity_email_evidence_without_secrets(self,token,get):
+        get.return_value=Mock(status_code=200,json=Mock(return_value={"keys":[{"kid":"fixture"}]}))
+        with TemporaryDirectory() as folder:
+            secret=Path(folder)/"email-client-secret"; secret.write_text("secret",encoding="utf-8")
+            with override_settings(BEYVRA_EMAIL_CLIENT_SECRET_FILE=str(secret)):
+                response=self.client.get("/ready")
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.json()["checks"]["email_delivery"]["ok"])
+        self.assertTrue(response.json()["checks"]["identity_provider"]["ok"])
+        token.assert_called_once()
+        get.assert_called_once()
+        self.assertNotIn("secret",str(response.json()).lower())
+    @override_settings(READINESS_ENFORCE_IDENTITY_EMAIL=False,KEYCLOAK_IDENTITY_ENABLED=False,EMAIL_REGISTRATION_ENABLED=False,TRANSACTIONAL_EMAIL_ENABLED=False)
+    def test_identity_email_evidence_command_outputs_safe_json(self):
+        output=StringIO()
+        call_command("collect_identity_email_readiness_evidence",stdout=output)
+        payload=json.loads(output.getvalue())
+        self.assertIn("email_delivery",payload["checks"])
+        self.assertIn("identity_provider",payload["checks"])
+        self.assertNotIn("secret",output.getvalue().lower())
     def test_public_status_is_safe(self):
         response=self.client.get("/api/v1/system/status");self.assertEqual(response.status_code,200);self.assertNotIn("hostname",response.json())
     def test_capabilities_never_advertise_real_money(self):

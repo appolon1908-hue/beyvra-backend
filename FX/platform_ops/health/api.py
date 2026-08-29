@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from platform_ops.permissions import IsSreViewer
-from .checks import check_postgres, check_redis, execute_required_checks
+from .checks import check_postgres, check_redis, execute_required_checks, identity_email_readiness_checks
 from .models import ServiceDefinition
 from .services import HealthAuthority
 
@@ -14,8 +14,8 @@ def live(_request): return JsonResponse({"status": "live"})
 
 
 def ready(_request):
-    pg=check_postgres(); redis=check_redis(); nats=(not settings.NATS_JETSTREAM_ENABLED) or bool(cache.get("health:outbox-worker")); ok=pg[0] and redis[0] and nats
-    return JsonResponse({"status": "ready" if ok else "not_ready", "checks": {"postgresql": pg[0], "redis": redis[0], "nats": "disabled" if not settings.NATS_JETSTREAM_ENABLED else ("ready" if nats else "worker_unavailable")}}, status=200 if ok else 503)
+    pg=check_postgres(); redis=check_redis(); nats=(not settings.NATS_JETSTREAM_ENABLED) or bool(cache.get("health:outbox-worker")); identity_email=identity_email_readiness_checks(); ok=pg[0] and redis[0] and nats and all(item["ok"] for item in identity_email.values())
+    return JsonResponse({"status": "ready" if ok else "not_ready", "checks": {"postgresql": pg[0], "redis": redis[0], "nats": "disabled" if not settings.NATS_JETSTREAM_ENABLED else ("ready" if nats else "worker_unavailable"), **identity_email}}, status=200 if ok else 503)
 
 
 class SystemStatusView(APIView):

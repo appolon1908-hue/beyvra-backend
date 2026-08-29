@@ -15,7 +15,7 @@ from apps.trading.models import TradingOrder
 from users.models import User
 from .domain import AccountState, AmlState, EligibilityResult, JurisdictionState, KycState, RestrictionType, SanctionsState
 from .models import ComplianceAuditEvent, ComplianceCaseEvent, ComplianceInboxEvent, ComplianceOverride, ComplianceProfile, ComplianceProviderGovernance, ComplianceRequirement, EligibilityDecision
-from .services import add_restriction, create_case, get_deposit_eligibility, get_trading_eligibility, get_transfer_eligibility, get_withdrawal_eligibility, transition_aml, transition_jurisdiction, transition_kyc, transition_sanctions, update_account_state
+from .services import add_restriction, build_underwriting_workflow, create_case, get_deposit_eligibility, get_trading_eligibility, get_transfer_eligibility, get_withdrawal_eligibility, transition_aml, transition_jurisdiction, transition_kyc, transition_sanctions, update_account_state
 
 @override_settings(
     DEPLOYMENT_ENV="test", SIMULATED_TRADING_ENABLED=True,
@@ -50,6 +50,29 @@ class ComplianceAuthorityTests(TestCase):
             self.approve(); setattr(self.profile,field,value); self.profile.save(); decision=get_trading_eligibility(self.profile); self.assertEqual(decision.result,EligibilityResult.DENIED); self.assertIn(reason,decision.reason_codes)
     def test_review_only_authorities_return_review_required(self):
         self.approve(); self.profile.aml_state=AmlState.REVIEW_REQUIRED; self.profile.save(); self.assertEqual(get_trading_eligibility(self.profile).result,EligibilityResult.REVIEW_REQUIRED)
+    def test_underwriting_workflow_summarizes_required_trading_actions(self):
+        workflow=build_underwriting_workflow(self.profile)
+        self.assertEqual(workflow["workflow"],"trading_underwriting")
+        self.assertEqual(workflow["status"],"ACTION_REQUIRED")
+        self.assertIn("IDENTITY_VERIFICATION",workflow["requirements"])
+        self.assertEqual(workflow["eligibility"]["trading"]["result"],"DENIED")
+    def test_underwriting_workflow_api_smokes_approved_account(self):
+        denied=self.client.get("/api/v1/compliance/underwriting/workflow")
+        self.assertEqual(denied.status_code,200)
+        self.assertEqual(denied.json()["eligibility"]["trading"]["result"],"DENIED")
+        self.approve()
+        approved=self.client.get("/api/v1/compliance/underwriting/workflow")
+        self.assertEqual(approved.status_code,200)
+        self.assertEqual(approved.json()["status"],"APPROVED")
+        self.assertTrue(all(item["complete"] for item in approved.json()["phases"]))
+        self.assertEqual(approved.json()["eligibility"]["deposit"]["result"],"ALLOWED")
+    def test_underwriting_workflow_requires_compliance_profile(self):
+        other=User.objects.create_user(email="workflow-missing@example.test",phone_number="+15555550188",first_name="Missing",last_name="Workflow",password="x")
+        OrganizationMembership.objects.create(user=other,organization=Organization.objects.create(name="Workflow Missing Tenant"))
+        c=APIClient(); c.force_authenticate(other)
+        response=c.get("/api/v1/compliance/underwriting/workflow")
+        self.assertEqual(response.status_code,409)
+        self.assertEqual(response.json()["eligibility"]["trading"]["reason_codes"],["PROFILE_REQUIRED"])
     def test_eligibility_refreshes_a_stale_caller_instance(self):
         self.approve(); stale=ComplianceProfile.objects.get(pk=self.profile.pk); ComplianceProfile.objects.filter(pk=self.profile.pk).update(aml_state=AmlState.BLOCKED); decision=get_trading_eligibility(stale); self.assertEqual(decision.result,EligibilityResult.DENIED); self.assertIn("AML_BLOCKED",decision.reason_codes)
     def test_active_restriction_denies(self):
