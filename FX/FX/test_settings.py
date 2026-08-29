@@ -1,8 +1,10 @@
 import os
 
-from .settings import *  # noqa: F403
+os.environ.setdefault("SECRET_KEY", "isolated-test-only-django-secret-key")
+os.environ.setdefault("ALLOWED_HOSTS", '["testserver","localhost","127.0.0.1"]')
+os.environ.setdefault("CSRF_TRUSTED_ORIGINS", '["http://localhost","http://127.0.0.1"]')
 
-import os
+from .settings import *  # noqa: F403
 
 if os.getenv("DB_HOST"):
     DATABASES = {"default": {"ENGINE": "django.db.backends.postgresql", "NAME": os.getenv("DB_NAME"), "USER": os.getenv("DB_USER"), "PASSWORD": os.getenv("DB_PASSWORD"), "HOST": os.getenv("DB_HOST"), "PORT": os.getenv("DB_PORT", "5432"), "TEST": {"NAME": os.getenv("TEST_DB_NAME", "test_codestra_ci")}}}
@@ -36,3 +38,4 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []  # noqa: F405
 # Synthetic test-only key material. Production settings remain fail-closed
 # unless the corresponding protected secret or secret-file reference exists.
 API_TOKEN_PEPPER = "isolated-test-only-api-token-pepper"
+WEBHOOK_MASTER_KEY = "isolated-test-only-webhook-master-key"

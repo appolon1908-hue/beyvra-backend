@@ -8,7 +8,6 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.foundation.models import RealtimeChannelEvent
-from ws.v2 import CHANNEL_REGISTRY, _channel_entry
 
 
 DEFAULT_HISTORY_SIZE = 100
@@ -58,6 +57,8 @@ def _stable_hash(value: dict) -> str:
 
 
 def _history_size(channel: str) -> int:
+    from ws.v2 import _channel_entry
+
     _, entry = _channel_entry(channel)
     if not entry:
         return DEFAULT_HISTORY_SIZE
@@ -129,6 +130,8 @@ def _from_model(row: RealtimeChannelEvent) -> StoredRealtimeEvent:
 
 
 def snapshot(*, tenant_ref: str, channel: str) -> dict:
+    from ws.v2 import _channel_entry
+
     latest = (
         RealtimeChannelEvent.objects.filter(tenant_ref=str(tenant_ref), channel=channel)
         .order_by("-sequence")

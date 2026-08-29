@@ -5,7 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
-from django.db import close_old_connections, transaction
+from django.db import close_old_connections, connection, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -171,6 +171,10 @@ class OutboxInboxTests(TestCase):
 
 class IdempotencyConcurrencyTests(TransactionTestCase):
     reset_sequences = True
+
+    def setUp(self):
+        if connection.vendor == "sqlite":
+            self.skipTest("threaded database concurrency contract requires PostgreSQL row locks")
 
     def test_100_concurrent_same_key_creates_one_record(self):
         barrier = threading.Barrier(20)

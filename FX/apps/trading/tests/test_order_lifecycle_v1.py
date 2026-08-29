@@ -2,6 +2,7 @@ import uuid
 from decimal import Decimal
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
+from apps.trading.application.simulation import process_created_order
 from apps.trading.models import TradingOrder, SimulatedTrade
 from apps.trading.domain.orders import OrderState
 from apps.foundation.models import OutboxEvent
@@ -73,7 +74,7 @@ class OrderLifecycleV1ApiTests(TestCase):
         self.assertGreaterEqual(len(res_events.json()["results"]), 1)
 
     def test_order_cancel_lifecycle(self):
-        payload = {"instrument": "BTC-USD", "side": "BUY", "order_type": "LIMIT", "quantity": "2", "limit_price": "90.00"}
+        payload = {"instrument": "BTC-USD", "side": "BUY", "order_type": "LIMIT", "quantity": "2", "limit_price": "96.00"}
         res_create = self.client.post(
             "/api/v1/orders",
             payload,
@@ -81,11 +82,13 @@ class OrderLifecycleV1ApiTests(TestCase):
             HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
             **self.headers
         )
+        self.assertEqual(res_create.status_code, 201, res_create.json())
         order_id = res_create.json()["id"]
+        process_created_order(order_id, "OPEN_THEN_CANCEL")
 
         res_cancel = self.client.post(f"/api/v1/orders/{order_id}/cancel", **self.headers)
         self.assertEqual(res_cancel.status_code, 200)
-        self.assertEqual(res_cancel.json()["status"], OrderState.CANCELED.value)
+        self.assertEqual(res_cancel.json()["state"], OrderState.CANCELED.value)
 
     def test_executions_endpoint(self):
         res_exec = self.client.get("/api/v1/executions", **self.headers)

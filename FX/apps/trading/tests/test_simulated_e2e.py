@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from types import SimpleNamespace
 
-from django.db import close_old_connections
+from django.db import close_old_connections, connection
 from django.test import TestCase, TransactionTestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -218,6 +218,10 @@ class CompleteTransitionMatrixTests(TestCase):
 @SIMULATION
 class SimulatedOrderConcurrencyTests(TransactionTestCase):
     reset_sequences = True
+
+    def setUp(self):
+        if connection.vendor == "sqlite":
+            self.skipTest("threaded order concurrency contract requires PostgreSQL row locks")
 
     def test_20_duplicate_order_requests_create_one_order_and_reservation(self):
         user = User.objects.create_user(
