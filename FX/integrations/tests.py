@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from apps.compliance.models import ComplianceProfile
 from pricing_authority.models import AccountPlan, AccountPlanAssignment, AccountPlanVersion, Entitlement, PlanEntitlement
 from users.models import User
-from .models import DemoAccount, DemoLedgerEntry, Organization, OrganizationMembership, ServiceToken
+from .models import DemoAccount, DemoLedgerEntry, IntegrationAuditEvent, Organization, OrganizationMembership, ServiceToken
 
 
 @override_settings(API_TOKEN_PEPPER="integration-test-pepper")
@@ -37,6 +37,38 @@ class IntegrationApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(email=self.payload["email"])
         self.assertEqual(user.role, "User")
+
+    def test_public_intake_accepts_beyvra_lead_form_payload(self):
+        payload = {
+            "source": "demo-trading-platform",
+            "name": "Demo Visitor",
+            "email": "visitor@example.invalid",
+            "interest": "Demo account",
+            "goal": "I want to explore Beyvra charts and paper trading.",
+            "consent": True,
+        }
+
+        response = self.client.post(
+            "/api/v1/public/intake",
+            payload,
+            format="json",
+            HTTP_X_REQUEST_ID="public-intake-test-1",
+        )
+        replay = self.client.post(
+            "/api/v1/public/intake",
+            payload,
+            format="json",
+            HTTP_X_REQUEST_ID="public-intake-test-1",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(response.data["status"], "submitted")
+        self.assertEqual(replay.data["intake_id"], response.data["intake_id"])
+        event = IntegrationAuditEvent.objects.get(action="public.intake")
+        self.assertEqual(event.metadata["email"], payload["email"])
+        self.assertEqual(event.metadata["source"], payload["source"])
+        self.assertEqual(event.metadata["interest"], payload["interest"])
 
 
 class ControlPlaneContextTests(TestCase):

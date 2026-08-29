@@ -15,9 +15,9 @@ from rest_framework.views import APIView
 
 from users.models import User
 from .crypto import decrypt_secret, encrypt_secret, fingerprint
-from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, ServiceToken, UserImport, UserImportRow
+from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, Organization, ServiceToken, UserImport, UserImportRow
 from .permissions import HasScope, ScopedBearerAuthentication, organization_for_request
-from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, ServiceTokenMetadataSerializer, UserCreateSerializer
+from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, PublicIntakeSerializer, ServiceTokenMetadataSerializer, UserCreateSerializer
 from .tasks import process_user_import
 from .throttles import CRMInboundThrottle, ImportActionThrottle, ImportThrottle, UserCreateThrottle
 from .observability import IMPORT_ROWS_TOTAL, INVALID_SIGNATURE_TOTAL, USER_CREATE_TOTAL, count
@@ -60,6 +60,49 @@ class ControlPlaneContextView(APIView):
         result["Cache-Control"] = "private, no-store"
         result["Vary"] = "Cookie, Authorization, X-Organization-ID"
         return result
+
+
+class PublicIntakeView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = "public_intake"
+
+    def post(self, request):
+        serializer = PublicIntakeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        organization, _ = Organization.objects.get_or_create(
+            name="Beyvra public intake",
+            defaults={"is_active": True},
+        )
+        key = request.headers.get("Idempotency-Key") or request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        prior = IntegrationAuditEvent.objects.filter(
+            organization=organization,
+            action="public.intake",
+            metadata__idempotency_key=key,
+        ).first()
+        if prior:
+            return Response(prior.metadata["result"], status=status.HTTP_200_OK)
+        result = {
+            "intake_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"beyvra-public-intake:{key}")),
+            "status": "submitted",
+            "source": data["source"],
+        }
+        IntegrationAuditEvent.objects.create(
+            organization=organization,
+            action="public.intake",
+            metadata={
+                "idempotency_key": key,
+                "result": result,
+                "source": data["source"],
+                "interest": data["interest"],
+                "email": data["email"],
+                "name": data["name"],
+                "goal_preview": data["goal"][:160],
+                "contact_consent": data["consent"],
+            },
+        )
+        return Response(result, status=status.HTTP_202_ACCEPTED)
 
 
 def _create_user(attrs, organization, reference):

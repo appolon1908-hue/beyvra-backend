@@ -27,6 +27,21 @@ class UserCreateSerializer(serializers.Serializer):
         return attrs
 
 
+class PublicIntakeSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=80)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=16, required=False, allow_blank=True, default="")
+    source = serializers.CharField(max_length=120, required=False, allow_blank=True, default="public_site")
+    interest = serializers.CharField(max_length=80, required=False, allow_blank=True, default="Demo account")
+    goal = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
+    consent = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if attrs["consent"] is not True:
+            raise serializers.ValidationError({"consent": "contact consent must be accepted"})
+        return attrs
+
+
 class DemoAccountSerializer(serializers.ModelSerializer):
     virtual_balance = serializers.SerializerMethodField()
     class Meta:
