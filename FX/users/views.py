@@ -628,15 +628,69 @@ class SessionResolveView(APIView):
     """Bounded, server-authoritative session bootstrap contract for the SPA."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @staticmethod
+    def _portal_access(user, guest):
+        if guest:
+            return {
+                "default": "client",
+                "allowed": ["client"],
+                "role": "Guest",
+                "operatorRoles": [],
+            }
+        operator_roles = sorted(
+            OrganizationMembership.objects.filter(user_id=user.pk)
+            .exclude(role__in={"member", ""})
+            .values_list("role", flat=True)
+            .distinct()
+        )
+        role = getattr(user, "role", "User") or "User"
+        if getattr(user, "is_superuser", False):
+            return {
+                "default": "admin",
+                "allowed": ["admin", "contractor", "client"],
+                "role": "Super Admin",
+                "operatorRoles": operator_roles,
+            }
+        if getattr(user, "is_staff", False) or role == "Admin":
+            return {
+                "default": "admin",
+                "allowed": ["admin", "contractor", "client"],
+                "role": "Admin",
+                "operatorRoles": operator_roles,
+            }
+        if role == "Contractor" or operator_roles:
+            return {
+                "default": "contractor",
+                "allowed": ["contractor", "client"],
+                "role": "Contractor",
+                "operatorRoles": operator_roles,
+            }
+        return {
+            "default": "client",
+            "allowed": ["client"],
+            "role": "User",
+            "operatorRoles": operator_roles,
+        }
+
     def get(self, request):
         user = request.user
         guest = bool(getattr(user, "is_guest_demo", False))
+        portals = self._portal_access(user, guest)
         return Response({
             "state": "guest.ready" if guest else "user.ready",
             "principal": "guest" if guest else "user",
             "guestDemo": guest,
             "demoOnly": True,
-            "user": {"id": user.pk, "email": None if guest else user.email, "displayName": user.get_full_name() or "Guest Demo"},
+            "portal": portals["default"],
+            "allowedPortals": portals["allowed"],
+            "roles": [portals["role"]],
+            "operatorRoles": portals["operatorRoles"],
+            "user": {
+                "id": user.pk,
+                "email": None if guest else user.email,
+                "displayName": user.get_full_name() or "Guest Demo",
+                "role": portals["role"],
+            },
         })
 
 

@@ -41,6 +41,7 @@ class TimeStampedModel(models.Model):
 
 class UserRoles(Enum):
     User = "User"
+    Contractor = "Contractor"
     Admin = "Admin"
     Super_Admin = "Super Admin"
 

@@ -4,6 +4,7 @@ from django.test import override_settings
 from django.urls import resolve, reverse
 from rest_framework.test import APIClient, APITestCase
 
+from integrations.models import Organization, OrganizationMembership
 from users.models import User
 
 
@@ -79,7 +80,11 @@ class CoreApiSmokeTests(APITestCase):
 
         session = client.get("/api/v1/session")
         self.assertEqual(session.status_code, 200)
-        self.assertEqual(session.json()["state"], "user.ready")
+        session_payload = session.json()
+        self.assertEqual(session_payload["state"], "user.ready")
+        self.assertEqual(session_payload["portal"], "client")
+        self.assertEqual(session_payload["allowedPortals"], ["client"])
+        self.assertEqual(session_payload["user"]["role"], "User")
 
         self.assertEqual(client.post(reverse("canonical_auth:token_refresh"), {}, format="json").status_code, 403)
         refreshed = client.post(
@@ -161,3 +166,39 @@ class CoreApiSmokeTests(APITestCase):
             HTTP_X_TENANT_REF="11111111-1111-1111-1111-111111111111",
         )
         self.assertIn(response.status_code, {403, 503})
+
+    def test_session_contract_exposes_staff_admin_portal(self):
+        admin = User.objects.create_user(
+            email="admin-smoke@example.test",
+            password="safe-test-password",
+            phone_number="+12025550171",
+            role="Admin",
+            is_staff=True,
+        )
+        self.client.force_authenticate(admin)
+
+        payload = self.client.get("/api/v1/session").json()
+        self.assertEqual(payload["portal"], "admin")
+        self.assertEqual(payload["allowedPortals"], ["admin", "contractor", "client"])
+        self.assertEqual(payload["roles"], ["Admin"])
+
+    def test_session_contract_exposes_contractor_portal(self):
+        contractor = User.objects.create_user(
+            email="contractor-smoke@example.test",
+            password="safe-test-password",
+            phone_number="+12025550172",
+            role="Contractor",
+        )
+        organization = Organization.objects.create(name="Contractor Ops")
+        OrganizationMembership.objects.create(
+            user=contractor,
+            organization=organization,
+            role="support_agent",
+        )
+        self.client.force_authenticate(contractor)
+
+        payload = self.client.get("/api/v1/session").json()
+        self.assertEqual(payload["portal"], "contractor")
+        self.assertEqual(payload["allowedPortals"], ["contractor", "client"])
+        self.assertEqual(payload["roles"], ["Contractor"])
+        self.assertEqual(payload["operatorRoles"], ["support_agent"])
