@@ -23,6 +23,29 @@ Keycloak client secrets, and OpenBao root or recovery material must stay out of 
 | Grafana Alloy | `Codestra-Alloy` | Collect Docker logs and scrape Beyvra metrics from `alloy/beyvra.alloy`. |
 | OpenBao / Secrets | `Codestra-OpenBao` | Store Beyvra runtime secrets using `openbao/beyvra-secret-map.md`. |
 
+## Endpoint And Credential Matrix
+
+| System | Endpoint | Consumer | Exposure | Credential source | Production proof |
+| --- | --- | --- | --- | --- | --- |
+| Beyvra backend app metrics | `http://beyvra-backend:8000/metrics` | Prometheus, Alloy | Private observability network | None, private network only | `up{job="beyvra-backend-django"} == 1` and `beyvra_*` metrics present |
+| Beyvra backend exporter | `http://beyvra-backend:7001/metrics` | Prometheus, Alloy | Private observability network | None, private network only | `up{job="beyvra-backend-exporter"} == 1` |
+| Beyvra live health | `https://api.beyvra.com/health` | Blackbox exporter, release checks | Public HTTPS through edge/BFF | None | HTTP 200 probe success |
+| Beyvra readiness | `https://api.beyvra.com/ready` | Blackbox exporter, release checks | Public HTTPS through edge/BFF | None | HTTP 200 only when dependencies are ready |
+| Beyvra frontend | `https://beyvra.com/` | Blackbox exporter, Google systems | Public HTTPS | None | HTTP 200, valid TLS, indexable page |
+| Beyvra sign-in | `https://beyvra.com/signIn?tab=login` | Blackbox exporter, auth smoke tests | Public HTTPS | Backend-owned HttpOnly cookies after login | Login smoke test reaches `/api/v1/session` |
+| PostgreSQL exporter | `http://postgres-exporter:9187/metrics` | Prometheus | Private observability and database networks | `kv/beyvra/production/postgres-exporter` or `/run/secrets/postgres_exporter_*` | `pg_up == 1` |
+| Redis exporter | `http://redis-exporter:9121/metrics` | Prometheus | Private observability network | `kv/beyvra/production/redis` if Redis auth is enabled | `up{job="beyvra-redis"} == 1` |
+| Node exporter | `http://node-exporter:9100/metrics` | Prometheus | Private observability network | None, host-level deployment approval required | `up{job="beyvra-node"} == 1` |
+| cAdvisor | `http://cadvisor:8080/metrics` | Prometheus | Private observability network | None, Docker socket access approval required | `up{job="beyvra-cadvisor"} == 1` |
+| Blackbox exporter | `http://blackbox-exporter:9115/probe` | Prometheus | Private observability network | None | `probe_success == 1` for Beyvra public targets |
+| Loki | `http://loki:3100/loki/api/v1/push` | Alloy | Private observability network | `kv/beyvra/production/observability` if tenant auth is enabled | JSON logs visible with `service=beyvra-backend` |
+| Tempo | `tempo:4317` and `http://tempo:3200` | Alloy, Grafana | Private observability network | `kv/beyvra/production/observability` if auth is enabled | Trace search works for Beyvra services |
+| Prometheus | `http://prometheus:9090` | Grafana, Alertmanager rule evaluation | Private observability network | `kv/beyvra/production/observability` if UI/API auth is enabled | Beyvra targets and alerts loaded |
+| Grafana | Deployment-owned HTTPS hostname | Operators | Protected browser access | `kv/beyvra/production/observability` | Beyvra dashboards render Prometheus, Loki, and Tempo data |
+| Alertmanager | Deployment-owned private API | Prometheus | Private observability network | `kv/beyvra/production/observability` | Controlled test alert reaches approved receiver |
+| OpenBao | `https://bao.codestra.media` | Runtime secret injection, approved operators | Protected API/browser access only | AppRole/OIDC policy, never root token | Audit log shows least-privilege Beyvra reads |
+| Superset | Deployment-owned HTTPS hostname | Analytics operators | Protected browser access | Dedicated read-only analytics database secret | Read-only Beyvra analytics dashboards load |
+
 ## PostgreSQL Exporter Contract
 
 `Codestra-Postgres-Exporter` is the PostgreSQL metrics authority for Beyvra. Its private service
