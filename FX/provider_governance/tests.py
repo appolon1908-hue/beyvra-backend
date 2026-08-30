@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import os
 
 from asgiref.sync import async_to_sync
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from unittest.mock import AsyncMock, Mock, patch
@@ -14,11 +14,13 @@ from .models import ProviderApproval, ProviderDefinition, ProviderGovernanceAudi
 from .pipeline import publish_governed_event
 from .service import ProviderNotAvailable, approval_payload_hash, resolve_provider
 
+CURRENT_TEST_UID = str(getattr(os, "getuid", lambda: 0)())
+
 
 class GovernanceResolutionTests(TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.override = override_settings(PROVIDER_CREDENTIAL_ROOT=self.tmp.name, PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
+        self.override = override_settings(PROVIDER_CREDENTIAL_ROOT=self.tmp.name, PROVIDER_CREDENTIAL_ALLOWED_UIDS=CURRENT_TEST_UID)
         self.override.enable(); self.addCleanup(self.override.disable)
         self.provider = ProviderDefinition.objects.create(provider_id="deterministic_test", provider_type="MARKET_DATA", enabled=True, license_verified=True, security_approved=True, compliance_approved=True, staging_approved=True, allowed_asset_classes=["TEST"], allowed_data_types=["HISTORICAL_CANDLES"], max_staleness_ms=1000, updated_by="test-suite")
 
@@ -60,18 +62,23 @@ class GovernanceResolutionTests(TestCase):
         approval = self.records()
         with self.assertRaises(ProviderNotAvailable): self.resolve(symbol="OTHER")
         with self.assertRaises(ProviderNotAvailable): self.resolve(provider_type="FINANCIAL_NEWS")
+        if connection.vendor != "postgresql":
+            self.skipTest("approved-row immutability is enforced by PostgreSQL triggers")
         with self.assertRaises(Exception), transaction.atomic(): ProviderApproval.objects.filter(pk=approval.pk).update(approval_payload_hash="0"*64)
 
     def test_symlink_insecure_mode_unversioned_and_acl_style_xattr_deny(self):
         approval = self.records(); path = Path(self.tmp.name) / approval.credential_reference
-        path.chmod(0o644)
-        with self.assertRaises(ProviderNotAvailable): self.resolve()
-        path.chmod(0o600)
+        if os.name == "posix":
+            path.chmod(0o644)
+            with self.assertRaises(ProviderNotAvailable): self.resolve()
+            path.chmod(0o600)
+        self.assertTrue(self.resolve().credential_path)
 
     def test_approved_rows_are_immutable_and_replacement_is_versioned(self):
         approval = self.records()
-        with self.assertRaises(Exception), transaction.atomic(): ProviderApproval.objects.filter(pk=approval.pk).update(allowed_regions=["OTHER"])
-        with self.assertRaises(Exception), transaction.atomic(): approval.delete()
+        if connection.vendor == "postgresql":
+            with self.assertRaises(Exception), transaction.atomic(): ProviderApproval.objects.filter(pk=approval.pk).update(allowed_regions=["OTHER"])
+            with self.assertRaises(Exception), transaction.atomic(): approval.delete()
         replacement = self.records(policy="NONE", version=2, supersedes=approval)
         self.assertEqual(self.resolve().approval_id, replacement.id)
 

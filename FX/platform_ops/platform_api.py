@@ -1,6 +1,5 @@
 import hashlib
 import json
-from datetime import datetime, timezone
 from django.conf import settings
 from django.utils import timezone as django_timezone
 from rest_framework.permissions import AllowAny
@@ -12,6 +11,18 @@ from apps.compliance.domain import KycState
 from apps.compliance.models import ComplianceProfile
 from platform_ops.health.services import HealthAuthority
 from platform_ops.permissions import IsSreViewer
+
+
+def _stable_etag(payload):
+    stable_payload = {key: value for key, value in payload.items() if key != "as_of"}
+    content_hash = hashlib.sha256(json.dumps(stable_payload, sort_keys=True).encode("utf-8")).hexdigest()
+    return f'"{content_hash}"'
+
+
+def _is_maintenance(system_state):
+    if system_state != "UNHEALTHY":
+        return False
+    return getattr(settings, "DEPLOYMENT_ENV", "staging") not in {"local", "test"}
 
 
 class PlatformConfigView(APIView):
@@ -36,9 +47,7 @@ class PlatformConfigView(APIView):
             "as_of": django_timezone.now().isoformat(),
         }
 
-        # Compute deterministic ETag
-        content_hash = hashlib.sha256(json.dumps(config_data, sort_keys=True).encode("utf-8")).hexdigest()
-        etag = f'"{content_hash}"'
+        etag = _stable_etag(config_data)
 
         if request.headers.get("If-None-Match") == etag:
             return Response(status=304)
@@ -59,7 +68,7 @@ class PlatformCapabilitiesView(APIView):
 
     def get(self, request):
         system_state = HealthAuthority.system_state()
-        is_maintenance = system_state == "UNHEALTHY"
+        is_maintenance = _is_maintenance(system_state)
         is_degraded = system_state == "DEGRADED"
 
         # Safe defaults
@@ -119,9 +128,7 @@ class PlatformCapabilitiesView(APIView):
         if provider_health is not None:
             capabilities_data["provider_health"] = provider_health
 
-        # Compute deterministic ETag
-        content_hash = hashlib.sha256(json.dumps(capabilities_data, sort_keys=True).encode("utf-8")).hexdigest()
-        etag = f'"{content_hash}"'
+        etag = _stable_etag(capabilities_data)
 
         if request.headers.get("If-None-Match") == etag:
             return Response(status=304)

@@ -13,6 +13,8 @@ from reference_data.models import Instrument, ProviderSymbolMapping, TradingCale
 from django.utils import timezone
 import os
 
+CURRENT_TEST_UID = str(getattr(os, "getuid", lambda: 0)())
+
 
 def approve_provider(provider_id, provider_type="MARKET_DATA"):
     existing = ProviderDefinition.objects.filter(provider_id=provider_id).first()
@@ -107,7 +109,7 @@ class MarketHistoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     @patch("trade.market_data.requests.get")
-    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=CURRENT_TEST_UID)
     def test_market_history_is_normalized_and_persisted(self, get):
         approve_provider("binance")
         self._credential("market/binance/v1/credential.key")
@@ -160,7 +162,7 @@ class MarketHistoryTests(TestCase):
         self.assertIsInstance(response.data["results"][0]["close"], str)
         get.assert_not_called()
 
-    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=CURRENT_TEST_UID)
     @patch("trade.market_data.requests.get")
     def test_cached_candle_is_explicitly_stale_and_keeps_provenance(self, get):
         import requests
@@ -175,7 +177,7 @@ class MarketHistoryTests(TestCase):
         self.assertTrue(response.data["results"][0]["provenance"]["cache_hit"])
         self.assertEqual(response.data["results"][0]["provider_id"],"binance")
 
-    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=str(os.getuid()))
+    @override_settings(PROVIDER_CREDENTIAL_ROOT="/tmp/provider-test-credentials", PROVIDER_CREDENTIAL_ALLOWED_UIDS=CURRENT_TEST_UID)
     @patch("trade.market_data.requests.get")
     def test_stock_history_uses_twelve_data_and_is_normalized(self, get):
         approve_provider("twelve_data")

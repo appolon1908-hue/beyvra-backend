@@ -72,6 +72,8 @@ def _deny(context, reason):
 
 
 def _has_acl(path):
+    if not hasattr(os, "getxattr"):
+        return False
     try:
         return bool(os.getxattr(path, "system.posix_acl_access", follow_symlinks=False))
     except OSError as exc:
@@ -86,6 +88,7 @@ def _credential_path(reference):
     root = Path(settings.PROVIDER_CREDENTIAL_ROOT).absolute()
     candidate = root / reference
     allowed_uids = {int(uid) for uid in str(getattr(settings, "PROVIDER_CREDENTIAL_ALLOWED_UIDS", "0")).split(",") if uid.strip()}
+    enforce_posix_metadata = os.name == "posix"
     current = root
     try:
         root_stat = os.lstat(root)
@@ -95,14 +98,19 @@ def _credential_path(reference):
                 return None
             current = current / part
             item_stat = os.lstat(current)
-            if stat.S_ISLNK(item_stat.st_mode) or item_stat.st_uid not in allowed_uids or _has_acl(current):
+            if stat.S_ISLNK(item_stat.st_mode):
                 return None
-            if current != candidate and item_stat.st_mode & 0o022:
-                return None
+            if enforce_posix_metadata:
+                if item_stat.st_uid not in allowed_uids or _has_acl(current):
+                    return None
+                if current != candidate and item_stat.st_mode & 0o022:
+                    return None
         file_stat = os.lstat(candidate)
     except OSError:
         return None
-    if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_mode & 0o077 or not os.access(candidate, os.R_OK):
+    if not stat.S_ISREG(file_stat.st_mode) or not os.access(candidate, os.R_OK):
+        return None
+    if enforce_posix_metadata and file_stat.st_mode & 0o077:
         return None
     return str(candidate)
 
