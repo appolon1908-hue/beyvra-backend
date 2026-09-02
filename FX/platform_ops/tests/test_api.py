@@ -4,6 +4,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 from platform_ops.health.models import HealthCheckResult,ServiceDefinition
 from platform_ops.incidents.models import OperationalIncident
+from platform_ops.reconciliation.models import FullStackReconciliationRun
 
 class PublicApiTests(APITestCase):
     def test_liveness_is_fast_and_dependency_free(self):self.assertEqual(self.client.get("/health").status_code,200)
@@ -28,10 +29,21 @@ class OperatorApiTests(APITestCase):
         self.assertEqual(self.client.post("/api/v1/operator/system/kill-switches/GLOBAL_PLATFORM_HALT/activate",{}).status_code,400)
     def test_incident_invalid_transition_rejected(self):
         x=OperationalIncident.objects.create(severity="SEV2",category="TEST",summary="fixture",source="test",deduplication_key="test")
-        self.assertEqual(self.client.post(f"/api/v1/operator/system/incidents/{x.id}/resolve",{"reason_code":"test"}).status_code,409)
+        headers={"HTTP_IDEMPOTENCY_KEY":"incident-invalid","HTTP_X_REQUEST_ID":"65cbf766-67ac-4f77-868a-cacc105008d3","HTTP_IF_MATCH":"OPEN"}
+        self.assertEqual(self.client.post(f"/api/v1/operator/system/incidents/{x.id}/resolve",{"reason_code":"test"},format="json",**headers).status_code,409)
+    def test_incident_transition_is_idempotent_and_versioned(self):
+        x=OperationalIncident.objects.create(severity="SEV2",category="TEST",summary="fixture",source="test",deduplication_key="idempotent-test")
+        headers={"HTTP_IDEMPOTENCY_KEY":"incident-ack","HTTP_X_REQUEST_ID":"65cbf766-67ac-4f77-868a-cacc105008d5","HTTP_IF_MATCH":"OPEN"}
+        first=self.client.post(f"/api/v1/operator/system/incidents/{x.id}/acknowledge",{"reason_code":"operator_ack"},format="json",**headers)
+        replay=self.client.post(f"/api/v1/operator/system/incidents/{x.id}/acknowledge",{"reason_code":"operator_ack"},format="json",**headers)
+        conflict=self.client.post(f"/api/v1/operator/system/incidents/{x.id}/acknowledge",{"reason_code":"changed"},format="json",**headers)
+        self.assertEqual(first.status_code,200);self.assertEqual(replay.json(),first.json());self.assertEqual(conflict.status_code,409)
+        self.assertEqual(OperationalIncident.objects.get(pk=x.pk).state,"ACKNOWLEDGED")
     @override_settings(RELEASE_SHA="a"*40)
     def test_reconciliation_never_fabricates_pass_without_sources(self):
-        response=self.client.post("/api/v1/operator/system/reconciliation/run",{"reason_code":"fixture"},format="json")
+        response=self.client.post("/api/v1/operator/system/reconciliation/run",{"reason_code":"fixture"},format="json",HTTP_IDEMPOTENCY_KEY="reconcile-test",HTTP_X_REQUEST_ID="65cbf766-67ac-4f77-868a-cacc105008d4")
         self.assertEqual(response.status_code,503);self.assertEqual(response.json()["reconciliation"]["state"],"INCOMPLETE")
+        replay=self.client.post("/api/v1/operator/system/reconciliation/run",{"reason_code":"fixture"},format="json",HTTP_IDEMPOTENCY_KEY="reconcile-test",HTTP_X_REQUEST_ID="65cbf766-67ac-4f77-868a-cacc105008d4")
+        self.assertEqual(replay.status_code,503);self.assertEqual(replay.json(),response.json());self.assertEqual(FullStackReconciliationRun.objects.count(),1)
     def test_no_generic_mutation_endpoints(self):
         for p in ("action","admin","toggle"):self.assertEqual(self.client.post(f"/api/v1/operator/system/{p}",{}).status_code,404)
