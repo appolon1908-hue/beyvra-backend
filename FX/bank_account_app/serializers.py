@@ -4,7 +4,7 @@ from .models import BankAccount, WithdrawalRequest
 from wallet.serializers import CurrencySerializer
 from users.serializers import UserSerializer
 from wallet.models import Currency, Wallet
-from integrations.crypto import encrypt, fingerprint
+from integrations.crypto import encrypt, keyed_fingerprint
 from django.db.models import Q
 
 
@@ -97,7 +97,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
 
         raw_account_number = validated_data.pop('account_number')
         encrypted_identifiers = self._encrypt_identifiers(validated_data)
-        digest = fingerprint(raw_account_number)
+        digest = keyed_fingerprint(raw_account_number)
         bank_account = BankAccount.objects.filter(user=user).filter(
             Q(account_number_fingerprint=digest) | Q(account_number=raw_account_number)
         ).first()
@@ -118,7 +118,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
         raw_account_number = validated_data.pop('account_number', None)
         if raw_account_number:
-            digest = fingerprint(raw_account_number)
+            digest = keyed_fingerprint(raw_account_number)
             duplicate = BankAccount.objects.filter(user=instance.user).filter(
                 Q(account_number_fingerprint=digest) | Q(account_number=raw_account_number)
             ).exclude(pk=instance.pk).exists()

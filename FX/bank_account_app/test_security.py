@@ -76,7 +76,10 @@ class BankAccountSecurityTests(TestCase):
         self.assertEqual(attacker.withdrawal_requests.count(), 0)
 
 
-@override_settings(DATA_ENCRYPTION_KEY="bank-account-test-key")
+@override_settings(
+    DATA_ENCRYPTION_KEY="bank-account-test-key",
+    API_TOKEN_PEPPER="bank-account-fingerprint-test-pepper",
+)
 class BankAccountCommandTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -103,6 +106,7 @@ class BankAccountCommandTests(TestCase):
         self.assertEqual(replay.json(), first.json()); self.assertEqual(conflict.status_code, 409)
         row = BankAccount.objects.get(user=self.user)
         self.assertIsNone(row.account_number); self.assertTrue(row.account_number_ciphertext)
+        self.assertNotEqual(row.account_number_fingerprint, __import__('hashlib').sha256(b"123456789").hexdigest()[:32])
         for field in ("routing_number", "swift_code", "iban"):
             self.assertIsNone(getattr(row, field))
             self.assertTrue(getattr(row, f"{field}_ciphertext"))
@@ -141,7 +145,10 @@ class BankAccountCommandTests(TestCase):
             "HTTP_IF_MATCH": row.updated_at.isoformat().replace("+00:00", "Z"),
         }
         response = self.client.delete("/api/bank_account/", {"bank_account_id": row.pk}, format="json", **headers)
+        replay = self.client.delete("/api/bank_account/", {"bank_account_id": row.pk}, format="json", **headers)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(replay.json(), response.json())
         row.refresh_from_db(); self.assertFalse(row.is_active); self.assertIsNotNone(row.revoked_at)
 
     def test_legacy_plaintext_backfill_encrypts_and_clears_source(self):

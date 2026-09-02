@@ -94,13 +94,18 @@ class BankAccountView(APIView):
             command, error = command_context(request, require_version=True)
             if error: return error
             key, _, correlation_id, expected_version = command
+            account_id = request.data.get('bank_account_id')
+            organization, record, replay = begin_command(
+                request, key=key,
+                payload={"bank_account_id": account_id, "action": "retire", "expected_version": expected_version},
+            )
+            if replay: return replay
             bank_account = BankAccount.objects.select_for_update().filter(
-                pk=request.data.get('bank_account_id'), user=request.user, is_active=True,
+                pk=account_id, user=request.user, is_active=True,
             ).first()
             if not bank_account:
+                record.delete()
                 return Response({"Error": "Bank account not found."}, status=status.HTTP_404_NOT_FOUND)
-            organization, record, replay = begin_command(request, key=key, payload={"bank_account_id": bank_account.pk, "action": "retire", "expected_version": expected_version})
-            if replay: return replay
             if expected_version != bank_account.updated_at.isoformat().replace("+00:00", "Z"):
                 record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
             bank_account.retire()

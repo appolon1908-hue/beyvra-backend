@@ -25,7 +25,7 @@ class BankAccount(TimeStampedModel):
     account_number_ciphertext = models.TextField(null=True, blank=True)
     account_number_nonce = models.CharField(max_length=64, null=True, blank=True)
     account_number_key_version = models.CharField(max_length=32, default="v1")
-    account_number_fingerprint = models.CharField(max_length=16, default="", db_index=True)
+    account_number_fingerprint = models.CharField(max_length=32, default="", db_index=True)
     account_number_last_four = models.CharField(max_length=4, default="")
     is_active = models.BooleanField(default=True)
     revoked_at = models.DateTimeField(null=True, blank=True)

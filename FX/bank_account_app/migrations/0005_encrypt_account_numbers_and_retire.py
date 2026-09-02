@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
         migrations.AddField("bankaccount", "account_number_ciphertext", models.TextField(blank=True, null=True)),
         migrations.AddField("bankaccount", "account_number_nonce", models.CharField(blank=True, max_length=64, null=True)),
         migrations.AddField("bankaccount", "account_number_key_version", models.CharField(default="v1", max_length=32)),
-        migrations.AddField("bankaccount", "account_number_fingerprint", models.CharField(db_index=True, default="", max_length=16)),
+        migrations.AddField("bankaccount", "account_number_fingerprint", models.CharField(db_index=True, default="", max_length=32)),
         migrations.AddField("bankaccount", "account_number_last_four", models.CharField(default="", max_length=4)),
         migrations.AddField("bankaccount", "routing_number_ciphertext", models.TextField(blank=True, null=True)),
         migrations.AddField("bankaccount", "routing_number_nonce", models.CharField(blank=True, max_length=64, null=True)),

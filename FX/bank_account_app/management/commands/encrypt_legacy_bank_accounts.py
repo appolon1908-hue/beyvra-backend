@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import models, transaction
 
 from bank_account_app.models import BankAccount
-from integrations.crypto import encrypt, fingerprint
+from integrations.crypto import encrypt, keyed_fingerprint
 
 
 class Command(BaseCommand):
@@ -44,7 +44,7 @@ class Command(BaseCommand):
                             f"{field}_key_version", f"{field}_last_four",
                         ))
                         if field == "account_number":
-                            row.account_number_fingerprint = fingerprint(raw)
+                            row.account_number_fingerprint = keyed_fingerprint(raw)
                             update_fields.append("account_number_fingerprint")
                     row.save(update_fields=update_fields)
                     migrated += 1
