@@ -75,6 +75,14 @@ services:
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    user: "70:70"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
     environment:
       - PGHOST=postgres
       - PGPORT=5432
