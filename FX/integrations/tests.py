@@ -1,9 +1,12 @@
 import hashlib
 import json
 import time
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from users.models import User
@@ -62,3 +65,27 @@ class IntegrationManagementCommandTests(TestCase):
         self.assertEqual(ServiceToken.objects.filter(owner=self.admin).count(), 1)
         stored = IdempotencyRecord.objects.get(key="token-issue-test").response_body
         self.assertNotIn(first.data["token"], json.dumps(stored))
+
+    def test_expired_service_token_idempotency_never_replays_secret(self):
+        headers = {
+            "HTTP_X_ORGANIZATION_ID": str(self.org.id), "HTTP_IDEMPOTENCY_KEY": "expired-token-issue",
+            "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2004",
+        }
+        payload = {"name": "automation", "scopes": ["users:read"]}
+        first = self.client.post("/api/v1/integrations/service-tokens", payload, format="json", **headers)
+        record = IdempotencyRecord.objects.get(key="expired-token-issue")
+        record.expires_at = timezone.now() - timedelta(seconds=1); record.save(update_fields=["expires_at"])
+        replay = self.client.post("/api/v1/integrations/service-tokens", payload, format="json", **headers)
+        self.assertEqual(first.status_code, 201); self.assertEqual(replay.status_code, 410)
+        self.assertNotIn("token", replay.data)
+
+    def test_failed_import_response_is_durably_replayed(self):
+        headers = {
+            "HTTP_X_ORGANIZATION_ID": str(self.org.id), "HTTP_IDEMPOTENCY_KEY": "failed-import",
+            "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2005",
+        }
+        content = b"unsupported_column\nvalue\n"
+        first = self.client.post("/api/v1/users/imports", {"file": SimpleUploadedFile("users.csv", content, content_type="text/csv")}, **headers)
+        replay = self.client.post("/api/v1/users/imports", {"file": SimpleUploadedFile("users.csv", content, content_type="text/csv")}, **headers)
+        self.assertEqual(first.status_code, 400); self.assertEqual(replay.status_code, 400)
+        self.assertEqual(first.data, replay.data)

@@ -84,6 +84,8 @@ def _complete_secret_result(record, *, status_code, body, raw_secret, resource_t
 def _replay_secret(record):
     if record.response_status is None or record.response_body is None:
         return Response({"detail": "command result is not yet available"}, status=409)
+    if record.expires_at <= timezone.now():
+        return Response({"detail": "one-time secret replay window has expired"}, status=410)
     stored = dict(record.response_body)
     envelope = stored.pop("_secret_envelope", None)
     if not envelope:
@@ -243,7 +245,10 @@ class UserImportView(APIView):
                 count(IMPORT_ROWS_TOTAL, row_status.lower())
             job.row_count = job.rows.count(); job.valid_count = job.rows.filter(status="VALID").count(); job.invalid_count = job.rows.filter(status="INVALID").count(); job.save()
         except (UnicodeDecodeError, csv.Error, ValueError) as exc:
-            job.status = "FAILED"; job.save(update_fields=["status", "updated_at"]); record.delete(); return Response({"detail": str(exc)}, status=400)
+            job.status = "FAILED"; job.save(update_fields=["status", "updated_at"])
+            body = {"detail": str(exc)}
+            complete_idempotent_request(record, status=400, body=body, resource_type="user_import", resource_id=job.pk)
+            return Response(body, status=400)
         body = ImportSerializer(job).data
         _command_audit(organization=org, request=request, action="user_import.upload", correlation_id=correlation_id, metadata={"request_id": request_id, "import_id": str(job.pk), "file_sha256": digest.hexdigest()})
         complete_idempotent_request(record, status=201, body=body, resource_type="user_import", resource_id=job.pk)
