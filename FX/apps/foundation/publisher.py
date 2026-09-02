@@ -7,6 +7,7 @@ import time
 from django.conf import settings
 
 from .services import claim_outbox_batch, mark_publish_result
+from .models import OutboxEvent
 from .observability import OUTBOX_FAILURES, OUTBOX_LAST_SUCCESS, OUTBOX_PUBLISHED, OUTBOX_RETRIES, worker_success
 
 CANONICAL_SUBJECT_DOMAINS = {
@@ -76,6 +77,10 @@ async def _publish(rows):
 def publish_batch(limit=100):
     rows = claim_outbox_batch(limit=limit)
     if not rows:
+        if OutboxEvent.objects.filter(state=OutboxEvent.State.DEAD_LETTER).exists():
+            # An exhausted publication is unresolved work.  Keep liveness
+            # stale so the worker alert cannot be cleared by an idle poll.
+            return 0
         # An empty claim is a successful durability check, not a stale worker.
         # Emit a heartbeat so liveness alerts do not require business traffic.
         OUTBOX_LAST_SUCCESS.set(time.time())
