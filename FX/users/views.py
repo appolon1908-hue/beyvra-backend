@@ -120,16 +120,8 @@ class DeleteUserView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request):
-        user = request.user
-        try:
-            user_to_delete = User.objects.get(email=user)
-        except User.DoesNotExist:
-            return Response(
-                {"detail": messages.USER_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND
-            )
-        user_to_delete.delete()
         return Response(
-            {"detail": messages.USER_DELETED_SUCCESS}, status=status.HTTP_200_OK
+            {"code": "ACCOUNT_CLOSURE_WORKFLOW_REQUIRED"}, status=status.HTTP_409_CONFLICT
         )
 
 
@@ -1218,6 +1210,7 @@ class BulkCreateUserView(APIView):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def ban_user(request, user_id):
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
         return Response(
@@ -1265,6 +1258,7 @@ def ban_user(request, user_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def unban_user(request, user_id):
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
         return Response(
@@ -1586,6 +1580,7 @@ def verify_user_kyc(request, user_id):
         return Response(results, status=status.HTTP_200_OK)
 
     elif request.method == "PATCH":
+        return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         kyc.verified = True
         kyc.status = "S"
         kyc.save()
@@ -1687,6 +1682,7 @@ def user_trading_statistics(request):
 @api_view(["PATCH"])
 @permission_classes([IsAdminUser])
 def accept_kyc_file(request, file_id):
+    return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
     try:
         kyc_file = KYCFile.objects.get(id=file_id)
     except KYCFile.DoesNotExist:
@@ -1723,6 +1719,7 @@ def accept_kyc_file(request, file_id):
 @api_view(["PATCH"])
 @permission_classes([IsAdminUser])
 def reject_kyc_file(request, file_id):
+    return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
     try:
         kyc_file = KYCFile.objects.get(id=file_id)
     except KYCFile.DoesNotExist:
@@ -1768,6 +1765,7 @@ class UserDocumentVerificationStatus(generics.GenericAPIView):
         return get_user_model().objects.get(id=user_id)
 
     def patch(self, request, *args, **kwargs):
+        return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
         # check action confirmation
@@ -1797,6 +1795,7 @@ class UserFaceVerificationStatus(generics.GenericAPIView):
         return get_user_model().objects.get(id=user_id)
 
     def patch(self, request, *args, **kwargs):
+        return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
         # check action confirmation
@@ -1826,6 +1825,7 @@ class UserVerificationStatus(generics.GenericAPIView):
         return get_user_model().objects.get(id=user_id)
 
     def patch(self, request, *args, **kwargs):
+        return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
         serializer = self.get_serializer(data=request.data, context={"view": self})
         # check action confirmation
@@ -2081,27 +2081,7 @@ def user_roles(request, user_id):
         return Response({"user_id": user.id, "email": user.email, "role": user.role})
 
     elif request.method in ["PUT", "PATCH"]:
-        role = request.data.get("role")
-        if not role:
-            return Response({"error": "Role field is required."}, status=400)
-
-        allowed_roles = ["Admin", "User", "Manager"]
-        if role not in allowed_roles:
-            return Response(
-                {"error": f"Invalid role. Allowed roles: {allowed_roles}"}, status=400
-            )
-
-        # check action confirmation
-        confirm_response = confirm_action(request)
-        if isinstance(confirm_response, Response):
-            return confirm_response
-
-        user.role = role
-        user.save()
-
-        return Response(
-            {"message": f"Role updated to {role} for user {user.email}."}, status=200
-        )
+        return Response({"code": "GOVERNED_ROLE_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["GET"])
@@ -2115,38 +2095,17 @@ def list_roles(request):
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def assign_permissions_to_role(request):
-    role_id = request.data.get("role_id")
-    permission_ids = request.data.get("permission_ids", [])
-    try:
-        role = Group.objects.get(id=role_id)
-        permissions = Permission.objects.filter(id__in=permission_ids)
-        role.permissions.set(permissions)
-        return Response(
-            {"message": f"Permissions assigned to role '{role.name}' successfully."}
-        )
-    except Group.DoesNotExist:
-        return Response({"error": "Role not found."}, status=404)
+    return Response({"code": "GOVERNED_RBAC_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def assign_user_to_role(request):
-    user_id = request.data.get("user_id")
-    role_id = request.data.get("role_id")
-    try:
-        user = User.objects.get(id=user_id)
-        role = Group.objects.get(id=role_id)
-        user.groups.add(role)
-        return Response(
-            {
-                "message": f"User '{user.username}' assigned to role '{role.name}' successfully."
-            }
-        )
-    except (User.DoesNotExist, Group.DoesNotExist) as e:
-        raise ValidationError("Resource not found") from e
+    return Response({"code": "GOVERNED_RBAC_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["POST"])
+@permission_classes([IsAdminUser])
 def check_user_permissions(request):
     user_id = request.data.get("user_id")
     permission_name = request.data.get("permission")
@@ -2164,6 +2123,7 @@ def toggle_user_status(request, user_id):
     """
     Toggle user status (active/inactive).
     """
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     # check action confirmation
     confirm_response = confirm_action(request)
     if isinstance(confirm_response, Response):
@@ -2187,6 +2147,7 @@ def update_user_status(request, user_id):
     """
     Update user status (active/inactive).
     """
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     status_value = request.data.get("status")
     if status_value not in ["active", "inactive"]:
         return Response(
@@ -2220,21 +2181,7 @@ def create_user(request):
     """
     Create a new user.
     """
-    data = request.data
-    try:
-        user = User.objects.create_user(
-            username=data.get("username"),
-            first_name=data.get("first_name"),
-            last_name=data.get("last_name"),
-            email=data.get("email"),
-            password=data.get("password"),
-        )
-        return Response(
-            {"message": f"User {user.username} created successfully"},
-            status=status.HTTP_201_CREATED,
-        )
-    except Exception as e:
-        raise ValidationError("User creation failed") from e
+    return Response({"code": "GOVERNED_USER_PROVISIONING_REQUIRED"}, status=409)
 
 
 @api_view(["PUT"])
@@ -2243,24 +2190,7 @@ def update_user(request, user_id):
     """
     Update the user details.
     """
-    data = request.data
-    # check action confirmation
-    confirm_response = confirm_action(request)
-    if isinstance(confirm_response, Response):
-        return confirm_response
-
-    try:
-        user = User.objects.get(id=user_id)
-        user.first_name = data.get("first_name", user.first_name)
-        user.last_name = data.get("last_name", user.last_name)
-        user.email = data.get("email", user.email)
-        user.save()
-        return Response(
-            {"message": f"User {user.username} updated successfully"},
-            status=status.HTTP_200_OK,
-        )
-    except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"code": "GOVERNED_USER_PROFILE_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["DELETE"])
@@ -2269,24 +2199,7 @@ def delete_user(request, user_id):
     """
     Delete user with confirmation.
     """
-    confirm = request.data.get("confirm", False)
-    if not confirm:
-        return Response(
-            {
-                "error": "Please confirm deletion by adding 'confirm: true' in the request body."
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        user = User.objects.get(id=user_id)
-        user.delete()
-        return Response(
-            {"message": f"User {user.username} deleted successfully"},
-            status=status.HTTP_204_NO_CONTENT,
-        )
-    except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"code": "ACCOUNT_CLOSURE_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["POST"])
@@ -2297,75 +2210,7 @@ def bulk_actions(request):
     - Delete users.
     - Update roles or statuses for users.
     """
-    action = request.data.get("action")
-    user_ids = request.data.get("user_ids")
-    if not user_ids:
-        return Response(
-            {"error": "No user IDs provided"}, status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # check action confirmation
-    confirm_response = confirm_action(request)
-    if isinstance(confirm_response, Response):
-        return confirm_response
-
-    if action == "delete":
-        users_to_delete = User.objects.filter(id__in=user_ids)
-        deleted_count = users_to_delete.delete()[0]
-        return Response(
-            {"message": f"{deleted_count} users deleted successfully"},
-            status=status.HTTP_200_OK,
-        )
-
-    elif action == "update_roles":
-        new_role = request.data.get("role")
-        if not new_role:
-            return Response(
-                {"error": "No role provided for update"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        users_to_update = User.objects.filter(id__in=user_ids)
-        updated_count = 0
-        for user in users_to_update:
-            user.role = new_role
-            user.save()
-            updated_count += 1
-
-        return Response(
-            {
-                "message": f"{updated_count} users' roles updated to {new_role} successfully"
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    elif action == "update_status":
-        new_status = request.data.get("is_active")
-        if new_status is None:
-            return Response(
-                {"error": "No status provided for update"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        users_to_update = User.objects.filter(id__in=user_ids)
-        updated_count = 0
-        for user in users_to_update:
-            user.is_active = new_status
-            user.save()
-            updated_count += 1
-
-        return Response(
-            {"message": f"{updated_count} users' statuses updated successfully"},
-            status=status.HTTP_200_OK,
-        )
-
-    else:
-        return Response(
-            {
-                "error": "Invalid action. Please provide a valid action (delete, update_roles, or update_status)."
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    return Response({"code": "BULK_IDENTITY_WORKFLOW_REQUIRED"}, status=409)
 
 
 @api_view(["GET"])
@@ -2436,89 +2281,14 @@ class ResetUserPasswordView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, user_id, *args, **kwargs):
-        new_password = request.data.get("new_password")
-        confirm_password = request.data.get("confirm_password")
-
-        if not new_password or not confirm_password:
-            return JsonResponse(
-                {"error": "Both 'new_password' and 'confirm_password' are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_password != confirm_password:
-            return JsonResponse(
-                {"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # check action confirmation
-        confirm_response = confirm_action(request)
-        if isinstance(confirm_response, Response):
-            return confirm_response
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return JsonResponse(
-                {"error": "User not found."}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        user.set_password(new_password)
-        user.save()
-        revoke_sessions_after_credential_change(user=user, event_type="PASSWORD_RESET")
-
-        return JsonResponse(
-            {"message": "Password reset successfully."}, status=status.HTTP_200_OK
-        )
+        return Response({"code": "CREDENTIAL_RECOVERY_WORKFLOW_REQUIRED"}, status=409)
 
 
 class BulkResetPasswordView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request, *args, **kwargs):
-        user_ids = request.data.get("user_ids")
-        new_password = request.data.get("new_password")
-        confirm_password = request.data.get("confirm_password")
-
-        if not user_ids or not isinstance(user_ids, list) or not user_ids:
-            return JsonResponse(
-                {"error": "'user_ids' must be a non-empty list."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not new_password or not confirm_password:
-            return JsonResponse(
-                {"error": "Both 'new_password' and 'confirm_password' are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_password != confirm_password:
-            return JsonResponse(
-                {"error": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # check action confirmation
-        confirm_response = confirm_action(request)
-        if isinstance(confirm_response, Response):
-            return confirm_response
-
-        users = User.objects.filter(id__in=user_ids)
-        if not users.exists():
-            return JsonResponse(
-                {"error": "No users found for the provided IDs."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        for user in users:
-            user.set_password(new_password)
-            user.save()
-            revoke_sessions_after_credential_change(
-                user=user, event_type="PASSWORD_RESET"
-            )
-
-        return JsonResponse(
-            {"message": f"Passwords reset for {users.count()} users."},
-            status=status.HTTP_200_OK,
-        )
+        return Response({"code": "BULK_CREDENTIAL_RESET_DISABLED"}, status=409)
 
 
 @extend_schema(request=PreferredLanguageSerializer)
@@ -2558,33 +2328,4 @@ class SetGlobal2FAMethodView(generics.GenericAPIView):
     serializer_class = Global2FAMethodSerializer
 
     def patch(self, request, *args, **kwargs):
-        serializer = Global2FAMethodSerializer(data=request.data)
-        if serializer.is_valid():
-            if serializer.validated_data["confirm_override"] is True:
-                # Extract the 2FA method
-                two_fa_method = serializer.validated_data["method"]
-                # Update 2FA method for all users
-                users = User.objects.all()
-                updated_users = []
-                for user in users:
-                    user.two_fa_type = two_fa_method  # Update with the 2FA method
-                    user.save()
-                    updated_users.append(user.email)
-                # Return a response with a success message
-                return Response(
-                    {
-                        "message": f"2FA method: {two_fa_method} set for {len(updated_users)} users successfully.",
-                        "updated_users": updated_users,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                # Return a response with a failed message
-                return Response(
-                    {
-                        "message": "2FA method override aborted.",
-                        "updated_users": None,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"code": "IDENTITY_PROVIDER_MFA_POLICY_REQUIRED"}, status=409)
