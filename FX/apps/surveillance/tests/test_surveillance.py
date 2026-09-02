@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib.auth.models import Group
 from django.db import DatabaseError, transaction
 from django.test import TestCase, override_settings
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -118,6 +119,8 @@ class SurveillanceTests(TestCase):
         row = SurveillanceCase.objects.create(tenant_ref="default", account_ref="sim:target", case_type="MARKET_ABUSE_REVIEW", severity="CRITICAL", status="OPEN", opened_at=self.now, policy_version="surveillance-2026-08-v1", evidence_hash="3" * 64)
         maker = APIClient(); maker.force_authenticate(self.manager); base=f"/api/v1/operator/surveillance/cases/{row.pk}"
         self.assertEqual(maker.post(f"{base}/assign", {"reason":"ownership"}, format="json").status_code, 422)
+        self.assertEqual(maker.post(f"{base}/assign", {"reason":"ownership"}, format="json", HTTP_IDEMPOTENCY_KEY="k"*256, HTTP_X_REQUEST_ID="request", HTTP_IF_MATCH=row.updated_at.isoformat()).status_code, 422)
+        self.assertTrue({"idempotency-key", "x-request-id", "if-match"}.issubset(settings.CORS_ALLOW_HEADERS))
         stale = maker.post(f"{base}/assign", {"reason":"ownership"}, format="json", HTTP_IDEMPOTENCY_KEY="case-stale", HTTP_X_REQUEST_ID="case-stale-request", HTTP_IF_MATCH="stale")
         self.assertEqual(stale.status_code, 409); row.refresh_from_db(); self.assertEqual(row.status, "OPEN")
         headers={"HTTP_IDEMPOTENCY_KEY":"case-assign","HTTP_X_REQUEST_ID":"case-assign-request","HTTP_IF_MATCH":row.updated_at.isoformat()}

@@ -25,9 +25,11 @@ VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match"
 
 
 def _command_headers(request, versioned=False):
-    key = request.headers.get("Idempotency-Key", "")
-    request_id = request.headers.get("X-Request-ID", "")
+    key = request.headers.get("Idempotency-Key", "").strip()
+    request_id = request.headers.get("X-Request-ID", "").strip()
     version = request.headers.get("If-Match", "") if versioned else None
+    if len(key) > 255 or len(request_id) > 128:
+        return None, None, None
     return (key, request_id[:128], version) if key and request_id and (not versioned or version) else (None, None, None)
 
 
