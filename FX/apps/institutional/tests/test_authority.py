@@ -18,6 +18,7 @@ from apps.institutional.models import (
     InstitutionalSubaccount, InstitutionalTradeAllocationInstruction, OmnibusAccount,
     OmnibusBeneficialPosition, SegregatedCustodyAccount,
 )
+from apps.foundation.models import ApplicationAuditEvent, IdempotencyRecord
 from apps.institutional.services import (
     AllocationService, InstitutionAggregationService, InstitutionalAccountReconciler,
     InstitutionalAccountService, InstitutionalRiskService, SubaccountService,
@@ -121,6 +122,8 @@ class InstitutionalAuthorityTests(TestCase):
 
     def test_operator_is_tenant_scoped(self):
         other_tenant = Organization.objects.create(name="Other Operator Tenant")
+        # A non-operator membership in another tenant must not grant operator access there.
+        OrganizationMembership.objects.create(user=self.operator, organization=other_tenant, role="member")
         foreign_operator = User.objects.create_user(email="foreign-operator@example.test", phone_number="+15555551004", first_name="Foreign", last_name="Operator", password="x")
         OrganizationMembership.objects.create(user=foreign_operator, organization=other_tenant, role="institutional_operations")
         foreign = InstitutionalAccount.objects.create(tenant=other_tenant, institution_code="FOREIGN", display_name="Foreign", account_type="INTERNAL_TEST", status="ACTIVE", base_currency="USD", effective_from=self.now)
@@ -128,6 +131,57 @@ class InstitutionalAuthorityTests(TestCase):
         ids = {row["id"] for row in operator.get("/api/v1/operator/institutional/accounts").json()["results"]}
         self.assertNotIn(str(foreign.id), ids)
         self.assertEqual(operator.get(f"/api/v1/operator/institutional/accounts/{foreign.id}").status_code, 404)
+        denied_create = operator.post("/api/v1/operator/institutional/subaccounts", {"institution_id": str(foreign.id)}, format="json", HTTP_IDEMPOTENCY_KEY="cross-tenant", HTTP_X_REQUEST_ID="44bb62c2-bc51-49fd-a490-2ccb62ea2730")
+        self.assertEqual(denied_create.status_code, 404)
+
+    def test_operator_subaccount_create_is_durably_idempotent(self):
+        operator = APIClient(); operator.force_authenticate(self.operator)
+        request_id = "44bb62c2-bc51-49fd-a490-2ccb62ea272d"
+        headers = {"HTTP_IDEMPOTENCY_KEY": "institutional-create-1", "HTTP_X_REQUEST_ID": request_id}
+        payload = {
+            "institution_id": str(self.institution.pk), "code": "IDEMP", "display_name": "Idempotent",
+            "subaccount_type": "TEST", "base_currency": "USD", "status": "ACTIVE",
+            "effective_from": self.now.isoformat(),
+        }
+        first = operator.post("/api/v1/operator/institutional/subaccounts", payload, format="json", **headers)
+        replay = operator.post("/api/v1/operator/institutional/subaccounts", payload, format="json", **headers)
+        conflict = operator.post("/api/v1/operator/institutional/subaccounts", {**payload, "display_name": "Changed"}, format="json", **headers)
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(replay.status_code, 201)
+        self.assertEqual(replay.json(), first.json())
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(InstitutionalSubaccount.objects.filter(code="IDEMP").count(), 1)
+        self.assertEqual(IdempotencyRecord.objects.filter(key="institutional-create-1").count(), 1)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(request_id=request_id).count(), 1)
+
+    def test_operator_subaccount_update_requires_version_and_replays(self):
+        operator = APIClient(); operator.force_authenticate(self.operator)
+        request_id = "44bb62c2-bc51-49fd-a490-2ccb62ea272e"
+        url = f"/api/v1/operator/institutional/subaccounts/{self.sub_a.pk}"
+        missing = operator.patch(url, {"display_name": "Updated"}, format="json", HTTP_IDEMPOTENCY_KEY="update-1", HTTP_X_REQUEST_ID=request_id)
+        self.assertEqual(missing.status_code, 428)
+        version = self.sub_a.updated_at.isoformat().replace("+00:00", "Z")
+        headers = {"HTTP_IDEMPOTENCY_KEY": "update-1", "HTTP_X_REQUEST_ID": request_id, "HTTP_IF_MATCH": version}
+        first = operator.patch(url, {"display_name": "Updated"}, format="json", **headers)
+        replay = operator.patch(url, {"display_name": "Updated"}, format="json", **headers)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(replay.json(), first.json())
+        self.sub_a.refresh_from_db(); self.assertEqual(self.sub_a.display_name, "Updated")
+        self.assertEqual(ApplicationAuditEvent.objects.filter(request_id=request_id).count(), 1)
+
+    def test_operator_reconciliation_is_durably_idempotent(self):
+        operator = APIClient(); operator.force_authenticate(self.operator)
+        request_id = "44bb62c2-bc51-49fd-a490-2ccb62ea272f"
+        headers = {"HTTP_IDEMPOTENCY_KEY": "reconciliation-1", "HTTP_X_REQUEST_ID": request_id}
+        payload = {"institution_id": str(self.institution.pk)}
+        first = operator.post("/api/v1/operator/institutional/reconciliation/run", payload, format="json", **headers)
+        replay = operator.post("/api/v1/operator/institutional/reconciliation/run", payload, format="json", **headers)
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(replay.status_code, 201)
+        self.assertEqual(replay.json(), first.json())
+        self.assertEqual(self.institution.reconciliation_runs.count(), 1)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(request_id=request_id).count(), 1)
 
     def test_maker_checker_constraint_and_append_only_audit(self):
         action = InstitutionalOperatorAction(institution=self.institution, control="CUSTODY_MODEL_CHANGE", requested_by=self.operator, approved_by=self.operator)
