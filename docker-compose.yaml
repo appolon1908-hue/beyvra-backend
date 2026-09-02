@@ -72,6 +72,23 @@ services:
       timeout: 5s
       retries: 10
 
+  backup-init:
+    image: postgres:16-alpine
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    volumes:
+      - ./backups:/backups
+    command: ["/bin/sh", "-c", "chown 70:70 /backups && chmod 700 /backups"]
+
   db-backup:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -96,6 +113,8 @@ services:
       - ./scripts/backup-loop.sh:/usr/local/bin/backup-loop.sh:ro
     command: ["/bin/sh", "/usr/local/bin/backup-loop.sh"]
     depends_on:
+      backup-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     networks:
