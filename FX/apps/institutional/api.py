@@ -24,7 +24,7 @@ from .permissions import OPERATOR_ROLES, IsInstitutionalManager, IsInstitutional
 from .serializers import (
     AllocationGroupSerializer, AllocationInstructionSerializer, BrokerAccountMappingSerializer,
     ClearingBrokerSerializer, ClearingRelationshipSerializer, CustodyStructureSafeSerializer,
-    InstitutionalAccountSerializer, InstitutionalSubaccountSerializer, OperatorCustodySerializer,
+    InstitutionalAccountSerializer, InstitutionalSubaccountCreateSerializer, InstitutionalSubaccountSerializer, OperatorCustodySerializer,
     OperatorOmnibusSerializer, OperatorSegregatedSerializer, SettlementMappingSerializer,
 )
 from .services import InstitutionAggregationService, InstitutionalAccountReconciler, InstitutionalAccountService, InstitutionalRiskService, SubaccountService
@@ -247,22 +247,24 @@ class OperatorAccountDetailView(APIView):
 class OperatorSubaccountsView(APIView):
     permission_classes = [IsInstitutionalOperator]
     def get(self, request): return Response({"results": InstitutionalSubaccountSerializer(_operator_scope(request, InstitutionalSubaccount.objects.all()).order_by("code"), many=True).data})
-    @extend_schema(parameters=COMMAND_PARAMETERS, request=InstitutionalSubaccountSerializer, responses={201: InstitutionalSubaccountSerializer})
+    @extend_schema(parameters=COMMAND_PARAMETERS, request=InstitutionalSubaccountCreateSerializer, responses={201: InstitutionalSubaccountSerializer})
     @transaction.atomic
     def post(self, request):
         institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=request.data.get("institution_id"))
         command, error = _command_context(request)
         if error: return error
         key, request_id, correlation_id, _ = command
-        serializer = InstitutionalSubaccountSerializer(data=request.data); serializer.is_valid(raise_exception=True)
-        payload = {key: value for key, value in serializer.validated_data.items()}
+        serializer = InstitutionalSubaccountCreateSerializer(data=request.data); serializer.is_valid(raise_exception=True)
+        validated_data = dict(serializer.validated_data)
+        validated_data.pop("institution_id")
+        payload = {key: value for key, value in validated_data.items()}
         payload["institution_id"] = str(institution.pk)
         try:
             record, created = _begin_command(request, tenant=institution.tenant, key=key, endpoint="/api/v1/operator/institutional/subaccounts", payload=payload)
         except IdempotencyConflict:
             return Response({"error": {"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}}, status=409)
         if not created: return _replay(record)
-        row = SubaccountService.create(institution=institution, actor=request.user, **serializer.validated_data)
+        row = SubaccountService.create(institution=institution, actor=request.user, **validated_data)
         body = InstitutionalSubaccountSerializer(row).data
         complete_idempotent_request(record, status=201, body=body, resource_type="institutional_subaccount", resource_id=row.pk)
         _audit_command(institution=institution, actor=request.user, event_type="institutional.subaccount.command.created.v1", object_ref=row.pk, request_id=request_id, correlation_id=correlation_id, after=body)
