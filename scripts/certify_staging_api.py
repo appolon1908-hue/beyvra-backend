@@ -58,7 +58,7 @@ def main():
     if not token:
         principal = "guest_demo"
         status, payload = call(args.base_url, "POST", "/api/v1/demo/sessions", body={}, idempotency=f"api-cert-{uuid.uuid4()}")
-        if status != 201 or not payload.get("access"):
+        if status != 201 or not isinstance(payload, dict) or not payload.get("access"):
             raise SystemExit(f"Unable to create guest demo session: HTTP {status}")
         token = payload["access"]
 
