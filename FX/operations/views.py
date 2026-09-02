@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -6,11 +7,15 @@ from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from apps.foundation.models import ApplicationAuditEvent
+from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 
 from .artifacts import open_private_artifact
 
@@ -88,9 +93,52 @@ from .services import (
 )
 
 
+COMMAND_PARAMETERS = [
+    OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Request-ID", str, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Correlation-ID", str, OpenApiParameter.HEADER, required=False),
+]
+VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True)]
+
+
 class TenantMixin:
     def tenant_id(self):
         return tenant_for(self.request.user)
+
+
+def _command_context(request, *, require_version=False):
+    key = request.headers.get("Idempotency-Key", "").strip()
+    request_id = request.headers.get("X-Request-ID", "").strip()
+    expected_version = request.headers.get("If-Match", "").strip()
+    if not key or len(key) > 255 or not request_id or len(request_id) > 128:
+        return None, Response({"code": "VALIDATION_ERROR", "message": "Idempotency-Key and X-Request-ID are required."}, status=400)
+    if require_version and not expected_version:
+        return None, Response({"code": "PRECONDITION_REQUIRED", "message": "If-Match is required."}, status=428)
+    try:
+        correlation_id = uuid.UUID(request.headers.get("X-Correlation-ID") or request_id)
+    except (TypeError, ValueError):
+        return None, Response({"code": "VALIDATION_ERROR", "message": "The correlation identifier must be a UUID."}, status=400)
+    return (key, request_id, correlation_id, expected_version), None
+
+
+def _begin_command(request, *, tenant, key, payload):
+    return begin_idempotent_request(
+        key=key, tenant_ref=tenant, actor_ref=request.user.pk, endpoint=request.path,
+        method=request.method, request_data={"api_version": "v1", **payload},
+    )
+
+
+def _replay(record):
+    if record.response_status is None or record.response_body is None:
+        return Response({"code": "COMMAND_IN_PROGRESS", "message": "Command result is not yet available."}, status=409)
+    return Response(record.response_body, status=record.response_status)
+
+
+def _application_audit(request, *, action, resource_type, resource_id, request_id, correlation_id, reason, context=None):
+    ApplicationAuditEvent.objects.create(
+        actor_ref=str(request.user.pk), action=action, resource_type=resource_type, resource_id=str(resource_id),
+        request_id=request_id, correlation_id=correlation_id, context=context or {}, reason=reason[:255], occurred_at=timezone.now(),
+    )
 
 
 class SupportCaseListCreate(TenantMixin, generics.ListCreateAPIView):
@@ -552,11 +600,16 @@ class SafetyFlags(APIView):
 class OperatorFreeze(APIView):
     permission_classes = (IsSecurityManager,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
     @transaction.atomic
     def post(self, request, account_id):
         tenant = request.headers.get(
             "X-Beyvra-Tenant", tenant_for(request.user)
         ).lower()
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, request_id, correlation_id, _ = command
         account = get_object_or_404(
             get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
         )
@@ -569,15 +622,20 @@ class OperatorFreeze(APIView):
                 },
                 status=400,
             )
+        reason_code = request.data.get("reason_code", "ACCOUNT_REVIEW_REQUIRED")
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"account_id": account_id, "level": level, "reason_code": reason_code})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
         freeze, _ = AccountFreeze.objects.update_or_create(
             tenant_id=tenant,
             account=account,
             released_at__isnull=True,
             defaults={
                 "level": level,
-                "reason_code": request.data.get(
-                    "reason_code", "ACCOUNT_REVIEW_REQUIRED"
-                ),
+                "reason_code": reason_code,
                 "actor": request.user,
             },
         )
@@ -589,16 +647,38 @@ class OperatorFreeze(APIView):
             target=str(account_id),
             reason=freeze.reason_code,
         )
-        return Response({"level": freeze.level}, status=201)
+        body = {"level": freeze.level, "freeze_id": freeze.pk}
+        _application_audit(request, action="operations.account.frozen", resource_type="account_freeze", resource_id=freeze.pk, request_id=request_id, correlation_id=correlation_id, reason=freeze.reason_code, context={"tenant_id": tenant, "account_id": str(account_id), "level": freeze.level})
+        complete_idempotent_request(record, status=201, body=body, resource_type="account_freeze", resource_id=freeze.pk)
+        return Response(body, status=201)
 
 
 class OperatorApprove(APIView):
     permission_classes = (IsManagerOperator,)
 
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request, request_id):
         tenant = request.headers.get(
             "X-Beyvra-Tenant", tenant_for(request.user)
         ).lower()
+        command, error = _command_context(request, require_version=True)
+        if error:
+            return error
+        key, command_request_id, correlation_id, expected_version = command
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"operator_request_id": str(request_id), "action": "APPROVE", "expected_version": expected_version})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
+        current = OperatorActionRequest.objects.filter(pk=request_id, tenant_id=tenant).values_list("status", flat=True).first()
+        if current is None:
+            record.delete()
+            return Response({"code": "ACTION_NOT_ALLOWED", "message": "The requested action is not available."}, status=403)
+        if current != expected_version:
+            record.delete()
+            return Response({"code": "VERSION_CONFLICT", "message": "Operator request version does not match."}, status=409)
         roles = set(
             OperatorRole.objects.filter(
                 user=request.user, tenant_id=tenant
@@ -612,6 +692,7 @@ class OperatorApprove(APIView):
                 approver_roles=roles,
             )
         except (PermissionError, OperatorActionRequest.DoesNotExist) as exc:
+            record.delete()
             action = (
                 "self_approval"
                 if "SELF_APPROVAL_FORBIDDEN" in str(exc)
@@ -625,14 +706,36 @@ class OperatorApprove(APIView):
                 },
                 status=403,
             )
-        return Response({"request_id": action.request_id, "status": "APPROVED"})
+        body = {"request_id": str(action.request_id), "status": "APPROVED", "version": "APPROVED"}
+        _application_audit(request, action="operations.action.approved", resource_type="operator_action", resource_id=action.pk, request_id=command_request_id, correlation_id=correlation_id, reason=action.reason, context={"tenant_id": tenant})
+        complete_idempotent_request(record, status=200, body=body, resource_type="operator_action", resource_id=action.pk)
+        return Response(body)
 
 
 class OperatorExecute(APIView):
     permission_classes = (IsManagerOperator,)
 
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request, request_id):
         tenant = operator_tenant(request)
+        command, error = _command_context(request, require_version=True)
+        if error:
+            return error
+        key, command_request_id, correlation_id, expected_version = command
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"operator_request_id": str(request_id), "action": "EXECUTE", "expected_version": expected_version})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
+        current = OperatorActionRequest.objects.filter(pk=request_id, tenant_id=tenant).values_list("status", flat=True).first()
+        if current is None:
+            record.delete()
+            return Response({"code": "ACTION_NOT_ALLOWED", "message": "The requested action is not available."}, status=403)
+        if current != expected_version:
+            record.delete()
+            return Response({"code": "VERSION_CONFLICT", "message": "Operator request version does not match."}, status=409)
         roles = set(
             OperatorRole.objects.filter(
                 user=request.user, tenant_id=tenant
@@ -646,6 +749,7 @@ class OperatorExecute(APIView):
                 executor_roles=roles,
             )
         except (PermissionError, OperatorActionRequest.DoesNotExist):
+            record.delete()
             return Response(
                 {
                     "code": "ACTION_NOT_ALLOWED",
@@ -653,7 +757,10 @@ class OperatorExecute(APIView):
                 },
                 status=403,
             )
-        return Response({"request_id": action.request_id, "status": "EXECUTED"})
+        body = {"request_id": str(action.request_id), "status": "EXECUTED", "version": "EXECUTED"}
+        _application_audit(request, action="operations.action.executed", resource_type="operator_action", resource_id=action.pk, request_id=command_request_id, correlation_id=correlation_id, reason=action.reason, context={"tenant_id": tenant, "action_type": action.action_type})
+        complete_idempotent_request(record, status=200, body=body, resource_type="operator_action", resource_id=action.pk)
+        return Response(body)
 
 
 def operator_tenant(request):
@@ -845,6 +952,8 @@ class OperatorSupportEvent(APIView):
 class OperatorActionCreate(APIView):
     permission_classes = (IsManagerOperator,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
         action_type = request.data.get("action_type")
         if action_type not in {
@@ -865,6 +974,10 @@ class OperatorActionCreate(APIView):
                 status=400,
             )
         tenant = operator_tenant(request)
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, command_request_id, correlation_id, _ = command
         requester_roles = set(
             OperatorRole.objects.filter(user=request.user, tenant_id=tenant).values_list(
                 "role", flat=True
@@ -885,10 +998,17 @@ class OperatorActionCreate(APIView):
                 {"code": "REASON_REQUIRED", "message": "A reason is required."},
                 status=400,
             )
+        target_ref = request.data.get("target_ref", "")[:128]
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"action_type": action_type, "target_ref": target_ref, "reason": reason})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
         action = OperatorActionRequest.objects.create(
             tenant_id=tenant,
             action_type=action_type,
-            target_ref=request.data.get("target_ref", "")[:128],
+            target_ref=target_ref,
             requested_by=request.user,
             reason=reason[:500],
             expires_at=timezone.now() + timedelta(hours=1),
@@ -901,22 +1021,37 @@ class OperatorActionCreate(APIView):
             reason=action.reason,
             request_id=action.pk,
         )
-        return Response({"request_id": action.pk, "status": action.status}, status=201)
+        body = {"request_id": str(action.pk), "status": action.status, "version": action.status}
+        _application_audit(request, action="operations.action.requested", resource_type="operator_action", resource_id=action.pk, request_id=command_request_id, correlation_id=correlation_id, reason=action.reason, context={"tenant_id": tenant, "action_type": action.action_type, "target_ref": action.target_ref})
+        complete_idempotent_request(record, status=201, body=body, resource_type="operator_action", resource_id=action.pk)
+        return Response(body, status=201)
 
 
 class OperatorLegalHold(APIView):
     permission_classes = (IsComplianceManager,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
     @transaction.atomic
     def post(self, request, account_id):
         tenant = operator_tenant(request)
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, request_id, correlation_id, _ = command
         account = get_object_or_404(
             get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
         )
+        reason = request.data.get("reason", "policy hold")[:500]
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"account_id": account_id, "reason": reason})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
         hold = LegalHold.objects.create(
             tenant_id=tenant,
             account=account,
-            reason=request.data.get("reason", "policy hold")[:500],
+            reason=reason,
             created_by=request.user,
         )
         AuditEvent.objects.create(
@@ -926,7 +1061,10 @@ class OperatorLegalHold(APIView):
             target=str(hold.pk),
             reason=hold.reason,
         )
-        return Response({"hold_id": hold.pk, "active": True}, status=201)
+        body = {"hold_id": hold.pk, "active": True}
+        _application_audit(request, action="operations.legal_hold.created", resource_type="legal_hold", resource_id=hold.pk, request_id=request_id, correlation_id=correlation_id, reason=hold.reason, context={"tenant_id": tenant, "account_id": str(account_id)})
+        complete_idempotent_request(record, status=201, body=body, resource_type="legal_hold", resource_id=hold.pk)
+        return Response(body, status=201)
 
 
 class OperatorAccountSummary(APIView):
@@ -1031,8 +1169,14 @@ class OperatorFinancialState(APIView):
 class OperatorStatementIssue(APIView):
     permission_classes = (IsFinancialManager,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request, account_id):
         tenant = operator_tenant(request)
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, request_id, correlation_id, _ = command
         account = get_object_or_404(
             get_user_model().objects.filter(tenant_account_q(tenant)), pk=account_id
         )
@@ -1053,6 +1197,13 @@ class OperatorStatementIssue(APIView):
                 tenant_id=tenant,
                 account=account,
             )
+        payload = {"account_id": account_id, "period_start": period_start, "period_end": period_end, "supersedes": str(supersedes.pk) if supersedes else None, "reason": request.data.get("reason", "")}
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload=payload)
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
         try:
             statement = issue_simulation_statement(
                 tenant_id=tenant,
@@ -1064,8 +1215,12 @@ class OperatorStatementIssue(APIView):
                 reason=request.data.get("reason", ""),
             )
         except (ValueError, PermissionError) as exc:
+            record.delete()
             raise ValidationError("Statement cannot be issued") from exc
-        return Response(StatementSerializer(statement).data, status=201)
+        body = StatementSerializer(statement).data
+        _application_audit(request, action="operations.statement.issued", resource_type="statement", resource_id=statement.pk, request_id=request_id, correlation_id=correlation_id, reason=request.data.get("reason", "statement issue"), context={"tenant_id": tenant, "account_id": str(account_id), "version": statement.version})
+        complete_idempotent_request(record, status=201, body=body, resource_type="statement", resource_id=statement.pk)
+        return Response(body, status=201)
 
 
 class OperatorControlState(APIView):
@@ -1093,12 +1248,23 @@ class OperatorControlState(APIView):
 class OperatorTradingHalt(APIView):
     permission_classes = (IsOperationsManager,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
     @transaction.atomic
     def post(self, request):
         tenant = operator_tenant(request)
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, request_id, correlation_id, _ = command
         reason = request.data.get("reason", "").strip()
         if not reason:
             raise ValidationError("A reason is required")
+        try:
+            record, command_created = _begin_command(request, tenant=tenant, key=key, payload={"reason": reason})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not command_created:
+            return _replay(record)
         halt, created = TradingHalt.objects.get_or_create(
             tenant_id=tenant,
             released_at__isnull=True,
@@ -1113,9 +1279,11 @@ class OperatorTradingHalt(APIView):
                 target=f"trading_halt:{halt.pk}",
                 reason=halt.reason,
             )
-        return Response(
-            {"halt_id": halt.pk, "active": True}, status=201 if created else 200
-        )
+        response_status = 201 if created else 200
+        body = {"halt_id": str(halt.pk), "active": True}
+        _application_audit(request, action="operations.trading.halted", resource_type="trading_halt", resource_id=halt.pk, request_id=request_id, correlation_id=correlation_id, reason=reason, context={"tenant_id": tenant, "created": created})
+        complete_idempotent_request(record, status=response_status, body=body, resource_type="trading_halt", resource_id=halt.pk)
+        return Response(body, status=response_status)
 
 
 class OperatorIncidents(APIView):
@@ -1204,8 +1372,22 @@ class OperatorAuditTimeline(generics.ListAPIView):
 class OperatorReconciliation(APIView):
     permission_classes = (IsManagerOperator,)
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
-        checks = reconcile_operational_domains(tenant_id=operator_tenant(request))
-        return Response(
-            [{"domain": item.domain, "status": item.status} for item in checks]
-        )
+        tenant = operator_tenant(request)
+        command, error = _command_context(request)
+        if error:
+            return error
+        key, request_id, correlation_id, _ = command
+        try:
+            record, created = _begin_command(request, tenant=tenant, key=key, payload={"operation": "OPERATIONS_RECONCILIATION"})
+        except IdempotencyConflict:
+            return Response({"code": "IDEMPOTENCY_CONFLICT", "message": "Idempotency key was reused with different command semantics."}, status=409)
+        if not created:
+            return _replay(record)
+        checks = reconcile_operational_domains(tenant_id=tenant)
+        body = [{"domain": item.domain, "status": item.status} for item in checks]
+        _application_audit(request, action="operations.reconciliation.completed", resource_type="operations_reconciliation", resource_id=record.pk, request_id=request_id, correlation_id=correlation_id, reason="operator reconciliation", context={"tenant_id": tenant, "statuses": {item.domain: item.status for item in checks}})
+        complete_idempotent_request(record, status=200, body=body, resource_type="operations_reconciliation", resource_id=record.pk)
+        return Response(body)

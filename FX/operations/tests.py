@@ -483,6 +483,45 @@ class OperatorAuthorityTests(TestCase):
                 approver_roles={"security_manager"},
             )
 
+    def test_operator_workflow_commands_replay_exactly_once(self):
+        OperatorRole.objects.create(
+            user=self.maker, tenant_id="tenant-a", role="security_manager"
+        )
+        freeze = AccountFreeze.objects.create(
+            tenant_id="tenant-a", account=self.maker, actor=self.checker,
+            level="FULL", reason_code="ACCOUNT_REVIEW_REQUIRED",
+        )
+        client = APIClient(); client.force_authenticate(self.checker)
+        create_headers = {
+            "HTTP_X_BEYVRA_TENANT": "tenant-a", "HTTP_IDEMPOTENCY_KEY": "action-create-test",
+            "HTTP_X_REQUEST_ID": "fe9e2361-87ad-4bd5-86d6-85859169a010",
+        }
+        payload = {"action_type": "UNFREEZE", "target_ref": f"account:{self.maker.pk}", "reason": "review complete"}
+        created = client.post("/api/internal/v1/actions", payload, format="json", **create_headers)
+        replay = client.post("/api/internal/v1/actions", payload, format="json", **create_headers)
+        self.assertEqual(created.status_code, 201); self.assertEqual(replay.data, created.data)
+        self.assertEqual(OperatorActionRequest.objects.filter(target_ref=f"account:{self.maker.pk}").count(), 1)
+
+        action_id = created.data["request_id"]
+        client.force_authenticate(self.maker)
+        approve_headers = {
+            "HTTP_X_BEYVRA_TENANT": "tenant-a", "HTTP_IDEMPOTENCY_KEY": "action-approve-test",
+            "HTTP_X_REQUEST_ID": "fe9e2361-87ad-4bd5-86d6-85859169a011", "HTTP_IF_MATCH": "PENDING",
+        }
+        approved = client.post(f"/api/internal/v1/actions/{action_id}/approve", {}, format="json", **approve_headers)
+        approval_replay = client.post(f"/api/internal/v1/actions/{action_id}/approve", {}, format="json", **approve_headers)
+        self.assertEqual(approved.status_code, 200); self.assertEqual(approval_replay.data, approved.data)
+
+        execute_headers = {
+            "HTTP_X_BEYVRA_TENANT": "tenant-a", "HTTP_IDEMPOTENCY_KEY": "action-execute-test",
+            "HTTP_X_REQUEST_ID": "fe9e2361-87ad-4bd5-86d6-85859169a012", "HTTP_IF_MATCH": "APPROVED",
+        }
+        executed = client.post(f"/api/internal/v1/actions/{action_id}/execute", {}, format="json", **execute_headers)
+        execution_replay = client.post(f"/api/internal/v1/actions/{action_id}/execute", {}, format="json", **execute_headers)
+        self.assertEqual(executed.status_code, 200); self.assertEqual(execution_replay.data, executed.data)
+        freeze.refresh_from_db(); self.assertIsNotNone(freeze.released_at)
+        self.assertEqual(AuditEvent.objects.filter(request_id=action_id, action="ACCOUNT_UNFROZEN").count(), 1)
+
     def test_independent_manager_can_approve_once(self):
         action = self.action()
         approved = approve_operator_request(
@@ -726,6 +765,8 @@ class OperatorAuthorityTests(TestCase):
             {"level": "FULL"},
             format="json",
             HTTP_X_BEYVRA_TENANT="tenant-a",
+            HTTP_IDEMPOTENCY_KEY="freeze-wrong-tenant",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a001",
         )
         self.assertEqual(response.status_code, 404)
         self.assertFalse(AccountFreeze.objects.filter(account=outsider).exists())
@@ -746,6 +787,9 @@ class OperatorAuthorityTests(TestCase):
         response = client.post(
             f"/api/internal/v1/actions/{action.pk}/approve",
             HTTP_X_BEYVRA_TENANT="tenant-b",
+            HTTP_IDEMPOTENCY_KEY="approve-wrong-tenant",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a002",
+            HTTP_IF_MATCH="PENDING",
         )
         self.assertEqual(response.status_code, 403)
         action.refresh_from_db()
@@ -769,12 +813,16 @@ class OperatorAuthorityTests(TestCase):
             },
             format="json",
             HTTP_X_BEYVRA_TENANT="tenant-a",
+            HTTP_IDEMPOTENCY_KEY="unauthorized-action",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a003",
         )
         hold_response = client.post(
             f"/api/internal/v1/accounts/{self.maker.pk}/legal-holds",
             {"reason": "not a support authority"},
             format="json",
             HTTP_X_BEYVRA_TENANT="tenant-a",
+            HTTP_IDEMPOTENCY_KEY="unauthorized-hold",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a004",
         )
         self.assertEqual(request_response.status_code, 403)
         self.assertEqual(hold_response.status_code, 403)
@@ -848,6 +896,8 @@ class OperatorAuthorityTests(TestCase):
             {"reason": "synthetic incident fixture"},
             format="json",
             HTTP_X_BEYVRA_TENANT="tenant-a",
+            HTTP_IDEMPOTENCY_KEY="halt-fixture",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a005",
         )
         self.assertEqual(halted.status_code, 201)
         action = OperatorActionRequest.objects.create(
@@ -1006,6 +1056,8 @@ class ReportingAuthorityTests(TestCase):
             {"level": "FULL", "reason_code": "ACCOUNT_REVIEW_REQUIRED"},
             format="json",
             HTTP_X_BEYVRA_TENANT="default",
+            HTTP_IDEMPOTENCY_KEY="freeze-default",
+            HTTP_X_REQUEST_ID="fe9e2361-87ad-4bd5-86d6-85859169a006",
         )
         self.assertEqual(response.status_code, 201)
         self.assertTrue(
