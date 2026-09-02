@@ -50,15 +50,41 @@ class ExecutionAuthorityTests(TestCase):
         self.assertEqual(quality.price_improvement_amount, Decimal("-1"))
 
     def test_operator_halt_resume_requires_admin_and_audits(self):
-        seed_safe_authorities()
+        provider = seed_safe_authorities()
         denied = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "test"}, format="json")
         self.assertEqual(denied.status_code, 403)
         self.user.is_staff = True; self.user.is_superuser = True; self.user.save(); self.client.force_authenticate(self.user)
-        halted = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "drill"}, format="json")
+        halted = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "drill"}, format="json",
+            HTTP_IDEMPOTENCY_KEY="halt-key", HTTP_IF_MATCH=provider.updated_at.isoformat())
         self.assertEqual(halted.data["health"], "HALTED")
-        resumed = self.client.post("/api/v1/operator/execution/providers/simulation/resume", {"reason": "verified"}, format="json")
+        resumed = self.client.post("/api/v1/operator/execution/providers/simulation/resume", {"reason": "verified"}, format="json",
+            HTTP_IDEMPOTENCY_KEY="resume-key", HTTP_IF_MATCH=halted.data["version"])
         self.assertEqual(resumed.data["health"], "HEALTHY")
         self.assertEqual(ApplicationAuditEvent.objects.filter(resource_type="execution_provider").count(), 2)
+
+    def test_operator_control_requires_command_headers_and_replays_once(self):
+        provider = seed_safe_authorities()
+        self.user.is_superuser = True; self.user.save(); self.client.force_authenticate(self.user)
+        url = "/api/v1/operator/execution/providers/simulation/halt"
+        self.assertEqual(self.client.post(url, {"reason": "drill"}, format="json").status_code, 422)
+        headers = {"HTTP_IDEMPOTENCY_KEY": "same-halt", "HTTP_IF_MATCH": provider.updated_at.isoformat()}
+        first = self.client.post(url, {"reason": "drill"}, format="json", **headers)
+        replay = self.client.post(url, {"reason": "drill"}, format="json", **headers)
+        self.assertEqual((first.status_code, replay.status_code), (200, 200))
+        self.assertEqual(first.data, replay.data)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="execution.provider.halted").count(), 1)
+
+    def test_operator_control_rejects_stale_version_and_semantic_key_reuse(self):
+        provider = seed_safe_authorities()
+        self.user.is_superuser = True; self.user.save(); self.client.force_authenticate(self.user)
+        url = "/api/v1/operator/execution/providers/simulation/halt"
+        stale = self.client.post(url, {"reason": "drill"}, format="json", HTTP_IDEMPOTENCY_KEY="stale", HTTP_IF_MATCH="old")
+        self.assertEqual(stale.status_code, 409)
+        provider.refresh_from_db(); self.assertEqual(provider.health, "HEALTHY")
+        headers = {"HTTP_IDEMPOTENCY_KEY": "semantic", "HTTP_IF_MATCH": provider.updated_at.isoformat()}
+        self.assertEqual(self.client.post(url, {"reason": "first"}, format="json", **headers).status_code, 200)
+        conflict = self.client.post(url, {"reason": "different"}, format="json", **headers)
+        self.assertEqual(conflict.status_code, 409)
 
     def test_tenant_isolation_for_route_and_quality(self):
         other = get_user_model().objects.create_user(email="other@example.test", password="x", phone_number="+15550000002")

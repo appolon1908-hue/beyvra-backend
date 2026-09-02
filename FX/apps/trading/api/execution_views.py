@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,13 +10,14 @@ from apps.trading.execution_control.capabilities import seed_fixture_capabilitie
 from apps.trading.execution_control.health import ProviderHealthService
 from apps.trading.execution_control.reconciliation import ExecutionReconciler
 from apps.foundation.models import ApplicationAuditEvent
+from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 from apps.trading.models import ExecutionGovernanceChange, ExecutionProviderRecord, ExecutionQualityReport, ExecutionReconciliationRun, ExecutionRoutingDecision, ExecutionVenue, TradingOrder, UnknownExecutionOutcome
 from .errors import error_response
 
 
 def _fail(request, exc):
     code = str(exc)
-    status = 503 if code.endswith("DISABLED") else 422 if code == "VALIDATION_ERROR" else 404
+    status = 503 if code.endswith("DISABLED") else 409 if code in {"IDEMPOTENCY_CONFLICT", "VERSION_CONFLICT"} else 422 if code == "VALIDATION_ERROR" else 404
     return error_response(request, code, status)
 
 
@@ -180,13 +182,29 @@ class OperatorQualityView(APIView):
 class OperatorProviderControlView(APIView):
     permission_classes = (IsExecutionOperator,)
     halted = True
+    @extend_schema(parameters=[
+        OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True),
+        OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True, description="Provider version returned by the API."),
+    ])
     def post(self, request, provider_id):
         reason = str(request.data.get("reason") or "")
-        if not reason: return error_response(request, "VALIDATION_ERROR", 422)
+        key = request.headers.get("Idempotency-Key")
+        expected_version = request.headers.get("If-Match")
+        if not reason or not key or not expected_version:
+            return error_response(request, "VALIDATION_ERROR", 422, {"required": ["reason", "Idempotency-Key", "If-Match"]})
         try:
-            row = set_provider_halt(request.user, provider_id, self.halted, reason)
-            return Response({"provider_id": row.provider_id, "mode": row.mode, "health": row.health, "enabled": row.enabled})
-        except (ExecutionProviderRecord.DoesNotExist, ValueError) as exc: return _fail(request, exc)
+            with transaction.atomic():
+                action = "halt" if self.halted else "resume"
+                record, fresh = begin_idempotent_request(key=key, tenant_ref="default", actor_ref=request.user.pk,
+                    endpoint=f"/api/v1/operator/execution/providers/{provider_id}/{action}", method="POST",
+                    request_data={"provider_id": provider_id, "action": action, "reason": reason, "expected_version": expected_version})
+                if not fresh and record.response_body is not None:
+                    return Response(record.response_body, status=record.response_status)
+                row = set_provider_halt(request.user, provider_id, self.halted, reason, expected_version, getattr(request, "correlation_id", None))
+                body = {"provider_id": row.provider_id, "mode": row.mode, "health": row.health, "enabled": row.enabled, "version": row.updated_at.isoformat()}
+                complete_idempotent_request(record, status=200, body=body, resource_type="execution_provider", resource_id=row.provider_id)
+                return Response(body)
+        except (ExecutionProviderRecord.DoesNotExist, ValueError, IdempotencyConflict) as exc: return _fail(request, exc)
 
 
 class OperatorProviderResumeView(OperatorProviderControlView): halted = False
