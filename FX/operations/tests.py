@@ -506,7 +506,7 @@ class OperatorAuthorityTests(TestCase):
         client.force_authenticate(self.maker)
         approve_headers = {
             "HTTP_X_BEYVRA_TENANT": "tenant-a", "HTTP_IDEMPOTENCY_KEY": "action-approve-test",
-            "HTTP_X_REQUEST_ID": "fe9e2361-87ad-4bd5-86d6-85859169a011", "HTTP_IF_MATCH": "PENDING",
+            "HTTP_X_REQUEST_ID": "opaque-approval-request", "HTTP_IF_MATCH": '"PENDING"',
         }
         approved = client.post(f"/api/internal/v1/actions/{action_id}/approve", {}, format="json", **approve_headers)
         approval_replay = client.post(f"/api/internal/v1/actions/{action_id}/approve", {}, format="json", **approve_headers)
@@ -514,7 +514,7 @@ class OperatorAuthorityTests(TestCase):
 
         execute_headers = {
             "HTTP_X_BEYVRA_TENANT": "tenant-a", "HTTP_IDEMPOTENCY_KEY": "action-execute-test",
-            "HTTP_X_REQUEST_ID": "fe9e2361-87ad-4bd5-86d6-85859169a012", "HTTP_IF_MATCH": "APPROVED",
+            "HTTP_X_REQUEST_ID": "opaque-execution-request", "HTTP_IF_MATCH": 'W/"APPROVED"',
         }
         executed = client.post(f"/api/internal/v1/actions/{action_id}/execute", {}, format="json", **execute_headers)
         execution_replay = client.post(f"/api/internal/v1/actions/{action_id}/execute", {}, format="json", **execute_headers)

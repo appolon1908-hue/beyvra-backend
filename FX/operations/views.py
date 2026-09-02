@@ -110,14 +110,19 @@ def _command_context(request, *, require_version=False):
     key = request.headers.get("Idempotency-Key", "").strip()
     request_id = request.headers.get("X-Request-ID", "").strip()
     expected_version = request.headers.get("If-Match", "").strip()
+    if expected_version.startswith("W/"):
+        expected_version = expected_version[2:].strip()
+    if len(expected_version) >= 2 and expected_version[0] == expected_version[-1] == '"':
+        expected_version = expected_version[1:-1]
     if not key or len(key) > 255 or not request_id or len(request_id) > 128:
         return None, Response({"code": "VALIDATION_ERROR", "message": "Idempotency-Key and X-Request-ID are required."}, status=400)
     if require_version and not expected_version:
         return None, Response({"code": "PRECONDITION_REQUIRED", "message": "If-Match is required."}, status=428)
+    raw_correlation = str(request.headers.get("X-Correlation-ID") or getattr(request, "correlation_id", "") or request_id)
     try:
-        correlation_id = uuid.UUID(request.headers.get("X-Correlation-ID") or request_id)
+        correlation_id = uuid.UUID(raw_correlation)
     except (TypeError, ValueError):
-        return None, Response({"code": "VALIDATION_ERROR", "message": "The correlation identifier must be a UUID."}, status=400)
+        correlation_id = uuid.uuid5(uuid.NAMESPACE_URL, raw_correlation)
     return (key, request_id, correlation_id, expected_version), None
 
 
