@@ -97,6 +97,7 @@ class ExecutionControlPlaneTests(TestCase):
         self.user.is_staff=True;self.user.is_superuser=True;self.user.save();self.client.force_authenticate(self.user)
         for path in ("/api/v1/operator/execution/providers","/api/v1/operator/execution/providers/simulation","/api/v1/operator/execution/providers/simulation/capabilities","/api/v1/operator/execution/providers/simulation/health","/api/v1/operator/execution/venues","/api/v1/operator/execution/unknown","/api/v1/operator/execution/reconciliation"):
             self.assertEqual(self.client.get(path).status_code,200,path)
+        self.assertIn("version", self.client.get("/api/v1/operator/execution/providers/simulation").data)
 
     def test_reconciliation_is_read_only_and_detects_unknown(self):
         order=self.order();preview_route(self.user,self.payload(),persist=True,order=order);record_ambiguous_outcome(order,"simulation")
@@ -137,7 +138,7 @@ class ExecutionControlPlaneTests(TestCase):
         managers=Group.objects.create(name="execution_manager");first=self.user;first.groups.add(managers)
         provider=seed_fixture_capabilities()[0][1];provider.enabled=False;provider.save(update_fields=("enabled","updated_at"))
         version=provider.updated_at.isoformat().replace("+00:00","Z")
-        maker_headers={"HTTP_IDEMPOTENCY_KEY":"paper-enable-maker","HTTP_X_REQUEST_ID":"cf69152c-93d8-4888-804b-4c8846f41001","HTTP_IF_MATCH":version}
+        maker_headers={"HTTP_IDEMPOTENCY_KEY":"paper-enable-maker","HTTP_X_REQUEST_ID":"opaque-edge-request-id","HTTP_IF_MATCH":version}
         response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json",**maker_headers)
         self.assertEqual(response.status_code,202);self.assertFalse(response.data["enabled"])
         replay=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json",**maker_headers)

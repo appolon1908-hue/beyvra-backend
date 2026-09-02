@@ -61,7 +61,7 @@ def _command_context(request, *, require_reason=False, require_version=False):
     try:
         correlation_id = uuid.UUID(raw_correlation)
     except (TypeError, ValueError):
-        return None, error_response(request, "VALIDATION_ERROR", 400, {"invalid": ["X-Correlation-ID"]})
+        correlation_id = uuid.uuid5(uuid.NAMESPACE_URL, f"beyvra-correlation:{raw_correlation}")
     return (key, request_id, correlation_id, reason, expected_version), None
 
 
@@ -134,7 +134,7 @@ class CapabilitiesView(APIView):
         rows = ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")
         return Response({"results": [{"provider_id": x.provider_id, "name": x.display_name, "mode": x.mode, "enabled": x.enabled,
             "health": x.health, "capabilities": x.capabilities, "asset_classes": x.supported_asset_classes,
-            "order_types": x.supported_order_types, "venues": x.supported_venues} for x in rows], "live_broker_routing_enabled": False})
+            "order_types": x.supported_order_types, "venues": x.supported_venues, "version": _version(x)} for x in rows], "live_broker_routing_enabled": False})
 
 
 class CapabilityDetailView(APIView):
@@ -144,7 +144,8 @@ class CapabilityDetailView(APIView):
         if not x:return error_response(request,"RESOURCE_NOT_FOUND",404)
         return Response({"provider_id":x.provider_id,"name":x.display_name,"mode":x.mode,"health":x.health,"asset_classes":x.supported_asset_classes,
             "order_types":x.supported_order_types,"capabilities":[{"asset_class":c.asset_class,"venue_id":c.venue_id,"type":c.capability_type,"source":c.source,
-            "source_version":c.source_version,"verified_at":c.verified_at.isoformat()} for c in x.capability_records.filter(enabled=True).order_by("asset_class","capability_type")],"live_supported":False})
+            "source_version":c.source_version,"verified_at":c.verified_at.isoformat()} for c in x.capability_records.filter(enabled=True).order_by("asset_class","capability_type")],"live_supported":False,
+            "version":_version(x)})
 
 
 class VenuesView(APIView):
