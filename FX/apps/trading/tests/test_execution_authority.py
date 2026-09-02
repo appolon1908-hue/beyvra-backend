@@ -54,8 +54,14 @@ class ExecutionAuthorityTests(TestCase):
         denied = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "test"}, format="json")
         self.assertEqual(denied.status_code, 403)
         self.user.is_staff = True; self.user.is_superuser = True; self.user.save(); self.client.force_authenticate(self.user)
+        listed = self.client.get("/api/v1/operator/execution/providers")
+        self.assertEqual(listed.status_code, 200)
+        provider.refresh_from_db()
+        provider_result = next(row for row in listed.data["results"] if row["provider_id"] == provider.provider_id)
+        self.assertEqual(provider_result["version"], provider.updated_at.isoformat())
         halted = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "drill"}, format="json",
-            HTTP_IDEMPOTENCY_KEY="halt-key", HTTP_IF_MATCH=provider.updated_at.isoformat())
+            HTTP_IDEMPOTENCY_KEY="halt-key", HTTP_IF_MATCH=provider.updated_at.isoformat(),
+            HTTP_X_CORRELATION_ID="incident-opaque-123")
         self.assertEqual(halted.data["health"], "HALTED")
         resumed = self.client.post("/api/v1/operator/execution/providers/simulation/resume", {"reason": "verified"}, format="json",
             HTTP_IDEMPOTENCY_KEY="resume-key", HTTP_IF_MATCH=halted.data["version"])

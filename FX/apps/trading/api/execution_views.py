@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import transaction
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -73,7 +75,8 @@ class CapabilitiesView(APIView):
         rows = ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")
         return Response({"results": [{"provider_id": x.provider_id, "name": x.display_name, "mode": x.mode, "enabled": x.enabled,
             "health": x.health, "capabilities": x.capabilities, "asset_classes": x.supported_asset_classes,
-            "order_types": x.supported_order_types, "venues": x.supported_venues} for x in rows], "live_broker_routing_enabled": False})
+            "order_types": x.supported_order_types, "venues": x.supported_venues,
+            "version": x.updated_at.isoformat()} for x in rows], "live_broker_routing_enabled": False})
 
 
 class CapabilityDetailView(APIView):
@@ -81,7 +84,7 @@ class CapabilityDetailView(APIView):
     def get(self,request,provider_code):
         seed_fixture_capabilities(); x=ExecutionProviderRecord.objects.exclude(mode="LIVE").filter(pk=provider_code).first()
         if not x:return error_response(request,"RESOURCE_NOT_FOUND",404)
-        return Response({"provider_id":x.provider_id,"name":x.display_name,"mode":x.mode,"health":x.health,"asset_classes":x.supported_asset_classes,
+        return Response({"provider_id":x.provider_id,"name":x.display_name,"mode":x.mode,"health":x.health,"version":x.updated_at.isoformat(),"asset_classes":x.supported_asset_classes,
             "order_types":x.supported_order_types,"capabilities":[{"asset_class":c.asset_class,"venue_id":c.venue_id,"type":c.capability_type,"source":c.source,
             "source_version":c.source_version,"verified_at":c.verified_at.isoformat()} for c in x.capability_records.filter(enabled=True).order_by("asset_class","capability_type")],"live_supported":False})
 
@@ -107,7 +110,7 @@ class ProviderStatusView(APIView):
     permission_classes=(IsAuthenticated,)
     def get(self,request):
         seed_fixture_capabilities(); service=ProviderHealthService()
-        return Response({"results":[{"provider_id":x.provider_id,"mode":x.mode,"state":service.evaluate(x),"routable":service.is_routable(x)} for x in ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")]})
+        return Response({"results":[{"provider_id":x.provider_id,"mode":x.mode,"state":service.evaluate(x),"routable":service.is_routable(x),"version":x.updated_at.isoformat()} for x in ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")]})
 
 
 class RouteView(APIView):
@@ -156,7 +159,7 @@ class OperatorProviderHealthView(APIView):
         seed_fixture_capabilities(); x=ExecutionProviderRecord.objects.filter(pk=provider_code).first()
         if not x:return error_response(request,"RESOURCE_NOT_FOUND",404)
         service=ProviderHealthService(); row=getattr(x,"health_record",None)
-        return Response({"provider_id":x.provider_id,"state":service.evaluate(x),"routable":service.is_routable(x),"circuit_state":row.circuit_state if row else "CLOSED"})
+        return Response({"provider_id":x.provider_id,"state":service.evaluate(x),"routable":service.is_routable(x),"circuit_state":row.circuit_state if row else "CLOSED","version":x.updated_at.isoformat()})
 
 
 class OperatorRoutesView(APIView):
@@ -200,7 +203,12 @@ class OperatorProviderControlView(APIView):
                     request_data={"provider_id": provider_id, "action": action, "reason": reason, "expected_version": expected_version})
                 if not fresh and record.response_body is not None:
                     return Response(record.response_body, status=record.response_status)
-                row = set_provider_halt(request.user, provider_id, self.halted, reason, expected_version, getattr(request, "correlation_id", None))
+                raw_correlation = str(getattr(request, "correlation_id", "") or uuid.uuid4())
+                try:
+                    correlation_id = uuid.UUID(raw_correlation)
+                except ValueError:
+                    correlation_id = uuid.uuid5(uuid.NAMESPACE_URL, raw_correlation)
+                row = set_provider_halt(request.user, provider_id, self.halted, reason, expected_version, correlation_id)
                 body = {"provider_id": row.provider_id, "mode": row.mode, "health": row.health, "enabled": row.enabled, "version": row.updated_at.isoformat()}
                 complete_idempotent_request(record, status=200, body=body, resource_type="execution_provider", resource_id=row.provider_id)
                 return Response(body)
