@@ -31,7 +31,7 @@ class Command(BaseCommand):
                 tick=time.monotonic(); body,_=create(user,payload,f"load-{index}"); local["order"]=(time.monotonic()-tick)*1000
                 scenario="PARTIAL_THEN_FILL" if index%10==0 else "OPEN_THEN_CANCEL" if index%10==1 else "IMMEDIATE_FULL_FILL"
                 tick=time.monotonic(); order=process_created_order(body["id"],scenario); local["execution"]=(time.monotonic()-tick)*1000
-                if scenario=="OPEN_THEN_CANCEL": cancel(user,order.id)
+                if scenario=="OPEN_THEN_CANCEL": cancel(user,order.id,f"load-cancel-{index}",order.updated_at.isoformat())
                 local["settlement"]=local["execution"]; local["outbox"]=local["order"]
                 return local,None
             except Exception as exc:return local,type(exc).__name__

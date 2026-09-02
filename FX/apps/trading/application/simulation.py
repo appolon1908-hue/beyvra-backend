@@ -323,7 +323,6 @@ def process_created_order(order_id, scenario=None):
     return order
 
 
-@transaction.atomic
 def cancel(user, order_id, idempotency_key, expected_version, correlation_id=None):
     tenant, subject, _ = refs(user)
     endpoint = f"/api/v1/trading/orders/{order_id}/cancel"
@@ -336,25 +335,33 @@ def cancel(user, order_id, idempotency_key, expected_version, correlation_id=Non
         request_data={"order_id": str(order_id), "expected_version": expected_version},
     )
     if not fresh and record.response_body is not None:
+        if record.response_status and record.response_status >= 400:
+            raise ValueError(record.response_body["code"])
         return record.response_body
-    order = TradingOrder.objects.select_for_update().get(pk=order_id, tenant_ref=tenant, subject_ref=subject, simulation=True)
-    if order.updated_at.isoformat() != expected_version:
+    with transaction.atomic():
+        order = TradingOrder.objects.select_for_update().get(pk=order_id, tenant_ref=tenant, subject_ref=subject, simulation=True)
+        if order.updated_at.isoformat() != expected_version:
+            version_conflict = True
+        else:
+            version_conflict = False
+            correlation = correlation_uuid(correlation_id) if correlation_id else order_correlation(order)
+            if order.state not in {"ACCEPTED", "OPEN", "PARTIALLY_FILLED"}: raise ValueError("ORDER_INVALID_STATE")
+            order.state = transition_order(order.state, "CANCEL_PENDING")
+            order.save(update_fields=("state", "updated_at"))
+            enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancel_requested.v1", payload=event_payload(order), tenant_ref=tenant,correlation_id=correlation)
+            order.state = transition_order(order.state, "CANCELLED")
+            order.save(update_fields=("state", "updated_at"))
+            SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
+            transaction.on_commit(lambda: SIM_RESERVATIONS["released"].inc())
+            enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancelled.v1", payload=event_payload(order), tenant_ref=tenant,correlation_id=correlation)
+            audit(user, "simulation.order.cancelled", order.id, correlation)
+            SIMULATED_CANCELLATIONS.inc()
+            transaction.on_commit(lambda: ORDERS_CANCELLED.labels(ENVIRONMENT, "true").inc())
+            body = serialize_order(order)
+            complete_idempotent_request(record, status=200, body=body, resource_type="simulation_order", resource_id=order.id)
+    if version_conflict:
+        complete_idempotent_request(record, status=409, body={"code": "VERSION_CONFLICT"}, resource_type="simulation_order", resource_id=order.id)
         raise ValueError("VERSION_CONFLICT")
-    correlation = correlation_uuid(correlation_id) if correlation_id else order_correlation(order)
-    if order.state not in {"ACCEPTED", "OPEN", "PARTIALLY_FILLED"}: raise ValueError("ORDER_INVALID_STATE")
-    order.state = transition_order(order.state, "CANCEL_PENDING")
-    order.save(update_fields=("state", "updated_at"))
-    enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancel_requested.v1", payload=event_payload(order), tenant_ref=tenant,correlation_id=correlation)
-    order.state = transition_order(order.state, "CANCELLED")
-    order.save(update_fields=("state", "updated_at"))
-    SimulatedFinancialAdapter().release_reservation(SimulatedReservation.objects.get(pk=order.reservation_id))
-    transaction.on_commit(lambda: SIM_RESERVATIONS["released"].inc())
-    enqueue_event(aggregate_type="order", aggregate_id=order.id, event_type="trading.order.cancelled.v1", payload=event_payload(order), tenant_ref=tenant,correlation_id=correlation)
-    audit(user, "simulation.order.cancelled", order.id, correlation)
-    SIMULATED_CANCELLATIONS.inc()
-    transaction.on_commit(lambda: ORDERS_CANCELLED.labels(ENVIRONMENT, "true").inc())
-    body = serialize_order(order)
-    complete_idempotent_request(record, status=200, body=body, resource_type="simulation_order", resource_id=order.id)
     return body
 
 
