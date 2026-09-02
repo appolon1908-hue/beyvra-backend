@@ -71,6 +71,10 @@ jobs:
           python manage.py test apps.trading.tests
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
+      - name: Validate reverse-proxy probes
+        run: |
+          operations/test_nginx_ws_v2_route.sh
+          operations/test_nginx_upstream_probe.sh
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
       - name: Audit dependencies

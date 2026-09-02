@@ -22,21 +22,26 @@ invalid_login=$(http_code \
   --header 'Content-Type: application/json' \
   --data '{"email":"nonexistent-certification-user@invalid.example","password":"not-a-real-password"}' \
   "${base_url}/api/user/token/" || true)
-ws_probe_key='Y2VydGlmaWNhdGlvbi10ZXN0' # gitleaks:allow fixed RFC 6455 probe value
+ws_probe_key='dGhlIHNhbXBsZSBub25jZQ==' # gitleaks:allow RFC 6455 16-byte sample nonce
 websocket=$(http_code --http1.1 \
   --header 'Connection: Upgrade' \
   --header 'Upgrade: websocket' \
   --header 'Sec-WebSocket-Version: 13' \
   --header "Sec-WebSocket-Key: ${ws_probe_key}" \
   "${base_url}/ws/nonexistent-certification/" || true)
-centrifugo=$(http_code "${base_url}/ws/v2/health" || true)
+centrifugo=$(http_code --http1.1 \
+  --header 'Connection: Upgrade' \
+  --header 'Upgrade: websocket' \
+  --header 'Sec-WebSocket-Version: 13' \
+  --header "Sec-WebSocket-Key: ${ws_probe_key}" \
+  "${base_url}/ws/v2/" || true)
 
 auth_ok=0
 websocket_ok=0
 centrifugo_ok=0
 [[ "$providers" == 200 && "$invalid_login" == 401 ]] && auth_ok=1
 case "$websocket" in 000|502|503|504) ;; *) websocket_ok=1 ;; esac
-[[ "$centrifugo" == 200 ]] && centrifugo_ok=1
+[[ "$centrifugo" == 101 ]] && centrifugo_ok=1
 
 recent_logs=$(docker logs "$nginx_container" --since "$window" 2>&1 || true)
 http_502=$(grep -Ec '" 502 [0-9]+' <<<"$recent_logs" || true)
