@@ -40,14 +40,6 @@ def durable_security_command(action, *, versioned=False):
             expected_version = request.headers.get("If-Match", "").strip()
             if versioned and not expected_version:
                 return Response({"detail": "If-Match is required"}, status=428)
-            if versioned:
-                try:
-                    target = view.get_command_object() if hasattr(view, "get_command_object") else view.get_object()
-                except Exception:
-                    target = None
-                current_version = "NONE" if target is None else target.updated_at.isoformat().replace("+00:00", "Z")
-                if target is not None and expected_version != current_version:
-                    return Response({"detail": "VERSION_CONFLICT"}, status=409)
             payload = {"api_version": "legacy-v1", "route": kwargs, "body": request.data, "expected_version": expected_version}
             try:
                 record, created = begin_idempotent_request(
@@ -57,14 +49,33 @@ def durable_security_command(action, *, versioned=False):
             except IdempotencyConflict:
                 return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
             if not created:
-                if record.response_status is None or record.response_body is None:
+                if record.response_status is None:
                     return Response({"detail": "command result is not yet available"}, status=409)
                 return Response(record.response_body, status=record.response_status)
+            target = None
+            if versioned:
+                try:
+                    target = view.get_command_object() if hasattr(view, "get_command_object") else view.get_object()
+                except Exception:
+                    target = None
+                if target is not None:
+                    target = target.__class__._default_manager.select_for_update().get(pk=target.pk)
+                current_version = "NONE" if target is None else target.updated_at.isoformat().replace("+00:00", "Z")
+                if target is not None and expected_version != current_version:
+                    record.delete()
+                    return Response({"detail": "VERSION_CONFLICT"}, status=409)
             response = handler(view, request, *args, **kwargs)
             if response.status_code >= 400:
                 record.delete()
                 return response
             body = json.loads(json.dumps(getattr(response, "data", {}), cls=DjangoJSONEncoder))
+            if versioned and isinstance(body, dict) and response.status_code != 204:
+                try:
+                    version_target = target or (view.get_command_object() if hasattr(view, "get_command_object") else view.get_object())
+                    version_target.refresh_from_db()
+                    body["version"] = version_target.updated_at.isoformat().replace("+00:00", "Z")
+                except Exception:
+                    pass
             resource_id = str(kwargs.get("user_id") or kwargs.get("pk") or request.user.pk)
             ApplicationAuditEvent.objects.create(
                 actor_ref=str(request.user.pk), action=action, resource_type="security_control",

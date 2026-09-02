@@ -114,7 +114,7 @@ class SetGlobalTwoFactorAuth(generics.CreateAPIView):
     permission_classes = (IsAuthenticated, IsAdminUser)
 
     def get_command_object(self):
-        return models.TwoFactorAuth.objects.filter(admin=self.request.user).first()
+        return models.TwoFactorAuth.objects.select_for_update().filter(admin=self.request.user).first()
 
     @durable_security_command("security.global_2fa.update", versioned=True)
     def create(self, request, *args, **kwargs):
@@ -166,7 +166,7 @@ class SetGlobalPasswordPolicy(generics.CreateAPIView):
     permission_classes = (IsAuthenticated, IsAdminUser)
 
     def get_command_object(self):
-        return models.PasswordPolicy.objects.filter(admin=self.request.user).first()
+        return models.PasswordPolicy.objects.select_for_update().filter(admin=self.request.user).first()
 
     @durable_security_command("security.password_policy.update", versioned=True)
     def create(self, request, *args, **kwargs):
@@ -378,6 +378,9 @@ class IPRestrictionsView(generics.RetrieveUpdateAPIView):
     """
     serializer_class = serializers.IPRestrictionsSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get_command_object(self):
+        return models.IPRestrictions.objects.select_for_update().filter(admin=self.request.user).first()
 
     def get_object(self):
 

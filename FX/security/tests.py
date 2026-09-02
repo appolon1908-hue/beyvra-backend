@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from apps.foundation.models import ApplicationAuditEvent
 from integrations.models import Organization, OrganizationMembership
-from security.models import IPWhitelist
+from security.models import IPRestrictions, IPWhitelist
 
 
 class SecurityCommandTests(TestCase):
@@ -59,6 +59,33 @@ class SecurityCommandTests(TestCase):
         )
         self.assertEqual(response.status_code, 409)
         self.assertTrue(IPWhitelist.objects.filter(pk=entry.pk).exists())
+
+    def test_version_is_exposed_and_completed_delete_replays_204(self):
+        create_headers = {**self.headers, "HTTP_IDEMPOTENCY_KEY": "security-create-version"}
+        created = self.client.post("/api/security/ip-whitelist/", {"ip_address": "198.51.100.31"}, format="json", **create_headers)
+        self.assertEqual(created.status_code, 201); self.assertIn("updated_at", created.data)
+        delete_headers = {
+            **self.headers, "HTTP_IDEMPOTENCY_KEY": "security-delete-replay",
+            "HTTP_IF_MATCH": created.data["updated_at"],
+        }
+        first = self.client.delete(f"/api/security/ip-whitelist/{created.data['id']}/delete/", **delete_headers)
+        replay = self.client.delete(f"/api/security/ip-whitelist/{created.data['id']}/delete/", **delete_headers)
+        self.assertEqual(first.status_code, 204); self.assertEqual(replay.status_code, 204)
+
+    def test_global_update_replays_before_changed_version_and_restriction_preflight_is_clean(self):
+        headers = {**self.headers, "HTTP_IDEMPOTENCY_KEY": "global-2fa-replay", "HTTP_IF_MATCH": "NONE"}
+        first = self.client.post("/api/security/set-2fa/", {"auth_type": "AUTHENTICATOR_APP"}, format="json", **headers)
+        replay = self.client.post("/api/security/set-2fa/", {"auth_type": "AUTHENTICATOR_APP"}, format="json", **headers)
+        self.assertEqual(first.status_code, 201); self.assertEqual(replay.data, first.data); self.assertIn("version", first.data)
+
+        restriction = IPRestrictions.objects.create(admin=self.admin)
+        entry = IPWhitelist.objects.create(admin=self.admin, ip_address="198.51.100.32")
+        stale = self.client.patch(
+            "/api/security/ip-restrictions/", {"restriction_type": "CUSTOM_IP_WHITELIST"}, format="json",
+            **{**self.headers, "HTTP_IDEMPOTENCY_KEY": "restriction-stale", "HTTP_IF_MATCH": "stale"},
+        )
+        self.assertEqual(stale.status_code, 409)
+        self.assertFalse(restriction.ip_whitelist.filter(pk=entry.pk).exists())
 
     def test_cross_tenant_user_security_mutation_is_hidden(self):
         response = self.client.patch(
