@@ -161,6 +161,8 @@ class OverrideApprovalView(APIView):
                 override=ComplianceOverride.objects.select_for_update().get(pk=override.pk)
                 record,fresh=_begin(request,override.account.organization_id,f"/api/v1/admin/compliance/overrides/{override.pk}/approve",key,{"override_id":str(override.pk),"expected_version":version})
                 if replay:=_replay(record,fresh):return replay
+                if override.approved_at:
+                    record.delete();raise ValueError("OVERRIDE_ALREADY_APPROVED")
                 if override.requested_at.isoformat()!=version:raise ValueError("VERSION_CONFLICT")
                 override=approve_override(override.pk,request.user)
                 body={"override_id":str(override.pk),"status":"APPROVED","approved_at":_iso(override.approved_at)}

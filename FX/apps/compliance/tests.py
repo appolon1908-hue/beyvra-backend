@@ -4,6 +4,7 @@ from io import StringIO
 from django.db import close_old_connections, connection
 from django.db import DatabaseError
 from django.core.management import call_command
+from django.conf import settings
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -164,9 +165,12 @@ class ComplianceAdminAuthorizationTests(TestCase):
         case_id=created.json()["case_id"]
         assigned=self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_ASSIGNED","metadata":{"assigned_to_id":str(self.analyst.pk),"unsafe_note":"must not persist"}},format="json",**self.command_headers(created.json()["version"])); self.assertEqual(assigned.status_code,201)
         case=ComplianceCaseEvent.objects.get(pk=assigned.json()["event_id"]).case; self.assertEqual(case.assigned_to,self.analyst); self.assertNotIn("unsafe_note",case.events.get(pk=assigned.json()["event_id"]).metadata)
+        note=self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_NOTE_ADDED","metadata":{"note_ref":"opaque-note-evidence"}},format="json",**self.command_headers(assigned.json()["case_version"])); self.assertEqual(note.status_code,201)
+        self.assertNotEqual(note.json()["case_version"],assigned.json()["case_version"])
+        self.assertTrue({"idempotency-key","x-request-id","if-match"}.issubset(settings.CORS_ALLOW_HEADERS))
         self.assertEqual(self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json").status_code,403)
-        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json",**self.command_headers(assigned.json()["case_version"])).status_code,201)
-        self.assertEqual(ComplianceCaseEvent.objects.filter(case_id=case_id).count(),3)
+        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json",**self.command_headers(note.json()["case_version"])).status_code,201)
+        self.assertEqual(ComplianceCaseEvent.objects.filter(case_id=case_id).count(),4)
     def test_generic_admin_and_support_have_no_compliance_authority(self):
         self.assertEqual(self.client_for(self.generic_admin).get("/api/v1/admin/compliance/cases").status_code,403); self.assertEqual(self.client_for(self.support).get("/api/v1/admin/compliance/cases").status_code,403)
     def test_cross_tenant_admin_access_denied(self):
@@ -209,6 +213,9 @@ class ComplianceAdminAuthorizationTests(TestCase):
         endpoint=f"/api/v1/admin/compliance/overrides/{created.json()['override_id']}/approve"; headers={"HTTP_IDEMPOTENCY_KEY":"override-approve","HTTP_IF_MATCH":created.json()["version"],"HTTP_X_REQUEST_ID":"override-approve-request"}; manager=self.client_for(self.manager)
         first=manager.post(endpoint,{},format="json",**headers); replay=manager.post(endpoint,{},format="json",**headers)
         self.assertEqual((first.status_code,replay.status_code),(200,200)); self.assertEqual(first.json(),replay.json()); self.assertEqual(ComplianceAuditEvent.objects.filter(account=self.profile,event_type="MANUAL_OVERRIDE").count(),1); self.assertEqual(ApplicationAuditEvent.objects.filter(action="compliance.override.approved",request_id="override-approve-request").count(),1)
+        second_key=manager.post(endpoint,{},format="json",HTTP_IDEMPOTENCY_KEY="override-second-key",HTTP_IF_MATCH=created.json()["version"],HTTP_X_REQUEST_ID="override-second-request")
+        self.assertEqual(second_key.status_code,409); self.assertEqual(second_key.json()["error"]["code"],"OVERRIDE_ALREADY_APPROVED")
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="compliance.override.approved").count(),1)
 
 @override_settings(
     SIMULATED_TRADING_ENABLED=True,
