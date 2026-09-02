@@ -46,7 +46,12 @@ class BankAccountSerializer(serializers.ModelSerializer):
         exclude = [
             'user', 'account_number_ciphertext', 'account_number_nonce',
             'account_number_key_version', 'account_number_fingerprint',
-            'account_number_last_four', 'revoked_at',
+            'account_number_last_four', 'routing_number_ciphertext',
+            'routing_number_nonce', 'routing_number_key_version',
+            'routing_number_last_four', 'swift_code_ciphertext',
+            'swift_code_nonce', 'swift_code_key_version', 'swift_code_last_four',
+            'iban_ciphertext', 'iban_nonce', 'iban_key_version', 'iban_last_four',
+            'revoked_at',
         ]
         read_only_fields = ('is_active',)
 
@@ -55,9 +60,32 @@ class BankAccountSerializer(serializers.ModelSerializer):
         last_four = instance.account_number_last_four or (instance.account_number or "")[-4:]
         data["account_number"] = f"****{last_four}" if last_four else ""
         for field in ("routing_number", "swift_code", "iban"):
-            value = getattr(instance, field, None) or ""
-            data[field] = f"****{value[-4:]}" if value else ""
+            last_four = getattr(instance, f"{field}_last_four", "") or (getattr(instance, field, None) or "")[-4:]
+            data[field] = f"****{last_four}" if last_four else ""
         return data
+
+    @staticmethod
+    def _encrypt_identifiers(validated_data):
+        encrypted = {}
+        for field in ("routing_number", "swift_code", "iban"):
+            raw = validated_data.pop(field, None)
+            if raw:
+                ciphertext, nonce, version = encrypt(raw)
+                encrypted.update({
+                    field: None,
+                    f"{field}_ciphertext": ciphertext,
+                    f"{field}_nonce": nonce,
+                    f"{field}_key_version": version,
+                    f"{field}_last_four": raw[-4:],
+                })
+            elif raw is not None:
+                encrypted.update({
+                    field: None,
+                    f"{field}_ciphertext": None,
+                    f"{field}_nonce": None,
+                    f"{field}_last_four": "",
+                })
+        return encrypted
 
     def validate(self, attrs):
         if "withdrawal_request" in self.initial_data:
@@ -68,6 +96,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
 
         raw_account_number = validated_data.pop('account_number')
+        encrypted_identifiers = self._encrypt_identifiers(validated_data)
         digest = fingerprint(raw_account_number)
         bank_account = BankAccount.objects.filter(user=user).filter(
             Q(account_number_fingerprint=digest) | Q(account_number=raw_account_number)
@@ -79,11 +108,14 @@ class BankAccountSerializer(serializers.ModelSerializer):
                 user=user, account_number=None, account_number_ciphertext=ciphertext,
                 account_number_nonce=nonce, account_number_key_version=version,
                 account_number_fingerprint=digest, account_number_last_four=raw_account_number[-4:],
+                **encrypted_identifiers,
                 **validated_data)
 
         return bank_account
 
     def update(self, instance, validated_data):
+        for field, value in self._encrypt_identifiers(validated_data).items():
+            setattr(instance, field, value)
         raw_account_number = validated_data.pop('account_number', None)
         if raw_account_number:
             digest = fingerprint(raw_account_number)

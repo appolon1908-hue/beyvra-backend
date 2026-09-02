@@ -1,12 +1,12 @@
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import models, transaction
 
 from bank_account_app.models import BankAccount
 from integrations.crypto import encrypt, fingerprint
 
 
 class Command(BaseCommand):
-    help = "Encrypt legacy plaintext bank-account numbers in bounded batches."
+    help = "Encrypt legacy plaintext bank-account identifiers in bounded batches."
 
     def add_arguments(self, parser):
         parser.add_argument("--batch-size", type=int, default=100)
@@ -18,24 +18,34 @@ class Command(BaseCommand):
             with transaction.atomic():
                 rows = list(
                     BankAccount.objects.select_for_update(skip_locked=True)
-                    .filter(account_number__isnull=False, account_number_ciphertext__isnull=True)
-                    .exclude(account_number="")[:batch_size]
+                    .filter(
+                        (models.Q(account_number__isnull=False, account_number_ciphertext__isnull=True) & ~models.Q(account_number=""))
+                        | (models.Q(routing_number__isnull=False, routing_number_ciphertext__isnull=True) & ~models.Q(routing_number=""))
+                        | (models.Q(swift_code__isnull=False, swift_code_ciphertext__isnull=True) & ~models.Q(swift_code=""))
+                        | (models.Q(iban__isnull=False, iban_ciphertext__isnull=True) & ~models.Q(iban=""))
+                    )[:batch_size]
                 )
                 if not rows:
                     break
                 for row in rows:
-                    raw = row.account_number
-                    ciphertext, nonce, version = encrypt(raw)
-                    row.account_number_ciphertext = ciphertext
-                    row.account_number_nonce = nonce
-                    row.account_number_key_version = version
-                    row.account_number_fingerprint = fingerprint(raw)
-                    row.account_number_last_four = raw[-4:]
-                    row.account_number = None
-                    row.save(update_fields=(
-                        "account_number", "account_number_ciphertext", "account_number_nonce",
-                        "account_number_key_version", "account_number_fingerprint",
-                        "account_number_last_four", "updated_at",
-                    ))
+                    update_fields = ["updated_at"]
+                    for field in ("account_number", "routing_number", "swift_code", "iban"):
+                        raw = getattr(row, field)
+                        if not raw or getattr(row, f"{field}_ciphertext"):
+                            continue
+                        ciphertext, nonce, version = encrypt(raw)
+                        setattr(row, f"{field}_ciphertext", ciphertext)
+                        setattr(row, f"{field}_nonce", nonce)
+                        setattr(row, f"{field}_key_version", version)
+                        setattr(row, f"{field}_last_four", raw[-4:])
+                        setattr(row, field, None)
+                        update_fields.extend((
+                            field, f"{field}_ciphertext", f"{field}_nonce",
+                            f"{field}_key_version", f"{field}_last_four",
+                        ))
+                        if field == "account_number":
+                            row.account_number_fingerprint = fingerprint(raw)
+                            update_fields.append("account_number_fingerprint")
+                    row.save(update_fields=update_fields)
                     migrated += 1
         self.stdout.write(f"migrated={migrated}")

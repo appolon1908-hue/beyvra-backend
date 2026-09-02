@@ -33,8 +33,20 @@ class BankAccount(TimeStampedModel):
     last_name = models.CharField(max_length=255, null=True, blank=True,
                                  help_text='Last name of the account holder')
     routing_number = models.CharField(max_length=50, null=True, blank=True)
+    routing_number_ciphertext = models.TextField(null=True, blank=True)
+    routing_number_nonce = models.CharField(max_length=64, null=True, blank=True)
+    routing_number_key_version = models.CharField(max_length=32, default="v1")
+    routing_number_last_four = models.CharField(max_length=4, default="")
     swift_code = models.CharField(max_length=50, null=True, blank=True)
+    swift_code_ciphertext = models.TextField(null=True, blank=True)
+    swift_code_nonce = models.CharField(max_length=64, null=True, blank=True)
+    swift_code_key_version = models.CharField(max_length=32, default="v1")
+    swift_code_last_four = models.CharField(max_length=4, default="")
     iban = models.CharField(max_length=50, null=True, blank=True)
+    iban_ciphertext = models.TextField(null=True, blank=True)
+    iban_nonce = models.CharField(max_length=64, null=True, blank=True)
+    iban_key_version = models.CharField(max_length=32, default="v1")
+    iban_last_four = models.CharField(max_length=4, default="")
     country = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):

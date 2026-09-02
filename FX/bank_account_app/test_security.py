@@ -103,6 +103,9 @@ class BankAccountCommandTests(TestCase):
         self.assertEqual(replay.json(), first.json()); self.assertEqual(conflict.status_code, 409)
         row = BankAccount.objects.get(user=self.user)
         self.assertIsNone(row.account_number); self.assertTrue(row.account_number_ciphertext)
+        for field in ("routing_number", "swift_code", "iban"):
+            self.assertIsNone(getattr(row, field))
+            self.assertTrue(getattr(row, f"{field}_ciphertext"))
         self.assertEqual(first.json()["data"]["account_number"], "****6789")
         self.assertEqual(first.json()["data"]["routing_number"], "****0021")
         self.assertEqual(first.json()["data"]["swift_code"], "****PL22")
@@ -144,6 +147,8 @@ class BankAccountCommandTests(TestCase):
     def test_legacy_plaintext_backfill_encrypts_and_clears_source(self):
         row = BankAccount.objects.create(
             user=self.user, bank_name="Legacy Bank", account_number="246813579",
+            routing_number="021000021", swift_code="EXAMPL22",
+            iban="GB82WEST12345698765432",
             account_holder_name="Legacy Holder",
         )
         call_command("encrypt_legacy_bank_accounts", batch_size=10)
@@ -154,3 +159,17 @@ class BankAccountCommandTests(TestCase):
             decrypt(row.account_number_ciphertext, row.account_number_nonce, key_version=row.account_number_key_version),
             "246813579",
         )
+        for field, expected in (
+            ("routing_number", "021000021"),
+            ("swift_code", "EXAMPL22"),
+            ("iban", "GB82WEST12345698765432"),
+        ):
+            self.assertIsNone(getattr(row, field))
+            self.assertEqual(
+                decrypt(
+                    getattr(row, f"{field}_ciphertext"),
+                    getattr(row, f"{field}_nonce"),
+                    key_version=getattr(row, f"{field}_key_version"),
+                ),
+                expected,
+            )
