@@ -1,4 +1,3 @@
-from api_trade.utils.alpaca_util import get_today
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -23,12 +22,12 @@ from ..scripts.alpaca_news import get_news
         OpenApiParameter(
             name="start",
             type=OpenApiTypes.DATE,
-            default=get_today(),
+            description="Inclusive start date. If omitted, the provider uses the current UTC date.",
         ),
         OpenApiParameter(
             name="end",
             type=OpenApiTypes.DATE,
-            default=get_today(),
+            description="Inclusive end date. If omitted, the provider uses the current UTC date.",
         ),
         OpenApiParameter(
             name="include_content",

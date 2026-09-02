@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import api_view
@@ -26,7 +24,7 @@ class GetCalendarViewSet(viewsets.ViewSet):
                 name="start",
                 required=True,
                 type=OpenApiTypes.DATE,
-                default=datetime.now().strftime("%Y-%m-%d"),
+                description="First market date. Supply an ISO 8601 date (YYYY-MM-DD).",
             ),
             OpenApiParameter(
                 name="end",
