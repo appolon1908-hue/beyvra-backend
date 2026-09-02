@@ -153,6 +153,10 @@ class PostTradeAuthorityTests(TestCase):
         self.assertEqual(client.post(endpoint,{"reason":"controlled assignment"},format="json").status_code,422)
         stale=client.post(endpoint,{"reason":"controlled assignment"},format="json",HTTP_IDEMPOTENCY_KEY="stale",HTTP_X_REQUEST_ID="stale-request",HTTP_IF_MATCH="stale")
         self.assertEqual(stale.status_code,409); row.refresh_from_db(); self.assertEqual(row.state,"OPEN")
+        oversized_key=client.post(endpoint,{"reason":"controlled assignment"},format="json",HTTP_IDEMPOTENCY_KEY="k"*256,HTTP_X_REQUEST_ID="request",HTTP_IF_MATCH=row.updated_at.isoformat())
+        self.assertEqual(oversized_key.status_code,422)
+        oversized_reason=client.post(endpoint,{"reason":"r"*256},format="json",HTTP_IDEMPOTENCY_KEY="bounded-reason",HTTP_X_REQUEST_ID="request",HTTP_IF_MATCH=row.updated_at.isoformat())
+        self.assertEqual(oversized_reason.status_code,422)
         headers={"HTTP_IDEMPOTENCY_KEY":"assign-once","HTTP_X_REQUEST_ID":"assign-request","HTTP_IF_MATCH":row.updated_at.isoformat()}
         first=client.post(endpoint,{"reason":"controlled assignment"},format="json",**headers); replay=client.post(endpoint,{"reason":"controlled assignment"},format="json",**headers)
         self.assertEqual((first.status_code,replay.status_code),(200,200)); self.assertEqual(first.json(),replay.json())

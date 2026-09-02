@@ -25,9 +25,11 @@ VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match"
 
 
 def _command_headers(request, versioned=False):
-    key = request.headers.get("Idempotency-Key", "")
-    request_id = request.headers.get("X-Request-ID", "")
+    key = request.headers.get("Idempotency-Key", "").strip()
+    request_id = request.headers.get("X-Request-ID", "").strip()
     version = request.headers.get("If-Match", "") if versioned else None
+    if len(key) > 255 or len(request_id) > 128:
+        return None, None, None
     return (key, request_id[:128], version) if key and request_id and (not versioned or version) else (None, None, None)
 
 
@@ -134,8 +136,9 @@ class ExceptionAction(APIView):
         row = PostTradeException.objects.filter(pk=exception_id, tenant_ref="default").first()
         if not row: return error_response(request, "RESOURCE_NOT_FOUND", 404)
         key, request_id, expected_version = _command_headers(request, versioned=True)
-        reason = str(request.data.get("reason", "")).strip()
-        if not key or not reason: return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "X-Request-ID", "If-Match", "reason"]})
+        raw_reason = request.data.get("reason", "")
+        reason = raw_reason.strip() if isinstance(raw_reason, str) else ""
+        if not key or not reason or len(reason) > 255: return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "X-Request-ID", "If-Match", "reason"], "limits": {"Idempotency-Key": 255, "X-Request-ID": 128, "reason": 255}})
         resolution_code = str(request.data.get("resolution_code", "REVIEWED"))[:64]
         try:
             with transaction.atomic():
