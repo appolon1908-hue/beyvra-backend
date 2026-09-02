@@ -47,6 +47,17 @@ class SimulatedTradingE2ETests(TestCase):
     def post_order(self, payload=None, key=None):
         return self.client.post("/api/v1/trading/orders", payload or self.payload, format="json", HTTP_IDEMPOTENCY_KEY=key or str(uuid.uuid4()), **self.headers)
 
+    def cancel_order(self, order, key="cancel-key", expected_version=None):
+        order.refresh_from_db()
+        return self.client.post(
+            f"/api/v1/trading/orders/{order.id}/cancel",
+            {},
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=key,
+            HTTP_IF_MATCH=expected_version or order.updated_at.isoformat(),
+            **self.headers,
+        )
+
     def test_simulation_is_separate_and_requires_explicit_authority(self):
         denied = self.client.post("/api/v1/trading/orders/preview", self.payload, format="json")
         self.assertEqual(denied.status_code, 503)
@@ -117,9 +128,41 @@ class SimulatedTradingE2ETests(TestCase):
 
     def test_open_then_cancel_releases_reservation(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
-        response = self.client.post(f"/api/v1/trading/orders/{order.id}/cancel", {}, format="json", **self.headers)
+        response = self.cancel_order(order)
         self.assertEqual(response.status_code, 200); self.assertEqual(response.json()["state"], "CANCELLED")
         self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "RELEASED")
+
+    def test_cancel_requires_idempotency_and_expected_version(self):
+        order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
+        response = self.client.post(f"/api/v1/trading/orders/{order.id}/cancel", {}, format="json", **self.headers)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "VALIDATION_ERROR")
+
+    def test_cancel_replay_returns_original_result_without_duplicate_effects(self):
+        order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL"); order.refresh_from_db()
+        expected_version = order.updated_at.isoformat()
+        first = self.cancel_order(order, "cancel-replay", expected_version)
+        replay = self.cancel_order(order, "cancel-replay", expected_version)
+        self.assertEqual((first.status_code, replay.status_code), (200, 200))
+        self.assertEqual(first.json(), replay.json())
+        self.assertEqual(OutboxEvent.objects.filter(aggregate_id=str(order.id), event_type="trading.order.cancelled.v1").count(), 1)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(resource_id=str(order.id), action="simulation.order.cancelled").count(), 1)
+
+    def test_cancel_same_key_with_different_version_conflicts(self):
+        order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL"); order.refresh_from_db()
+        self.assertEqual(self.cancel_order(order, "cancel-conflict", order.updated_at.isoformat()).status_code, 200)
+        response = self.cancel_order(order, "cancel-conflict", "different-version")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "IDEMPOTENCY_CONFLICT")
+
+    def test_cancel_stale_expected_version_has_no_effect(self):
+        order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
+        response = self.cancel_order(order, "cancel-stale", "stale-version")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "VERSION_CONFLICT")
+        order.refresh_from_db()
+        self.assertEqual(order.state, "OPEN")
+        self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "ACTIVE")
 
     def test_reject_and_expire_are_deterministic_and_release_funds(self):
         rejected = TradingOrder.objects.get(pk=self.post_order(key="reject").json()["id"]); process_created_order(rejected.id, "REJECT"); rejected.refresh_from_db()
@@ -176,7 +219,8 @@ class SimulatedTradingE2ETests(TestCase):
         other = User.objects.create_user(email=f"other-{uuid.uuid4()}@example.invalid", phone_number=f"+1312{uuid.uuid4().int % 10000000:07d}", password="test")
         self.client.force_authenticate(other)
         self.assertEqual(self.client.get(f"/api/v1/trading/orders/{order_id}", **self.headers).status_code, 404)
-        self.assertEqual(self.client.post(f"/api/v1/trading/orders/{order_id}/cancel", {}, format="json", **self.headers).status_code, 404)
+        order = TradingOrder.objects.get(pk=order_id)
+        self.assertEqual(self.cancel_order(order, key="other-user-cancel").status_code, 404)
 
     def test_balance_never_overspends_and_sell_beyond_position_is_denied(self):
         too_large = self.client.post("/api/v1/trading/orders/preview", {**self.payload, "quantity": "101"}, format="json", **self.headers)
@@ -254,7 +298,7 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
         def race(action):
             close_old_connections(); barrier.wait()
             try:
-                if action == "cancel": cancel(User.objects.get(pk=user.pk), order.id)
+                if action == "cancel": cancel(User.objects.get(pk=user.pk), order.id, "race-cancel", order.updated_at.isoformat())
                 else: apply_execution(order.id, SimulatedExecution(f"sim:{order.id}:race", Decimal("1"), Decimal("100"), True))
             except (ValueError, InvalidOrderTransition):
                 pass
