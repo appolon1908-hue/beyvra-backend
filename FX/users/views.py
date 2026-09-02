@@ -119,6 +119,7 @@ class CreateUserView(generics.CreateAPIView):
 class DeleteUserView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(responses={409: dict})
     def delete(self, request):
         return Response(
             {"code": "ACCOUNT_CLOSURE_WORKFLOW_REQUIRED"}, status=status.HTTP_409_CONFLICT
@@ -1202,21 +1203,20 @@ class BulkCreateUserView(APIView):
 @extend_schema(
     description="Ban a user",
     responses={
-        200: {"description": "User banned successfully."},
         403: {"description": "Unauthorized action."},
-        404: {"description": "User not found."},
+        409: {"description": "Governed account restriction workflow required."},
     },
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def ban_user(request, user_id):
-    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
         return Response(
             {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
         )
 
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     try:
         user_to_ban = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -1250,21 +1250,20 @@ def ban_user(request, user_id):
     summary="Unban a user",
     description="Unban a user",
     responses={
-        200: {"description": "User unbanned successfully."},
         403: {"description": "Unauthorized action."},
-        404: {"description": "User not found."},
+        409: {"description": "Governed account restriction workflow required."},
     },
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def unban_user(request, user_id):
-    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     # Ensure the requesting user has administrative privileges
     if not request.user.is_staff:
         return Response(
             {"detail": messages.UNAUTHORIZED_ACTION}, status=status.HTTP_403_FORBIDDEN
         )
 
+    return Response({"code": "GOVERNED_ACCOUNT_RESTRICTION_REQUIRED"}, status=409)
     try:
         user_to_unban = User.objects.get(id=user_id)
     except User.DoesNotExist:
@@ -1528,6 +1527,7 @@ def get_user_kyc(request, user_id):
         200: {"description": "User KYC verified successfully."},
         403: {"description": "Unauthorized action."},
         404: {"description": "User not found."},
+        409: {"description": "Governed compliance approval workflow required."},
     },
 )
 @api_view(["PATCH", "GET"])
@@ -1764,6 +1764,7 @@ class UserDocumentVerificationStatus(generics.GenericAPIView):
         user_id = self.kwargs.get("user_id")
         return get_user_model().objects.get(id=user_id)
 
+    @extend_schema(responses={409: dict})
     def patch(self, request, *args, **kwargs):
         return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
@@ -1794,6 +1795,7 @@ class UserFaceVerificationStatus(generics.GenericAPIView):
         user_id = self.kwargs.get("user_id")
         return get_user_model().objects.get(id=user_id)
 
+    @extend_schema(responses={409: dict})
     def patch(self, request, *args, **kwargs):
         return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
@@ -1824,6 +1826,7 @@ class UserVerificationStatus(generics.GenericAPIView):
         user_id = self.kwargs.get("user_id")
         return get_user_model().objects.get(id=user_id)
 
+    @extend_schema(responses={409: dict})
     def patch(self, request, *args, **kwargs):
         return Response({"code": "COMPLIANCE_APPROVAL_WORKFLOW_REQUIRED"}, status=409)
         user = self.get_object()
@@ -2072,6 +2075,7 @@ def search_users(request):
     return paginator.get_paginated_response(user_data)
 
 
+@extend_schema(responses={200: dict, 409: dict})
 @api_view(["GET", "PUT", "PATCH"])
 @permission_classes([IsAdminUser])
 def user_roles(request, user_id):
@@ -2092,12 +2096,14 @@ def list_roles(request):
     return Response(data)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def assign_permissions_to_role(request):
     return Response({"code": "GOVERNED_RBAC_WORKFLOW_REQUIRED"}, status=409)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def assign_user_to_role(request):
@@ -2117,6 +2123,7 @@ def check_user_permissions(request):
         return Response({"error": "User not found."}, status=404)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["PATCH"])
 @permission_classes([IsAdminUser])
 def toggle_user_status(request, user_id):
@@ -2141,6 +2148,7 @@ def toggle_user_status(request, user_id):
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["PATCH"])
 @permission_classes([IsAdminUser])
 def update_user_status(request, user_id):
@@ -2175,6 +2183,7 @@ def update_user_status(request, user_id):
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def create_user(request):
@@ -2184,6 +2193,7 @@ def create_user(request):
     return Response({"code": "GOVERNED_USER_PROVISIONING_REQUIRED"}, status=409)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["PUT"])
 @permission_classes([IsAdminUser])
 def update_user(request, user_id):
@@ -2193,6 +2203,7 @@ def update_user(request, user_id):
     return Response({"code": "GOVERNED_USER_PROFILE_WORKFLOW_REQUIRED"}, status=409)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["DELETE"])
 @permission_classes([IsAdminUser])
 def delete_user(request, user_id):
@@ -2202,6 +2213,7 @@ def delete_user(request, user_id):
     return Response({"code": "ACCOUNT_CLOSURE_WORKFLOW_REQUIRED"}, status=409)
 
 
+@extend_schema(responses={409: dict})
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def bulk_actions(request):
@@ -2280,6 +2292,7 @@ def user_details_view(request, user_id):
 class ResetUserPasswordView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={409: dict})
     def post(self, request, user_id, *args, **kwargs):
         return Response({"code": "CREDENTIAL_RECOVERY_WORKFLOW_REQUIRED"}, status=409)
 
@@ -2287,6 +2300,7 @@ class ResetUserPasswordView(APIView):
 class BulkResetPasswordView(APIView):
     permission_classes = [IsAdminUser]
 
+    @extend_schema(responses={409: dict})
     def post(self, request, *args, **kwargs):
         return Response({"code": "BULK_CREDENTIAL_RESET_DISABLED"}, status=409)
 
