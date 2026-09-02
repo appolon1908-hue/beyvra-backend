@@ -8,9 +8,9 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.foundation.models import OutboxEvent, ProcessedEvent
+from apps.foundation.models import ApplicationAuditEvent, OutboxEvent, ProcessedEvent
 from apps.surveillance.engine import SurveillanceEngine
-from apps.surveillance.models import SurveillanceAudit, SurveillanceCase, SurveillanceDeadLetter, SurveillanceEvent, SurveillanceRule, TradingRestriction
+from apps.surveillance.models import SurveillanceAudit, SurveillanceCase, SurveillanceCaseEvent, SurveillanceDeadLetter, SurveillanceEvent, SurveillanceRule, TradingRestriction
 from apps.surveillance.reconciliation import reconcile_surveillance
 from apps.surveillance.services import ingest_event
 from apps.trading.application.simulation import create
@@ -94,17 +94,51 @@ class SurveillanceTests(TestCase):
 
     def test_operator_rbac_tenant_scope_maker_checker_and_safe_errors(self):
         client = APIClient(); client.force_authenticate(self.manager)
-        response = client.post("/api/v1/operator/surveillance/restrictions", {"scope_type": "ACCOUNT", "scope_ref": "sim:target", "restriction_type": "BLOCK_NEW_ORDERS", "reason": "synthetic review"}, format="json")
+        request_payload = {"scope_type": "ACCOUNT", "scope_ref": "sim:target", "restriction_type": "BLOCK_NEW_ORDERS", "reason": "synthetic review"}
+        create_headers = {"HTTP_IDEMPOTENCY_KEY": "restriction-create", "HTTP_X_REQUEST_ID": "restriction-create-request"}
+        response = client.post("/api/v1/operator/surveillance/restrictions", request_payload, format="json", **create_headers)
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(client.post("/api/v1/operator/surveillance/restrictions", request_payload, format="json", **create_headers).json(), response.json())
+        self.assertEqual(TradingRestriction.objects.count(), 1)
         restriction_id = response.json()["id"]
         self_approval = client.post(f"/api/v1/operator/surveillance/restrictions/{restriction_id}/approve", {"reason": "approve"}, format="json")
         self.assertEqual(self_approval.status_code, 403)
         self.assertNotIn("request_id", str(self_approval.json()).lower())
         client.force_authenticate(self.checker)
-        self.assertEqual(client.post(f"/api/v1/operator/surveillance/restrictions/{restriction_id}/approve", {"reason": "independent"}, format="json").status_code, 200)
+        approval_headers = {"HTTP_IDEMPOTENCY_KEY": "restriction-approve", "HTTP_X_REQUEST_ID": "restriction-approve-request", "HTTP_IF_MATCH": response.json()["version"]}
+        approved = client.post(f"/api/v1/operator/surveillance/restrictions/{restriction_id}/approve", {"reason": "independent"}, format="json", **approval_headers)
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(client.post(f"/api/v1/operator/surveillance/restrictions/{restriction_id}/approve", {"reason": "independent"}, format="json", **approval_headers).json(), approved.json())
+        self.assertEqual(OutboxEvent.objects.filter(aggregate_id=restriction_id, event_type="regulatory.surveillance.restriction.applied.v1").count(), 1)
         customer = APIClient(); customer.force_authenticate(self.user)
         self.assertEqual(customer.get("/api/v1/operator/surveillance/rules").status_code, 403)
         self.assertEqual(customer.get(f"/api/v1/operator/surveillance/events/{uuid.uuid4()}").status_code, 403)
+
+    def test_surveillance_case_commands_require_version_replay_once_and_use_independent_resolution(self):
+        row = SurveillanceCase.objects.create(tenant_ref="default", account_ref="sim:target", case_type="MARKET_ABUSE_REVIEW", severity="CRITICAL", status="OPEN", opened_at=self.now, policy_version="surveillance-2026-08-v1", evidence_hash="3" * 64)
+        maker = APIClient(); maker.force_authenticate(self.manager); base=f"/api/v1/operator/surveillance/cases/{row.pk}"
+        self.assertEqual(maker.post(f"{base}/assign", {"reason":"ownership"}, format="json").status_code, 422)
+        stale = maker.post(f"{base}/assign", {"reason":"ownership"}, format="json", HTTP_IDEMPOTENCY_KEY="case-stale", HTTP_X_REQUEST_ID="case-stale-request", HTTP_IF_MATCH="stale")
+        self.assertEqual(stale.status_code, 409); row.refresh_from_db(); self.assertEqual(row.status, "OPEN")
+        headers={"HTTP_IDEMPOTENCY_KEY":"case-assign","HTTP_X_REQUEST_ID":"case-assign-request","HTTP_IF_MATCH":row.updated_at.isoformat()}
+        assigned=maker.post(f"{base}/assign", {"reason":"ownership"}, format="json", **headers); replay=maker.post(f"{base}/assign", {"reason":"ownership"}, format="json", **headers)
+        self.assertEqual((assigned.status_code,replay.status_code),(200,200)); self.assertEqual(assigned.json(),replay.json()); self.assertEqual(SurveillanceCaseEvent.objects.filter(case=row,event_type="CASE_ASSIGNED").count(),1)
+        self_resolve=maker.post(f"{base}/resolve", {"reason":"reviewed"}, format="json", HTTP_IDEMPOTENCY_KEY="self-resolve", HTTP_X_REQUEST_ID="self-resolve-request", HTTP_IF_MATCH=assigned.json()["version"])
+        self.assertEqual(self_resolve.status_code,403)
+        checker=APIClient(); checker.force_authenticate(self.checker); resolved=checker.post(f"{base}/resolve", {"reason":"independent review","resolution_code":"NO_ACTION"}, format="json", HTTP_IDEMPOTENCY_KEY="case-resolve", HTTP_X_REQUEST_ID="case-resolve-request", HTTP_IF_MATCH=assigned.json()["version"])
+        self.assertEqual(resolved.status_code,200); row.refresh_from_db(); self.assertEqual(row.status,"RESOLVED")
+        self.assertEqual(ApplicationAuditEvent.objects.filter(resource_id=str(row.pk),action="surveillance.case.resolve").count(),1)
+
+    def test_restriction_command_rejects_semantic_conflict_and_removal_replays_once(self):
+        client=APIClient(); client.force_authenticate(self.manager); endpoint="/api/v1/operator/surveillance/restrictions"; headers={"HTTP_IDEMPOTENCY_KEY":"semantic-restriction","HTTP_X_REQUEST_ID":"semantic-request"}
+        payload={"scope_type":"ACCOUNT","scope_ref":"sim:target","restriction_type":"BLOCK_NEW_ORDERS","reason":"documented review"}
+        created=client.post(endpoint,payload,format="json",**headers); self.assertEqual(created.status_code,201)
+        conflict=client.post(endpoint,{**payload,"reason":"different reason"},format="json",**headers); self.assertEqual(conflict.status_code,409)
+        rid=created.json()["id"]; checker=APIClient(); checker.force_authenticate(self.checker)
+        approved=checker.post(f"{endpoint}/{rid}/approve",{"reason":"independent approval"},format="json",HTTP_IDEMPOTENCY_KEY="approve-for-remove",HTTP_X_REQUEST_ID="approve-for-remove-request",HTTP_IF_MATCH=created.json()["version"]); self.assertEqual(approved.status_code,200)
+        remove_headers={"HTTP_IDEMPOTENCY_KEY":"remove-once","HTTP_X_REQUEST_ID":"remove-request","HTTP_IF_MATCH":approved.json()["version"]}
+        removed=client.post(f"{endpoint}/{rid}/remove",{"reason":"restriction no longer required"},format="json",**remove_headers); replay=client.post(f"{endpoint}/{rid}/remove",{"reason":"restriction no longer required"},format="json",**remove_headers)
+        self.assertEqual((removed.status_code,replay.status_code),(200,200)); self.assertEqual(removed.json(),replay.json()); self.assertEqual(OutboxEvent.objects.filter(aggregate_id=rid,event_type="regulatory.surveillance.restriction.removed.v1").count(),1)
 
     def test_audit_is_immutable_and_reconciliation_passes(self):
         first, _ = create(self.user, self.payload("BUY"), "audit-first")
