@@ -1,8 +1,15 @@
+import uuid
+
+from django.db import transaction
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.api.errors import error_response
+from apps.foundation.models import ApplicationAuditEvent
+from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 
 from .capture import TradeCaptureService
 from .exceptions import PostTradeExceptionService
@@ -11,6 +18,27 @@ from .reconciliation import PositionReconciler
 
 
 def account_ref(request): return f"sim:{request.user.pk}"
+
+
+COMMAND_PARAMETERS = [OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True), OpenApiParameter("X-Request-ID", str, OpenApiParameter.HEADER, required=True)]
+VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True, description="Exception version returned by the API.")]
+
+
+def _command_headers(request, versioned=False):
+    key = request.headers.get("Idempotency-Key", "")
+    request_id = request.headers.get("X-Request-ID", "")
+    version = request.headers.get("If-Match", "") if versioned else None
+    return (key, request_id[:128], version) if key and request_id and (not versioned or version) else (None, None, None)
+
+
+def _correlation(request):
+    raw = str(getattr(request, "correlation_id", "") or uuid.uuid4())
+    try: return uuid.UUID(raw)
+    except ValueError: return uuid.uuid5(uuid.NAMESPACE_URL, raw)
+
+
+def _application_audit(request, *, request_id, action, resource_type, resource_id, reason="", context=None):
+    return ApplicationAuditEvent.objects.create(actor_ref=str(request.user.pk), action=action, resource_type=resource_type, resource_id=str(resource_id), request_id=request_id, correlation_id=_correlation(request), context=context or {}, reason=reason[:255], occurred_at=timezone.now())
 
 
 def trade_payload(row):
@@ -95,21 +123,37 @@ class OperatorExceptions(APIView):
     def get(self, request, exception_id=None):
         rows = PostTradeException.objects.filter(tenant_ref="default")
         if exception_id:
-            row = rows.filter(pk=exception_id).first(); return Response({"id": str(row.id), "type": row.exception_type, "severity": row.severity, "state": row.state}) if row else error_response(request, "RESOURCE_NOT_FOUND", 404)
-        return Response({"results": [{"id": str(row.id), "type": row.exception_type, "severity": row.severity, "state": row.state} for row in rows.order_by("-detected_at")]})
+            row = rows.filter(pk=exception_id).first(); return Response({"id": str(row.id), "type": row.exception_type, "severity": row.severity, "state": row.state, "version": row.updated_at.isoformat()}) if row else error_response(request, "RESOURCE_NOT_FOUND", 404)
+        return Response({"results": [{"id": str(row.id), "type": row.exception_type, "severity": row.severity, "state": row.state, "version": row.updated_at.isoformat()} for row in rows.order_by("-detected_at")]})
 
 
 class ExceptionAction(APIView):
     permission_classes = (IsAuthenticated, AnalystRole); action = "assign"
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
     def post(self, request, exception_id):
         row = PostTradeException.objects.filter(pk=exception_id, tenant_ref="default").first()
         if not row: return error_response(request, "RESOURCE_NOT_FOUND", 404)
+        key, request_id, expected_version = _command_headers(request, versioned=True)
+        reason = str(request.data.get("reason", "")).strip()
+        if not key or not reason: return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "X-Request-ID", "If-Match", "reason"]})
+        resolution_code = str(request.data.get("resolution_code", "REVIEWED"))[:64]
         try:
-            if self.action == "assign": PostTradeExceptionService.assign(row, actor_ref=str(request.user.pk))
-            elif self.action == "escalate": PostTradeExceptionService.escalate(row, actor_ref=str(request.user.pk))
-            else: PostTradeExceptionService.resolve(row, actor_ref=str(request.user.pk), resolution_code=str(request.data.get("resolution_code", "REVIEWED")))
-        except ValueError as exc: return error_response(request, str(exc), 403)
-        row.refresh_from_db(); return Response({"id": str(row.id), "state": row.state})
+            with transaction.atomic():
+                row = PostTradeException.objects.select_for_update().get(pk=row.pk)
+                record, fresh = begin_idempotent_request(key=key, tenant_ref=row.tenant_ref, actor_ref=request.user.pk,
+                    endpoint=f"/api/v1/operator/post-trade/exceptions/{row.pk}/{self.action}", method="POST",
+                    request_data={"exception_id": str(row.pk), "action": self.action, "reason": reason, "resolution_code": resolution_code, "expected_version": expected_version})
+                if not fresh and record.response_body is not None: return Response(record.response_body, status=record.response_status)
+                if row.updated_at.isoformat() != expected_version: raise ValueError("VERSION_CONFLICT")
+                if self.action == "assign": row = PostTradeExceptionService.assign(row, actor_ref=str(request.user.pk), reason=reason)
+                elif self.action == "escalate": row = PostTradeExceptionService.escalate(row, actor_ref=str(request.user.pk), reason=reason)
+                else: row = PostTradeExceptionService.resolve(row, actor_ref=str(request.user.pk), resolution_code=resolution_code, reason=reason)
+                body = {"id": str(row.id), "state": row.state, "version": row.updated_at.isoformat()}
+                _application_audit(request, request_id=request_id, action=f"post_trade.exception.{self.action}", resource_type="post_trade_exception", resource_id=row.pk, reason=reason, context={"state": row.state})
+                complete_idempotent_request(record, status=200, body=body, resource_type="post_trade_exception", resource_id=row.pk)
+                return Response(body)
+        except IdempotencyConflict: return error_response(request, "IDEMPOTENCY_CONFLICT", 409)
+        except ValueError as exc: return error_response(request, str(exc), 409 if str(exc) in {"VERSION_CONFLICT", "INVALID_EXCEPTION_TRANSITION"} else 403)
 
 
 class ExceptionAssign(ExceptionAction): action = "assign"
@@ -120,9 +164,20 @@ class ExceptionResolve(ExceptionAction): permission_classes = (IsAuthenticated, 
 class OperatorReconciliation(APIView):
     permission_classes = (IsAuthenticated, PostTradeRole)
     def get(self, request): return Response(PositionReconciler.run(tenant_ref="default", persist=False))
+    @extend_schema(parameters=COMMAND_PARAMETERS)
     def post(self, request):
         if not AnalystRole().has_permission(request, self): return error_response(request, "PERMISSION_DENIED", 403)
-        return Response(PositionReconciler.run(tenant_ref="default", persist=True))
+        key, request_id, _ = _command_headers(request)
+        if not key: return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "X-Request-ID"]})
+        try:
+            with transaction.atomic():
+                record, fresh = begin_idempotent_request(key=key, tenant_ref="default", actor_ref=request.user.pk, endpoint="/api/v1/operator/post-trade/reconciliation/run", method="POST", request_data={"operation": "post_trade_reconciliation", "policy_version": "v1"})
+                if not fresh and record.response_body is not None: return Response(record.response_body, status=record.response_status)
+                body = PositionReconciler.run(tenant_ref="default", persist=True)
+                _application_audit(request, request_id=request_id, action="post_trade.reconciliation.run", resource_type="post_trade_reconciliation", resource_id=body["run_id"], context={"status": body["status"]})
+                complete_idempotent_request(record, status=201, body=body, resource_type="post_trade_reconciliation", resource_id=body["run_id"])
+                return Response(body, status=201)
+        except IdempotencyConflict: return error_response(request, "IDEMPOTENCY_CONFLICT", 409)
 
 
 class OperatorEvidence(APIView):

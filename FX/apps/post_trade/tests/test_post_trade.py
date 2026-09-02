@@ -8,11 +8,11 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.foundation.models import OutboxEvent
+from apps.foundation.models import ApplicationAuditEvent, OutboxEvent
 from apps.post_trade.allocation import TradeAllocationService
 from apps.post_trade.calendar import SettlementCalendarService
 from apps.post_trade.corrections import TradeCorrectionService
-from apps.post_trade.models import PostTradeAudit, PostTradeException, SettlementInstruction, Trade, TradeAllocation, TradeConfirmation, TradePositionEffect
+from apps.post_trade.models import PostTradeAudit, PostTradeException, PostTradeReconciliationRun, SettlementInstruction, Trade, TradeAllocation, TradeConfirmation, TradePositionEffect
 from apps.post_trade.processor import process_simulated_fill
 from apps.post_trade.reconciliation import PositionReconciler
 from apps.post_trade.state import PostTradeStateService
@@ -34,6 +34,8 @@ class PostTradeAuthorityTests(TestCase):
         self.other = User.objects.create_user(email="other-post-trade@example.test", password="safe-password", phone_number="+15550001002")
         self.manager = User.objects.create_user(email="post-trade-manager@example.test", password="safe-password", phone_number="+15550001003")
         Group.objects.get_or_create(name="post_trade_manager")[0].user_set.add(self.manager)
+        self.checker = User.objects.create_user(email="post-trade-checker@example.test", password="safe-password", phone_number="+15550001004")
+        Group.objects.get_or_create(name="post_trade_manager")[0].user_set.add(self.checker)
 
     def filled_trade(self, key="post-trade-order"):
         body, _ = create(self.user, {"instrument": "BTC-USD", "side": "BUY", "order_type": "MARKET", "quantity": "0.01"}, key)
@@ -143,3 +145,35 @@ class PostTradeAuthorityTests(TestCase):
         _, trade = self.filled_trade("audit")
         row = PostTradeAudit.objects.filter(resource_ref=str(trade.id)).first()
         with self.assertRaises(DatabaseError), transaction.atomic(): PostTradeAudit.objects.filter(pk=row.pk).update(reason="tampered")
+
+    def test_exception_command_requires_controls_replays_once_and_rejects_stale_version(self):
+        _, trade = self.filled_trade("exception-command")
+        row = PostTradeException.objects.create(tenant_ref="default", account_ref=trade.account_ref, trade=trade, exception_type="COMMAND_TEST", severity="HIGH", state="OPEN", detected_at=timezone.now(), evidence_hash="1" * 64)
+        client = APIClient(); client.force_authenticate(self.manager); endpoint=f"/api/v1/operator/post-trade/exceptions/{row.pk}/assign"
+        self.assertEqual(client.post(endpoint,{"reason":"controlled assignment"},format="json").status_code,422)
+        stale=client.post(endpoint,{"reason":"controlled assignment"},format="json",HTTP_IDEMPOTENCY_KEY="stale",HTTP_X_REQUEST_ID="stale-request",HTTP_IF_MATCH="stale")
+        self.assertEqual(stale.status_code,409); row.refresh_from_db(); self.assertEqual(row.state,"OPEN")
+        headers={"HTTP_IDEMPOTENCY_KEY":"assign-once","HTTP_X_REQUEST_ID":"assign-request","HTTP_IF_MATCH":row.updated_at.isoformat()}
+        first=client.post(endpoint,{"reason":"controlled assignment"},format="json",**headers); replay=client.post(endpoint,{"reason":"controlled assignment"},format="json",**headers)
+        self.assertEqual((first.status_code,replay.status_code),(200,200)); self.assertEqual(first.json(),replay.json())
+        self.assertEqual(PostTradeAudit.objects.filter(resource_ref=str(row.pk),action="post_trade.exception.assigned").count(),1)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(resource_id=str(row.pk),action="post_trade.exception.assign").count(),1)
+
+    def test_critical_exception_resolution_requires_independent_checker(self):
+        _, trade = self.filled_trade("critical-command")
+        row = PostTradeException.objects.create(tenant_ref="default", account_ref=trade.account_ref, trade=trade, exception_type="CRITICAL_COMMAND", severity="CRITICAL", state="OPEN", detected_at=timezone.now(), evidence_hash="2" * 64)
+        maker=APIClient(); maker.force_authenticate(self.manager); base=f"/api/v1/operator/post-trade/exceptions/{row.pk}"
+        assigned=maker.post(f"{base}/assign",{"reason":"take ownership"},format="json",HTTP_IDEMPOTENCY_KEY="critical-assign",HTTP_X_REQUEST_ID="critical-assign-request",HTTP_IF_MATCH=row.updated_at.isoformat())
+        self.assertEqual(assigned.status_code,200)
+        self_approval=maker.post(f"{base}/resolve",{"reason":"review complete","resolution_code":"RECONCILED"},format="json",HTTP_IDEMPOTENCY_KEY="self-resolve",HTTP_X_REQUEST_ID="self-resolve-request",HTTP_IF_MATCH=assigned.json()["version"])
+        self.assertEqual(self_approval.status_code,403)
+        checker=APIClient(); checker.force_authenticate(self.checker)
+        resolved=checker.post(f"{base}/resolve",{"reason":"independent evidence review","resolution_code":"RECONCILED"},format="json",HTTP_IDEMPOTENCY_KEY="checker-resolve",HTTP_X_REQUEST_ID="checker-resolve-request",HTTP_IF_MATCH=assigned.json()["version"])
+        self.assertEqual(resolved.status_code,200); row.refresh_from_db(); self.assertEqual((row.state,row.approved_by),("RESOLVED",str(self.checker.pk)))
+
+    def test_persisted_reconciliation_command_replays_one_run(self):
+        self.filled_trade("reconciliation-command")
+        client=APIClient(); client.force_authenticate(self.manager); endpoint="/api/v1/operator/post-trade/reconciliation/run"; headers={"HTTP_IDEMPOTENCY_KEY":"reconcile-once","HTTP_X_REQUEST_ID":"reconcile-request"}
+        first=client.post(endpoint,{},format="json",**headers); replay=client.post(endpoint,{},format="json",**headers)
+        self.assertEqual((first.status_code,replay.status_code),(201,201)); self.assertEqual(first.json(),replay.json()); self.assertEqual(PostTradeReconciliationRun.objects.count(),1)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="post_trade.reconciliation.run",request_id="reconcile-request").count(),1)
