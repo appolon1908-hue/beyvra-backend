@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
 from treasury.models import TreasuryAccount, TreasuryException, TreasuryReconciliationRun, TreasuryTransferPlan
+from treasury.api import exception_version
 from ws.v2 import _channel_entry
 
 
@@ -76,6 +77,9 @@ class TreasuryApiRealtimeTests(TestCase):
             tenant=self.tenant, institution_id=uuid.uuid4(), exception_type="SIMULATION_MISMATCH",
             severity="HIGH", state="OPEN", source_ref="fixture", evidence_hash="0" * 64,
         )
+        fetched = self.api.get(f"/api/v1/operator/treasury/exceptions/{item.pk}")
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.data["data"][0]["version"], exception_version(item))
         assign_headers = {
             "HTTP_IDEMPOTENCY_KEY": "assign-test", "HTTP_X_REQUEST_ID": "75c9b384-dcaa-46e4-872a-bf6812f14003",
             "HTTP_IF_MATCH": "OPEN:HIGH:-",

@@ -303,7 +303,10 @@ class OperatorExceptionsView(OperatorTreasuryAPIView):
     def get(self, request, exception_id=None):
         qs = TreasuryException.objects.filter(tenant=self.tenant)
         if exception_id: qs = qs.filter(pk=exception_id)
-        return self.ok(list(qs.order_by("-detected_at")))
+        rows = list(qs.order_by("-detected_at"))
+        if exception_id and not rows:
+            return Response({"code": "NOT_FOUND"}, status=404)
+        return self.ok([{**serialize(item), "version": exception_version(item)} for item in rows])
 
 
 class OperatorExceptionActionView(OperatorTreasuryAPIView):
