@@ -16,6 +16,7 @@ from django.utils import timezone
 from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
 from notifications.services import emit_notification
 from notifications.tasks import deliver_webhook, purge_expired_notifications
+from integrations.models import Organization, OrganizationMembership
 
 
 class NotificationInboxTests(TestCase):
@@ -26,15 +27,29 @@ class NotificationInboxTests(TestCase):
         self.other = get_user_model().objects.create_user(
             email="other-inbox@example.com", password="test-pass", phone_number="+12025550134"
         )
+        self.organization = Organization.objects.create(name="Notification test tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=self.organization, role="member")
+        OrganizationMembership.objects.create(user=self.other, organization=self.organization, role="member")
         NotificationEvent.objects.all().delete()
         self.event = NotificationEvent.objects.create(
-            user=self.user, title="Trade placed", message="Your demo trade is open", category="TRADE"
+            user=self.user, organization=self.organization, title="Trade placed", message="Your demo trade is open", category="TRADE"
         )
         NotificationEvent.objects.create(
-            user=self.other, title="Private", message="Not visible to first user"
+            user=self.other, organization=self.organization, title="Private", message="Not visible to first user"
         )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
+        self.command_number = 0
+
+    def command_headers(self, *, version=None):
+        self.command_number += 1
+        headers = {
+            "HTTP_IDEMPOTENCY_KEY": f"notification-command-{self.command_number}",
+            "HTTP_X_REQUEST_ID": f"65cbf766-67ac-4f77-868a-{self.command_number:012d}",
+        }
+        if version is not None:
+            headers["HTTP_IF_MATCH"] = version
+        return headers
 
     def test_inbox_is_user_scoped_and_can_mark_read(self):
         response = self.client.get("/api/notification/inbox/", secure=True)
@@ -43,15 +58,15 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(len(results), 1)
 
         read = self.client.post(
-            f"/api/notification/inbox/{self.event.id}/read/", secure=True
+            f"/api/notification/inbox/{self.event.id}/read/", secure=True, **self.command_headers()
         )
         self.assertEqual(read.status_code, status.HTTP_200_OK)
         self.event.refresh_from_db()
         self.assertTrue(self.event.is_read)
 
     def test_mark_all_read(self):
-        NotificationEvent.objects.create(user=self.user, title="Second", message="Another event")
-        response = self.client.post("/api/notification/inbox/read-all/", secure=True)
+        NotificationEvent.objects.create(user=self.user, organization=self.organization, title="Second", message="Another event")
+        response = self.client.post("/api/notification/inbox/read-all/", secure=True, **self.command_headers())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["updated"], 2)
 
@@ -65,7 +80,7 @@ class NotificationInboxTests(TestCase):
 
     def test_disabled_push_preference_suppresses_event(self):
         preference = Notifications.objects.create(name="Push Notifications")
-        UserNotifications.objects.create(user=self.user, notification=preference, is_enabled=False)
+        UserNotifications.objects.create(user=self.user, organization=self.organization, notification=preference, is_enabled=False)
         event = emit_notification(
             user_id=self.user.id, title="Deposit completed", message="Done", category="DEPOSIT"
         )
@@ -75,6 +90,7 @@ class NotificationInboxTests(TestCase):
     def test_event_creates_matching_webhook_delivery(self, queue_webhook):
         subscription = WebhookSubscription.objects.create(
             user=self.user,
+            organization=self.organization,
             url="https://example.com/codestra-events",
             secret="a-secure-test-secret",
             categories=["TRADE"],
@@ -90,6 +106,7 @@ class NotificationInboxTests(TestCase):
     def test_webhook_queue_is_deferred_until_transaction_commit(self, queue_webhook):
         WebhookSubscription.objects.create(
             user=self.user,
+            organization=self.organization,
             url="https://example.com/commit-boundary",
             secret="a-secure-test-secret",
             categories=["TRADE"],
@@ -100,13 +117,27 @@ class NotificationInboxTests(TestCase):
         queue_webhook.assert_called_once()
 
     def test_webhook_api_is_user_scoped_and_secret_is_write_only(self):
+        headers = self.command_headers()
         with patch("notifications.serializers.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
             response = self.client.post(
                 "/api/notification/webhooks/",
                 {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
-                format="json", secure=True,
+                format="json", secure=True, **headers,
+            )
+            replay = self.client.post(
+                "/api/notification/webhooks/",
+                {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
+                format="json", secure=True, **headers,
+            )
+            conflict = self.client.post(
+                "/api/notification/webhooks/",
+                {"url": "https://example.com/changed", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
+                format="json", secure=True, **headers,
             )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay.data, response.data)
+        self.assertEqual(conflict.status_code, status.HTTP_409_CONFLICT)
         self.assertNotIn("secret", response.data)
         self.assertEqual(WebhookSubscription.objects.filter(user=self.user).count(), 1)
 
@@ -142,12 +173,13 @@ class NotificationInboxTests(TestCase):
             created = self.client.post(
                 "/api/notification/webhooks/",
                 {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
-                format="json", secure=True,
+                format="json", secure=True, **self.command_headers(),
             )
             webhook_id = created.data["id"]
             updated = self.client.patch(
                 f"/api/notification/webhooks/{webhook_id}/",
                 {"categories": ["DEPOSIT"]}, format="json", secure=True,
+                **self.command_headers(version=created.data["updated_at"]),
             )
         self.assertEqual(updated.status_code, status.HTTP_200_OK)
         self.assertEqual(updated.data["categories"], ["DEPOSIT"])
