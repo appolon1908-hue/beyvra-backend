@@ -32,6 +32,29 @@ def create_periodic_task(using="default", **_kwargs):
         )
         return
 
+    # A post_migrate signal is emitted after every app migration.  The two
+    # tables already exist at django-celery-beat 0001, but the current model
+    # reads columns introduced by later migrations.  Do not query it until
+    # the installed schema can satisfy every concrete field.
+    with connection.cursor() as cursor:
+        for model in (IntervalSchedule, PeriodicTask):
+            actual_columns = {
+                column.name
+                for column in connection.introspection.get_table_description(
+                    cursor, model._meta.db_table
+                )
+            }
+            required_columns = {
+                field.column
+                for field in model._meta.concrete_fields
+                if field.column
+            }
+            if not required_columns.issubset(actual_columns):
+                logging.info(
+                    "Skipping security periodic task until django-celery-beat schema is current."
+                )
+                return
+
     # Create a 5min interval Anomaly Check on User Activities.
     interval, _ = IntervalSchedule.objects.using(using).get_or_create(
         every=5, period=IntervalSchedule.MINUTES
