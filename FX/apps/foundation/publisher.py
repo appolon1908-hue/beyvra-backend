@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import ssl
+import time
 
 from django.conf import settings
 
@@ -75,6 +76,10 @@ async def _publish(rows):
 def publish_batch(limit=100):
     rows = claim_outbox_batch(limit=limit)
     if not rows:
+        # An empty claim is a successful durability check, not a stale worker.
+        # Emit a heartbeat so liveness alerts do not require business traffic.
+        OUTBOX_LAST_SUCCESS.set(time.time())
+        worker_success("outbox_publisher")
         return 0
     published = 0
     for event, error in asyncio.run(_publish(rows)):
@@ -82,6 +87,6 @@ def publish_batch(limit=100):
         if error:
             OUTBOX_FAILURES.labels("dependency").inc(); OUTBOX_RETRIES.inc()
         else:
-            OUTBOX_PUBLISHED.inc(); OUTBOX_LAST_SUCCESS.set(__import__("time").time()); worker_success("outbox_publisher")
+            OUTBOX_PUBLISHED.inc(); OUTBOX_LAST_SUCCESS.set(time.time()); worker_success("outbox_publisher")
         published += not bool(error)
     return published
