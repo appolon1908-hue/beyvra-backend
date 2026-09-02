@@ -36,6 +36,9 @@ class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
 
 class BankAccountSerializer(serializers.ModelSerializer):
     account_number = serializers.CharField(write_only=True, min_length=4, max_length=50, required=True)
+    routing_number = serializers.CharField(write_only=True, max_length=50, required=False, allow_blank=True, allow_null=True)
+    swift_code = serializers.CharField(write_only=True, max_length=50, required=False, allow_blank=True, allow_null=True)
+    iban = serializers.CharField(write_only=True, max_length=50, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = BankAccount
@@ -51,6 +54,9 @@ class BankAccountSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         last_four = instance.account_number_last_four or (instance.account_number or "")[-4:]
         data["account_number"] = f"****{last_four}" if last_four else ""
+        for field in ("routing_number", "swift_code", "iban"):
+            value = getattr(instance, field, None) or ""
+            data[field] = f"****{value[-4:]}" if value else ""
         return data
 
     def validate(self, attrs):

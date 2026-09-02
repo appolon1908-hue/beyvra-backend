@@ -91,7 +91,11 @@ class BankAccountCommandTests(TestCase):
         }
 
     def test_create_is_encrypted_masked_idempotent_and_audited(self):
-        payload = {"bank_name": "Example Bank", "account_number": "123456789", "account_holder_name": "Test Holder"}
+        payload = {
+            "bank_name": "Example Bank", "account_number": "123456789",
+            "account_holder_name": "Test Holder", "routing_number": "021000021",
+            "swift_code": "EXAMPL22", "iban": "GB82WEST12345698765432",
+        }
         first = self.client.post("/api/bank_account/", payload, format="json", **self.headers)
         replay = self.client.post("/api/bank_account/", payload, format="json", **self.headers)
         conflict = self.client.post("/api/bank_account/", {**payload, "account_number": "987654321"}, format="json", **self.headers)
@@ -100,7 +104,13 @@ class BankAccountCommandTests(TestCase):
         row = BankAccount.objects.get(user=self.user)
         self.assertIsNone(row.account_number); self.assertTrue(row.account_number_ciphertext)
         self.assertEqual(first.json()["data"]["account_number"], "****6789")
+        self.assertEqual(first.json()["data"]["routing_number"], "****0021")
+        self.assertEqual(first.json()["data"]["swift_code"], "****PL22")
+        self.assertEqual(first.json()["data"]["iban"], "****5432")
         self.assertNotIn("123456789", str(first.json()))
+        self.assertNotIn("021000021", str(first.json()))
+        self.assertNotIn("EXAMPL22", str(first.json()))
+        self.assertNotIn("GB82WEST12345698765432", str(first.json()))
         self.assertEqual(ApplicationAuditEvent.objects.filter(action="bank_account.create").count(), 1)
 
     def test_bank_account_create_cannot_smuggle_withdrawal(self):
