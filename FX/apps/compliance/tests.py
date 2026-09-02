@@ -1,4 +1,4 @@
-import hashlib, hmac, json, threading, time
+import hashlib, hmac, json, threading, time, uuid
 from datetime import timedelta
 from io import StringIO
 from django.db import close_old_connections, connection
@@ -9,12 +9,12 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from prometheus_client import generate_latest
 from integrations.models import Organization, OrganizationMembership
-from apps.foundation.models import OutboxEvent
+from apps.foundation.models import ApplicationAuditEvent, OutboxEvent
 from apps.foundation.publisher import envelope
 from apps.trading.models import TradingOrder
 from users.models import User
 from .domain import AccountState, AmlState, EligibilityResult, JurisdictionState, KycState, RestrictionType, SanctionsState
-from .models import ComplianceAuditEvent, ComplianceCaseEvent, ComplianceInboxEvent, ComplianceOverride, ComplianceProfile, ComplianceProviderGovernance, ComplianceRequirement, EligibilityDecision
+from .models import ComplianceAuditEvent, ComplianceCase, ComplianceCaseEvent, ComplianceInboxEvent, ComplianceOverride, ComplianceProfile, ComplianceProviderGovernance, ComplianceRequirement, EligibilityDecision
 from .services import add_restriction, create_case, get_deposit_eligibility, get_trading_eligibility, get_transfer_eligibility, get_withdrawal_eligibility, transition_aml, transition_jurisdiction, transition_kyc, transition_sanctions, update_account_state
 
 @override_settings(
@@ -151,17 +151,21 @@ class ComplianceAdminAuthorizationTests(TestCase):
         user=User.objects.create_user(email=f"{name}@example.test",phone_number=f"+15555550{suffix}",first_name=name.title(),last_name="User",password="x",is_staff=is_staff)
         OrganizationMembership.objects.create(user=user,organization=org,role=role); return user
     def client_for(self,user): c=APIClient(); c.force_authenticate(user); return c
+    def command_headers(self,version=None):
+        headers={"HTTP_IDEMPOTENCY_KEY":str(uuid.uuid4()),"HTTP_X_REQUEST_ID":str(uuid.uuid4())}
+        if version is not None:headers["HTTP_IF_MATCH"]=str(version)
+        return headers
     def test_least_privilege_case_workflow(self):
         endpoint="/api/v1/admin/compliance/cases"; payload={"account_id":str(self.profile.pk),"case_type":"MANUAL_REVIEW","reason_codes":["MANUAL_REVIEW_REQUIRED"]}
         self.assertEqual(self.client_for(self.subject).get(endpoint).status_code,403)
         self.assertEqual(self.client_for(self.viewer).get(endpoint).status_code,200)
         self.assertEqual(self.client_for(self.viewer).post(endpoint,payload,format="json").status_code,403)
-        created=self.client_for(self.analyst).post(endpoint,payload,format="json"); self.assertEqual(created.status_code,201)
+        created=self.client_for(self.analyst).post(endpoint,payload,format="json",**self.command_headers()); self.assertEqual(created.status_code,201)
         case_id=created.json()["case_id"]
-        assigned=self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_ASSIGNED","metadata":{"assigned_to_id":str(self.analyst.pk),"unsafe_note":"must not persist"}},format="json"); self.assertEqual(assigned.status_code,201)
+        assigned=self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_ASSIGNED","metadata":{"assigned_to_id":str(self.analyst.pk),"unsafe_note":"must not persist"}},format="json",**self.command_headers(created.json()["version"])); self.assertEqual(assigned.status_code,201)
         case=ComplianceCaseEvent.objects.get(pk=assigned.json()["event_id"]).case; self.assertEqual(case.assigned_to,self.analyst); self.assertNotIn("unsafe_note",case.events.get(pk=assigned.json()["event_id"]).metadata)
         self.assertEqual(self.client_for(self.analyst).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json").status_code,403)
-        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json").status_code,201)
+        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{case_id}/events",{"event_type":"CASE_APPROVED"},format="json",**self.command_headers(assigned.json()["case_version"])).status_code,201)
         self.assertEqual(ComplianceCaseEvent.objects.filter(case_id=case_id).count(),3)
     def test_generic_admin_and_support_have_no_compliance_authority(self):
         self.assertEqual(self.client_for(self.generic_admin).get("/api/v1/admin/compliance/cases").status_code,403); self.assertEqual(self.client_for(self.support).get("/api/v1/admin/compliance/cases").status_code,403)
@@ -170,18 +174,41 @@ class ComplianceAdminAuthorizationTests(TestCase):
         self.assertEqual(self.client_for(self.foreign_manager).post("/api/v1/admin/compliance/restrictions",payload,format="json").status_code,404)
     def test_maker_checker_override_and_audit(self):
         endpoint="/api/v1/admin/compliance/overrides"; payload={"account_id":str(self.profile.pk),"control":"KYC_STATE","new_state":"APPROVED","reason":"Verified manual fixture evidence","evidence_ref":"opaque-manual-evidence-fixture"}
-        without_evidence={key:value for key,value in payload.items() if key!="evidence_ref"}; self.assertEqual(self.client_for(self.analyst).post(endpoint,without_evidence,format="json").json()["error"]["code"],"VERIFIED_EVIDENCE_REQUIRED")
-        created=self.client_for(self.analyst).post(endpoint,payload,format="json"); self.assertEqual(created.status_code,201); oid=created.json()["override_id"]
+        without_evidence={key:value for key,value in payload.items() if key!="evidence_ref"}; self.assertEqual(self.client_for(self.analyst).post(endpoint,without_evidence,format="json",**self.command_headers(self.profile.version)).json()["error"]["code"],"VERIFIED_EVIDENCE_REQUIRED")
+        created=self.client_for(self.analyst).post(endpoint,payload,format="json",**self.command_headers(self.profile.version)); self.assertEqual(created.status_code,201); oid=created.json()["override_id"]
         self.assertEqual(self.client_for(self.analyst).post(f"{endpoint}/{oid}/approve",{},format="json").status_code,403)
-        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{oid}/approve",{},format="json").status_code,200)
+        self.assertEqual(self.client_for(self.manager).post(f"{endpoint}/{oid}/approve",{},format="json",**self.command_headers(created.json()["version"])).status_code,200)
         self.profile.refresh_from_db(); self.assertEqual(self.profile.kyc_state,KycState.APPROVED); self.assertTrue(ComplianceAuditEvent.objects.filter(account=self.profile,event_type="MANUAL_OVERRIDE").exists()); self.assertTrue(ComplianceAuditEvent.objects.filter(account=self.profile,event_type="KYC_STATE_CHANGED").exists())
     def test_same_manager_cannot_make_and_check(self):
-        payload={"account_id":str(self.profile.pk),"control":"AML_STATE","new_state":"BLOCKED","reason":"Documented synthetic risk escalation"}; c=self.client_for(self.manager); created=c.post("/api/v1/admin/compliance/overrides",payload,format="json"); oid=created.json()["override_id"]
-        response=c.post(f"/api/v1/admin/compliance/overrides/{oid}/approve",{},format="json"); self.assertEqual(response.status_code,409); self.assertEqual(response.json()["error"]["code"],"MAKER_CHECKER_REQUIRED")
+        payload={"account_id":str(self.profile.pk),"control":"AML_STATE","new_state":"BLOCKED","reason":"Documented synthetic risk escalation"}; c=self.client_for(self.manager); created=c.post("/api/v1/admin/compliance/overrides",payload,format="json",**self.command_headers(self.profile.version)); oid=created.json()["override_id"]
+        response=c.post(f"/api/v1/admin/compliance/overrides/{oid}/approve",{},format="json",**self.command_headers(created.json()["version"])); self.assertEqual(response.status_code,409); self.assertEqual(response.json()["error"]["code"],"MAKER_CHECKER_REQUIRED")
     def test_restriction_removal_requires_override(self):
         restriction=add_restriction(self.profile,RestrictionType.TRADING_DISABLED,"TRADING_DISABLED","MANUAL",self.analyst)
         payload={"account_id":str(self.profile.pk),"control":f"REMOVE_RESTRICTION:{restriction.pk}","new_state":"INACTIVE","reason":"Documented restriction removal evidence"}
-        created=self.client_for(self.analyst).post("/api/v1/admin/compliance/overrides",payload,format="json"); self.client_for(self.manager).post(f"/api/v1/admin/compliance/overrides/{created.json()['override_id']}/approve",{},format="json"); restriction.refresh_from_db(); self.assertFalse(restriction.active)
+        self.profile.refresh_from_db(); created=self.client_for(self.analyst).post("/api/v1/admin/compliance/overrides",payload,format="json",**self.command_headers(self.profile.version)); self.client_for(self.manager).post(f"/api/v1/admin/compliance/overrides/{created.json()['override_id']}/approve",{},format="json",**self.command_headers(created.json()["version"])); restriction.refresh_from_db(); self.assertFalse(restriction.active)
+
+    def test_case_command_replays_once_and_rejects_semantic_key_reuse(self):
+        endpoint="/api/v1/admin/compliance/cases"; payload={"account_id":str(self.profile.pk),"case_type":"MANUAL_REVIEW","reason_codes":["MANUAL_REVIEW_REQUIRED"]}
+        headers={"HTTP_IDEMPOTENCY_KEY":"case-replay","HTTP_X_REQUEST_ID":"case-request"}; client=self.client_for(self.analyst)
+        first=client.post(endpoint,payload,format="json",**headers); replay=client.post(endpoint,payload,format="json",**headers)
+        self.assertEqual((first.status_code,replay.status_code),(201,201)); self.assertEqual(first.json(),replay.json()); self.assertEqual(ComplianceCase.objects.count(),1); self.assertEqual(ApplicationAuditEvent.objects.filter(action="compliance.case.created").count(),1)
+        conflict=client.post(endpoint,{**payload,"priority":"HIGH"},format="json",**headers)
+        self.assertEqual(conflict.status_code,409); self.assertEqual(conflict.json()["error"]["code"],"IDEMPOTENCY_CONFLICT")
+
+    def test_restriction_command_rejects_stale_version_and_replays_once(self):
+        endpoint="/api/v1/admin/compliance/restrictions"; payload={"account_id":str(self.profile.pk),"restriction_type":"TRADING_DISABLED","reason_code":"TRADING_DISABLED"}; client=self.client_for(self.analyst)
+        stale=client.post(endpoint,payload,format="json",HTTP_IDEMPOTENCY_KEY="stale-restriction",HTTP_IF_MATCH="999",HTTP_X_REQUEST_ID="stale-request")
+        self.assertEqual(stale.status_code,409); self.assertFalse(self.profile.restrictions.exists())
+        headers={"HTTP_IDEMPOTENCY_KEY":"restriction-replay","HTTP_IF_MATCH":str(self.profile.version),"HTTP_X_REQUEST_ID":"restriction-request"}
+        first=client.post(endpoint,payload,format="json",**headers); replay=client.post(endpoint,payload,format="json",**headers)
+        self.assertEqual((first.status_code,replay.status_code),(201,201)); self.assertEqual(first.json(),replay.json()); self.assertEqual(self.profile.restrictions.count(),1)
+
+    def test_override_approval_replay_has_one_immutable_effect(self):
+        payload={"account_id":str(self.profile.pk),"control":"AML_STATE","new_state":"BLOCKED","reason":"Documented synthetic risk escalation"}
+        created=self.client_for(self.analyst).post("/api/v1/admin/compliance/overrides",payload,format="json",HTTP_IDEMPOTENCY_KEY="override-create",HTTP_IF_MATCH=str(self.profile.version),HTTP_X_REQUEST_ID="override-create-request")
+        endpoint=f"/api/v1/admin/compliance/overrides/{created.json()['override_id']}/approve"; headers={"HTTP_IDEMPOTENCY_KEY":"override-approve","HTTP_IF_MATCH":created.json()["version"],"HTTP_X_REQUEST_ID":"override-approve-request"}; manager=self.client_for(self.manager)
+        first=manager.post(endpoint,{},format="json",**headers); replay=manager.post(endpoint,{},format="json",**headers)
+        self.assertEqual((first.status_code,replay.status_code),(200,200)); self.assertEqual(first.json(),replay.json()); self.assertEqual(ComplianceAuditEvent.objects.filter(account=self.profile,event_type="MANUAL_OVERRIDE").count(),1); self.assertEqual(ApplicationAuditEvent.objects.filter(action="compliance.override.approved",request_id="override-approve-request").count(),1)
 
 @override_settings(
     SIMULATED_TRADING_ENABLED=True,
