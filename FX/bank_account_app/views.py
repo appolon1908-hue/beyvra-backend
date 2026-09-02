@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Q
+from django.db import transaction
 from .models import BankAccount, WithdrawalRequest
 from .serializers import BankAccountSerializer, WithdrawalRequestSerializer
 from rest_framework.views import APIView
@@ -12,6 +13,7 @@ from django.shortcuts import get_object_or_404
 from users.models import User
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import ValidationError
+from .commands import COMMAND_PARAMETERS, VERSIONED_COMMAND_PARAMETERS, begin_command, command_context, complete_command
 
 from operations.services import assert_sensitive_mutation_allowed, tenant_for
 
@@ -33,55 +35,77 @@ class BankAccountView(APIView):
     def get(self, request):
         user_id = request.user.id
         # get_object_or_404(User, id=user_id)
-        bank_account_instance = BankAccount.objects.filter(user=user_id)
+        bank_account_instance = BankAccount.objects.filter(user=user_id, is_active=True)
         return Response({"data":BankAccountSerializer(bank_account_instance, many=True).data}, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=BankAccountSerializer,
         responses={201: BankAccountSerializer, 400: 'Bad Request'},
+        parameters=COMMAND_PARAMETERS,
     )
+    @transaction.atomic
     def post(self, request):
         try:
             bank_account_serializer = BankAccountSerializer(
                 data=request.data, context={'request': request})
-            
-            if bank_account_serializer.is_valid(raise_exception=True):
-                bank_account_serializer.save()
-                return Response({"data": bank_account_serializer.data}, status=status.HTTP_201_CREATED)
+            bank_account_serializer.is_valid(raise_exception=True)
+            command, error = command_context(request)
+            if error: return error
+            key, _, correlation_id, _ = command
+            organization, record, replay = begin_command(request, key=key, payload=bank_account_serializer.validated_data)
+            if replay: return replay
+            bank_account_serializer.save()
+            body = complete_command(record, request=request, organization=organization, correlation_id=correlation_id, action="bank_account.create", status=201, body={"data": bank_account_serializer.data}, resource_id=bank_account_serializer.instance.pk)
+            return Response(body, status=status.HTTP_201_CREATED)
         except Exception as e:
             raise ValidationError("Bank account request failed") from e
         
     @extend_schema(
         request=BankAccountSerializer,
         responses={201: BankAccountSerializer, 400: 'Bad Request'},
+        parameters=VERSIONED_COMMAND_PARAMETERS,
     )
+    @transaction.atomic
     def patch(self, request):
         try:
-            bank_account = BankAccount.objects.filter(user=request.user, bank_name=request.data['bank_name']).first()
+            command, error = command_context(request, require_version=True)
+            if error: return error
+            key, _, correlation_id, expected_version = command
+            bank_account = BankAccount.objects.select_for_update().filter(user=request.user, pk=request.data.get('bank_account_id'), is_active=True).first()
             if not bank_account:
-                return Response({"Error": "Bank account not found for the authenticated user in {} bank".format(request.data['bank_name'])}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"Error": "Bank account not found."}, status=status.HTTP_404_NOT_FOUND)
             serializer = BankAccountSerializer(
                 bank_account, data=request.data, context={'request': request}, partial=True)
-            if not serializer.is_valid():
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(raise_exception=True)
+            organization, record, replay = begin_command(request, key=key, payload={"bank_account_id": bank_account.pk, "expected_version": expected_version, **serializer.validated_data})
+            if replay: return replay
+            if expected_version != bank_account.updated_at.isoformat().replace("+00:00", "Z"):
+                record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
             serializer.save()
-            return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+            body = complete_command(record, request=request, organization=organization, correlation_id=correlation_id, action="bank_account.update", status=200, body={"data": serializer.data}, resource_id=bank_account.pk)
+            return Response(body, status=status.HTTP_200_OK)
         except Exception as e:
             raise ValidationError("Bank account request failed") from e
 
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def delete(self, request):
         try:
-            account_number = request.data.get('account_number')
-            bank_name = request.data.get('bank_name')
-            if not account_number or not bank_name:
-                return Response({"Error": "Missing required fields: account_number and bank_name"}, status=status.HTTP_400_BAD_REQUEST)
-            bank_account = BankAccount.objects.filter(
-                account_number=account_number, user=request.user, bank_name=bank_name
+            command, error = command_context(request, require_version=True)
+            if error: return error
+            key, _, correlation_id, expected_version = command
+            bank_account = BankAccount.objects.select_for_update().filter(
+                pk=request.data.get('bank_account_id'), user=request.user, is_active=True,
             ).first()
             if not bank_account:
                 return Response({"Error": "Bank account not found."}, status=status.HTTP_404_NOT_FOUND)
-            bank_account.delete()
-            return Response({"Message": "Bank account deleted successfully"}, status=status.HTTP_200_OK)
+            organization, record, replay = begin_command(request, key=key, payload={"bank_account_id": bank_account.pk, "action": "retire", "expected_version": expected_version})
+            if replay: return replay
+            if expected_version != bank_account.updated_at.isoformat().replace("+00:00", "Z"):
+                record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
+            bank_account.retire()
+            body = complete_command(record, request=request, organization=organization, correlation_id=correlation_id, action="bank_account.retire", status=200, body={"bank_account_id": bank_account.pk, "status": "retired"}, resource_id=bank_account.pk)
+            return Response(body, status=status.HTTP_200_OK)
         
         except Exception as e:
             raise ValidationError("Bank account request failed") from e
@@ -165,6 +189,6 @@ class AdminBankAccountView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        bank_account_instance = BankAccount.objects.filter(user__role='Super Admin')
+        bank_account_instance = BankAccount.objects.filter(user__role='Super Admin', is_active=True)
         return Response({"data":BankAccountSerializer(
             bank_account_instance, many=True).data}, status=status.HTTP_200_OK)

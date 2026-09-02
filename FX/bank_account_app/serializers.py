@@ -4,6 +4,8 @@ from .models import BankAccount, WithdrawalRequest
 from wallet.serializers import CurrencySerializer
 from users.serializers import UserSerializer
 from wallet.models import Currency, Wallet
+from integrations.crypto import encrypt, fingerprint
+from django.db.models import Q
 
 
 class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
@@ -33,45 +35,65 @@ class WithdrawalRequestCreateWithBank(serializers.ModelSerializer):
 
 
 class BankAccountSerializer(serializers.ModelSerializer):
-    # Nesting WithdrawalRequestSerializer (for incoming withdrawal requests)
-    withdrawal_request = WithdrawalRequestCreateWithBank(
-        write_only=True, required=False)
+    account_number = serializers.CharField(write_only=True, min_length=4, max_length=50, required=True)
 
     class Meta:
         model = BankAccount
         # Ensure the user is added automatically in the view
-        exclude = ['user']
+        exclude = [
+            'user', 'account_number_ciphertext', 'account_number_nonce',
+            'account_number_key_version', 'account_number_fingerprint',
+            'account_number_last_four', 'revoked_at',
+        ]
+        read_only_fields = ('is_active',)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        last_four = instance.account_number_last_four or (instance.account_number or "")[-4:]
+        data["account_number"] = f"****{last_four}" if last_four else ""
+        return data
+
+    def validate(self, attrs):
+        if "withdrawal_request" in self.initial_data:
+            raise ValidationError({"withdrawal_request": "Use the governed withdrawal workflow."})
+        return attrs
 
     def create(self, validated_data):
-        withdrawal_request_data = validated_data.pop(
-            'withdrawal_request', None)
         user = self.context['request'].user
 
-        # Check if the bank account already exists for the user
-        bank_account = BankAccount.objects.filter(
-            user=user, account_number=validated_data['account_number']).first()
+        raw_account_number = validated_data.pop('account_number')
+        digest = fingerprint(raw_account_number)
+        bank_account = BankAccount.objects.filter(user=user).filter(
+            Q(account_number_fingerprint=digest) | Q(account_number=raw_account_number)
+        ).first()
 
         if not bank_account:
+            ciphertext, nonce, version = encrypt(raw_account_number)
             bank_account = BankAccount.objects.create(
-                user=user, **validated_data)
+                user=user, account_number=None, account_number_ciphertext=ciphertext,
+                account_number_nonce=nonce, account_number_key_version=version,
+                account_number_fingerprint=digest, account_number_last_four=raw_account_number[-4:],
+                **validated_data)
 
-        # If there is a withdrawal request, handling it here
-        if withdrawal_request_data:
-            WithdrawalRequest.objects.create(
-                bank_account=bank_account,
-                user=user,
-                **withdrawal_request_data
-            )
-
-            # Create a pending transaction
-            # transaction = Transaction.objects.create(
-            #     user=user,
-            #     amount=withdrawal_request_data['amount'],
-            #     type="W",
-            #     status="P",
-            #     wallet=wallet,
-            # )
         return bank_account
+
+    def update(self, instance, validated_data):
+        raw_account_number = validated_data.pop('account_number', None)
+        if raw_account_number:
+            digest = fingerprint(raw_account_number)
+            duplicate = BankAccount.objects.filter(user=instance.user).filter(
+                Q(account_number_fingerprint=digest) | Q(account_number=raw_account_number)
+            ).exclude(pk=instance.pk).exists()
+            if duplicate:
+                raise ValidationError({'account_number': 'Bank account already exists.'})
+            ciphertext, nonce, version = encrypt(raw_account_number)
+            instance.account_number = None
+            instance.account_number_ciphertext = ciphertext
+            instance.account_number_nonce = nonce
+            instance.account_number_key_version = version
+            instance.account_number_fingerprint = digest
+            instance.account_number_last_four = raw_account_number[-4:]
+        return super().update(instance, validated_data)
 
 
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
