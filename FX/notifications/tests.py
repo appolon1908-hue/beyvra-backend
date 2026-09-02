@@ -13,7 +13,7 @@ from unittest.mock import patch
 from django.test import override_settings
 from django.db import transaction
 from django.utils import timezone
-from notifications.models import Notifications, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
+from notifications.models import EmailNotificationPreference, Notifications, NotificationEvent, UserNotifications, WebhookDelivery, WebhookSubscription
 from notifications.services import emit_notification
 from notifications.tasks import deliver_webhook, purge_expired_notifications
 from integrations.models import Organization, OrganizationMembership
@@ -69,6 +69,12 @@ class NotificationInboxTests(TestCase):
         response = self.client.post("/api/notification/inbox/read-all/", secure=True, **self.command_headers())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["updated"], 2)
+
+    def test_legacy_null_organization_events_remain_readable(self):
+        legacy = NotificationEvent.objects.create(user=self.user, organization=None, title="Legacy", message="Before tenancy")
+        read = self.client.post(f"/api/notification/inbox/{legacy.id}/read/", secure=True, **self.command_headers())
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        legacy.refresh_from_db(); self.assertTrue(legacy.is_read)
 
     def test_inbox_is_paginated(self):
         for number in range(12):
@@ -186,6 +192,36 @@ class NotificationInboxTests(TestCase):
         stored = WebhookSubscription.objects.get(pk=webhook_id)
         self.assertIsNone(stored.secret)
         self.assertTrue(stored.secret_ciphertext)
+
+    def test_email_preference_and_webhook_delete_replay_after_mutation(self):
+        preference = EmailNotificationPreference.objects.create(user=self.user, organization=self.organization)
+        version = preference.updated_at.isoformat().replace("+00:00", "Z")
+        headers = self.command_headers(version=version)
+        first = self.client.patch("/api/notification/email-preferences/", {"trading": False}, format="json", secure=True, **headers)
+        replay = self.client.patch("/api/notification/email-preferences/", {"trading": False}, format="json", secure=True, **headers)
+        self.assertEqual(first.status_code, 200); self.assertEqual(replay.data, first.data)
+
+        subscription = WebhookSubscription.objects.create(user=self.user, organization=self.organization, url="https://example.com/delete", secret="test-secret")
+        delete_headers = self.command_headers(version=subscription.updated_at.isoformat().replace("+00:00", "Z"))
+        first_delete = self.client.delete(f"/api/notification/webhooks/{subscription.id}/", secure=True, **delete_headers)
+        replay_delete = self.client.delete(f"/api/notification/webhooks/{subscription.id}/", secure=True, **delete_headers)
+        self.assertEqual(first_delete.status_code, 204); self.assertEqual(replay_delete.status_code, 204)
+
+    def test_missing_webhook_update_is_404_and_delivery_retry_replays(self):
+        missing = self.client.patch(
+            "/api/notification/webhooks/00000000-0000-0000-0000-000000000001/", {}, format="json", secure=True,
+            **self.command_headers(version="missing"),
+        )
+        self.assertEqual(missing.status_code, 404)
+        subscription = WebhookSubscription.objects.create(user=self.user, organization=self.organization, url="https://example.com/retry", secret="test-secret")
+        event = NotificationEvent.objects.create(user=self.user, organization=self.organization, title="Retry", message="Failed")
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=event, status="F", attempts=1)
+        headers = self.command_headers(version="F:1")
+        with patch("notifications.services._queue_webhook"):
+            with self.captureOnCommitCallbacks(execute=True):
+                first = self.client.post(f"/api/notification/webhooks/{subscription.id}/retry/", {"delivery_id": str(delivery.id)}, format="json", secure=True, **headers)
+            replay = self.client.post(f"/api/notification/webhooks/{subscription.id}/retry/", {"delivery_id": str(delivery.id)}, format="json", secure=True, **headers)
+        self.assertEqual(first.status_code, 202); self.assertEqual(replay.data, first.data)
 
     @override_settings(STAGING_WEBHOOK_RECEIVER_ENABLED=True, STAGING_WEBHOOK_RECEIVER_SECRET="receiver-secret")
     def test_staging_receiver_verifies_signature_and_supports_controlled_failure(self):

@@ -3,6 +3,7 @@ import hmac
 import json
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.http import Http404
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
@@ -60,12 +61,12 @@ class EmailNotificationPreferences(generics.GenericAPIView):
         key, _, correlation_id, expected_version = command
         organization = organization_for_request(request)
         instance = EmailNotificationPreference.objects.select_for_update().filter(user=request.user).first()
-        if instance and expected_version != instance.updated_at.isoformat().replace("+00:00", "Z"):
-            return Response({"detail": "VERSION_CONFLICT"}, status=409)
-        serializer = self.serializer_class(self.get_object(), data=request.data, partial=True)
+        serializer = self.serializer_class(instance or self.get_object(), data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         record, replay = begin(request, organization=organization, key=key, payload={"expected_version": expected_version, **serializer.validated_data})
         if replay: return replay
+        if instance and expected_version != instance.updated_at.isoformat().replace("+00:00", "Z"):
+            record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
         serializer.save(marketing=False)
         body = complete(record, request=request, organization=organization, correlation_id=correlation_id, action="notification.email_preference.update", status=200, body=serializer.data, resource_type="email_notification_preference", resource_id=serializer.instance.pk)
         return Response(body)
@@ -188,7 +189,10 @@ class NotificationEventRead(generics.GenericAPIView):
         organization = organization_for_request(request); command, error = context(request)
         if error: return error
         key, _, correlation_id, _ = command
-        event = generics.get_object_or_404(NotificationEvent.objects.select_for_update(), id=event_id, user=request.user, organization=organization)
+        event = generics.get_object_or_404(
+            NotificationEvent.objects.select_for_update().filter(Q(organization=organization) | Q(organization__isnull=True)),
+            id=event_id, user=request.user,
+        )
         record, replay = begin(request, organization=organization, key=key, payload={"event_id": str(event_id), "action": "read"})
         if replay: return replay
         event.is_read = True
@@ -208,7 +212,9 @@ class NotificationReadAll(generics.GenericAPIView):
         key, _, correlation_id, _ = command
         record, replay = begin(request, organization=organization, key=key, payload={"action": "read_all"})
         if replay: return replay
-        updated = NotificationEvent.objects.filter(user=request.user, organization=organization, is_read=False).update(is_read=True)
+        updated = NotificationEvent.objects.filter(user=request.user, is_read=False).filter(
+            Q(organization=organization) | Q(organization__isnull=True)
+        ).update(is_read=True)
         body = complete(record, request=request, organization=organization, correlation_id=correlation_id, action="notification.inbox.read_all", status=200, body={"updated": updated}, resource_type="notification_inbox", resource_id=request.user.pk)
         return Response(body)
 
@@ -264,7 +270,7 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
-        instance = self.get_queryset().select_for_update().get(pk=kwargs["pk"])
+        instance = generics.get_object_or_404(self.get_queryset().select_for_update(), pk=kwargs["pk"])
         serializer = self.get_serializer(instance, data=request.data, partial=partial); serializer.is_valid(raise_exception=True)
         organization = organization_for_request(request); command, error = context(request, require_version=True)
         if error: return error
@@ -285,12 +291,12 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
     @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_queryset().select_for_update().get(pk=kwargs["pk"])
         organization = organization_for_request(request); command, error = context(request, require_version=True)
         if error: return error
         key, _, correlation_id, expected_version = command
-        record, replay = begin(request, organization=organization, key=key, payload={"subscription_id": str(instance.pk), "action": "delete", "expected_version": expected_version})
+        record, replay = begin(request, organization=organization, key=key, payload={"subscription_id": str(kwargs["pk"]), "action": "delete", "expected_version": expected_version})
         if replay: return replay
+        instance = generics.get_object_or_404(self.get_queryset().select_for_update(), pk=kwargs["pk"])
         if expected_version != instance.updated_at.isoformat().replace("+00:00", "Z"):
             record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
         resource_id = instance.pk; self.perform_destroy(instance)
@@ -354,11 +360,13 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         command, error = context(request, require_version=True)
         if error: return error
         key, _, correlation_id, expected_version = command
-        delivery = WebhookDelivery.objects.select_for_update().filter(subscription=subscription, id=request.data.get("delivery_id"), status__in=["F", "D"]).first()
-        if not delivery:
-            return Response({"detail": "failed delivery not found"}, status=status.HTTP_404_NOT_FOUND)
-        record, replay = begin(request, organization=organization, key=key, payload={"subscription_id": str(subscription.pk), "delivery_id": str(delivery.pk), "action": "retry", "expected_version": expected_version})
+        delivery_id = request.data.get("delivery_id")
+        record, replay = begin(request, organization=organization, key=key, payload={"subscription_id": str(subscription.pk), "delivery_id": str(delivery_id), "action": "retry", "expected_version": expected_version})
         if replay: return replay
+        delivery = WebhookDelivery.objects.select_for_update().filter(subscription=subscription, id=delivery_id, status__in=["F", "D"]).first()
+        if not delivery:
+            record.delete()
+            return Response({"detail": "failed delivery not found"}, status=status.HTTP_404_NOT_FOUND)
         current_version = f"{delivery.status}:{delivery.attempts}"
         if expected_version != current_version:
             record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
