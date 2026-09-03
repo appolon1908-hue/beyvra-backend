@@ -1,0 +1,74 @@
+name: Certification authority CI
+
+on:
+  pull_request:
+    paths:
+      - "FX/web-start-prod.sh"
+      - "FX/gunicorn_conf.py"
+      - ".github/workflows/certify-deployment.yml"
+      - ".github/workflows/certification-ci.yml"
+      - "operations/certify_remote_readonly.sh"
+      - "operations/inspect_deployment_run.sh"
+      - "operations/run_deployment_certification.sh"
+      - "operations/release_cert_runtime.sh"
+      - "operations/release_cert_state.sh"
+      - "operations/rehearse_readonly_rollback.sh"
+      - "operations/verify_metrics_zero.py"
+      - "operations/verify_edge_policy.py"
+      - "operations/verify_previous_release.py"
+      - "scripts/database_fingerprint.py"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  certification-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate certification authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n operations/certify_remote_readonly.sh
+          bash -n operations/inspect_deployment_run.sh
+          bash -n operations/run_deployment_certification.sh
+          bash -n operations/release_cert_runtime.sh
+          bash -n operations/release_cert_state.sh
+          bash -n operations/rehearse_readonly_rollback.sh
+          sh -n FX/web-start-prod.sh
+          python -m py_compile \
+            FX/gunicorn_conf.py \
+            operations/verify_metrics_zero.py \
+            operations/verify_edge_policy.py \
+            operations/verify_previous_release.py \
+            scripts/database_fingerprint.py
+          ruby -e '
+            require "yaml"
+            YAML.load_file(".github/workflows/certify-deployment.yml")
+            YAML.load_file(".github/workflows/certification-ci.yml")
+          '
+      - name: Exercise zero-effect parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          effects = ("broker_order_create", "broker_order_cancel", "custody_provider", "payment_provider", "transactional_email")
+          results = ("attempt", "success", "failure")
+          flags = ("real_trading_enabled", "external_execution_enabled", "real_money_enabled", "real_deposits_enabled", "real_withdrawals_enabled", "real_internal_transfers_enabled", "live_broker_routing_enabled", "fix_live_session_enabled", "payments_enabled", "transactional_email_enabled", "welcome_email_enabled", "simulated_trading_enabled", "realtime_v2_v1_fallback_enabled")
+          lines = ['beyvra_safety_flag_enabled{flag="deployment_read_only"} 1']
+          lines += [f'beyvra_safety_flag_enabled{{flag="{flag}"}} 0' for flag in flags]
+          lines += [f'beyvra_live_effects_total{{effect="{effect}",result="{result}"}} 0' for effect in effects for result in results]
+          text = "\n".join(lines) + "\n"
+          Path("/tmp/metrics-before.prom").write_text(text)
+          Path("/tmp/metrics-after.prom").write_text(text)
+          PY
+          python operations/verify_metrics_zero.py \
+            --before /tmp/metrics-before.prom \
+            --after /tmp/metrics-after.prom \
+            --output /tmp/zero-effects.json
+          jq -e '.overall == "PASS"' /tmp/zero-effects.json >/dev/null

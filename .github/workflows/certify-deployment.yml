@@ -1,0 +1,79 @@
+name: Certify deployed immutable Beyvra backend
+
+on:
+  workflow_run:
+    workflows: ["Publish and deploy immutable Beyvra backend"]
+    types: [completed]
+
+concurrency:
+  group: beyvra-backend-certification-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      source_sha: ${{ steps.manifest.outputs.source_sha }}
+      backend_image: ${{ steps.manifest.outputs.backend_image }}
+      edge_image: ${{ steps.manifest.outputs.edge_image }}
+      target: ${{ steps.manifest.outputs.target }}
+      change_id: ${{ steps.manifest.outputs.change_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
+      DEPLOY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - id: manifest
+        run: operations/inspect_deployment_run.sh
+
+  certify:
+    needs: inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: ${{ needs.inspect.outputs.target }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PUBLIC_SERVER_NAME: ${{ vars.PUBLIC_SERVER_NAME }}
+      VERIFICATION_BASE_URL: ${{ vars.VERIFICATION_BASE_URL }}
+      CERTIFICATION_TOKEN_FILE: ${{ vars.CERTIFICATION_TOKEN_FILE }}
+      CANARY_TRAFFIC_PERCENT: ${{ vars.CANARY_TRAFFIC_PERCENT }}
+      EXTERNAL_CANARY_ROUTING_VERIFIED: ${{ vars.EXTERNAL_CANARY_ROUTING_VERIFIED }}
+      SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+      BACKEND_IMAGE: ${{ needs.inspect.outputs.backend_image }}
+      EDGE_IMAGE: ${{ needs.inspect.outputs.edge_image }}
+      DEPLOYMENT_TARGET: ${{ needs.inspect.outputs.target }}
+      CHANGE_ID: ${{ needs.inspect.outputs.change_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.inspect.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Run exact-source certification authority
+        run: operations/run_deployment_certification.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: beyvra-backend-certification-${{ needs.inspect.outputs.target }}-${{ needs.inspect.outputs.change_id }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 90
