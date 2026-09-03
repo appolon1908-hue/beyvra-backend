@@ -10,15 +10,28 @@ plan_file="$(mktemp)"
 trap 'rm -f "$plan_file"' EXIT HUP INT TERM
 python3 manage.py migrate --plan | tee "$plan_file"
 
+pending_migrations=true
+if grep -Fq "No planned migration operations." "$plan_file"; then
+  pending_migrations=false
+fi
+
 case "${DEPLOYMENT_ENV:-local}" in
   staging|production)
-    if [ "${ALLOW_SCHEMA_MIGRATIONS:-false}" != "true" ] \
-      && ! grep -Fq "No planned migration operations." "$plan_file"; then
+    if [ "$pending_migrations" = true ] \
+      && [ "${ALLOW_SCHEMA_MIGRATIONS:-false}" != "true" ]; then
       echo "Schema changes require ALLOW_SCHEMA_MIGRATIONS=true." >&2
       exit 1
     fi
     ;;
 esac
 
-python3 manage.py migrate --noinput
+# A zero-change read-only release must not invoke Django's migrate command at
+# all: even an empty migration plan can run post_migrate handlers that write.
+if [ "$pending_migrations" = true ]; then
+  env DEPLOYMENT_READ_ONLY=false python3 manage.py migrate --noinput
+else
+  echo "No planned migration operations; migration execution skipped."
+fi
+
+# Static collection is allowed, but it keeps the database read-only guard.
 python3 manage.py collectstatic --no-input

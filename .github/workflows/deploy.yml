@@ -104,7 +104,7 @@ jobs:
             gh api \
               "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}/check-runs?per_page=100"
           )"
-          for required in container secrets validate; do
+          for required in container secrets validate certification-static; do
             jq -e --arg name "$required" \
               '.check_runs | any(.name == $name and .conclusion == "success")' \
               <<<"$checks" >/dev/null
@@ -114,20 +114,41 @@ jobs:
             docker-compose.production.yaml \
             operations/deploy_immutable_candidate.sh \
             operations/verify_release_identity.py \
+            operations/certify_remote_readonly.sh \
+            operations/rehearse_readonly_rollback.sh \
+            operations/verify_metrics_zero.py \
+            .github/workflows/certify-deployment.yml \
             scripts/backup-once.sh; do
             git show "${SOURCE_SHA}:${path}" >/dev/null
           done
 
-          if [[ "${{ inputs.target }}" == "production-readonly" \
-                && "${{ inputs.publish_images }}" == "true" ]]; then
-            echo "Production promotion must reuse staging-certified digests." >&2
+          [[ "${{ inputs.change_id }}" =~ ^[A-Za-z0-9._-]+$ ]]
+          if [[ "${{ inputs.allow_schema_migrations }}" != "false" \
+                || "${{ inputs.migration_compatibility_approved }}" != "false" ]]; then
+            echo "Read-only promotion forbids schema migration authorization." >&2
             exit 1
           fi
-          if [[ "${{ inputs.allow_schema_migrations }}" == "true" \
-                && "${{ inputs.migration_compatibility_approved }}" != "true" ]]; then
-            echo "Migration compatibility approval is required." >&2
-            exit 1
-          fi
+
+          case "${{ inputs.target }}" in
+            staging-readonly)
+              test "${{ inputs.publish_images }}" = "true"
+              test "${{ inputs.deploy }}" = "true"
+              test -z "${{ inputs.backend_image }}"
+              test -z "${{ inputs.edge_image }}"
+              test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
+              ;;
+            production-readonly)
+              test "${{ inputs.publish_images }}" = "false"
+              test "${{ inputs.deploy }}" = "true"
+              digest_pattern='@sha256:[0-9a-f]{64}$'
+              [[ "${{ inputs.backend_image }}" =~ $digest_pattern ]]
+              [[ "${{ inputs.edge_image }}" =~ $digest_pattern ]]
+              ;;
+            *)
+              echo "Unsupported read-only deployment target." >&2
+              exit 1
+              ;;
+          esac
 
           printf 'source_sha=%s\n' "$SOURCE_SHA" >>"$GITHUB_OUTPUT"
           printf 'python_base_image=%s\n' "$PYTHON_BASE_IMAGE" >>"$GITHUB_OUTPUT"
