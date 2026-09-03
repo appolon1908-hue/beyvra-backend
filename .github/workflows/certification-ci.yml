@@ -7,8 +7,11 @@ on:
       - "FX/gunicorn_conf.py"
       - ".github/workflows/certify-deployment.yml"
       - ".github/workflows/certification-ci.yml"
+      - ".github/workflows/release-intent-dispatch.yml"
       - "operations/certify_remote_readonly.sh"
       - "operations/inspect_deployment_run.sh"
+      - "operations/dispatch_release_intent.sh"
+      - "operations/validate_release_intent.py"
       - "operations/run_deployment_certification.sh"
       - "operations/release_cert_runtime.sh"
       - "operations/release_cert_state.sh"
@@ -35,6 +38,7 @@ jobs:
           set -euo pipefail
           bash -n operations/certify_remote_readonly.sh
           bash -n operations/inspect_deployment_run.sh
+          bash -n operations/dispatch_release_intent.sh
           bash -n operations/run_deployment_certification.sh
           bash -n operations/release_cert_runtime.sh
           bash -n operations/release_cert_state.sh
@@ -42,6 +46,7 @@ jobs:
           sh -n FX/web-start-prod.sh
           python -m py_compile \
             FX/gunicorn_conf.py \
+            operations/validate_release_intent.py \
             operations/verify_metrics_zero.py \
             operations/verify_edge_policy.py \
             operations/verify_previous_release.py \
@@ -50,6 +55,7 @@ jobs:
             require "yaml"
             YAML.load_file(".github/workflows/certify-deployment.yml")
             YAML.load_file(".github/workflows/certification-ci.yml")
+            YAML.load_file(".github/workflows/release-intent-dispatch.yml")
           '
       - name: Exercise zero-effect parser
         shell: bash

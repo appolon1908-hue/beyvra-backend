@@ -2,12 +2,13 @@ name: Dispatch reviewed release intent
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["Certification authority CI"]
     types: [completed]
 
 permissions:
   contents: read
   actions: write
+  checks: read
 
 concurrency:
   group: beyvra-backend-release-intent
@@ -20,182 +21,22 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Check out the exact green main commit
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 2
-
-      - id: intent
-        name: Validate reviewed one-shot release intent
-        env:
-          GREEN_MAIN_SHA: ${{ github.event.workflow_run.head_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          intent_file=.release/intent.json
-          if [[ ! -f "$intent_file" ]]; then
-            printf 'enabled=false\n' >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git rev-parse HEAD^ >/dev/null
-          if git diff --quiet HEAD^ HEAD -- "$intent_file"; then
-            echo "Release intent did not change in this exact green main commit; not dispatching."
-            printf 'enabled=false\n' >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          python3 - "$intent_file" "$GREEN_MAIN_SHA" "$GITHUB_OUTPUT" <<'PY'
-          import json
-          import re
-          import sys
-          from pathlib import Path
-
-          intent_path = Path(sys.argv[1])
-          green_main_sha = sys.argv[2]
-          output_path = Path(sys.argv[3])
-          intent = json.loads(intent_path.read_text())
-
-          if intent.get("schema_version") != 1:
-              raise SystemExit("unsupported release-intent schema")
-          if intent.get("enabled") is not True:
-              output_path.open("a").write("enabled=false\n")
-              raise SystemExit(0)
-
-          target = intent.get("target")
-          if target not in {"staging-readonly", "production-readonly"}:
-              raise SystemExit("unsupported deployment target")
-
-          publish_images = intent.get("publish_images")
-          deploy = intent.get("deploy")
-          allow_migrations = intent.get("allow_schema_migrations")
-          migration_approved = intent.get("migration_compatibility_approved")
-          for name, value in {
-              "publish_images": publish_images,
-              "deploy": deploy,
-              "allow_schema_migrations": allow_migrations,
-              "migration_compatibility_approved": migration_approved,
-          }.items():
-              if not isinstance(value, bool):
-                  raise SystemExit(f"{name} must be boolean")
-
-          change_id = str(intent.get("change_id", ""))
-          if not re.fullmatch(r"[A-Za-z0-9._-]+", change_id):
-              raise SystemExit("invalid change_id")
-
-          requested_source = str(intent.get("source_sha", ""))
-          backend_image = str(intent.get("backend_image", ""))
-          edge_image = str(intent.get("edge_image", ""))
-          digest = re.compile(r"^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$")
-
-          if target == "staging-readonly":
-              if requested_source != "CURRENT_MAIN":
-                  raise SystemExit("staging intent must select CURRENT_MAIN")
-              if publish_images is not True or deploy is not True:
-                  raise SystemExit("staging intent must publish and deploy")
-              if backend_image or edge_image:
-                  raise SystemExit("staging build must not supply existing digests")
-              source_sha = green_main_sha
-          else:
-              if not re.fullmatch(r"[0-9a-f]{40}", requested_source):
-                  raise SystemExit("production source_sha must be exact")
-              if publish_images is not False or deploy is not True:
-                  raise SystemExit("production intent must reuse and deploy images")
-              if not digest.fullmatch(backend_image) or not digest.fullmatch(edge_image):
-                  raise SystemExit("production images must be immutable digests")
-              source_sha = requested_source
-
-          if allow_migrations and not migration_approved:
-              raise SystemExit("migration compatibility approval is required")
-
-          values = {
-              "enabled": "true",
-              "source_sha": source_sha,
-              "target": target,
-              "publish_images": str(publish_images).lower(),
-              "backend_image": backend_image,
-              "edge_image": edge_image,
-              "deploy": str(deploy).lower(),
-              "change_id": change_id,
-              "allow_schema_migrations": str(allow_migrations).lower(),
-              "migration_compatibility_approved": str(migration_approved).lower(),
-          }
-          with output_path.open("a") as output:
-              for key, value in values.items():
-                  output.write(f"{key}={value}\n")
-          PY
-
       - id: dispatch
-        name: Dispatch the exact protected workflow once
-        if: steps.intent.outputs.enabled == 'true'
+        name: Validate and dispatch exact protected-main intent
         env:
           GH_TOKEN: ${{ github.token }}
           GREEN_MAIN_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_SHA: ${{ steps.intent.outputs.source_sha }}
-          TARGET: ${{ steps.intent.outputs.target }}
-          PUBLISH_IMAGES: ${{ steps.intent.outputs.publish_images }}
-          BACKEND_IMAGE: ${{ steps.intent.outputs.backend_image }}
-          EDGE_IMAGE: ${{ steps.intent.outputs.edge_image }}
-          DEPLOY: ${{ steps.intent.outputs.deploy }}
-          CHANGE_ID: ${{ steps.intent.outputs.change_id }}
-          ALLOW_SCHEMA_MIGRATIONS: ${{ steps.intent.outputs.allow_schema_migrations }}
-          MIGRATION_COMPATIBILITY_APPROVED: ${{ steps.intent.outputs.migration_compatibility_approved }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          test "$current_main" = "$GREEN_MAIN_SHA"
-
-          existing_runs="$(
-            gh api \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=100" \
-              --jq "[.workflow_runs[] | select(.head_sha == \"$GREEN_MAIN_SHA\")] | length"
-          )"
-          if [[ "$existing_runs" != "0" ]]; then
-            echo "A deployment workflow run already exists for this exact protected-main SHA."
-            printf 'dispatched=false\n' >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/dispatches" \
-            -f ref=main \
-            -f "inputs[source_sha]=$SOURCE_SHA" \
-            -f "inputs[target]=$TARGET" \
-            -f "inputs[publish_images]=$PUBLISH_IMAGES" \
-            -f "inputs[backend_image]=$BACKEND_IMAGE" \
-            -f "inputs[edge_image]=$EDGE_IMAGE" \
-            -f "inputs[deploy]=$DEPLOY" \
-            -f "inputs[change_id]=$CHANGE_ID" \
-            -f "inputs[allow_schema_migrations]=$ALLOW_SCHEMA_MIGRATIONS" \
-            -f "inputs[migration_compatibility_approved]=$MIGRATION_COMPATIBILITY_APPROVED"
-
-          jq -n \
-            --arg dispatcher_sha "$GREEN_MAIN_SHA" \
-            --arg source_sha "$SOURCE_SHA" \
-            --arg target "$TARGET" \
-            --arg change_id "$CHANGE_ID" \
-            --arg dispatched_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{
-              schema_version: 1,
-              dispatcher_sha: $dispatcher_sha,
-              source_sha: $source_sha,
-              target: $target,
-              change_id: $change_id,
-              dispatched_at: $dispatched_at,
-              deployment_read_only: true,
-              live_effects_authorized: false
-            }' > dispatch-evidence.json
-          printf 'dispatched=true\n' >>"$GITHUB_OUTPUT"
-
-      - name: Retain non-secret dispatch evidence
+        run: operations/dispatch_release_intent.sh
+      - uses: actions/upload-artifact@v7
         if: steps.dispatch.outputs.dispatched == 'true'
-        uses: actions/upload-artifact@v7
         with:
-          name: beyvra-backend-dispatch-${{ steps.intent.outputs.change_id }}
+          name: beyvra-backend-dispatch-${{ github.event.workflow_run.head_sha }}
           path: dispatch-evidence.json
           if-no-files-found: error
           retention-days: 90
