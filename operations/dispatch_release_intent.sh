@@ -27,6 +27,14 @@ for _ in $(seq 1 60); do
 done
 [[ "$checks_ready" == true ]] || { echo "Required exact-SHA checks did not complete." >&2; exit 1; }
 
+# The CI wait can overlap another protected-main merge. Re-read the branch
+# immediately before accepting or dispatching this intent.
+current_main="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+[[ "$current_main" == "$GREEN_MAIN_SHA" ]] || {
+  echo "Protected main moved while release checks were running." >&2
+  exit 1
+}
+
 intent_file=.release/intent.json
 if [[ ! -f "$intent_file" ]]; then printf 'dispatched=false\n' >>"$GITHUB_OUTPUT"; exit 0; fi
 git rev-parse HEAD^ >/dev/null
