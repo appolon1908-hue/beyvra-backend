@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "FX/web-start-prod.sh"
+      - "FX/release-init-prod.sh"
       - "FX/gunicorn_conf.py"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/certify-deployment.yml"
@@ -45,6 +46,7 @@ jobs:
           bash -n operations/release_cert_state.sh
           bash -n operations/rehearse_readonly_rollback.sh
           sh -n FX/web-start-prod.sh
+          sh -n FX/release-init-prod.sh
           python -m py_compile \
             FX/gunicorn_conf.py \
             operations/validate_release_intent.py \
@@ -59,6 +61,32 @@ jobs:
             YAML.load_file(".github/workflows/certification-ci.yml")
             YAML.load_file(".github/workflows/release-intent-dispatch.yml")
           '
+
+      - name: Prove zero-change release never invokes migrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          fake_bin="$(mktemp -d)"
+          log_file="$(mktemp)"
+          trap 'rm -rf "$fake_bin" "$log_file"' EXIT
+          cat >"$fake_bin/python3" <<'SH'
+          #!/bin/sh
+          printf '%s\n' "$*" >>"$FAKE_DJANGO_LOG"
+          case "$*" in
+            "manage.py migrate --plan")
+              printf 'No planned migration operations.\n'
+              ;;
+          esac
+          SH
+          chmod 0755 "$fake_bin/python3"
+          PATH="$fake_bin:$PATH" \
+            FAKE_DJANGO_LOG="$log_file" \
+            DEPLOYMENT_ENV=staging \
+            ALLOW_SCHEMA_MIGRATIONS=false \
+            sh FX/release-init-prod.sh
+          ! grep -Fq 'manage.py migrate --noinput' "$log_file"
+          grep -Fq 'manage.py collectstatic --no-input' "$log_file"
+
       - name: Exercise zero-effect parser
         shell: bash
         run: |
