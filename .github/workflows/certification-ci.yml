@@ -5,6 +5,7 @@ on:
     paths:
       - "FX/web-start-prod.sh"
       - "FX/gunicorn_conf.py"
+      - ".github/workflows/deploy.yml"
       - ".github/workflows/certify-deployment.yml"
       - ".github/workflows/certification-ci.yml"
       - ".github/workflows/release-intent-dispatch.yml"
@@ -53,6 +54,7 @@ jobs:
             scripts/database_fingerprint.py
           ruby -e '
             require "yaml"
+            YAML.load_file(".github/workflows/deploy.yml")
             YAML.load_file(".github/workflows/certify-deployment.yml")
             YAML.load_file(".github/workflows/certification-ci.yml")
             YAML.load_file(".github/workflows/release-intent-dispatch.yml")
