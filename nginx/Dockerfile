@@ -1,25 +1,28 @@
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29-alpine
+FROM ${NGINX_IMAGE}
+
+ARG VCS_REF=unknown
+ARG BUILD_VERSION=unreleased
+ARG BUILD_DATE=unknown
 
 USER root
 
-ARG CONFIG_FILE=nginx.prod.conf.template
+RUN apk upgrade --no-cache \
+    && rm -f /etc/nginx/conf.d/default.conf \
+    && mkdir -p /etc/nginx/templates \
+    && chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/templates \
+    && chmod -R u=rwX,go=rX /etc/nginx/conf.d /etc/nginx/templates
 
-WORKDIR /app
+COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
+COPY --chown=root:root nginx.prod.conf.template \
+    /etc/nginx/templates/default.conf.template
 
-RUN apk upgrade --no-cache
-
-RUN rm /etc/nginx/conf.d/default.conf
-
-COPY ./nginx.conf /etc/nginx/nginx.conf
-
-COPY ./nginx.conf /etc/nginx/default.conf
-
-RUN mkdir /etc/nginx/templates
-
-COPY $CONFIG_FILE /etc/nginx/templates
-
-RUN chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/templates && \
-    chmod -R u=rwX,go=rX /etc/nginx/conf.d /etc/nginx/templates
+LABEL org.opencontainers.image.source="https://github.com/appolon1908-hue/beyvra-backend" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
+      org.opencontainers.image.created="$BUILD_DATE" \
+      org.opencontainers.image.title="Beyvra read-only edge" \
+      org.opencontainers.image.description="Read-only ingress for certified Beyvra candidates"
 
 EXPOSE 8080
 
