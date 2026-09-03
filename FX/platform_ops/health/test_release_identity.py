@@ -14,7 +14,20 @@ class ReleaseIdentityTests(SimpleTestCase):
         LIVE_TRADING_ENABLED=False,
         REAL_TRADING_ENABLED=False,
         REAL_MONEY_ENABLED=False,
+        REAL_DEPOSITS_ENABLED=False,
+        REAL_WITHDRAWALS_ENABLED=False,
+        REAL_INTERNAL_TRANSFERS_ENABLED=False,
         EXTERNAL_EXECUTION_ENABLED=False,
+        LIVE_BROKER_ROUTING_ENABLED=False,
+        FIX_LIVE_SESSION_ENABLED=False,
+        PAYMENTS_ENABLED=False,
+        TRANSACTIONAL_EMAIL_ENABLED=False,
+        WELCOME_EMAIL_ENABLED=False,
+        REALTIME_V2_V1_FALLBACK_ENABLED=False,
+    )
+    @patch(
+        "platform_ops.health.api.database_read_only_state",
+        return_value=True,
     )
     @patch.dict(
         os.environ,
@@ -29,13 +42,19 @@ class ReleaseIdentityTests(SimpleTestCase):
         },
         clear=False,
     )
-    def test_exact_release_identity_and_safety_are_publicly_readable(self):
+    def test_exact_release_identity_and_safety_are_publicly_readable(
+        self,
+        _database_read_only_state,
+    ):
         response = APIClient().get(reverse("system-version"))
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["immutable_identity_verified"])
         self.assertTrue(payload["deployment_read_only"])
+        self.assertTrue(payload["database_read_only_enforced"])
+        self.assertTrue(payload["effect_flags_disabled"])
+        self.assertTrue(payload["read_only_certified"])
         self.assertEqual(payload["source_sha"], "a" * 40)
         self.assertEqual(
             payload["image_digest"],
@@ -49,7 +68,16 @@ class ReleaseIdentityTests(SimpleTestCase):
                 "live_trading_enabled": False,
                 "real_trading_enabled": False,
                 "real_money_enabled": False,
+                "real_deposits_enabled": False,
+                "real_withdrawals_enabled": False,
+                "real_internal_transfers_enabled": False,
                 "external_execution_enabled": False,
+                "live_broker_routing_enabled": False,
+                "fix_live_session_enabled": False,
+                "payments_enabled": False,
+                "transactional_email_enabled": False,
+                "welcome_email_enabled": False,
+                "legacy_realtime_fallback_enabled": False,
                 "deployment_read_only": True,
             },
         )
@@ -60,6 +88,10 @@ class ReleaseIdentityTests(SimpleTestCase):
         DEPLOYMENT_ENV="local",
         SIMULATED_TRADING_ENABLED=False,
     )
+    @patch(
+        "platform_ops.health.api.database_read_only_state",
+        return_value=False,
+    )
     @patch.dict(
         os.environ,
         {
@@ -68,12 +100,17 @@ class ReleaseIdentityTests(SimpleTestCase):
         },
         clear=False,
     )
-    def test_missing_identity_is_reported_without_fabrication(self):
+    def test_missing_identity_is_reported_without_fabrication(
+        self,
+        _database_read_only_state,
+    ):
         response = APIClient().get(reverse("system-version"))
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertFalse(payload["immutable_identity_verified"])
         self.assertFalse(payload["deployment_read_only"])
+        self.assertFalse(payload["database_read_only_enforced"])
+        self.assertFalse(payload["read_only_certified"])
         self.assertEqual(payload["source_sha"], "unknown")
         self.assertEqual(payload["image_digest"], "unknown")

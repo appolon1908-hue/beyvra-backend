@@ -20,5 +20,7 @@ case "${DEPLOYMENT_ENV:-local}" in
     ;;
 esac
 
-python3 manage.py migrate --noinput
-python3 manage.py collectstatic --no-input
+# The runtime connection is database-enforced read-only. Only this reviewed,
+# one-shot release process may create a write-capable Django process.
+env DEPLOYMENT_READ_ONLY=false python3 manage.py migrate --noinput
+env DEPLOYMENT_READ_ONLY=false python3 manage.py collectstatic --no-input
