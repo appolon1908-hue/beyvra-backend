@@ -7,7 +7,8 @@ ARG BUILD_DATE=unknown
 
 USER root
 
-RUN rm -f /etc/nginx/conf.d/default.conf \
+RUN apk upgrade --no-cache \
+    && rm -f /etc/nginx/conf.d/default.conf \
     && mkdir -p /etc/nginx/templates \
     && chown -R nginx:nginx /etc/nginx/conf.d /etc/nginx/templates \
     && chmod -R u=rwX,go=rX /etc/nginx/conf.d /etc/nginx/templates
