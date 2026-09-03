@@ -73,8 +73,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: ${{ inputs.source_sha }}
-      PYTHON_BASE_IMAGE: ${{ vars.PYTHON_BASE_IMAGE }}
-      NGINX_BASE_IMAGE: ${{ vars.NGINX_BASE_IMAGE }}
+      # Exact bases observed and scanned successfully by protected-main CI.
+      PYTHON_BASE_IMAGE: "docker.io/library/python:3.11-alpine3.22@sha256:a4fc589b32e824f3f02ed9d7e7be19518aa47e105b80416336af9f202275a489"
+      NGINX_BASE_IMAGE: "docker.io/nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
     steps:
       - name: Require the workflow and source to come from protected main
         uses: actions/checkout@v7
