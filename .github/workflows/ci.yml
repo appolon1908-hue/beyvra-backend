@@ -69,6 +69,7 @@ jobs:
           python manage.py test news_app.test_phase5_contracts ws.test_v2
           python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
+          python manage.py test apps.workspace apps.valuation.test_portfolio_api
       - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
       - name: Scan Python code

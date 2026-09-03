@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: Beyvra Enterprise Experience API
+  version: 1.0.0
+  description: >-
+    Same-origin, authenticated API for the Beyvra trading workspace. Financial
+    values are simulation projections unless an independently approved live
+    authority is introduced. Missing market or performance evidence is returned
+    as unavailable and is never fabricated.
+servers:
+  - url: /api/v1
+security:
+  - cookieSession: []
+paths:
+  /watchlists:
+    get:
+      operationId: listWatchlists
+      responses:
+        "200":
+          description: Tenant- and user-scoped watchlists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistCollection"
+    post:
+      operationId: createWatchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 80}
+      responses:
+        "201": {description: Watchlist created}
+        "409": {description: A watchlist with this name already exists}
+  /watchlists/{watchlist_id}:
+    parameters:
+      - $ref: "#/components/parameters/WatchlistId"
+    get:
+      operationId: getWatchlist
+      responses:
+        "200": {description: Watchlist with ordered items}
+        "404": {description: Watchlist is outside the caller scope or absent}
+    patch:
+      operationId: updateWatchlist
+      responses:
+        "200": {description: Watchlist updated}
+    delete:
+      operationId: deleteWatchlist
+      responses:
+        "204": {description: Watchlist deleted}
+  /watchlists/{watchlist_id}/items:
+    parameters:
+      - $ref: "#/components/parameters/WatchlistId"
+    get:
+      operationId: listWatchlistItems
+      responses:
+        "200": {description: Ordered watchlist items}
+    post:
+      operationId: addWatchlistItem
+      description: Idempotently adds an active canonical instrument by UUID or symbol.
+      responses:
+        "200": {description: Instrument was already present}
+        "201": {description: Instrument added}
+        "400": {description: Instrument is not active in reference-data authority}
+  /alerts:
+    get:
+      operationId: listPriceAlerts
+      responses:
+        "200": {description: Tenant-scoped price alerts}
+    post:
+      operationId: createPriceAlert
+      responses:
+        "201": {description: Alert created}
+  /portfolio/summary:
+    get:
+      operationId: getPortfolioSummary
+      responses:
+        "200":
+          description: Simulation cash, positions, P&L and valuation quality.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioSummary"
+  /portfolio/performance:
+    get:
+      operationId: getPortfolioPerformance
+      parameters:
+        - in: query
+          name: range
+          schema: {type: string, enum: [1D, 1W, 1M, 3M, 1Y, ALL]}
+      responses:
+        "200": {description: Persisted performance snapshots or an explicit unavailable result}
+  /portfolio/allocations:
+    get:
+      operationId: getPortfolioAllocations
+      responses:
+        "200": {description: Priced allocation weights plus unpriced instrument identifiers}
+  /portfolio/risk:
+    get:
+      operationId: getPortfolioRisk
+      responses:
+        "200": {description: Explainable exposure and concentration projection}
+  /operator/orders:
+    get:
+      operationId: listOperatorOrders
+      description: Requires a staff role and MFA on the current bound session.
+      responses:
+        "200": {description: Bounded canonical order projection}
+        "403": {description: Staff and current-session MFA are required}
+  /operator/providers/health:
+    get:
+      operationId: listProviderHealth
+      responses:
+        "200": {description: Provider governance, connection and circuit health}
+  /operator/reconciliation/breaks:
+    get:
+      operationId: listReconciliationBreaks
+      responses:
+        "200": {description: Unresolved execution outcomes; resolution remains fail-closed}
+  /operator/audit/events:
+    get:
+      operationId: listAuditEvents
+      responses:
+        "200": {description: Bounded append-only application audit projection}
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: beyvra_access
+  parameters:
+    WatchlistId:
+      in: path
+      name: watchlist_id
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    WatchlistItem:
+      type: object
+      required: [id, instrument_id, sort_order, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        instrument_id: {type: string, format: uuid}
+        symbol: {type: [string, "null"]}
+        sort_order: {type: integer, minimum: 0}
+        created_at: {type: string, format: date-time}
+    Watchlist:
+      type: object
+      required: [id, name, is_default, items, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        is_default: {type: boolean}
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/WatchlistItem"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    WatchlistCollection:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: {$ref: "#/components/schemas/Watchlist"}
+    PortfolioSummary:
+      type: object
+      required: [account_id, base_currency, cash, market_value, equity, positions, valuation_quality, simulation, live_trading_enabled]
+      properties:
+        account_id: {type: string, format: uuid}
+        base_currency: {type: string}
+        cash: {type: string}
+        market_value: {type: string}
+        equity: {type: string}
+        positions: {type: array, items: {type: object}}
+        valuation_quality: {type: string, enum: [EMPTY, COMPLETE, PARTIAL, UNAVAILABLE]}
+        simulation: {const: true}
+        live_trading_enabled: {const: false}

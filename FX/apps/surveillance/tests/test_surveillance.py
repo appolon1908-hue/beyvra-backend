@@ -42,8 +42,8 @@ class SurveillanceTests(TestCase):
         organization = Organization.objects.create(name="Surveillance Test Tenant")
         OrganizationMembership.objects.create(user=self.user, organization=organization)
         ComplianceProfile.objects.create(user=self.user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
-        self.manager = User.objects.create_user(email="manager@example.test", password="safe-password", phone_number="+15550000002")
-        self.checker = User.objects.create_user(email="checker@example.test", password="safe-password", phone_number="+15550000003")
+        self.manager = User.objects.create_user(email="manager@example.test", password="safe-password", phone_number="+15550000002", is_staff=True, is_mfa_enabled=True, two_factor_authentication_enabled=True)
+        self.checker = User.objects.create_user(email="checker@example.test", password="safe-password", phone_number="+15550000003", is_staff=True, is_mfa_enabled=True, two_factor_authentication_enabled=True)
         group, _ = Group.objects.get_or_create(name="surveillance_manager")
         self.manager.groups.add(group); self.checker.groups.add(group)
 

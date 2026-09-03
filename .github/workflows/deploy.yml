@@ -12,12 +12,14 @@ on:
 permissions:
   contents: read
   packages: write
+  attestations: write
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.image.outputs.ref }}
+      image: ${{ steps.locked-image.outputs.ref }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/login-action@v3
@@ -28,7 +30,8 @@ jobs:
       - uses: docker/setup-buildx-action@v4
       - id: image
         run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: FX/Dockerfile
@@ -36,11 +39,16 @@ jobs:
           tags: ${{ steps.image.outputs.ref }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+      - id: locked-image
+        name: Lock deployment identity to the published digest
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   deploy:
     if: inputs.deploy
@@ -73,4 +81,4 @@ jobs:
           printf '%s' "$GHCR_TOKEN" | ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd /srv/backend && set -eu && mkdir -p backups && tar -xzf release-manifests.tar.gz && test -f .env && docker compose -f docker-compose.yaml exec -T postgres sh -c 'pg_dump -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\"' | gzip > backups/predeploy-${GITHUB_SHA}.sql.gz && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml pull web daphne celery_worker celery_beat celery-flower chart-data-publisher && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml up -d --wait"
+            "cd /srv/backend && set -eu && mkdir -p backups && tar -xzf release-manifests.tar.gz && test -f .env && previous_image=\$(docker inspect --format '{{.Config.Image}}' \$(docker compose -f docker-compose.yaml ps -q web)) && rollback() { BACKEND_IMAGE=\"\$previous_image\" docker compose -f docker-compose.yaml up -d --wait web daphne celery_worker celery_beat celery-flower chart-data-publisher; } && trap rollback ERR && docker compose -f docker-compose.yaml exec -T postgres sh -c 'pg_dump -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\"' | gzip > backups/predeploy-${GITHUB_SHA}.sql.gz && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml pull web daphne celery_worker celery_beat celery-flower chart-data-publisher && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml up -d --wait && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml exec -T web python -c 'import requests; response=requests.get(\"http://127.0.0.1:8000/health/ready\", timeout=10); response.raise_for_status()' && trap - ERR"
