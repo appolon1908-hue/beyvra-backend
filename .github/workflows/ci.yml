@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
@@ -12,6 +16,7 @@ permissions:
 jobs:
   secrets:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -22,6 +27,7 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -40,11 +46,41 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: FX/requirements.txt
+
+      - name: Require pinned direct Python dependencies
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          offenders = []
+          for number, raw in enumerate(
+              Path("FX/requirements.txt").read_text().splitlines(), 1
+          ):
+              line = raw.strip()
+              if not line or line.startswith("#"):
+                  continue
+              if "==" not in line:
+                  offenders.append(f"{number}: {line}")
+          if offenders:
+              raise SystemExit(
+                  "Unpinned direct dependencies:\n" + "\n".join(offenders)
+              )
+          PY
+
       - name: Install application and audit tools
-        run: pip install -r FX/requirements.txt pip-audit bandit
+        run: pip install -r FX/requirements.txt pip-audit bandit pyyaml
+
+      - name: Verify installed dependency graph
+        run: pip check
+
       - name: Compile Python sources
-        run: python -m compileall -q FX
-      - name: Run Django checks and security regression tests
+        run: >-
+          python -m compileall -q
+          FX
+          scripts/certify_staging_api.py
+          operations/verify_release_identity.py
+
+      - name: Run Django checks and production regression tests
         working-directory: FX
         env:
           DJANGO_SETTINGS_MODULE: FX.test_settings
@@ -69,15 +105,125 @@ jobs:
           python manage.py test news_app.test_phase5_contracts ws.test_v2
           python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
-      - name: Verify Beyvra public identity surfaces
+          python manage.py test api_trade.tests.test_openapi_stability apps.foundation.test_publisher security.tests.test_apps platform_ops.health.test_release_identity
+
+      - name: Verify public identity surfaces
         run: python scripts/check_public_identity.py
+
+      - name: Validate deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          operations/test_nginx_ws_v2_route.sh
+          operations/test_nginx_upstream_probe.sh
+          bash -n operations/deploy_immutable_candidate.sh
+          sh -n \
+            scripts/backup-loop.sh \
+            scripts/backup-once.sh \
+            FX/web-start-prod.sh \
+            FX/release-init-prod.sh
+          python operations/verify_release_identity.py --help >/dev/null
+          python scripts/certify_staging_api.py --help >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for path in (
+              ".github/workflows/ci.yml",
+              ".github/workflows/deploy.yml",
+              "docker-compose.production.yaml",
+          ):
+              value = yaml.safe_load(Path(path).read_text())
+              if not isinstance(value, dict):
+                  raise SystemExit(f"{path} is not a YAML mapping")
+          PY
+
+          touch .env
+          digest='ghcr.io/example/component@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          env \
+            APP_DEPLOYMENT_ENV=staging \
+            BACKEND_IMAGE="$digest" \
+            EDGE_IMAGE="$digest" \
+            POSTGRES_IMAGE="$digest" \
+            REDIS_IMAGE="$digest" \
+            NATS_IMAGE="$digest" \
+            CENTRIFUGO_IMAGE="$digest" \
+            STATSD_EXPORTER_IMAGE="$digest" \
+            SOURCE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            CHANGE_ID=ci-validation \
+            PUBLIC_SERVER_NAME=beyvra.example \
+            PORT=18080 \
+            FINANCIAL_API_NETWORK=financial-api \
+            MONITORING_NETWORK=monitoring \
+            BACKUP_OFFHOST_PATH=/tmp/offhost \
+            DB_NAME=ci \
+            DB_USER=ci \
+            DB_PASSWORD=ci \
+            POSTGRES_DB=ci \
+            POSTGRES_USER=ci \
+            REDIS_PASSWORD=ci \
+            CENTRIFUGO_API_KEY=ci \
+            CENTRIFUGO_TOKEN_HMAC_SECRET=ci \
+            CENTRIFUGO_PROXY_SECRET=ci \
+            docker compose \
+              -f docker-compose.production.yaml \
+              --profile release \
+              --profile background \
+              --profile simulation \
+              config > /tmp/beyvra-production-compose.yml
+
+          if grep -Eq '(^|[[:space:]])build:' /tmp/beyvra-production-compose.yml; then
+            echo "Production Compose must never build on the server." >&2
+            exit 1
+          fi
+          images="$(
+            env \
+              APP_DEPLOYMENT_ENV=staging \
+              BACKEND_IMAGE="$digest" \
+              EDGE_IMAGE="$digest" \
+              POSTGRES_IMAGE="$digest" \
+              REDIS_IMAGE="$digest" \
+              NATS_IMAGE="$digest" \
+              CENTRIFUGO_IMAGE="$digest" \
+              STATSD_EXPORTER_IMAGE="$digest" \
+              SOURCE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+              CHANGE_ID=ci-validation \
+              PUBLIC_SERVER_NAME=beyvra.example \
+              PORT=18080 \
+              FINANCIAL_API_NETWORK=financial-api \
+              MONITORING_NETWORK=monitoring \
+              BACKUP_OFFHOST_PATH=/tmp/offhost \
+              DB_NAME=ci \
+              DB_USER=ci \
+              DB_PASSWORD=ci \
+              POSTGRES_DB=ci \
+              POSTGRES_USER=ci \
+              REDIS_PASSWORD=ci \
+              CENTRIFUGO_API_KEY=ci \
+              CENTRIFUGO_TOKEN_HMAC_SECRET=ci \
+              CENTRIFUGO_PROXY_SECRET=ci \
+              docker compose \
+                -f docker-compose.production.yaml \
+                --profile release \
+                --profile background \
+                --profile simulation \
+                config --images
+          )"
+          if grep -Ev '@sha256:[0-9a-f]{64}$' <<<"$images" >/dev/null; then
+            printf 'Non-immutable image in production config:\n%s\n' "$images" >&2
+            exit 1
+          fi
+          rm -f .env
+
       - name: Scan Python code
         run: bandit -q -lll -r FX -x 'FX/**/tests,FX/**/migrations'
+
       - name: Audit dependencies
         run: pip-audit -r FX/requirements.txt
 
   exact-head-base-ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     env:
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -91,10 +237,12 @@ jobs:
           test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
           test "$observed_base" = "$EXPECTED_BASE_SHA"
           printf 'EXPECTED_HEAD_SHA=%s\nEXPECTED_BASE_SHA=%s\nOBSERVED_HEAD_SHA=%s\nOBSERVED_BASE_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$EXPECTED_BASE_SHA" "$(jq -r .head.sha <<<"$observed")" "$observed_base"
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.EXPECTED_HEAD_SHA }}
           fetch-depth: 0
+
       - name: Verify exact tuple and ancestry at end
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
@@ -107,14 +255,85 @@ jobs:
 
   container:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
-      - name: Build application image
-        run: docker build -f FX/Dockerfile -t backend-review:${{ github.sha }} .
-      - name: Scan application image
+
+      - name: Build backend and read-only edge images
+        run: |
+          docker build \
+            -f FX/Dockerfile \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --build-arg BUILD_VERSION=${{ github.sha }} \
+            --build-arg BUILD_DATE=1970-01-01T00:00:00Z \
+            -t backend-review:${{ github.sha }} .
+          docker build \
+            -f nginx/Dockerfile \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --build-arg BUILD_VERSION=${{ github.sha }} \
+            --build-arg BUILD_DATE=1970-01-01T00:00:00Z \
+            -t backend-edge-review:${{ github.sha }} nginx
+
+      - name: Verify image source labels
+        run: |
+          test "$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              backend-review:${{ github.sha }}
+          )" = "${{ github.sha }}"
+          test "$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              backend-edge-review:${{ github.sha }}
+          )" = "${{ github.sha }}"
+
+      - name: Exercise the read-only edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(
+            docker run -d --rm \
+              --read-only \
+              --cap-drop=ALL \
+              --security-opt=no-new-privileges \
+              --tmpfs /etc/nginx/conf.d:rw,noexec,nosuid,nodev,uid=101,gid=101,mode=0755 \
+              --tmpfs /tmp:rw,noexec,nosuid,nodev,uid=101,gid=101,mode=1777 \
+              -e WEB_HOST=127.0.0.1:8000 \
+              -e DAPHNE_HOST=127.0.0.1:8001 \
+              -e CENTRIFUGO_HOST=127.0.0.1:8002 \
+              -e PUBLIC_SERVER_NAME=localhost \
+              -p 127.0.0.1:18080:8080 \
+              backend-edge-review:${{ github.sha }}
+          )"
+          trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null
+          code="$(
+            curl --silent --output /tmp/read-only.json \
+              --write-out '%{http_code}' \
+              --request POST \
+              http://127.0.0.1:18080/api/v1/trading/orders
+          )"
+          test "$code" = "503"
+          grep -Fq '"code":"DEPLOYMENT_READ_ONLY"' /tmp/read-only.json
+
+      - name: Scan backend image
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: backend-review:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan edge image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: backend-edge-review:${{ github.sha }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"

@@ -1,10 +1,8 @@
-from datetime import datetime
-
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status
+
 from provider_governance.service import ProviderNotAvailable
 
 from ..scripts.alpaca_integration import AlpacaIntegrationAccount
@@ -12,10 +10,8 @@ from ..scripts.alpaca_integration import AlpacaIntegrationAccount
 
 @api_view(["GET"])
 def get_clock_view(request):
-    """Gets the current market timestamp, whether or not the market is
-    currently open, as well as the times of the next market open and close"""
+    """Return the current market clock from the governed provider."""
     result = AlpacaIntegrationAccount().get_clock()
-
     return Response(result)
 
 
@@ -26,12 +22,13 @@ class GetCalendarViewSet(viewsets.ViewSet):
                 name="start",
                 required=True,
                 type=OpenApiTypes.DATE,
-                default=datetime.now().strftime("%Y-%m-%d"),
+                description="First market date. Supply an ISO 8601 date (YYYY-MM-DD).",
             ),
             OpenApiParameter(
                 name="end",
                 required=False,
                 type=OpenApiTypes.DATE,
+                description="Optional last market date in ISO 8601 format (YYYY-MM-DD).",
             ),
         ],
     )
@@ -48,6 +45,9 @@ class GetCalendarViewSet(viewsets.ViewSet):
         try:
             result = AlpacaIntegrationAccount().get_calendar(request)
         except ProviderNotAvailable:
-            return Response({"code": "PROVIDER_NOT_AVAILABLE"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"code": "PROVIDER_NOT_AVAILABLE"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response(result)

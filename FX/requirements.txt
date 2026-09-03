@@ -1,5 +1,5 @@
 adyen==12.3.0
-alpaca-py
+alpaca-py==0.44.0
 aiohttp==3.14.3
 asgiref==3.9.2
 celery[redis]==5.3.6

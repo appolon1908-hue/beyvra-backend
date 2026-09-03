@@ -1,0 +1,482 @@
+name: backend
+
+x-production-safety: &production-safety
+  API_ENV: ${APP_DEPLOYMENT_ENV:?APP_DEPLOYMENT_ENV is required}
+  DEPLOYMENT_ENV: ${APP_DEPLOYMENT_ENV:?APP_DEPLOYMENT_ENV is required}
+  DEPLOYMENT_READ_ONLY: "true"
+  SIMULATED_TRADING_ENABLED: "false"
+  LIVE_TRADING_ENABLED: "false"
+  REAL_TRADING_ENABLED: "false"
+  REAL_MONEY_ENABLED: "false"
+  EXTERNAL_EXECUTION_ENABLED: "false"
+  LIVE_BROKER_ROUTING_ENABLED: "false"
+  FIX_LIVE_SESSION_ENABLED: "false"
+  PAYMENTS_ENABLED: "false"
+  TRANSACTIONAL_EMAIL_ENABLED: "false"
+  WELCOME_EMAIL_ENABLED: "false"
+  REALTIME_V2_V1_FALLBACK_ENABLED: "false"
+  RELEASE_SHA: ${SOURCE_SHA:?SOURCE_SHA is required}
+  BEYVRA_IMAGE_DIGEST: ${BACKEND_IMAGE}
+  BEYVRA_RELEASE_ID: ${CHANGE_ID:?CHANGE_ID is required}
+
+x-backend-service: &backend-service
+  image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable repository@sha256 digest}
+  pull_policy: never
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    <<: *production-safety
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:size=128m,noexec,nosuid,nodev
+  networks:
+    - fx-network
+    - financial-api
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fx-network
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  redis:
+    image: ${REDIS_IMAGE:?REDIS_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    networks:
+      - fx-network
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli -a "$${REDIS_PASSWORD}" ping | grep -Fq PONG
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  nats:
+    image: ${NATS_IMAGE:?NATS_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    command:
+      - -c
+      - /etc/nats/nats.conf
+    volumes:
+      - ./infra/realtime-v2/nats.conf:/etc/nats/nats.conf:ro
+      - ./infra/realtime-v2/tls:/etc/nats/tls:ro
+      - nats_data:/data
+    networks:
+      - fx-network
+    healthcheck:
+      test:
+        - CMD
+        - nats-server
+        - --signal
+        - ldm
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  centrifugo:
+    image: ${CENTRIFUGO_IMAGE:?CENTRIFUGO_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        export CENTRIFUGO_BROKER_NATS_TLS_SERVER_CA_PEM="$$(cat /etc/centrifugo/tls/ca.crt)";
+        export CENTRIFUGO_BROKER_NATS_TLS_CERT_PEM="$$(cat /etc/centrifugo/tls/client.crt)";
+        export CENTRIFUGO_BROKER_NATS_TLS_KEY_PEM="$$(cat /etc/centrifugo/tls/client.key)";
+        exec centrifugo -c /etc/centrifugo/config.json
+    environment:
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?CENTRIFUGO_TOKEN_HMAC_SECRET is required}
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+      CENTRIFUGO_PROXY_HTTP_HEADERS: X-Request-ID
+      CENTRIFUGO_CLIENT_INSECURE: "false"
+      CENTRIFUGO_ADMIN: "false"
+      CENTRIFUGO_DEBUG: "false"
+    volumes:
+      - ./infra/realtime-v2/centrifugo.json:/etc/centrifugo/config.json:ro
+      - ./infra/realtime-v2/tls/ca.crt:/etc/centrifugo/tls/ca.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.crt:/etc/centrifugo/tls/client.crt:ro
+      - ./infra/realtime-v2/tls/centrifugo-client.key:/etc/centrifugo/tls/client.key:ro
+    networks:
+      - fx-network
+    healthcheck:
+      test:
+        - CMD
+        - centrifugo
+        - checkconfig
+        - -c
+        - /etc/centrifugo/config.json
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+
+  static-init:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    profiles: [release]
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - chown -R "$$(id -u app):$$(id -g app)" /app/static
+    volumes:
+      - static_files:/app/static
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+
+  release-init:
+    <<: *backend-service
+    profiles: [release]
+    restart: "no"
+    command: ["./release-init-prod.sh"]
+    environment:
+      <<: *production-safety
+      ALLOW_SCHEMA_MIGRATIONS: ${ALLOW_SCHEMA_MIGRATIONS:-false}
+    volumes:
+      - static_files:/app/static
+      - ./media:/app/media
+      - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  backup-init:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    profiles: [release]
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    volumes:
+      - ./backups:/backups
+    command: ["/bin/sh", "-c", "mkdir -p /backups && chown \"$$(id -u postgres):$$(id -g postgres)\" /backups && chmod 700 /backups"]
+
+  db-backup:
+    image: ${POSTGRES_IMAGE:?POSTGRES_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    user: "postgres"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: ${DB_NAME:?DB_NAME is required}
+      PGUSER: ${DB_USER:?DB_USER is required}
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_OFFHOST_DIR: /offhost
+    volumes:
+      - ./backups:/backups
+      - ${BACKUP_OFFHOST_PATH:?BACKUP_OFFHOST_PATH must be an off-host mounted directory}:/offhost
+      - ./scripts/backup-loop.sh:/usr/local/bin/backup-loop.sh:ro
+      - ./scripts/backup-once.sh:/usr/local/bin/backup-once.sh:ro
+    command: ["/bin/sh", "/usr/local/bin/backup-loop.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fx-network
+
+  web:
+    <<: *backend-service
+    command: ["./web-start-prod.sh"]
+    expose:
+      - "8000"
+    volumes:
+      - static_files:/app/static
+      - ./media:/app/media
+      - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health/ready",timeout=5).read()'
+      interval: 15s
+      timeout: 7s
+      retries: 10
+      start_period: 30s
+
+  daphne:
+    <<: *backend-service
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8001", "FX.asgi:application"]
+    expose:
+      - "8001"
+    volumes:
+      - ./media:/app/media
+      - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c 'import socket; s=socket.create_connection(("127.0.0.1",8001),5); s.close()'
+      interval: 15s
+      timeout: 7s
+      retries: 10
+      start_period: 20s
+
+  realtime_bridge:
+    <<: *backend-service
+    command: ["python", "manage.py", "realtime_v2_bridge"]
+    environment:
+      <<: *production-safety
+      REALTIME_V2_ENABLED: "true"
+      NATS_JETSTREAM_ENABLED: "true"
+      CENTRIFUGO_ENABLED: "true"
+      CENTRIFUGO_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:?CENTRIFUGO_PROXY_SECRET is required}
+      NATS_URL: nats://nats:4222
+      NATS_TLS_CA_FILE: /run/secrets/realtime/ca.crt
+      NATS_TLS_CERT_FILE: /run/secrets/realtime/client.crt
+      NATS_TLS_KEY_FILE: /run/secrets/realtime/client.key
+    volumes:
+      - ./secrets:/run/secrets/codestra:ro
+      - ./secrets/financial:/run/secrets/financial:ro
+      - ./infra/realtime-v2/tls/ca.crt:/run/secrets/realtime/ca.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.crt:/run/secrets/realtime/client.crt:ro
+      - ./infra/realtime-v2/tls/bridge-client.key:/run/secrets/realtime/client.key:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c 'import os; os.kill(1, 0)'
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  canonical-outbox-publisher:
+    <<: *backend-service
+    profiles: [background]
+    command: ["python", "manage.py", "publish_outbox"]
+
+  celery_worker:
+    <<: *backend-service
+    profiles: [background]
+    entrypoint: ["./worker-entrypoint.sh"]
+
+  celery_beat:
+    <<: *backend-service
+    profiles: [background]
+    entrypoint: []
+    command: ["celery", "-A", "FX", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+
+  celery-flower:
+    <<: *backend-service
+    profiles: [background]
+    entrypoint: []
+    command: ["celery", "-A", "FX", "flower", "--port=5555"]
+
+  chart-data-publisher:
+    <<: *backend-service
+    profiles: [background]
+    command: ["python3", "api_trade/scripts/fetch_data.py"]
+
+  demo-event-publisher:
+    <<: *backend-service
+    profiles: [simulation]
+    command: ["python", "manage.py", "publish_demo_events"]
+
+  simulated-execution-consumer:
+    <<: *backend-service
+    profiles: [simulation]
+    command: ["python", "manage.py", "consume_simulated_orders"]
+
+  static-maintenance:
+    image: ${BACKEND_IMAGE:?BACKEND_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    profiles: [release]
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    volumes:
+      - static_files:/app/static
+      - ./releases:/releases
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+
+  nginx:
+    image: ${EDGE_IMAGE:?EDGE_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 127.0.0.1:${PORT:?PORT is required}:8080
+    volumes:
+      - static_files:/app/static:ro
+      - ./media:/app/media:ro
+    environment:
+      WEB_HOST: web:8000
+      DAPHNE_HOST: daphne:8001
+      CENTRIFUGO_HOST: centrifugo:8000
+      PUBLIC_SERVER_NAME: ${PUBLIC_SERVER_NAME:?PUBLIC_SERVER_NAME is required}
+    tmpfs:
+      - /etc/nginx/conf.d:rw,noexec,nosuid,nodev,uid=101,gid=101,mode=0755
+      - /tmp:rw,noexec,nosuid,nodev,uid=101,gid=101,mode=1777
+    networks:
+      - fx-network
+    depends_on:
+      web:
+        condition: service_healthy
+      daphne:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/healthz
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  statsd-exporter:
+    image: ${STATSD_EXPORTER_IMAGE:?STATSD_EXPORTER_IMAGE must be an immutable repository@sha256 digest}
+    pull_policy: never
+    restart: unless-stopped
+    command: ["--statsd.mapping-config=/statsd/statsd.conf"]
+    volumes:
+      - ./statsd-exporter/statsd.conf:/statsd/statsd.conf:ro
+    expose:
+      - "9102"
+      - "9125/udp"
+    networks:
+      - fx-network
+      - monitoring
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
+  static_files:
+
+networks:
+  fx-network:
+    internal: true
+  financial-api:
+    external: true
+    name: ${FINANCIAL_API_NETWORK:?FINANCIAL_API_NETWORK is required}
+  monitoring:
+    external: true
+    name: ${MONITORING_NETWORK:?MONITORING_NETWORK is required}

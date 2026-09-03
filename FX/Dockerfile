@@ -12,19 +12,35 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
 COPY FX/requirements.txt /tmp/requirements.txt
+COPY scripts/sanitize_autobahn_cryptosign.py /tmp/sanitize_autobahn_cryptosign.py
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir --requirement /tmp/requirements.txt \
-    && sed -i '/    Example input:/,/    :param keydata:/{ /    Example input:/!{ /    :param keydata:/!d; }; }' /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
+    && pip check \
+    && python /tmp/sanitize_autobahn_cryptosign.py \
+        /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
+    && python -m py_compile \
+        /opt/venv/lib/python3.11/site-packages/autobahn/wamp/cryptosign.py \
     && find /opt/venv -type d -name __pycache__ -prune -exec rm -rf '{}' + \
     && find /opt/venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
     && pip uninstall --yes pip setuptools wheel \
-    && rm -rf /root/.cache /tmp/requirements.txt
+    && rm -rf \
+        /root/.cache \
+        /tmp/requirements.txt \
+        /tmp/sanitize_autobahn_cryptosign.py
 
 FROM ${PYTHON_IMAGE} AS runtime
 
+ARG VCS_REF=unknown
+ARG BUILD_VERSION=unreleased
+ARG BUILD_DATE=unknown
+
 ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    RELEASE_SHA="${VCS_REF}" \
+    BEYVRA_RELEASE_ID="${BUILD_VERSION}" \
+    BEYVRA_BUILD_TIMESTAMP="${BUILD_DATE}" \
+    BEYVRA_SOURCE_REPOSITORY="https://github.com/appolon1908-hue/beyvra-backend"
 
 WORKDIR /app/
 
@@ -41,14 +57,18 @@ COPY --chown=app:app FX/ /app/
 COPY --chown=app:app contracts/ /contracts/
 COPY --chown=app:app scripts/ /scripts/
 
-RUN chmod +x /app/worker-entrypoint.sh /app/beat-entrypoint.sh /app/web-init-prod.sh
+RUN chmod +x \
+    /app/worker-entrypoint.sh \
+    /app/beat-entrypoint.sh \
+    /app/web-init-prod.sh \
+    /app/web-start-prod.sh \
+    /app/release-init-prod.sh
 
-ARG VCS_REF=unknown
-ARG BUILD_VERSION=unreleased
-ARG BUILD_DATE=unknown
-LABEL org.opencontainers.image.source="https://github.com/appolon1908-hue/trading-backend" \
+LABEL org.opencontainers.image.source="https://github.com/appolon1908-hue/beyvra-backend" \
       org.opencontainers.image.revision="$VCS_REF" \
       org.opencontainers.image.version="$BUILD_VERSION" \
-      org.opencontainers.image.created="$BUILD_DATE"
+      org.opencontainers.image.created="$BUILD_DATE" \
+      org.opencontainers.image.title="Beyvra backend" \
+      org.opencontainers.image.description="Fail-closed Beyvra API and read-only control plane"
 
 USER app
