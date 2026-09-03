@@ -13,7 +13,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
@@ -34,7 +34,7 @@ jobs:
           --health-cmd "pg_isready -U codestra_ci -d codestra_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -91,7 +91,7 @@ jobs:
           test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
           test "$observed_base" = "$EXPECTED_BASE_SHA"
           printf 'EXPECTED_HEAD_SHA=%s\nEXPECTED_BASE_SHA=%s\nOBSERVED_HEAD_SHA=%s\nOBSERVED_BASE_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$EXPECTED_BASE_SHA" "$(jq -r .head.sha <<<"$observed")" "$observed_base"
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.EXPECTED_HEAD_SHA }}
           fetch-depth: 0
@@ -108,7 +108,7 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build application image
         run: docker build -f FX/Dockerfile -t backend-review:${{ github.sha }} .
       - name: Scan application image
