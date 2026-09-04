@@ -12,9 +12,10 @@ from rest_framework import permissions, status, throttling
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 
 from users.models import User
-from .crypto import decrypt_secret, encrypt_secret, fingerprint
+from .crypto import decrypt, decrypt_secret, encrypt, encrypt_secret, fingerprint
 from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, ServiceToken, UserImport, UserImportRow
 from .permissions import HasScope, ScopedBearerAuthentication, organization_for_request
 from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, ServiceTokenMetadataSerializer, UserCreateSerializer
@@ -22,12 +23,90 @@ from .tasks import process_user_import
 from .throttles import CRMInboundThrottle, ImportActionThrottle, ImportThrottle, UserCreateThrottle
 from .observability import IMPORT_ROWS_TOTAL, INVALID_SIGNATURE_TOTAL, USER_CREATE_TOTAL, count
 from notifications.models import WebhookSubscription
+from apps.foundation.models import ApplicationAuditEvent
+from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 from .services import emit_crm_event
 
 ALLOWED_COLUMNS = {"external_user_id", "first_name", "last_name", "email", "phone", "organization_id", "locale", "country", "source", "tags", "terms_accepted", "marketing_allowed"}
 FORBIDDEN_COLUMNS = {"password", "role", "admin", "permissions", "demo_balance", "real_balance", "account_type", "api_key", "authentication_secret"}
 MAX_UPLOAD = 5 * 1024 * 1024
 MAX_ROWS = 10000
+
+COMMAND_PARAMETERS = [
+    OpenApiParameter("Idempotency-Key", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Request-ID", OpenApiTypes.UUID, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Correlation-ID", OpenApiTypes.UUID, OpenApiParameter.HEADER, required=False),
+]
+VERSIONED_COMMAND_PARAMETERS = COMMAND_PARAMETERS + [
+    OpenApiParameter("If-Match", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True),
+]
+
+
+def _command_context(request, *, require_version=False):
+    key = request.headers.get("Idempotency-Key", "").strip()
+    request_id = request.headers.get("X-Request-ID", "").strip()
+    expected_version = request.headers.get("If-Match", "").strip()
+    if not key or len(key) > 255 or not request_id or len(request_id) > 128:
+        return None, Response({"detail": "Idempotency-Key and X-Request-ID are required"}, status=400)
+    if require_version and not expected_version:
+        return None, Response({"detail": "If-Match is required"}, status=428)
+    try:
+        correlation_id = uuid.UUID(request.headers.get("X-Correlation-ID") or request_id)
+    except (TypeError, ValueError):
+        return None, Response({"detail": "correlation identifier must be a UUID"}, status=400)
+    return (key, request_id, correlation_id, expected_version), None
+
+
+def _actor_ref(request):
+    token = getattr(request, "service_token", None)
+    return f"service-token:{token.pk}" if token else str(request.user.pk)
+
+
+def _begin_command(request, *, organization, key, payload):
+    return begin_idempotent_request(
+        key=key, tenant_ref=organization.pk, actor_ref=_actor_ref(request), endpoint=request.path,
+        method=request.method, request_data={"api_version": "v1", **payload},
+    )
+
+
+def _replay(record):
+    if record.response_status is None or record.response_body is None:
+        return Response({"detail": "command result is not yet available"}, status=409)
+    return Response(record.response_body, status=record.response_status)
+
+
+def _complete_secret_result(record, *, status_code, body, raw_secret, resource_type, resource_id):
+    ciphertext, nonce, version = encrypt(raw_secret)
+    stored = {**body, "_secret_envelope": {"ciphertext": ciphertext, "nonce": nonce, "version": version}}
+    complete_idempotent_request(record, status=status_code, body=stored, resource_type=resource_type, resource_id=resource_id)
+
+
+def _replay_secret(record):
+    if record.response_status is None or record.response_body is None:
+        return Response({"detail": "command result is not yet available"}, status=409)
+    if record.expires_at <= timezone.now():
+        return Response({"detail": "one-time secret replay window has expired"}, status=410)
+    stored = dict(record.response_body)
+    envelope = stored.pop("_secret_envelope", None)
+    if not envelope:
+        return Response({"detail": "one-time secret is unavailable"}, status=409)
+    stored["token"] = decrypt(envelope["ciphertext"], envelope["nonce"], key_version=envelope["version"])
+    return Response(stored, status=record.response_status)
+
+
+def _command_audit(*, organization, request, action, correlation_id, metadata=None):
+    actor = request.user if isinstance(request.user, User) else None
+    metadata = metadata or {}
+    event = IntegrationAuditEvent.objects.create(
+        organization=organization, actor=actor, action=action, correlation_id=correlation_id, metadata=metadata or {},
+    )
+    ApplicationAuditEvent.objects.create(
+        actor_ref=_actor_ref(request), action=action, resource_type="integration",
+        resource_id=str(metadata.get("user_id") or metadata.get("import_id") or metadata.get("connection_id") or metadata.get("token_id") or event.pk),
+        request_id=str(metadata.get("request_id", ""))[:128], correlation_id=correlation_id,
+        context={"tenant_ref": str(organization.pk)}, reason="integration command", occurred_at=timezone.now(),
+    )
+    return event
 
 
 class TenantContextView(APIView):
@@ -70,19 +149,24 @@ class UserCreateView(APIView):
     required_scope = "users:write"
     throttle_classes = [UserCreateThrottle]
 
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
         serializer = UserCreateSerializer(data=request.data); serializer.is_valid(raise_exception=True)
-        org = organization_for_request(request); key = request.headers.get("Idempotency-Key")
-        if not key or len(key) > 255: return Response({"detail": "Idempotency-Key is required"}, status=400)
-        prior = IntegrationAuditEvent.objects.filter(organization=org, action="user.create", metadata__idempotency_key=key).first()
-        if prior: return Response(prior.metadata["result"], status=200)
+        org = organization_for_request(request); command, error = _command_context(request)
+        if error: return error
+        key, request_id, correlation_id, _ = command
+        try: record, created = _begin_command(request, organization=org, key=key, payload=serializer.validated_data)
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay(record)
         try: user, account = _create_user(serializer.validated_data, org, key)
-        except PermissionError as exc: return Response({"detail": str(exc)}, status=403)
-        except (ValueError, IntegrityError) as exc: return Response({"detail": str(exc)}, status=409)
+        except PermissionError as exc: record.delete(); return Response({"detail": str(exc)}, status=403)
+        except (ValueError, IntegrityError) as exc: record.delete(); return Response({"detail": str(exc)}, status=409)
         result = _result(user, account)
         count(USER_CREATE_TOTAL)
         emit_crm_event(organization=org, event_type="user.created", data={"user_id": str(user.id), "demo_account_id": str(account.id)}, correlation_id=user.id)
-        IntegrationAuditEvent.objects.create(organization=org, action="user.create", metadata={"idempotency_key": key, "result": result})
+        _command_audit(organization=org, request=request, action="user.create", correlation_id=correlation_id, metadata={"request_id": request_id, "user_id": str(user.pk)})
+        complete_idempotent_request(record, status=201, body=result, resource_type="user", resource_id=user.pk)
         return Response(result, status=201)
 
 
@@ -126,13 +210,24 @@ class UserImportView(APIView):
     parser_classes = [MultiPartParser]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ImportThrottle]
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
         if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
         upload = request.FILES.get("file")
         if not upload or upload.size > MAX_UPLOAD or not upload.name.lower().endswith(".csv"): return Response({"detail": "UTF-8 CSV under 5MB required"}, status=400)
-        org = organization_for_request(request); key = request.headers.get("Idempotency-Key") or str(uuid.uuid4())
+        org = organization_for_request(request); command, error = _command_context(request)
+        if error: return error
+        key, request_id, correlation_id, _ = command
+        digest = hashlib.sha256()
+        for chunk in upload.chunks(): digest.update(chunk)
+        upload.seek(0)
+        try: record, command_created = _begin_command(request, organization=org, key=key, payload={"file_name": upload.name, "size": upload.size, "sha256": digest.hexdigest()})
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not command_created: return _replay(record)
         job, created = UserImport.objects.get_or_create(organization=org, idempotency_key=key, defaults={"created_by": request.user, "file_name": upload.name})
-        if not created: return Response(ImportSerializer(job).data, status=200)
+        if not created:
+            record.delete(); return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
         try:
             reader = csv.DictReader(io.StringIO(upload.read().decode("utf-8-sig"))); columns = set(reader.fieldnames or [])
             if not columns or columns - ALLOWED_COLUMNS or columns & FORBIDDEN_COLUMNS: raise ValueError("unsupported CSV columns")
@@ -150,8 +245,14 @@ class UserImportView(APIView):
                 count(IMPORT_ROWS_TOTAL, row_status.lower())
             job.row_count = job.rows.count(); job.valid_count = job.rows.filter(status="VALID").count(); job.invalid_count = job.rows.filter(status="INVALID").count(); job.save()
         except (UnicodeDecodeError, csv.Error, ValueError) as exc:
-            job.status = "FAILED"; job.save(update_fields=["status", "updated_at"]); return Response({"detail": str(exc)}, status=400)
-        return Response(ImportSerializer(job).data, status=201)
+            job.status = "FAILED"; job.save(update_fields=["status", "updated_at"])
+            body = {"detail": str(exc)}
+            complete_idempotent_request(record, status=400, body=body, resource_type="user_import", resource_id=job.pk)
+            return Response(body, status=400)
+        body = ImportSerializer(job).data
+        _command_audit(organization=org, request=request, action="user_import.upload", correlation_id=correlation_id, metadata={"request_id": request_id, "import_id": str(job.pk), "file_sha256": digest.hexdigest()})
+        complete_idempotent_request(record, status=201, body=body, resource_type="user_import", resource_id=job.pk)
+        return Response(body, status=201)
 
 
 class ImportDetailView(APIView):
@@ -167,17 +268,28 @@ class ImportRowsView(ImportDetailView):
 class ImportActionView(ImportDetailView):
     action = None
     throttle_classes = [ImportActionThrottle]
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request, import_id):
-        job = self.get_job(request, import_id)
+        command, error = _command_context(request)
+        if error: return error
+        key, request_id, correlation_id, _ = command
+        job = UserImport.objects.select_for_update().get(id=import_id, created_by=request.user)
+        try: record, created = _begin_command(request, organization=job.organization, key=key, payload={"import_id": str(import_id), "action": self.action})
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay(record)
         if self.action == "commit" and job.status == "UPLOADED":
             if UserImport.objects.filter(organization=job.organization, status__in=["COMMITTED", "PROCESSING"]).exclude(id=job.id).exists():
-                return Response({"detail": "organization import concurrency limit reached"}, status=429)
+                record.delete(); return Response({"detail": "organization import concurrency limit reached"}, status=429)
             lock_key = f"import-commit:{job.id}"
-            if not cache.add(lock_key, "queued", timeout=3600): return Response({"detail": "import already queued"}, status=409)
-            job.status = "COMMITTED"; job.save(update_fields=["status", "updated_at"]); process_user_import.delay(str(job.id))
+            if not cache.add(lock_key, "queued", timeout=3600): record.delete(); return Response({"detail": "import already queued"}, status=409)
+            job.status = "COMMITTED"; job.save(update_fields=["status", "updated_at"]); transaction.on_commit(lambda: process_user_import.delay(str(job.id)))
         elif self.action == "cancel" and job.status in {"UPLOADED", "COMMITTED"}: job.status = "CANCELLED"; job.save(update_fields=["status", "updated_at"])
-        else: return Response({"detail": "invalid import state"}, status=409)
-        return Response(ImportSerializer(job).data)
+        else: record.delete(); return Response({"detail": "invalid import state"}, status=409)
+        body = ImportSerializer(job).data
+        _command_audit(organization=job.organization, request=request, action=f"user_import.{self.action}", correlation_id=correlation_id, metadata={"request_id": request_id, "import_id": str(job.pk), "status": job.status})
+        complete_idempotent_request(record, status=200, body=body, resource_type="user_import", resource_id=job.pk)
+        return Response(body)
 
 
 class ImportCommitView(ImportActionView): action = "commit"
@@ -187,25 +299,56 @@ class ImportCancelView(ImportActionView): action = "cancel"
 class CRMConnectionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request): return Response(CRMConnectionSerializer(organization_for_request(request).crm_connections.all(), many=True).data)
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
         if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
-        serializer = CRMConnectionSerializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; secret = data.pop("secret"); ciphertext, nonce, version = encrypt_secret(secret); connection = CRMConnection.objects.create(organization=organization_for_request(request), owner=request.user, secret_encrypted="", secret_ciphertext=ciphertext, secret_nonce=nonce, secret_key_version=version, secret_fingerprint=fingerprint(secret), secret_created_at=timezone.now(), **data)
+        serializer = CRMConnectionSerializer(data=request.data); serializer.is_valid(raise_exception=True)
+        org = organization_for_request(request); command, error = _command_context(request)
+        if error: return error
+        key, request_id, correlation_id, _ = command
+        try: record, created = _begin_command(request, organization=org, key=key, payload=serializer.validated_data)
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay(record)
+        data = serializer.validated_data; secret = data.pop("secret"); ciphertext, nonce, version = encrypt_secret(secret); connection = CRMConnection.objects.create(organization=org, owner=request.user, secret_encrypted="", secret_ciphertext=ciphertext, secret_nonce=nonce, secret_key_version=version, secret_fingerprint=fingerprint(secret), secret_created_at=timezone.now(), **data)
         WebhookSubscription.objects.create(user=request.user, url=connection.endpoint, categories=connection.event_categories, is_active=connection.is_active, **__import__("notifications.services", fromlist=["encrypted_webhook_fields"]).encrypted_webhook_fields(secret))
-        return Response(CRMConnectionSerializer(connection).data, status=201)
+        body = CRMConnectionSerializer(connection).data
+        _command_audit(organization=org, request=request, action="crm.connection.create", correlation_id=correlation_id, metadata={"request_id": request_id, "connection_id": str(connection.pk)})
+        complete_idempotent_request(record, status=201, body=body, resource_type="crm_connection", resource_id=connection.pk)
+        return Response(body, status=201)
 
 
 class CRMConnectionDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get_object(self, request, connection_id): return CRMConnection.objects.get(id=connection_id, organization=organization_for_request(request))
     def get(self, request, connection_id): return Response(CRMConnectionSerializer(self.get_object(request, connection_id)).data)
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def patch(self, request, connection_id):
-        obj = self.get_object(request, connection_id); data = request.data.copy(); secret = data.pop("secret", None); serializer = CRMConnectionSerializer(obj, data=data, partial=True); serializer.is_valid(raise_exception=True); obj = serializer.save()
+        command, error = _command_context(request, require_version=True)
+        if error: return error
+        key, request_id, correlation_id, expected_version = command
+        org = organization_for_request(request)
+        obj = CRMConnection.objects.select_for_update().get(id=connection_id, organization=org)
+        old_endpoint = obj.endpoint
+        data = request.data.copy(); secret = data.pop("secret", None); serializer = CRMConnectionSerializer(obj, data=data, partial=True); serializer.is_valid(raise_exception=True)
+        try: record, created = _begin_command(request, organization=org, key=key, payload={"connection_id": str(connection_id), "expected_version": expected_version, **request.data})
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay(record)
+        current_version = obj.updated_at.isoformat().replace("+00:00", "Z")
+        if expected_version != current_version:
+            record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
+        obj = serializer.save()
+        subscription_updates = {"url": obj.endpoint, "categories": obj.event_categories, "is_active": obj.is_active}
         if secret:
             ciphertext, nonce, version = encrypt_secret(secret); obj.secret_encrypted = ""; obj.secret_ciphertext = ciphertext; obj.secret_nonce = nonce; obj.secret_key_version = version; obj.secret_fingerprint = fingerprint(secret); obj.secret_rotated_at = timezone.now(); obj.save(update_fields=["secret_encrypted", "secret_ciphertext", "secret_nonce", "secret_key_version", "secret_fingerprint", "secret_rotated_at", "updated_at"])
             from notifications.services import encrypted_webhook_fields
-            WebhookSubscription.objects.filter(user=obj.owner, url=obj.endpoint).update(**encrypted_webhook_fields(secret))
-        WebhookSubscription.objects.filter(user=obj.owner, url=obj.endpoint).update(categories=obj.event_categories, is_active=obj.is_active)
-        return Response(CRMConnectionSerializer(obj).data)
+            subscription_updates.update(encrypted_webhook_fields(secret))
+        WebhookSubscription.objects.filter(user=obj.owner, url=old_endpoint).update(**subscription_updates)
+        body = CRMConnectionSerializer(obj).data
+        _command_audit(organization=org, request=request, action="crm.connection.update", correlation_id=correlation_id, metadata={"request_id": request_id, "connection_id": str(obj.pk), "secret_rotated": bool(secret)})
+        complete_idempotent_request(record, status=200, body=body, resource_type="crm_connection", resource_id=obj.pk)
+        return Response(body)
 
 
 class ServiceTokenListView(APIView):
@@ -213,6 +356,8 @@ class ServiceTokenListView(APIView):
     def get(self, request):
         org = organization_for_request(request)
         return Response(ServiceTokenMetadataSerializer(org.service_tokens.order_by("-created_at"), many=True).data)
+    @extend_schema(parameters=COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request):
         if not request.user.is_staff:
             return Response({"detail": "organization administrator required"}, status=403)
@@ -220,20 +365,46 @@ class ServiceTokenListView(APIView):
         allowed = {"users:read", "users:write", "users:import", "demo_accounts:read", "crm_connections:read", "crm_connections:write", "crm_deliveries:read", "crm_deliveries:retry", "webhooks:read", "webhooks:write"}
         if not isinstance(scopes, list) or not set(scopes).issubset(allowed):
             return Response({"detail": "invalid scopes"}, status=400)
-        org = organization_for_request(request); token, raw = ServiceToken.issue(org, request.data.get("name", "integration"), scopes); token.owner = request.user; token.save(update_fields=["owner"])
-        IntegrationAuditEvent.objects.create(organization=org, actor=request.user, action="service_token.issue", metadata={"token_id": str(token.id), "fingerprint": token.fingerprint})
-        response = ServiceTokenMetadataSerializer(token).data; response["token"] = raw
-        return Response(response, status=201)
+        org = organization_for_request(request); command, error = _command_context(request)
+        if error: return error
+        key, request_id, correlation_id, _ = command
+        payload = {"name": request.data.get("name", "integration"), "scopes": sorted(scopes)}
+        try: record, created = _begin_command(request, organization=org, key=key, payload=payload)
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay_secret(record)
+        token, raw = ServiceToken.issue(org, payload["name"], scopes); token.owner = request.user; token.save(update_fields=["owner"])
+        _command_audit(organization=org, request=request, action="service_token.issue", correlation_id=correlation_id, metadata={"request_id": request_id, "token_id": str(token.id), "fingerprint": token.fingerprint})
+        response = ServiceTokenMetadataSerializer(token).data
+        _complete_secret_result(record, status_code=201, body=response, raw_secret=raw, resource_type="service_token", resource_id=token.pk)
+        return Response({**response, "token": raw}, status=201)
 
 
 class ServiceTokenActionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def post(self, request, token_id):
-        token = ServiceToken.objects.get(id=token_id, organization=organization_for_request(request))
+        command, error = _command_context(request, require_version=True)
+        if error: return error
+        key, request_id, correlation_id, expected_version = command
+        org = organization_for_request(request)
+        token = ServiceToken.objects.select_for_update().get(id=token_id, organization=org)
         if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
         action = request.data.get("action", "revoke")
+        if action not in {"revoke", "rotate"}: return Response({"detail": "unsupported action"}, status=400)
+        try: record, created = _begin_command(request, organization=org, key=key, payload={"token_id": str(token_id), "action": action, "expected_version": expected_version})
+        except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created: return _replay_secret(record) if action == "rotate" else _replay(record)
+        current_version = "ACTIVE" if token.is_active and token.revoked_at is None else "REVOKED"
+        if expected_version != current_version:
+            record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
         if action == "revoke":
-            token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); return Response(ServiceTokenMetadataSerializer(token).data)
+            token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); body = ServiceTokenMetadataSerializer(token).data
+            _command_audit(organization=org, request=request, action="service_token.revoke", correlation_id=correlation_id, metadata={"request_id": request_id, "token_id": str(token.pk)})
+            complete_idempotent_request(record, status=200, body=body, resource_type="service_token", resource_id=token.pk)
+            return Response(body)
         if action == "rotate":
-            replacement, raw = ServiceToken.issue(token.organization, token.name, token.scopes); replacement.owner = request.user; replacement.save(update_fields=["owner"]); token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); response = ServiceTokenMetadataSerializer(replacement).data; response["token"] = raw; return Response(response, status=201)
-        return Response({"detail": "unsupported action"}, status=400)
+            replacement, raw = ServiceToken.issue(token.organization, token.name, token.scopes); replacement.owner = request.user; replacement.save(update_fields=["owner"]); token.is_active = False; token.revoked_at = timezone.now(); token.save(update_fields=["is_active", "revoked_at"]); response = ServiceTokenMetadataSerializer(replacement).data
+            _command_audit(organization=org, request=request, action="service_token.rotate", correlation_id=correlation_id, metadata={"request_id": request_id, "token_id": str(token.pk), "replacement_id": str(replacement.pk)})
+            _complete_secret_result(record, status_code=201, body=response, raw_secret=raw, resource_type="service_token", resource_id=replacement.pk)
+            return Response({**response, "token": raw}, status=201)
