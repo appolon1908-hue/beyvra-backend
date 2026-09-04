@@ -1,0 +1,77 @@
+name: Registration safety CI
+
+on:
+  pull_request:
+    paths:
+      - "FX/users/registration_safety.py"
+      - "FX/users/google_urls.py"
+      - "FX/users/models.py"
+      - "FX/users/tasks.py"
+      - "FX/users/migrations/**"
+      - "FX/users/tests/test_email_verification.py"
+      - ".github/workflows/registration-safety-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "FX/users/registration_safety.py"
+      - "FX/users/google_urls.py"
+      - "FX/users/models.py"
+      - "FX/users/tasks.py"
+      - "FX/users/migrations/**"
+      - "FX/users/tests/test_email_verification.py"
+      - ".github/workflows/registration-safety-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-registration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: codestra_ci
+          POSTGRES_USER: codestra_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U codestra_ci -d codestra_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: FX/requirements.txt
+      - name: Install application dependencies
+        run: pip install -r FX/requirements.txt
+      - name: Validate migration graph and registration concurrency
+        working-directory: FX
+        env:
+          DJANGO_SETTINGS_MODULE: FX.test_settings
+          SECRET_KEY: ci-only-secret-key-with-more-than-fifty-characters-for-checks
+          DEBUG: "0"
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+          CSRF_TRUSTED_ORIGINS: '[]'
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          REDIS_PASSWORD: ci-only-password
+          REDIS_DATABASE: "0"
+          DB_NAME: codestra_ci
+          DB_USER: codestra_ci
+          DB_PASSWORD: ci-only-password
+          DB_HOST: 127.0.0.1
+          DB_PORT: "5432"
+          TEST_DB_NAME: test_codestra_ci
+        run: |
+          python manage.py check --deploy
+          python manage.py makemigrations --check --dry-run
+          python manage.py test users.tests.test_email_verification --verbosity 2
