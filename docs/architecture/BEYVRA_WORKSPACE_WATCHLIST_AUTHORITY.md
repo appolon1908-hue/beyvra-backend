@@ -20,7 +20,8 @@ Every mutation requires:
 - `Idempotency-Key`;
 - `X-Request-ID`;
 - an optional `X-Correlation-ID`;
-- the current integer `version` in the JSON body for update, delete, and item mutations.
+- the current integer `version` in the JSON body for PATCH and item-add commands;
+- the current integer `version` as a query precondition for DELETE commands, avoiding unreliable intermediary handling of DELETE bodies.
 
 Exact replays return the original durable result. Reusing a key for different semantics returns `IDEMPOTENCY_CONFLICT`. The tenant-membership row and target watchlist are locked before mutation, so concurrent commands cannot both consume one version.
 
