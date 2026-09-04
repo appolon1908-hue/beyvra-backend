@@ -51,12 +51,12 @@ EXTERNAL_EXECUTION_ENABLED=false
 LIVE_BROKER_ROUTING_ENABLED=false
 FIX_LIVE_SESSION_ENABLED=false
 REAL_MONEY_ENABLED=false
-PAYMENT_EXECUTION=false
-CUSTODY_EXECUTION=false
-CHAIN_BROADCAST=false
+PAYMENTS_ENABLED=false
+LIVE_CUSTODY_ENABLED=false
+CROSS_CHAIN_TRANSFERS_ENABLED=false
 ```
 
-A separate protected activation release is required to change any live-effect capability. Source merge, image build, staging deployment, or read-only production canary does not authorize real trading or money movement.
+These names are the actual runtime gates read by the current backend and read-only release policy. A separate protected activation release is required to change any live-effect capability. Source merge, image build, staging deployment, or read-only production canary does not authorize real trading or money movement.
 
 ## Engineering and release rules
 
