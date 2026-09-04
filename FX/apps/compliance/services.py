@@ -213,6 +213,10 @@ def append_case_event(case_id, event_type, actor, metadata=None):
         if event_type in ("CASE_APPROVED","CASE_REJECTED"): case.resolved_at=timezone.now(); case.resolution=transitions[event_type]
         case.save()
         ComplianceAuditEvent.objects.create(account=case.account,event_type="CASE_RESOLUTION" if event_type in ("CASE_APPROVED","CASE_REJECTED") else event_type,actor_ref=str(actor.pk),reason_codes=case.reason_codes,state_after={"case_id":str(case.pk),"status":case.status})
+    else:
+        # Notes are mutations too: advance updated_at so If-Match protects
+        # concurrent timeline writers rather than remaining indefinitely valid.
+        case.save(update_fields=["updated_at"])
     return event
 
 @transaction.atomic
