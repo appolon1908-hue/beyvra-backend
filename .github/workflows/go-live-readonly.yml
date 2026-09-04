@@ -1,0 +1,52 @@
+name: Beyvra — One-Click Read-Only Go Live
+run-name: Beyvra read-only go-live · run ${{ github.run_number }}
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: beyvra-one-click-readonly-go-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  go-live:
+    name: Build, sign, certify, roll back, and promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ secrets.BEYVRA_RELEASE_BOT_TOKEN }}
+      BACKEND_REPOSITORY: appolon1908-hue/beyvra-backend
+      FRONTEND_REPOSITORY: appolon1908-hue/beyvra-frontend
+      BEYVRA_RELEASE_SUMMARY_PATH: one-click-readonly-release-summary.json
+    steps:
+      - name: Check out exact protected backend main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the cross-repository release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth status
+
+      - name: Validate the fail-closed orchestrator
+        run: python3 operations/one_click_readonly_release.py --self-test
+
+      - name: Run the complete signed read-only go-live chain
+        run: python3 operations/one_click_readonly_release.py
+
+      - name: Retain the final immutable release tuple and workflow evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: beyvra-one-click-readonly-go-live-${{ github.run_id }}-${{ github.run_attempt }}
+          path: one-click-readonly-release-summary.json
+          if-no-files-found: error
+          retention-days: 90
