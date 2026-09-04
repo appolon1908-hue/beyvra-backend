@@ -25,6 +25,13 @@ class InstitutionalSubaccountSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "institution_id", "tenant_id", "created_at", "updated_at")
 
 
+class InstitutionalSubaccountCreateSerializer(InstitutionalSubaccountSerializer):
+    institution_id = serializers.UUIDField(required=True, write_only=True)
+
+    class Meta(InstitutionalSubaccountSerializer.Meta):
+        read_only_fields = ("id", "tenant_id", "created_at", "updated_at")
+
+
 class CustodyStructureSafeSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustodyStructure

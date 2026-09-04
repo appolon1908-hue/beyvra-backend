@@ -1841,7 +1841,7 @@ paths:
         schema:
           type: string
           format: date
-          default: '2026-08-12'
+          default: '2026-09-02'
         required: true
       tags:
       - get-calendar
@@ -1915,7 +1915,7 @@ paths:
         schema:
           type: string
           format: date
-          default: '2026-08-12'
+          default: '2026-09-02'
       - in: query
         name: exclude_contentless
         schema:
@@ -1950,7 +1950,7 @@ paths:
         schema:
           type: string
           format: date
-          default: '2026-08-12'
+          default: '2026-09-02'
       - in: query
         name: symbol
         schema:
@@ -2591,6 +2591,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PriceAlert'
+          description: ''
+  /api/notification/email-preferences/:
+    get:
+      operationId: notification_email_preferences_retrieve
+      tags:
+      - notification
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailNotificationPreference'
+          description: ''
+    patch:
+      operationId: notification_email_preferences_partial_update
+      tags:
+      - notification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailNotificationPreference'
           description: ''
   /api/notification/inbox/:
     get:
@@ -4711,6 +4745,113 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserUpdate'
           description: ''
+  /api/user/oidc/callback/:
+    get:
+      operationId: user_oidc_callback_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/config/:
+    get:
+      operationId: user_oidc_config_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/csrf/:
+    get:
+      operationId: user_oidc_csrf_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/login/:
+    get:
+      operationId: user_oidc_login_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/logout/:
+    post:
+      operationId: user_oidc_logout_create
+      tags:
+      - user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/password-reset/:
+    get:
+      operationId: user_oidc_password_reset_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/user/oidc/register/:
+    get:
+      operationId: user_oidc_register_retrieve
+      tags:
+      - user
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/user/password_change/:
     post:
       operationId: user_password_change_create
@@ -5959,6 +6100,113 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserUpdate'
           description: ''
+  /api/v1/auth/oidc/callback/:
+    get:
+      operationId: v1_auth_oidc_callback_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/config/:
+    get:
+      operationId: v1_auth_oidc_config_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/csrf/:
+    get:
+      operationId: v1_auth_oidc_csrf_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/login/:
+    get:
+      operationId: v1_auth_oidc_login_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/logout/:
+    post:
+      operationId: v1_auth_oidc_logout_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/password-reset/:
+    get:
+      operationId: v1_auth_oidc_password_reset_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/auth/oidc/register/:
+    get:
+      operationId: v1_auth_oidc_register_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/auth/password_change/:
     post:
       operationId: v1_auth_password_change_create
@@ -6153,22 +6401,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
-          description: ''
-  /api/v1/auth/test/otp:
-    get:
-      operationId: v1_auth_test_otp_retrieve
-      description: Test-only OTP retrieval; unreachable unless an explicit staging
-        secret is configured.
-      tags:
-      - v1
-      security:
-      - {}
       responses:
         '200':
           content:
@@ -7958,6 +8190,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceAlert'
           description: ''
+  /api/v1/notifications/email-preferences/:
+    get:
+      operationId: v1_notifications_email_preferences_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailNotificationPreference'
+          description: ''
+    patch:
+      operationId: v1_notifications_email_preferences_partial_update
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEmailNotificationPreferenceRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailNotificationPreference'
+          description: ''
   /api/v1/notifications/inbox/:
     get:
       operationId: v1_notifications_inbox_list
@@ -8821,25 +9087,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_reconciliation_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalReconciliationResult'
           description: ''
   /api/v1/operator/institutional/reconciliation/run:
     get:
@@ -8855,25 +9137,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalReconciliationResult'
           description: ''
   /api/v1/operator/institutional/segregated-accounts:
     get:
@@ -8913,25 +9211,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_subaccounts_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalSubaccount'
           description: ''
   /api/v1/operator/institutional/subaccounts/{subaccount_id}:
     get:
@@ -8955,6 +9269,25 @@ paths:
     patch:
       operationId: v1_operator_institutional_subaccounts_partial_update
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: subaccount_id
         schema:
@@ -8967,19 +9300,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalSubaccount'
           description: ''
   /api/v1/operator/post-trade/confirmations:
     get:
@@ -14155,8 +14488,9 @@ components:
           maxLength: 255
         number_of_shares:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
         initial_price:
           type: number
           format: double
@@ -14218,8 +14552,9 @@ components:
           maxLength: 255
         number_of_shares:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
         initial_price:
           type: number
           format: double
@@ -14738,6 +15073,35 @@ components:
       description: |-
         * `UP` - UP
         * `DOWN` - DOWN
+    EmailNotificationPreference:
+      type: object
+      properties:
+        account:
+          type: string
+          readOnly: true
+        security:
+          type: string
+          readOnly: true
+        trading:
+          type: boolean
+        funds:
+          type: boolean
+        statements:
+          type: boolean
+        support:
+          type: boolean
+        marketing:
+          type: boolean
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - marketing
+      - security
+      - updated_at
     EnvironmentEnum:
       enum:
       - SIMULATION
@@ -14994,6 +15358,144 @@ components:
         * `passport` - Passport
         * `id_card` - ID Card
         * `driver_license` - Driver License
+    InstitutionalReconciliationCommandRequest:
+      type: object
+      properties:
+        institution_id:
+          type: string
+          format: uuid
+      required:
+      - institution_id
+    InstitutionalReconciliationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        violations:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - id
+      - status
+      - violations
+    InstitutionalSubaccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        tenant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        parent_subaccount_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+        display_name:
+          type: string
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_currency
+      - code
+      - created_at
+      - display_name
+      - effective_from
+      - id
+      - institution_id
+      - parent_subaccount_id
+      - subaccount_type
+      - tenant_id
+      - updated_at
+    InstitutionalSubaccountCreateRequest:
+      type: object
+      properties:
+        institution_id:
+          type: string
+          format: uuid
+          writeOnly: true
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - base_currency
+      - code
+      - display_name
+      - effective_from
+      - institution_id
+      - subaccount_type
     Instrument:
       type: object
       properties:
@@ -16250,12 +16752,14 @@ components:
           maxLength: 255
         min_length:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
         max_length:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
         strength:
           $ref: '#/components/schemas/StrengthEnum'
     PasswordPolicyRequest:
@@ -16271,12 +16775,14 @@ components:
           maxLength: 255
         min_length:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
         max_length:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
         strength:
           $ref: '#/components/schemas/StrengthEnum'
     PasswordResetConfirmRequest:
@@ -16362,6 +16868,17 @@ components:
           type: string
           nullable: true
           maxLength: 50
+    PatchedEmailNotificationPreferenceRequest:
+      type: object
+      properties:
+        trading:
+          type: boolean
+        funds:
+          type: boolean
+        statements:
+          type: boolean
+        support:
+          type: boolean
     PatchedGenericApiResponseRequest:
       type: object
       description: Fallback shape for legacy endpoints that return arbitrary JSON.
@@ -16382,6 +16899,40 @@ components:
       properties:
         restriction_type:
           $ref: '#/components/schemas/RestrictionTypeEnum'
+    PatchedInstitutionalSubaccountRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
     PatchedKYCFileRequest:
       type: object
       properties:
@@ -16497,6 +17048,15 @@ components:
           minLength: 1
           title: Email address
           maxLength: 254
+        identity_issuer:
+          type: string
+          format: uri
+          default: ''
+          maxLength: 255
+        identity_subject:
+          type: string
+          default: ''
+          maxLength: 255
         profile_picture:
           type: string
           format: binary
@@ -17056,8 +17616,9 @@ components:
           readOnly: true
         version:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
           default: 1
         period_start:
           type: string
@@ -17121,6 +17682,28 @@ components:
         * `STRONG` - STRONG
         * `MODERATE` - MODERATE
         * `WEAK` - WEAK
+    SubaccountTypeEnum:
+      enum:
+      - TRADING
+      - STRATEGY
+      - PORTFOLIO
+      - CLIENT
+      - FUND
+      - SLEEVE
+      - HOUSE_REFERENCE
+      - SETTLEMENT_REFERENCE
+      - TEST
+      type: string
+      description: |-
+        * `TRADING` - TRADING
+        * `STRATEGY` - STRATEGY
+        * `PORTFOLIO` - PORTFOLIO
+        * `CLIENT` - CLIENT
+        * `FUND` - FUND
+        * `SLEEVE` - SLEEVE
+        * `HOUSE_REFERENCE` - HOUSE_REFERENCE
+        * `SETTLEMENT_REFERENCE` - SETTLEMENT_REFERENCE
+        * `TEST` - TEST
     SupportCase:
       type: object
       properties:
@@ -17321,8 +17904,9 @@ components:
           type: integer
         duration:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
         result_time:
           type: string
@@ -17379,8 +17963,9 @@ components:
           $ref: '#/components/schemas/TransactionCompact'
         duration:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
           nullable: true
         open:
           type: string
@@ -17459,8 +18044,9 @@ components:
           type: boolean
         version:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
       required:
       - amount
       - asset
@@ -17815,6 +18401,15 @@ components:
           minLength: 1
           title: Email address
           maxLength: 254
+        identity_issuer:
+          type: string
+          format: uri
+          default: ''
+          maxLength: 255
+        identity_subject:
+          type: string
+          default: ''
+          maxLength: 255
         profile_picture:
           type: string
           format: binary
@@ -17919,6 +18514,15 @@ components:
           format: email
           title: Email address
           maxLength: 254
+        identity_issuer:
+          type: string
+          format: uri
+          default: ''
+          maxLength: 255
+        identity_subject:
+          type: string
+          default: ''
+          maxLength: 255
         profile_picture:
           type: string
           format: uri
@@ -18057,6 +18661,15 @@ components:
           minLength: 1
           title: Email address
           maxLength: 254
+        identity_issuer:
+          type: string
+          format: uri
+          default: ''
+          maxLength: 255
+        identity_subject:
+          type: string
+          default: ''
+          maxLength: 255
         profile_picture:
           type: string
           format: binary
