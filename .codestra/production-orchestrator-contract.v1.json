@@ -1,0 +1,52 @@
+{
+  "schema_version": "codestra.production-orchestrator-contract.v1",
+  "repository": "appolon1908-hue/beyvra-backend",
+  "repository_id": 1319831182,
+  "default_branch": "main",
+  "role": "application",
+  "release_intent_workflow": ".github/workflows/manual-release-intent.yml",
+  "deployment_authority": true,
+  "require_verified_commit": true,
+  "required_checks": [
+    "container",
+    "exact-head-base-ci",
+    "secrets",
+    "validate"
+  ],
+  "supported_phases": [
+    "plan",
+    "staging",
+    "canary",
+    "production"
+  ],
+  "artifact_policy": {
+    "minimum_images": 2,
+    "maximum_images": 2,
+    "require_digest": true,
+    "allow_rebuild_after_staging": false,
+    "allow_retag_after_staging": false,
+    "require_sbom": true,
+    "require_provenance": true,
+    "require_signature": false
+  },
+  "environments": {
+    "staging": "staging-readonly",
+    "canary": "production-readonly-canary",
+    "production": "production"
+  },
+  "native_workflows": {
+    "immutable_deploy": ".github/workflows/deploy.yml",
+    "certify": ".github/workflows/certify-deployment.yml"
+  },
+  "safety": {
+    "external_effects_default": false,
+    "live_email_delivery": false,
+    "live_sms_delivery": false,
+    "live_pstn_dialing": false,
+    "odoo_write": false,
+    "n8n_external_delivery": false,
+    "live_trading": false,
+    "payment_execution": false
+  },
+  "blockers": []
+}
