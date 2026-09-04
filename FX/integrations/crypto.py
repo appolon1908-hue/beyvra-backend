@@ -70,6 +70,11 @@ def fingerprint(value):
     return hashlib.sha256(value.encode()).hexdigest()[:16]
 
 
+def keyed_fingerprint(value):
+    """Deterministic lookup fingerprint protected by a non-database pepper."""
+    return hmac.new(token_pepper(), value.encode(), hashlib.sha256).hexdigest()[:32]
+
+
 def token_digest(raw):
     return hmac.new(token_pepper(), raw.encode(), hashlib.sha256).hexdigest()
 
