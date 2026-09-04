@@ -185,9 +185,15 @@ CORS_ALLOW_HEADERS = [
     "authorization",
     "content-type",
     "dnt",
+    "idempotency-key",
+    "if-match",
     "origin",
     "user-agent",
     "x-csrftoken",
+    "x-request-id",
+    "x-correlation-id",
+    "x-beyvra-tenant",
+    "x-organization-id",
     "x-requested-with",
 ]
 
