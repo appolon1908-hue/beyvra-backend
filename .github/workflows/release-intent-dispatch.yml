@@ -1,0 +1,42 @@
+name: Dispatch reviewed release intent
+
+on:
+  workflow_run:
+    workflows: ["Certification authority CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+concurrency:
+  group: beyvra-backend-release-intent
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: dispatch
+        name: Validate and dispatch exact protected-main intent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GREEN_MAIN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: operations/dispatch_release_intent.sh
+      - uses: actions/upload-artifact@v7
+        if: steps.dispatch.outputs.dispatched == 'true'
+        with:
+          name: beyvra-backend-dispatch-${{ github.event.workflow_run.head_sha }}
+          path: dispatch-evidence.json
+          if-no-files-found: error
+          retention-days: 90
