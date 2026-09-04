@@ -157,55 +157,88 @@ class EmailIntegrationTests(TestCase):
             self.assertEqual(EmailMiddlewareClient().token(), "cached-token")
         self.assertEqual(post.call_count, 1)
 
-    @override_settings(BEYVRA_EMAIL_API_URL="")
-    def test_missing_middleware_endpoint_fails_closed(self):
+    @patch.dict("os.environ", {"BEYVRA_EMAIL_API_URL": ""})
+    def test_missing_middleware_endpoint_keeps_durable_intent_recoverable(self):
         with self.assertRaises(EmailMiddlewareError) as raised:
             EmailMiddlewareClient()._middleware_base_url()
-        self.assertEqual(raised.exception.error_class, "MIDDLEWARE_ENDPOINT_NOT_CONFIGURED")
-        self.assertFalse(raised.exception.retryable)
+        self.assertEqual(
+            raised.exception.error_class, "MIDDLEWARE_ENDPOINT_NOT_CONFIGURED"
+        )
+        self.assertTrue(raised.exception.retryable)
 
-    @override_settings(BEYVRA_EMAIL_API_URL="ftp://middleware.internal/path?token=bad")
+    @patch.dict(
+        "os.environ",
+        {"BEYVRA_EMAIL_API_URL": "ftp://middleware.internal/path?token=bad"},
+    )
     def test_invalid_middleware_endpoint_fails_closed(self):
         with self.assertRaises(EmailMiddlewareError) as raised:
             EmailMiddlewareClient()._middleware_base_url()
         self.assertEqual(raised.exception.error_class, "MIDDLEWARE_ENDPOINT_INVALID")
 
-    @override_settings(BEYVRA_EMAIL_API_URL="https://api.codestra.co")
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://api.codestra.co"}
+    )
     def test_public_kong_email_route_is_blocked(self):
         with self.assertRaises(EmailMiddlewareError) as raised:
             EmailMiddlewareClient()._middleware_base_url()
-        self.assertEqual(raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED")
+        self.assertEqual(
+            raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED"
+        )
         self.assertFalse(raised.exception.retryable)
 
-    @override_settings(BEYVRA_EMAIL_API_URL="https://mail.klyrow.com")
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://api.codestra.co."}
+    )
+    def test_public_kong_fqdn_with_terminal_dot_is_blocked(self):
+        with self.assertRaises(EmailMiddlewareError) as raised:
+            EmailMiddlewareClient()._middleware_base_url()
+        self.assertEqual(
+            raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED"
+        )
+
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://mail.klyrow.com"}
+    )
     def test_direct_klyrow_smtp_host_is_blocked_for_business_email(self):
         with self.assertRaises(EmailMiddlewareError) as raised:
             EmailMiddlewareClient()._middleware_base_url()
-        self.assertEqual(raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED")
+        self.assertEqual(
+            raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED"
+        )
 
-    @override_settings(BEYVRA_EMAIL_API_URL="https://api.klyrow.com")
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://api.klyrow.com"}
+    )
     def test_direct_klyrow_api_host_is_blocked_for_business_email(self):
         with self.assertRaises(EmailMiddlewareError) as raised:
             EmailMiddlewareClient()._middleware_base_url()
-        self.assertEqual(raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED")
+        self.assertEqual(
+            raised.exception.error_class, "DIRECT_INTEGRATION_BYPASS_BLOCKED"
+        )
 
     @override_settings(KEYCLOAK_IDENTITY_ENABLED=True)
     @patch("notifications.email_client.requests.post")
     def test_keycloak_identity_mail_never_enters_business_email_client(self, post):
         item = Mock(template_key="password_reset")
         with self.assertRaises(EmailMiddlewareError) as raised:
-            EmailMiddlewareClient().submit(item, {"reset_path": "/must-not-leave-keycloak"})
-        self.assertEqual(raised.exception.error_class, "IDENTITY_MAIL_MUST_USE_KEYCLOAK")
+            EmailMiddlewareClient().submit(
+                item, {"reset_path": "/must-not-leave-keycloak"}
+            )
+        self.assertEqual(
+            raised.exception.error_class, "IDENTITY_MAIL_MUST_USE_KEYCLOAK"
+        )
         self.assertFalse(raised.exception.retryable)
         post.assert_not_called()
 
-    @override_settings(
-        KEYCLOAK_IDENTITY_ENABLED=False,
-        BEYVRA_EMAIL_API_URL="https://middleware.internal",
+    @override_settings(KEYCLOAK_IDENTITY_ENABLED=False)
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://middleware.internal"}
     )
     @patch.object(EmailMiddlewareClient, "token", return_value="service-token")
     @patch("notifications.email_client.requests.post")
-    def test_business_mail_uses_only_the_dedicated_middleware_endpoint(self, post, token):
+    def test_business_mail_uses_only_the_dedicated_middleware_endpoint(
+        self, post, token
+    ):
         response = Mock(status_code=202)
         response.json.return_value = {"status": "QUEUED"}
         post.return_value = response
@@ -226,17 +259,25 @@ class EmailIntegrationTests(TestCase):
         result = EmailMiddlewareClient().submit(item, {"case_id": "case-1"})
 
         self.assertEqual(result["status"], "QUEUED")
-        self.assertEqual(post.call_args.args[0], "https://middleware.internal/v1/email/messages")
-        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer service-token")
+        self.assertEqual(
+            post.call_args.args[0],
+            "https://middleware.internal/v1/email/messages",
+        )
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["Authorization"],
+            "Bearer service-token",
+        )
         token.assert_called_once_with()
 
-    @override_settings(
-        KEYCLOAK_IDENTITY_ENABLED=False,
-        BEYVRA_EMAIL_API_URL="https://middleware.internal",
+    @override_settings(KEYCLOAK_IDENTITY_ENABLED=False)
+    @patch.dict(
+        "os.environ", {"BEYVRA_EMAIL_API_URL": "https://middleware.internal"}
     )
     @patch.object(EmailMiddlewareClient, "token", return_value="service-token")
     @patch("notifications.email_client.requests.post")
-    def test_invalid_middleware_response_is_not_reported_as_success(self, post, token):
+    def test_invalid_middleware_response_is_not_reported_as_success(
+        self, post, token
+    ):
         response = Mock(status_code=202)
         response.json.side_effect = ValueError("not json")
         post.return_value = response
