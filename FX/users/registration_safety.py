@@ -1,7 +1,7 @@
 """Concurrency-safe local email registration.
 
 This module keeps the legacy local-registration endpoint available only while
-that capability is explicitly enabled.  Database constraints remain the final
+that capability is explicitly enabled. Database constraints remain the final
 authority; the view converts an expected concurrent uniqueness race into an
 idempotent 202 response instead of a 500.
 """
@@ -30,13 +30,32 @@ from .email_verification import (
 from .models import EmailVerificationChallenge, PendingRegistration, User
 
 
-def _pending_registration_response(pending: PendingRegistration, email: str, now) -> Response:
+def _pending_registration_response(
+    pending: PendingRegistration, email: str, now
+) -> Response:
+    challenge = (
+        pending.challenges.filter(status="active", expires_at__gt=now)
+        .only("expires_at")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    challenge_expires_in = (
+        max(0, int((challenge.expires_at - now).total_seconds()))
+        if challenge
+        else 0
+    )
+    registration_expires_in = max(
+        0, int((pending.expires_at - now).total_seconds())
+    )
     return Response(
         {
             "registrationId": f"reg_{pending.pk}",
             "status": pending.status,
             "maskedEmail": mask_email(email),
-            "expiresIn": max(0, int((pending.expires_at - now).total_seconds())),
+            # Keep expiresIn aligned with resend/verification semantics: it is
+            # the OTP challenge lifetime, not the longer registration lifetime.
+            "expiresIn": challenge_expires_in,
+            "registrationExpiresIn": registration_expires_in,
             "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
         },
         status=202,
@@ -47,7 +66,10 @@ class EmailRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        if not settings.EMAIL_REGISTRATION_ENABLED or not settings.EMAIL_OTP_VERIFICATION_ENABLED:
+        if (
+            not settings.EMAIL_REGISTRATION_ENABLED
+            or not settings.EMAIL_OTP_VERIFICATION_ENABLED
+        ):
             return Response(
                 {
                     "code": "EMAIL_REGISTRATION_DISABLED",
@@ -59,7 +81,12 @@ class EmailRegistrationView(APIView):
         email = str(request.data.get("email", "")).strip().lower()
         password = str(request.data.get("password", ""))
         display_name = str(request.data.get("displayName", "")).strip()[:120]
-        if not email or "@" not in email or len(password) < 8 or not request.data.get("legalAccepted"):
+        if (
+            not email
+            or "@" not in email
+            or len(password) < 8
+            or not request.data.get("legalAccepted")
+        ):
             return Response(
                 {
                     "code": "REGISTRATION_INVALID",
@@ -79,7 +106,10 @@ class EmailRegistrationView(APIView):
             )
 
         now = timezone.now()
-        versions = {key: value or "current" for key, value in _active_legal_versions().items()}
+        versions = {
+            key: value or "current"
+            for key, value in _active_legal_versions().items()
+        }
         created = False
 
         with transaction.atomic():
@@ -118,16 +148,21 @@ class EmailRegistrationView(APIView):
                             legal_confirmation=True,
                             legal_document_versions=versions,
                             expires_at=now
-                            + timedelta(seconds=settings.PENDING_REGISTRATION_TTL_SECONDS),
+                            + timedelta(
+                                seconds=settings.PENDING_REGISTRATION_TTL_SECONDS
+                            ),
                             request_ip=request.META.get("REMOTE_ADDR"),
-                            request_user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000],
+                            request_user_agent=request.META.get(
+                                "HTTP_USER_AGENT", ""
+                            )[:1000],
                         )
                         code = generate_otp()
                         EmailVerificationChallenge.objects.create(
                             registration=pending,
                             email_normalized=email,
                             otp_hash=hash_otp(code),
-                            expires_at=now + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS),
+                            expires_at=now
+                            + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS),
                             max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS,
                             send_count=1,
                         )
@@ -137,7 +172,8 @@ class EmailRegistrationView(APIView):
                             template_key="email_otp",
                             payload={
                                 "code_encrypted": _encrypted_code(code),
-                                "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS // 60,
+                                "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS
+                                // 60,
                                 "purpose": "registration",
                             },
                             idempotency_key=f"otp:{pending.pk}:1",
