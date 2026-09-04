@@ -13,7 +13,7 @@ from apps.trading.execution_control.reconciliation import ExecutionReconciler
 from apps.trading.execution_control.recovery import ExecutionRecoveryService
 from apps.trading.execution_control.router import SmartOrderRouter, digest
 from apps.trading.execution_control.state import ExecutionStateAuthority
-from apps.trading.models import CanonicalExecution, ExecutionProviderCapability, ExecutionProviderRecord, ExecutionQualityReport, ExecutionRoutingDecision, TradingOrder, UnknownExecutionOutcome
+from apps.trading.models import CanonicalExecution, ExecutionGovernanceChange, ExecutionProviderCapability, ExecutionProviderRecord, ExecutionQualityReport, ExecutionReconciliationRun, ExecutionRoutingDecision, TradingOrder, UnknownExecutionOutcome
 from integrations.execution.fix_gateway import FixExecutionGateway
 from integrations.execution.paper import PaperExecutionProvider
 
@@ -97,6 +97,7 @@ class ExecutionControlPlaneTests(TestCase):
         self.user.is_staff=True;self.user.is_superuser=True;self.user.save();self.client.force_authenticate(self.user)
         for path in ("/api/v1/operator/execution/providers","/api/v1/operator/execution/providers/simulation","/api/v1/operator/execution/providers/simulation/capabilities","/api/v1/operator/execution/providers/simulation/health","/api/v1/operator/execution/venues","/api/v1/operator/execution/unknown","/api/v1/operator/execution/reconciliation"):
             self.assertEqual(self.client.get(path).status_code,200,path)
+        self.assertIn("version", self.client.get("/api/v1/operator/execution/providers/simulation").data)
 
     def test_reconciliation_is_read_only_and_detects_unknown(self):
         order=self.order();preview_route(self.user,self.payload(),persist=True,order=order);record_ambiguous_outcome(order,"simulation")
@@ -136,12 +137,28 @@ class ExecutionControlPlaneTests(TestCase):
     def test_paper_enable_requires_independent_manager_checker(self):
         managers=Group.objects.create(name="execution_manager");first=self.user;first.groups.add(managers)
         provider=seed_fixture_capabilities()[0][1];provider.enabled=False;provider.save(update_fields=("enabled","updated_at"))
-        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json")
+        version=provider.updated_at.isoformat().replace("+00:00","Z")
+        maker_headers={"HTTP_IDEMPOTENCY_KEY":"paper-enable-maker","HTTP_X_REQUEST_ID":"opaque-edge-request-id","HTTP_IF_MATCH":version}
+        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json",**maker_headers)
         self.assertEqual(response.status_code,202);self.assertFalse(response.data["enabled"])
-        self.assertEqual(self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"self approval"},format="json").status_code,409)
+        replay=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json",**maker_headers)
+        self.assertEqual(replay.status_code,202);self.assertEqual(replay.data,response.data)
+        self.assertEqual(self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"self approval"},format="json",HTTP_IDEMPOTENCY_KEY="paper-enable-self",HTTP_X_REQUEST_ID="cf69152c-93d8-4888-804b-4c8846f41002",HTTP_IF_MATCH=version).status_code,409)
         checker=get_user_model().objects.create_user(email="checker@example.test",password="x",phone_number="+15550000102");checker.groups.add(managers);self.client.force_authenticate(checker)
-        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"independent check"},format="json")
+        checker_headers={"HTTP_IDEMPOTENCY_KEY":"paper-enable-checker","HTTP_X_REQUEST_ID":"cf69152c-93d8-4888-804b-4c8846f41003","HTTP_IF_MATCH":version}
+        response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"independent check"},format="json",**checker_headers)
         self.assertEqual(response.status_code,200);provider.refresh_from_db();self.assertTrue(provider.enabled)
+        replay=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"independent check"},format="json",**checker_headers)
+        self.assertEqual(replay.status_code,200);self.assertEqual(replay.data,response.data)
+        self.assertEqual(ExecutionGovernanceChange.objects.count(),1)
+
+    def test_operator_reconciliation_command_is_durably_idempotent(self):
+        operators=Group.objects.create(name="execution_operator");self.user.groups.add(operators)
+        headers={"HTTP_IDEMPOTENCY_KEY":"reconcile-test-key","HTTP_X_REQUEST_ID":"cf69152c-93d8-4888-804b-4c8846f41004"}
+        first=self.client.post("/api/v1/operator/execution/reconciliation",{},format="json",**headers)
+        replay=self.client.post("/api/v1/operator/execution/reconciliation",{},format="json",**headers)
+        self.assertEqual(first.status_code,201);self.assertEqual(replay.status_code,201);self.assertEqual(replay.data,first.data)
+        self.assertEqual(ExecutionReconciliationRun.objects.count(),1)
 
     def test_unknown_api_cannot_force_success_with_caller_evidence(self):
         operators=Group.objects.create(name="execution_operator");self.user.groups.add(operators)

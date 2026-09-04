@@ -1,5 +1,9 @@
+import uuid
+
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,8 +13,26 @@ from apps.trading.execution_control.capabilities import seed_fixture_capabilitie
 from apps.trading.execution_control.health import ProviderHealthService
 from apps.trading.execution_control.reconciliation import ExecutionReconciler
 from apps.foundation.models import ApplicationAuditEvent
+from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 from apps.trading.models import ExecutionGovernanceChange, ExecutionProviderRecord, ExecutionQualityReport, ExecutionReconciliationRun, ExecutionRoutingDecision, ExecutionVenue, TradingOrder, UnknownExecutionOutcome
 from .errors import error_response
+
+
+COMMAND_PARAMETERS = [
+    OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Request-ID", str, OpenApiParameter.HEADER, required=True),
+    OpenApiParameter("X-Correlation-ID", str, OpenApiParameter.HEADER, required=False),
+]
+VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True)]
+PAPER_ENABLE_REQUEST = inline_serializer("ExecutionPaperEnableCommand", {"reason": serializers.CharField()})
+PAPER_ENABLE_RESPONSE = inline_serializer("ExecutionPaperEnableResult", {
+    "change_id": serializers.UUIDField(), "provider_id": serializers.CharField(), "status": serializers.CharField(),
+    "enabled": serializers.BooleanField(), "maker_checker_required": serializers.BooleanField(required=False),
+    "mode": serializers.CharField(required=False), "live": serializers.BooleanField(required=False), "version": serializers.CharField(),
+})
+EXECUTION_RECONCILIATION_RESPONSE = inline_serializer("ExecutionReconciliationCommandResult", {
+    "id": serializers.UUIDField(), "status": serializers.CharField(), "critical_count": serializers.IntegerField(),
+})
 
 
 def _fail(request, exc):
@@ -24,6 +46,47 @@ def _bounded_limit(request, default=50, maximum=200):
         return max(1, min(int(request.query_params.get("limit", default)), maximum))
     except (TypeError, ValueError):
         return default
+
+
+def _command_context(request, *, require_reason=False, require_version=False):
+    key = request.headers.get("Idempotency-Key", "").strip()
+    request_id = request.headers.get("X-Request-ID", "").strip()
+    reason = str(request.data.get("reason", "")).strip()
+    expected_version = request.headers.get("If-Match", "").strip()
+    if not key or len(key) > 255 or not request_id or len(request_id) > 128 or (require_reason and not reason):
+        return None, error_response(request, "VALIDATION_ERROR", 400, {"required": ["Idempotency-Key", "X-Request-ID"] + (["reason"] if require_reason else [])})
+    if require_version and not expected_version:
+        return None, error_response(request, "PRECONDITION_REQUIRED", 428, {"required": ["If-Match"]})
+    raw_correlation = request.headers.get("X-Correlation-ID") or request_id
+    try:
+        correlation_id = uuid.UUID(raw_correlation)
+    except (TypeError, ValueError):
+        correlation_id = uuid.uuid5(uuid.NAMESPACE_URL, f"beyvra-correlation:{raw_correlation}")
+    return (key, request_id, correlation_id, reason, expected_version), None
+
+
+def _version(row):
+    return row.updated_at.isoformat().replace("+00:00", "Z")
+
+
+def _begin_command(request, *, key, payload):
+    return begin_idempotent_request(
+        key=key, tenant_ref="platform", actor_ref=request.user.pk, endpoint=request.path,
+        method=request.method, request_data={"api_version": "v1", **payload},
+    )
+
+
+def _replay(record):
+    if record.response_status is None or record.response_body is None:
+        return Response({"error": {"code": "COMMAND_IN_PROGRESS", "message": "Command result is not yet available."}}, status=409)
+    return Response(record.response_body, status=record.response_status)
+
+
+def _audit(request, *, action, resource_type, resource_id, request_id, correlation_id, reason, context=None):
+    ApplicationAuditEvent.objects.create(
+        actor_ref=str(request.user.pk), action=action, resource_type=resource_type, resource_id=str(resource_id),
+        request_id=request_id, correlation_id=correlation_id, context=context or {}, reason=reason[:255], occurred_at=timezone.now(),
+    )
 
 
 def _quality_rows(request, *, customer=False):
@@ -71,7 +134,7 @@ class CapabilitiesView(APIView):
         rows = ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")
         return Response({"results": [{"provider_id": x.provider_id, "name": x.display_name, "mode": x.mode, "enabled": x.enabled,
             "health": x.health, "capabilities": x.capabilities, "asset_classes": x.supported_asset_classes,
-            "order_types": x.supported_order_types, "venues": x.supported_venues} for x in rows], "live_broker_routing_enabled": False})
+            "order_types": x.supported_order_types, "venues": x.supported_venues, "version": _version(x)} for x in rows], "live_broker_routing_enabled": False})
 
 
 class CapabilityDetailView(APIView):
@@ -81,7 +144,8 @@ class CapabilityDetailView(APIView):
         if not x:return error_response(request,"RESOURCE_NOT_FOUND",404)
         return Response({"provider_id":x.provider_id,"name":x.display_name,"mode":x.mode,"health":x.health,"asset_classes":x.supported_asset_classes,
             "order_types":x.supported_order_types,"capabilities":[{"asset_class":c.asset_class,"venue_id":c.venue_id,"type":c.capability_type,"source":c.source,
-            "source_version":c.source_version,"verified_at":c.verified_at.isoformat()} for c in x.capability_records.filter(enabled=True).order_by("asset_class","capability_type")],"live_supported":False})
+            "source_version":c.source_version,"verified_at":c.verified_at.isoformat()} for c in x.capability_records.filter(enabled=True).order_by("asset_class","capability_type")],"live_supported":False,
+            "version":_version(x)})
 
 
 class VenuesView(APIView):
@@ -193,23 +257,37 @@ class OperatorProviderResumeView(OperatorProviderControlView): halted = False
 
 class OperatorProviderPaperEnableView(APIView):
     permission_classes=(IsExecutionManager,)
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS, request=PAPER_ENABLE_REQUEST, responses={200: PAPER_ENABLE_RESPONSE, 202: PAPER_ENABLE_RESPONSE})
     @transaction.atomic
     def post(self,request,provider_id):
-        x=ExecutionProviderRecord.objects.filter(pk=provider_id,mode="PAPER",live_supported=False).first()
+        command,error=_command_context(request,require_reason=True,require_version=True)
+        if error:return error
+        key,request_id,correlation_id,reason,expected_version=command
+        x=ExecutionProviderRecord.objects.select_for_update().filter(pk=provider_id,mode="PAPER",live_supported=False).first()
         if not x:return error_response(request,"RESOURCE_NOT_FOUND",404)
         if x.governance_state not in {"PAPER_APPROVED","PAPER_TECHNICALLY_CERTIFIED"}:return error_response(request,"PROVIDER_NOT_APPROVED",409)
-        reason=str(request.data.get("reason") or "")
-        if not reason:return error_response(request,"VALIDATION_ERROR",422)
+        try:
+            record,created=_begin_command(request,key=key,payload={"provider_id":x.provider_id,"action":"PAPER_ENABLE","reason":reason,"expected_version":expected_version})
+        except IdempotencyConflict:return error_response(request,"IDEMPOTENCY_CONFLICT",409)
+        if not created:return _replay(record)
+        if expected_version!=_version(x):
+            record.delete();return error_response(request,"VERSION_CONFLICT",409)
         pending=ExecutionGovernanceChange.objects.select_for_update().filter(provider=x,action="PAPER_ENABLE",status="PENDING").first()
         actor_ref=str(request.user.pk)
         if not pending:
             pending=ExecutionGovernanceChange.objects.create(provider=x,action="PAPER_ENABLE",requested_by_ref=actor_ref,reason=reason)
-            return Response({"change_id":str(pending.id),"provider_id":x.provider_id,"status":"PENDING","enabled":x.enabled,"maker_checker_required":True},status=202)
-        if pending.requested_by_ref==actor_ref:return error_response(request,"INDEPENDENT_REVIEW_REQUIRED",409)
+            body={"change_id":str(pending.id),"provider_id":x.provider_id,"status":"PENDING","enabled":x.enabled,"maker_checker_required":True,"version":_version(x)}
+            _audit(request,action="execution.provider.paper_enable_requested",resource_type="execution_provider",resource_id=x.provider_id,request_id=request_id,correlation_id=correlation_id,reason=reason,context={"change_id":str(pending.id),"mode":"PAPER"})
+            complete_idempotent_request(record,status=202,body=body,resource_type="execution_governance_change",resource_id=pending.pk)
+            return Response(body,status=202)
+        if pending.requested_by_ref==actor_ref:
+            record.delete();return error_response(request,"INDEPENDENT_REVIEW_REQUIRED",409)
         pending.reviewed_by_ref=actor_ref;pending.reviewed_at=timezone.now();pending.status="APPROVED";pending.save(update_fields=("reviewed_by_ref","reviewed_at","status"))
         x.enabled=True;x.save(update_fields=("enabled","updated_at"))
-        ApplicationAuditEvent.objects.create(actor_ref=actor_ref,action="execution.provider.paper_enabled",resource_type="execution_provider",resource_id=x.provider_id,request_id="operator",correlation_id=pending.id,context={"mode":"PAPER","change_id":str(pending.id),"maker_ref":pending.requested_by_ref,"checker_ref":actor_ref},reason=reason,occurred_at=timezone.now())
-        return Response({"change_id":str(pending.id),"provider_id":x.provider_id,"mode":"PAPER","enabled":True,"live":False,"status":"APPROVED"})
+        body={"change_id":str(pending.id),"provider_id":x.provider_id,"mode":"PAPER","enabled":True,"live":False,"status":"APPROVED","version":_version(x)}
+        _audit(request,action="execution.provider.paper_enabled",resource_type="execution_provider",resource_id=x.provider_id,request_id=request_id,correlation_id=correlation_id,reason=reason,context={"mode":"PAPER","change_id":str(pending.id),"maker_ref":pending.requested_by_ref,"checker_ref":actor_ref})
+        complete_idempotent_request(record,status=200,body=body,resource_type="execution_provider",resource_id=x.pk)
+        return Response(body)
 
 class OperatorUnknownView(APIView):
     permission_classes=(IsExecutionViewer,)
@@ -231,5 +309,16 @@ class OperatorReconciliationView(APIView):
     def get(self,request):
         return Response({"checks":ExecutionReconciler().inspect(),"runs":[{"id":str(x.id),"status":x.status,"critical_count":x.critical_count,
             "completed_at":x.completed_at.isoformat()} for x in ExecutionReconciliationRun.objects.order_by("-completed_at")[:20]]})
+    @extend_schema(parameters=COMMAND_PARAMETERS, request=None, responses={201: EXECUTION_RECONCILIATION_RESPONSE})
+    @transaction.atomic
     def post(self,request):
-        row=ExecutionReconciler().run(); return Response({"id":str(row.id),"status":row.status,"critical_count":row.critical_count},status=201)
+        command,error=_command_context(request)
+        if error:return error
+        key,request_id,correlation_id,_,_=command
+        try:record,created=_begin_command(request,key=key,payload={"operation":"EXECUTION_RECONCILIATION"})
+        except IdempotencyConflict:return error_response(request,"IDEMPOTENCY_CONFLICT",409)
+        if not created:return _replay(record)
+        row=ExecutionReconciler().run();body={"id":str(row.id),"status":row.status,"critical_count":row.critical_count}
+        _audit(request,action="execution.reconciliation.completed",resource_type="execution_reconciliation",resource_id=row.pk,request_id=request_id,correlation_id=correlation_id,reason="operator reconciliation",context={"status":row.status,"critical_count":row.critical_count})
+        complete_idempotent_request(record,status=201,body=body,resource_type="execution_reconciliation",resource_id=row.pk)
+        return Response(body,status=201)
