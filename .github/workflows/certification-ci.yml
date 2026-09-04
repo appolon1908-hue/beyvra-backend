@@ -10,10 +10,12 @@ on:
       - ".github/workflows/certify-deployment.yml"
       - ".github/workflows/certification-ci.yml"
       - ".github/workflows/release-intent-dispatch.yml"
+      - ".github/workflows/promote-production-readonly.yml"
       - "operations/certify_remote_readonly.sh"
       - "operations/inspect_deployment_run.sh"
       - "operations/dispatch_release_intent.sh"
       - "operations/validate_release_intent.py"
+      - "operations/validate_promotion_evidence.py"
       - "operations/run_deployment_certification.sh"
       - "operations/release_cert_runtime.sh"
       - "operations/release_cert_state.sh"
@@ -34,6 +36,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+
       - name: Validate certification authority
         shell: bash
         run: |
@@ -50,6 +53,7 @@ jobs:
           python -m py_compile \
             FX/gunicorn_conf.py \
             operations/validate_release_intent.py \
+            operations/validate_promotion_evidence.py \
             operations/verify_metrics_zero.py \
             operations/verify_edge_policy.py \
             operations/verify_previous_release.py \
@@ -60,7 +64,18 @@ jobs:
             YAML.load_file(".github/workflows/certify-deployment.yml")
             YAML.load_file(".github/workflows/certification-ci.yml")
             YAML.load_file(".github/workflows/release-intent-dispatch.yml")
+            YAML.load_file(".github/workflows/promote-production-readonly.yml")
           '
+
+          attest_sha=508db95dd578ae2727ebd6217d5ba78e4fbda05d
+          test "$(grep -Fc "actions/attest@$attest_sha" \
+            .github/workflows/certify-deployment.yml)" -eq 4
+          grep -Fq 'artifact-metadata: write' \
+            .github/workflows/certify-deployment.yml
+          grep -Fq 'publish_images]=false' \
+            .github/workflows/promote-production-readonly.yml
+          grep -Fq 'CANARY_TRAFFIC_PERCENT" =~ ^(0|1)$' \
+            .github/workflows/promote-production-readonly.yml
 
       - name: Prove zero-change release never invokes migrate
         shell: bash
@@ -108,3 +123,41 @@ jobs:
             --after /tmp/metrics-after.prom \
             --output /tmp/zero-effects.json
           jq -e '.overall == "PASS"' /tmp/zero-effects.json >/dev/null
+
+      - name: Exercise signed promotion evidence parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = {
+              "schema_version": 1,
+              "source_sha": "a" * 40,
+              "backend_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend@sha256:"
+                  + "b" * 64
+              ),
+              "edge_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend-edge@sha256:"
+                  + "c" * 64
+              ),
+              "target": "staging-readonly",
+              "certification_result": "PASS",
+              "rollback_rehearsal": "PASS",
+              "zero_live_effects": "PASS",
+              "deployment_read_only": True,
+              "live_trading_authorized": False,
+              "real_money_authorized": False,
+              "payments_authorized": False,
+              "withdrawals_authorized": False,
+              "transactional_email_authorized": False,
+              "external_execution_authorized": False,
+          }
+          Path("/tmp/promotion-manifest.json").write_text(
+              json.dumps(value) + "\n"
+          )
+          PY
+          python operations/validate_promotion_evidence.py \
+            /tmp/promotion-manifest.json
