@@ -1,0 +1,161 @@
+openapi: 3.1.0
+info:
+  title: Beyvra Workspace API
+  version: 1.0.0
+  description: Tenant-scoped watchlist presentation state. Not a trading, pricing, or financial authority.
+paths:
+  /api/v1/watchlists:
+    get:
+      operationId: listWatchlists
+      responses:
+        '200': {description: Tenant/user watchlists}
+    post:
+      operationId: createWatchlist
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, maxLength: 80}
+      responses:
+        '201': {description: Created}
+        '409': {description: Duplicate name or idempotency conflict}
+  /api/v1/watchlists/{watchlist_id}:
+    parameters:
+      - name: watchlist_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: getWatchlist
+      responses:
+        '200': {description: Watchlist}
+        '404': {description: Not found}
+    patch:
+      operationId: renameWatchlist
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedWatchlistMutation'
+      responses:
+        '200': {description: Updated}
+        '409': {description: Version, duplicate-name, or idempotency conflict}
+        '428': {description: Version required}
+    delete:
+      operationId: deleteWatchlist
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionMutation'
+      responses:
+        '204': {description: Deleted}
+        '409': {description: Version or idempotency conflict}
+        '428': {description: Version required}
+  /api/v1/watchlists/{watchlist_id}/items:
+    parameters:
+      - name: watchlist_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: listWatchlistItems
+      responses:
+        '200': {description: Items and current watchlist version}
+        '404': {description: Not found}
+    post:
+      operationId: addWatchlistItem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrument_id, version]
+              properties:
+                instrument_id:
+                  type: string
+                  description: Canonical instrument UUID or an unambiguous active canonical symbol.
+                sort_order: {type: integer, minimum: 0, default: 0}
+                version: {type: integer, minimum: 1}
+      responses:
+        '201': {description: Added}
+        '409': {description: Ambiguous instrument, version, or idempotency conflict}
+        '428': {description: Version required}
+  /api/v1/watchlists/{watchlist_id}/items/{instrument_id}:
+    parameters:
+      - name: watchlist_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+      - name: instrument_id
+        in: path
+        required: true
+        schema: {type: string}
+    delete:
+      operationId: deleteWatchlistItem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionMutation'
+      responses:
+        '204': {description: Deleted}
+        '409': {description: Version or idempotency conflict}
+        '428': {description: Version required}
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, maxLength: 255}
+    RequestId:
+      name: X-Request-ID
+      in: header
+      required: true
+      schema: {type: string, maxLength: 128}
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      schema: {type: string, maxLength: 128}
+  schemas:
+    VersionMutation:
+      type: object
+      required: [version]
+      properties:
+        version: {type: integer, minimum: 1}
+    VersionedWatchlistMutation:
+      type: object
+      required: [name, version]
+      properties:
+        name: {type: string, maxLength: 80}
+        version: {type: integer, minimum: 1}
