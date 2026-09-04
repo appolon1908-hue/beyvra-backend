@@ -60,12 +60,7 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/CorrelationId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VersionMutation'
+        - $ref: '#/components/parameters/VersionQuery'
       responses:
         '204': {description: Deleted}
         '409': {description: Version or idempotency conflict}
@@ -120,12 +115,7 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/CorrelationId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VersionMutation'
+        - $ref: '#/components/parameters/VersionQuery'
       responses:
         '204': {description: Deleted}
         '409': {description: Version or idempotency conflict}
@@ -147,12 +137,13 @@ components:
       in: header
       required: false
       schema: {type: string, maxLength: 128}
+    VersionQuery:
+      name: version
+      in: query
+      required: true
+      description: Current integer watchlist version used as the DELETE precondition.
+      schema: {type: integer, minimum: 1}
   schemas:
-    VersionMutation:
-      type: object
-      required: [version]
-      properties:
-        version: {type: integer, minimum: 1}
     VersionedWatchlistMutation:
       type: object
       required: [name, version]
