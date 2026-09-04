@@ -71,6 +71,7 @@ urlpatterns = [
     path("api/v1/post-trade/", include("apps.post_trade.urls")),
     path("api/v1/operator/post-trade/", include("apps.post_trade.operator_urls")),
     path("api/v1/", include("apps.valuation.urls")),
+    path("api/v1/", include("apps.workspace.urls")),
     path("api/v1/operator/valuation/", include("apps.valuation.operator_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
     path("api/v1/news/crypto", news_views.news_crypto_v1, name="news_crypto_v1"),
