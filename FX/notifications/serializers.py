@@ -49,7 +49,7 @@ class PriceAlertSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAlerts
-        exclude = ("user",)
+        exclude = ("user", "organization")
 
 
 class NotificationEventSerializer(serializers.ModelSerializer):

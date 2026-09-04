@@ -15,6 +15,8 @@ from users.tasks import process_transactional_email_outbox
 
 class EmailIntegrationTests(TestCase):
     def setUp(self):
+        EmailMiddlewareClient._token = ""
+        EmailMiddlewareClient._expires_at = 0.0
         self.user = get_user_model().objects.create_user(email="email-test@example.test", password="test", phone_number="+12025550198")
 
     def test_emit_is_deterministic_and_transactional(self):
@@ -108,4 +110,3 @@ class EmailIntegrationTests(TestCase):
             self.assertEqual(EmailMiddlewareClient().token(), "cached-token")
             self.assertEqual(EmailMiddlewareClient().token(), "cached-token")
         self.assertEqual(post.call_count, 1)
-
