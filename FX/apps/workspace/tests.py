@@ -199,11 +199,12 @@ class WatchlistApiTests(TestCase):
     def test_deleting_default_promotes_oldest_remaining_watchlist(self):
         first = self.create_watchlist("First").json()
         second = self.create_watchlist("Second").json()
+        delete_url = (
+            f"/api/v1/watchlists/{first['id']}?version={first['version']}"
+        )
 
         deleted = self.client.delete(
-            f"/api/v1/watchlists/{first['id']}",
-            {"version": first["version"]},
-            format="json",
+            delete_url,
             **self.command_headers("delete-first"),
         )
         self.assertEqual(deleted.status_code, 204)
@@ -212,9 +213,7 @@ class WatchlistApiTests(TestCase):
         self.assertEqual(replacement.version, 2)
 
         replay = self.client.delete(
-            f"/api/v1/watchlists/{first['id']}",
-            {"version": first["version"]},
-            format="json",
+            delete_url,
             **self.command_headers("delete-first"),
         )
         self.assertEqual(replay.status_code, 204)
@@ -276,9 +275,8 @@ class WatchlistApiTests(TestCase):
             (
                 f"/api/v1/watchlists/{watchlist['id']}/items/"
                 f"{self.instrument.instrument_id}"
+                f"?version={added.json()['watchlist_version']}"
             ),
-            {"version": added.json()["watchlist_version"]},
-            format="json",
             **self.command_headers("remove-inactive"),
         )
         self.assertEqual(removed.status_code, 204)
