@@ -6,16 +6,19 @@ on:
       - "FX/web-start-prod.sh"
       - "FX/release-init-prod.sh"
       - "FX/gunicorn_conf.py"
+      - ".release/intent.json"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/certify-deployment.yml"
       - ".github/workflows/certification-ci.yml"
       - ".github/workflows/release-intent-dispatch.yml"
       - ".github/workflows/promote-production-readonly.yml"
+      - ".github/workflows/go-live-readonly.yml"
       - "operations/certify_remote_readonly.sh"
       - "operations/inspect_deployment_run.sh"
       - "operations/dispatch_release_intent.sh"
       - "operations/validate_release_intent.py"
       - "operations/validate_promotion_evidence.py"
+      - "operations/one_click_readonly_release.py"
       - "operations/run_deployment_certification.sh"
       - "operations/release_cert_runtime.sh"
       - "operations/release_cert_state.sh"
@@ -25,6 +28,7 @@ on:
       - "operations/verify_previous_release.py"
       - "scripts/database_fingerprint.py"
       - "docs/SIGNED-PRODUCTION-READONLY-PROMOTION.md"
+      - "docs/ONE-CLICK-READONLY-GO-LIVE.md"
   push:
     branches: [main]
 
@@ -55,6 +59,7 @@ jobs:
             FX/gunicorn_conf.py \
             operations/validate_release_intent.py \
             operations/validate_promotion_evidence.py \
+            operations/one_click_readonly_release.py \
             operations/verify_metrics_zero.py \
             operations/verify_edge_policy.py \
             operations/verify_previous_release.py \
@@ -67,6 +72,7 @@ jobs:
             YAML.load_file(".github/workflows/certification-ci.yml")
             YAML.load_file(".github/workflows/release-intent-dispatch.yml")
             YAML.load_file(".github/workflows/promote-production-readonly.yml")
+            YAML.load_file(".github/workflows/go-live-readonly.yml")
           '
 
           attest_sha=508db95dd578ae2727ebd6217d5ba78e4fbda05d
@@ -87,6 +93,16 @@ jobs:
             .github/workflows/promote-production-readonly.yml
           grep -Fq 'CANARY_TRAFFIC_PERCENT" =~ ^(0|1)$' \
             .github/workflows/promote-production-readonly.yml
+          grep -Fq 'workflow_dispatch:' \
+            .github/workflows/go-live-readonly.yml
+          grep -Fq 'BEYVRA_RELEASE_BOT_TOKEN' \
+            .github/workflows/go-live-readonly.yml
+          grep -Fq 'canary_traffic_maximum_percent": 1' \
+            operations/one_click_readonly_release.py
+          jq -e '.enabled == false' .release/intent.json >/dev/null
+
+      - name: Exercise one-click orchestrator fail-closed models
+        run: python operations/one_click_readonly_release.py --self-test
 
       - name: Prove zero-change release never invokes migrate
         shell: bash
