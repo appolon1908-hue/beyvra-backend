@@ -1,0 +1,35 @@
+name: Beyvra automation contract CI
+
+on:
+  pull_request:
+    paths:
+      - "contracts/automation/**"
+      - "docs/integrations/n8n/**"
+      - "docs/integrations/CODESTRA_BEYVRA_FABRIC_V2.md"
+      - "docs/branches/BEYVRA_FABRIC_BRANCH_MAP.md"
+      - "scripts/validate_beyvra_fabric.py"
+      - ".github/workflows/beyvra-automation-contract-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "contracts/automation/**"
+      - "docs/integrations/n8n/**"
+      - "docs/integrations/CODESTRA_BEYVRA_FABRIC_V2.md"
+      - "docs/branches/BEYVRA_FABRIC_BRANCH_MAP.md"
+      - "scripts/validate_beyvra_fabric.py"
+      - ".github/workflows/beyvra-automation-contract-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Validate fail-closed automation authority
+        run: python scripts/validate_beyvra_fabric.py
