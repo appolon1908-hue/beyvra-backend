@@ -31,9 +31,10 @@ jobs:
           python-version: "3.11"
       - name: Compile validator
         run: python -m py_compile scripts/validate_beyvra_fabric.py
-      - name: Parse JSON contracts
+      - name: Parse structured contracts
         run: |
           python -m json.tool contracts/automation/beyvra-fabric.v2.json >/dev/null
           python -m json.tool docs/integrations/n8n/manifest.v2.json >/dev/null
+          python -m json.tool contracts/automation/beyvra-operations-api.v1.yaml >/dev/null
       - name: Enforce fail-closed automation boundary
         run: python scripts/validate_beyvra_fabric.py
