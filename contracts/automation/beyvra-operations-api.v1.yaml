@@ -1,0 +1,345 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Beyvra Automation-Safe API",
+    "version": "1.0.0",
+    "description": "Private non-financial operations contract invoked only by the Codestra Middleware adapter."
+  },
+  "servers": [
+    {
+      "url": "https://beyvra.internal.invalid"
+    }
+  ],
+  "paths": {
+    "/v1/automation/onboarding-cases": {
+      "post": {
+        "operationId": "createOnboardingCase",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/onboarding-cases/{case_id}": {
+      "get": {
+        "operationId": "getOnboardingCase",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current state"
+          }
+        }
+      }
+    },
+    "/v1/automation/compliance-tasks/{task_id}/remind": {
+      "post": {
+        "operationId": "requestComplianceReminder",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/support-escalations": {
+      "post": {
+        "operationId": "createSupportEscalation",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/report-requests": {
+      "post": {
+        "operationId": "createReportRequest",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/report-requests/{request_id}": {
+      "get": {
+        "operationId": "getReportRequest",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current state"
+          }
+        }
+      }
+    },
+    "/v1/automation/notifications": {
+      "post": {
+        "operationId": "requestNotification",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/security-alerts": {
+      "post": {
+        "operationId": "createSecurityAlert",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/webhook-reconciliation": {
+      "post": {
+        "operationId": "reconcileWebhookDelivery",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/v1/automation/operations/{operation_id}": {
+      "get": {
+        "operationId": "getAutomationOperation",
+        "security": [
+          {
+            "oauth2": [
+              "beyvra.operations.read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciled operation state"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.codestra.co/realms/codestra/protocol/openid-connect/token",
+            "scopes": {
+              "beyvra.operations.write": "Request allowlisted non-financial operations",
+              "beyvra.operations.read": "Read operation state"
+            }
+          }
+        }
+      }
+    }
+  }
+}
