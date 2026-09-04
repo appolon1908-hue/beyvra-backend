@@ -10,6 +10,17 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from users.models import UserDeviceInfo
 from security import models
 from security import serializers
+from security.commands import durable_security_command
+from integrations.models import OrganizationMembership
+from integrations.permissions import organization_for_request
+
+
+def _managed_user(request, user_id):
+    organization = organization_for_request(request)
+    return get_user_model().objects.filter(
+        id=user_id,
+        id__in=OrganizationMembership.objects.filter(organization=organization).values("user_id"),
+    ).first()
 
 
 @extend_schema(
@@ -102,31 +113,19 @@ class SetGlobalTwoFactorAuth(generics.CreateAPIView):
     serializer_class = serializers.TwoFactorAuthSerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
+    def get_command_object(self):
+        return models.TwoFactorAuth.objects.select_for_update().filter(admin=self.request.user).first()
+
+    @durable_security_command("security.global_2fa.update", versioned=True)
     def create(self, request, *args, **kwargs):
-        auth_type = request.data.get('auth_type', 'SMS')
-
-        # Get or create 2FA settings for the current admin
-        two_factor_auth, created = models.TwoFactorAuth.objects.get_or_create(
-            admin=request.user,
-            defaults={'auth_type': auth_type}
-        )
-
-        if created:
-            serializer = self.get_serializer(data=request.data)
-        else:
-            serializer = self.get_serializer(
-                two_factor_auth, data=request.data)
-
-        # Validate the serializer
+        existing = models.TwoFactorAuth.objects.select_for_update().filter(admin=request.user).first()
+        serializer = self.get_serializer(existing, data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except ValidationError as e:
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-
-        if not created:
-            serializer.save()
-
-        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        serializer.save(admin=request.user)
+        status_code = status.HTTP_200_OK if existing else status.HTTP_201_CREATED
 
         return Response(serializer.data, status=status_code)
 
@@ -166,29 +165,19 @@ class SetGlobalPasswordPolicy(generics.CreateAPIView):
     serializer_class = serializers.PasswordPolicySerializer
     permission_classes = (IsAuthenticated, IsAdminUser)
 
+    def get_command_object(self):
+        return models.PasswordPolicy.objects.select_for_update().filter(admin=self.request.user).first()
+
+    @durable_security_command("security.password_policy.update", versioned=True)
     def create(self, request, *args, **kwargs):
-        # Get or create password policy settings for the current admin
-        password_policy, created = models.PasswordPolicy.objects.get_or_create(
-            admin=request.user,
-            defaults=request.data
-        )
-
-        if created:
-            serializer = self.get_serializer(data=request.data)
-        else:
-            serializer = self.get_serializer(
-                password_policy, data=request.data)
-
-        # Validate the serializer
+        existing = models.PasswordPolicy.objects.select_for_update().filter(admin=request.user).first()
+        serializer = self.get_serializer(existing, data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except ValidationError as e:
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-
-        if not created:
-            serializer.save()
-
-        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        serializer.save(admin=request.user)
+        status_code = status.HTTP_200_OK if existing else status.HTTP_201_CREATED
 
         return Response(serializer.data, status=status_code)
 
@@ -225,6 +214,7 @@ class IPWhitelist(generics.ListCreateAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @durable_security_command("security.ip_whitelist.create")
     def create(self, request, *args, **kwargs):
         ip_address = request.data.get('ip_address', None)
 
@@ -254,6 +244,10 @@ class IPWhitelistDeleteView(generics.DestroyAPIView):
     serializer_class = serializers.IPWhitelistSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    def get_queryset(self):
+        return models.IPWhitelist.objects.filter(admin=self.request.user)
+
+    @durable_security_command("security.ip_whitelist.delete", versioned=True)
     def delete(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)
@@ -278,6 +272,7 @@ class CountryWhitelist(generics.ListCreateAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @durable_security_command("security.country_whitelist.create")
     def create(self, request, *args, **kwargs):
         country = request.data.get('country', None)
 
@@ -307,6 +302,10 @@ class CountryWhitelistDeleteView(generics.DestroyAPIView):
     serializer_class = serializers.CountryWhitelistSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    def get_queryset(self):
+        return models.CountryWhitelist.objects.filter(admin=self.request.user)
+
+    @durable_security_command("security.country_whitelist.delete", versioned=True)
     def delete(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)
@@ -330,6 +329,7 @@ class IPBlacklistView(generics.ListCreateAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @durable_security_command("security.ip_blacklist.create")
     def create(self, request, *args, **kwargs):
         ip_address = request.data.get('ip_address', None)
 
@@ -360,6 +360,10 @@ class IPBlacklistDeleteView(generics.DestroyAPIView):
     serializer_class = serializers.IPBlacklistSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    def get_queryset(self):
+        return models.IPBlacklist.objects.filter(admin=self.request.user)
+
+    @durable_security_command("security.ip_blacklist.delete", versioned=True)
     def delete(self, request, *args, **kwargs):
         instance = self.get_object()
         self.perform_destroy(instance)
@@ -375,6 +379,9 @@ class IPRestrictionsView(generics.RetrieveUpdateAPIView):
     serializer_class = serializers.IPRestrictionsSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    def get_command_object(self):
+        return models.IPRestrictions.objects.select_for_update().filter(admin=self.request.user).first()
+
     def get_object(self):
 
         obj, created = models.IPRestrictions.objects.get_or_create(
@@ -389,6 +396,7 @@ class IPRestrictionsView(generics.RetrieveUpdateAPIView):
             models.IPBlacklist.objects.filter(admin=self.request.user))
         return obj
 
+    @durable_security_command("security.ip_restrictions.update", versioned=True)
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -416,8 +424,9 @@ class UserIPRestrictionView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_ip_restriction.update", versioned=True)
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -443,8 +452,9 @@ class SetUser2FATypeView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_2fa_type.update", versioned=True)
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -469,8 +479,9 @@ class SetUserPasswordStrengthView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_password_strength.update", versioned=True)
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -492,8 +503,9 @@ class SetUserPasswordLengthView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_password_length.update", versioned=True)
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -522,8 +534,9 @@ class SetUserPasswordComplexityView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_password_complexity.update", versioned=True)
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -544,8 +557,9 @@ class ResetUserSettingsView(generics.GenericAPIView):
 
     def get_object(self):
         user_id = self.kwargs.get("user_id")
-        return get_user_model().objects.filter(id=user_id).first()
+        return _managed_user(self.request, user_id)
 
+    @durable_security_command("security.user_settings.reset", versioned=True)
     def post(self, request, *args, **kwargs):
         user = self.get_object()
         if not user:
@@ -568,17 +582,23 @@ class UserIPBlacklistView(generics.ListCreateAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
+        organization = organization_for_request(self.request)
         return models.UserIPBlacklist.objects.filter(
-            user_id=self.kwargs.get("user_id"), admin=self.request.user)
+            user_id=self.kwargs.get("user_id"), admin=self.request.user,
+            user_id__in=OrganizationMembership.objects.filter(organization=organization).values("user_id"),
+        )
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @durable_security_command("security.user_ip_blacklist.create")
     def create(self, request, *args, **kwargs):
         ip_address = request.data.get('ip_address', None)
         user_id = self.kwargs.get("user_id")
+        if not _managed_user(request, user_id):
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if not ip_address:
             return Response({'ip_address': ['This field is required.']},
@@ -586,7 +606,7 @@ class UserIPBlacklistView(generics.ListCreateAPIView):
 
         # Check if the IP address already exists
         if models.UserIPBlacklist.objects.filter(
-                user_id=user_id, ip_address=ip_address).exists():
+                admin=request.user, user_id=user_id, ip_address=ip_address).exists():
             return Response({'ip_address': ['This IP address is already blacklisted.']},
                             status=status.HTTP_400_BAD_REQUEST)
         
@@ -614,12 +634,17 @@ class UserIPBlacklistUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        return models.UserIPBlacklist.objects.filter(admin=self.request.user)
+        organization = organization_for_request(self.request)
+        return models.UserIPBlacklist.objects.filter(
+            admin=self.request.user,
+            user_id__in=OrganizationMembership.objects.filter(organization=organization).values("user_id"),
+        )
 
     def get_object(self):
         return get_object_or_404(
             self.get_queryset(), id=self.kwargs.get("pk"))
 
+    @durable_security_command("security.user_ip_blacklist.update", versioned=True)
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(
@@ -629,6 +654,7 @@ class UserIPBlacklistUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @durable_security_command("security.user_ip_blacklist.delete", versioned=True)
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.delete()
