@@ -10,8 +10,10 @@ def reconcile_pending_registration_evidence(apps, schema_editor):
     )
     now = timezone.now()
 
-    # Normalize legacy evidence in place.  Nothing is deleted: expired and
+    # Normalize legacy evidence in place. Nothing is deleted: expired and
     # superseded rows remain available for audit and incident reconstruction.
+    # Linked challenge identities must move with the registration identity so
+    # resend ordinal accounting cannot reuse an existing outbox key.
     for registration in PendingRegistration.objects.all().only(
         "id", "email_normalized"
     ).iterator():
@@ -20,6 +22,9 @@ def reconcile_pending_registration_evidence(apps, schema_editor):
             PendingRegistration.objects.filter(pk=registration.pk).update(
                 email_normalized=normalized
             )
+        EmailVerificationChallenge.objects.filter(
+            registration_id=registration.pk
+        ).exclude(email_normalized=normalized).update(email_normalized=normalized)
 
     expired_ids = list(
         PendingRegistration.objects.filter(
