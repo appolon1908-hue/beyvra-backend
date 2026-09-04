@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
@@ -26,6 +28,59 @@ class EmailMiddlewareClient:
         value = path.read_text(encoding="utf-8").strip()
         if not value:
             raise EmailMiddlewareError("AUTHENTICATION_FAILURE", False)
+        return value
+
+    def _middleware_base_url(self) -> str:
+        # There is deliberately no usable application default for this trust
+        # boundary. Runtime owners must bind the dedicated private Middleware
+        # base URL explicitly. We still inspect the legacy Django setting for
+        # compatibility with tests and older deployments, but the historical
+        # public Kong default is treated as unconfigured unless it was supplied
+        # explicitly through the environment.
+        configured_env = os.environ.get("BEYVRA_EMAIL_API_URL")
+        configured_value = (
+            configured_env
+            if configured_env is not None
+            else getattr(settings, "BEYVRA_EMAIL_API_URL", "")
+        )
+        value = str(configured_value or "").strip().rstrip("/")
+        if not value:
+            # Configuration can be repaired without losing durable outbox
+            # intent, so the worker must keep the item pending rather than
+            # permanently dead-lettering it.
+            raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_NOT_CONFIGURED", True)
+
+        parsed = urlsplit(value)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not host
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_INVALID", False)
+
+        # Product services must never route business mail through the public
+        # Kong edge or directly to Klyrow/Postal provider surfaces. A terminal
+        # DNS dot is normalized above so equivalent FQDN spellings cannot evade
+        # the boundary.
+        forbidden_hosts = {
+            "api.codestra.co",
+            "api.codestra.agency",
+            "api.klyrow.com",
+            "mail.klyrow.com",
+        }
+        if host in forbidden_hosts:
+            if configured_env is None and host == "api.codestra.co":
+                # Neutralize the historical settings.py fallback. It is not an
+                # authorized destination and is handled like missing private
+                # configuration so queued mail remains recoverable.
+                raise EmailMiddlewareError(
+                    "MIDDLEWARE_ENDPOINT_NOT_CONFIGURED", True
+                )
+            raise EmailMiddlewareError("DIRECT_INTEGRATION_BYPASS_BLOCKED", False)
         return value
 
     def token(self) -> str:
@@ -65,6 +120,13 @@ class EmailMiddlewareClient:
                 ) from exc
 
     def submit(self, item, parameters: dict) -> dict:
+        if getattr(settings, "KEYCLOAK_IDENTITY_ENABLED", False) and item.template_key in {
+            "password_reset",
+            "account_verification",
+            "email_otp",
+        }:
+            raise EmailMiddlewareError("IDENTITY_MAIL_MUST_USE_KEYCLOAK", False)
+
         category = category_for(item.template_key)
         body = {
             "notification_id": str(item.notification_id),
@@ -81,18 +143,22 @@ class EmailMiddlewareClient:
             "locale": item.locale,
             "parameters": parameters,
         }
+
+        endpoint = self._middleware_base_url() + "/v1/email/messages"
+        token = self.token()
         record_live_effect("transactional_email", "attempt")
         try:
             response = requests.post(
-                settings.BEYVRA_EMAIL_API_URL + "/v1/email/messages",
+                endpoint,
                 json=body,
-                headers={"Authorization": "Bearer " + self.token()},
+                headers={"Authorization": "Bearer " + token},
                 timeout=10,
                 allow_redirects=False,
             )
         except (requests.Timeout, requests.ConnectionError) as exc:
             record_live_effect("transactional_email", "failure")
             raise EmailMiddlewareError("NETWORK_FAILURE", True) from exc
+
         if response.status_code == 429:
             record_live_effect("transactional_email", "failure")
             raise EmailMiddlewareError("RATE_LIMITED", True)
@@ -102,8 +168,15 @@ class EmailMiddlewareClient:
         if response.status_code >= 400:
             record_live_effect("transactional_email", "failure")
             raise EmailMiddlewareError("POLICY_REJECTION", False)
+
+        try:
+            result = response.json()
+        except ValueError as exc:
+            record_live_effect("transactional_email", "failure")
+            raise EmailMiddlewareError("INVALID_RESPONSE", False) from exc
+
         record_live_effect("transactional_email", "success")
-        return response.json()
+        return result
 
 
 def normalize_template(value: str) -> str:
