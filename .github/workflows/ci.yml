@@ -323,7 +323,7 @@ jobs:
           grep -Fq '"code":"DEPLOYMENT_READ_ONLY"' /tmp/read-only.json
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: backend-review:${{ github.sha }}
           severity: CRITICAL,HIGH
@@ -331,7 +331,7 @@ jobs:
           exit-code: "1"
 
       - name: Scan edge image
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: backend-edge-review:${{ github.sha }}
           severity: CRITICAL,HIGH
