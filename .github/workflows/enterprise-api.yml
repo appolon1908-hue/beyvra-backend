@@ -1,0 +1,53 @@
+name: Enterprise API integration
+
+on:
+  push:
+    branches: [feature/beyvra/enterprise-api-foundation-v1]
+  pull_request:
+    paths:
+      - 'FX/**'
+      - 'contracts/openapi/beyvra-enterprise-experience-v1.yaml'
+      - '.github/workflows/enterprise-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enterprise-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Capture exact public source refs for offline conflict analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          mkdir -p /tmp/enterprise-evidence
+          printf 'HEAD_SHA=%s\nBASE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" | tee /tmp/enterprise-evidence/refs.txt
+          git branch enterprise-source HEAD
+          git bundle create /tmp/enterprise-evidence/source.bundle enterprise-source refs/remotes/origin/main
+          git bundle verify /tmp/enterprise-evidence/source.bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: enterprise-source-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/enterprise-evidence/
+          retention-days: 3
+          if-no-files-found: error
+      - name: Require conflict-free integration with protected main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name enterprise-ci
+          git config user.email enterprise-ci@users.noreply.github.com
+          git merge --no-commit --no-ff origin/main
+          git diff --check
