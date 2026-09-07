@@ -1,6 +1,5 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -9,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
+from users.models import TransactionalEmailOutbox
 
 
 class PasswordResetTests(TestCase):
@@ -26,8 +26,9 @@ class PasswordResetTests(TestCase):
         response = self.client.post(reverse("user:password_reset"), {"email": "RESET@EXAMPLE.COM"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("/password-reset?uidb64=", mail.outbox[0].alternatives[0].content)
+        queued = TransactionalEmailOutbox.objects.get(user_id_ref=self.user.pk, event_type="account.password_reset_requested")
+        self.assertEqual(queued.status, "pending")
+        self.assertIn("/reset-password?uid=", queued.payload["action"])
 
     def test_request_does_not_reveal_missing_account(self):
         existing_response = self.client.post(reverse("user:password_reset"), {"email": self.user.email})
