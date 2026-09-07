@@ -6,7 +6,6 @@ on:
   pull_request:
     paths:
       - 'FX/**'
-      - 'contracts/openapi/beyvra-enterprise-experience-v1.yaml'
       - '.github/workflows/enterprise-api.yml'
   workflow_dispatch:
 
@@ -14,10 +13,38 @@ permissions:
   contents: read
 
 concurrency:
-  group: enterprise-api-${{ github.event.pull_request.number || github.ref }}
+  group: enterprise-api-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  cache-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install isolated Django test dependency
+        run: pip install Django==5.2.17
+      - name: Verify sensitive cache policies without application or provider initialization
+        working-directory: FX
+        run: |
+          python - <<'PY'
+          import sys
+          import unittest
+          import django
+          from django.conf import settings
+          settings.configure(SECRET_KEY='ci-only-cache-test', INSTALLED_APPS=[], DATABASES={})
+          django.setup()
+          suite = unittest.defaultTestLoader.loadTestsFromName('middleware.test_no_store')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          sys.exit(0 if result.wasSuccessful() else 1)
+          PY
+
   enterprise-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -27,28 +54,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Capture exact public source refs for offline conflict analysis
-        shell: bash
+      - name: Require current main ancestry before enterprise approval
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git fetch --no-tags origin main:refs/remotes/origin/main
-          git fetch --no-tags origin 7de91225b40875d21229575ed7880f2f2c69877c:refs/remotes/origin/workspace-source
-          mkdir -p /tmp/enterprise-evidence
-          printf 'HEAD_SHA=%s\nBASE_SHA=%s\nWORKSPACE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" "$(git rev-parse origin/workspace-source)" | tee /tmp/enterprise-evidence/refs.txt
-          git branch enterprise-source HEAD
-          git bundle create /tmp/enterprise-evidence/source.bundle enterprise-source refs/remotes/origin/main refs/remotes/origin/workspace-source
-          git bundle verify /tmp/enterprise-evidence/source.bundle
-      - uses: actions/upload-artifact@v7
-        with:
-          name: enterprise-source-${{ github.event.pull_request.head.sha || github.sha }}
-          path: /tmp/enterprise-evidence/
-          retention-days: 3
-          if-no-files-found: error
-      - name: Require conflict-free integration with protected main
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name enterprise-ci
-          git config user.email enterprise-ci@users.noreply.github.com
-          git merge --no-commit --no-ff origin/main
-          git diff --check
+          printf 'HEAD_SHA=%s\nBASE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)"
+          git merge-base --is-ancestor origin/main HEAD
