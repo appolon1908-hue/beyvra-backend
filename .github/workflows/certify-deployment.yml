@@ -1,0 +1,275 @@
+name: Certify deployed immutable Beyvra backend
+
+on:
+  workflow_run:
+    workflows: ["Publish and deploy immutable Beyvra backend"]
+    types: [completed]
+
+concurrency:
+  group: beyvra-backend-certification-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  inspect:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      source_sha: ${{ steps.manifest.outputs.source_sha }}
+      backend_image: ${{ steps.manifest.outputs.backend_image }}
+      edge_image: ${{ steps.manifest.outputs.edge_image }}
+      target: ${{ steps.manifest.outputs.target }}
+      change_id: ${{ steps.manifest.outputs.change_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
+      DEPLOY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - id: manifest
+        name: Inspect checksum-verified deployment manifest
+        run: operations/inspect_deployment_run.sh
+
+  certify:
+    needs: inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: ${{ needs.inspect.outputs.target }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PUBLIC_SERVER_NAME: ${{ vars.PUBLIC_SERVER_NAME }}
+      VERIFICATION_BASE_URL: ${{ vars.VERIFICATION_BASE_URL }}
+      CERTIFICATION_TOKEN_FILE: ${{ vars.CERTIFICATION_TOKEN_FILE }}
+      CANARY_TRAFFIC_PERCENT: ${{ vars.CANARY_TRAFFIC_PERCENT }}
+      EXTERNAL_CANARY_ROUTING_VERIFIED: ${{ vars.EXTERNAL_CANARY_ROUTING_VERIFIED }}
+      SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+      BACKEND_IMAGE: ${{ needs.inspect.outputs.backend_image }}
+      EDGE_IMAGE: ${{ needs.inspect.outputs.edge_image }}
+      DEPLOYMENT_TARGET: ${{ needs.inspect.outputs.target }}
+      CHANGE_ID: ${{ needs.inspect.outputs.change_id }}
+      RELEASE_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/release/v1
+      CERTIFICATION_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/certification/v1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.inspect.outputs.source_sha }}
+          fetch-depth: 0
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: subjects
+        name: Validate exact OCI subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest_pattern='^sha256:[0-9a-f]{64}$'
+          backend_name="${BACKEND_IMAGE%@*}"
+          backend_digest="${BACKEND_IMAGE#*@}"
+          edge_name="${EDGE_IMAGE%@*}"
+          edge_digest="${EDGE_IMAGE#*@}"
+          [[ "$backend_name" == ghcr.io/* ]]
+          [[ "$edge_name" == ghcr.io/* ]]
+          [[ "$backend_digest" =~ $digest_pattern ]]
+          [[ "$edge_digest" =~ $digest_pattern ]]
+          printf 'backend_name=%s\n' "$backend_name" >>"$GITHUB_OUTPUT"
+          printf 'backend_digest=%s\n' "$backend_digest" >>"$GITHUB_OUTPUT"
+          printf 'edge_name=%s\n' "$edge_name" >>"$GITHUB_OUTPUT"
+          printf 'edge_digest=%s\n' "$edge_digest" >>"$GITHUB_OUTPUT"
+
+      - name: Create exact release predicate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          jq -n \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg edge_image "$EDGE_IMAGE" \
+            --arg target "$DEPLOYMENT_TARGET" \
+            --arg change_id "$CHANGE_ID" \
+            --arg deploy_run_id "$DEPLOY_RUN_ID" \
+            --arg signed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              schema_version: 1,
+              source_sha: $source_sha,
+              backend_image: $backend_image,
+              edge_image: $edge_image,
+              target: $target,
+              change_id: $change_id,
+              deploy_run_id: $deploy_run_id,
+              signed_at: $signed_at,
+              deployment_read_only: true,
+              live_trading_authorized: false,
+              real_money_authorized: false,
+              payments_authorized: false,
+              withdrawals_authorized: false,
+              transactional_email_authorized: false,
+              external_execution_authorized: false,
+              certification_pending: true
+            }' > evidence/release-attestation-predicate.json
+
+      - id: attest_backend_release
+        name: Sign exact backend release identity
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.subjects.outputs.backend_name }}
+          subject-digest: ${{ steps.subjects.outputs.backend_digest }}
+          predicate-type: ${{ env.RELEASE_ATTESTATION_TYPE }}
+          predicate-path: evidence/release-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - id: attest_edge_release
+        name: Sign exact edge release identity
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.subjects.outputs.edge_name }}
+          subject-digest: ${{ steps.subjects.outputs.edge_digest }}
+          predicate-type: ${{ env.RELEASE_ATTESTATION_TYPE }}
+          predicate-path: evidence/release-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify exact release signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="$GITHUB_REPOSITORY/.github/workflows/certify-deployment.yml"
+          gh attestation verify "oci://${BACKEND_IMAGE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$RELEASE_ATTESTATION_TYPE" \
+            --format json \
+            > evidence/backend-release-attestation-verification.json
+          gh attestation verify "oci://${EDGE_IMAGE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$RELEASE_ATTESTATION_TYPE" \
+            --format json \
+            > evidence/edge-release-attestation-verification.json
+
+      - name: Run exact-source staging, zero-effect, and rollback certification
+        run: operations/run_deployment_certification.sh
+
+      - name: Create successful certification predicate and promotion manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg edge_image "$EDGE_IMAGE" \
+            --arg target "$DEPLOYMENT_TARGET" \
+            --arg change_id "$CHANGE_ID" \
+            --arg deploy_run_id "$DEPLOY_RUN_ID" \
+            --arg certification_run_id "$GITHUB_RUN_ID" \
+            --arg certified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              schema_version: 1,
+              source_sha: $source_sha,
+              backend_image: $backend_image,
+              edge_image: $edge_image,
+              target: $target,
+              change_id: $change_id,
+              deploy_run_id: $deploy_run_id,
+              certification_run_id: $certification_run_id,
+              certified_at: $certified_at,
+              certification_result: "PASS",
+              rollback_rehearsal: "PASS",
+              zero_live_effects: "PASS",
+              deployment_read_only: true,
+              live_trading_authorized: false,
+              real_money_authorized: false,
+              payments_authorized: false,
+              withdrawals_authorized: false,
+              transactional_email_authorized: false,
+              external_execution_authorized: false
+            }' > evidence/certification-attestation-predicate.json
+
+          if [[ "$DEPLOYMENT_TARGET" == "staging-readonly" ]]; then
+            cp evidence/certification-attestation-predicate.json \
+              evidence/production-promotion-manifest.json
+            (
+              cd evidence
+              sha256sum production-promotion-manifest.json \
+                > production-promotion-manifest.json.sha256
+            )
+          fi
+
+      - id: attest_backend_certification
+        name: Sign successful backend certification
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.subjects.outputs.backend_name }}
+          subject-digest: ${{ steps.subjects.outputs.backend_digest }}
+          predicate-type: ${{ env.CERTIFICATION_ATTESTATION_TYPE }}
+          predicate-path: evidence/certification-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - id: attest_edge_certification
+        name: Sign successful edge certification
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.subjects.outputs.edge_name }}
+          subject-digest: ${{ steps.subjects.outputs.edge_digest }}
+          predicate-type: ${{ env.CERTIFICATION_ATTESTATION_TYPE }}
+          predicate-path: evidence/certification-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify successful certification signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="$GITHUB_REPOSITORY/.github/workflows/certify-deployment.yml"
+          gh attestation verify "oci://${BACKEND_IMAGE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$CERTIFICATION_ATTESTATION_TYPE" \
+            --format json \
+            > evidence/backend-certification-attestation-verification.json
+          gh attestation verify "oci://${EDGE_IMAGE}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$CERTIFICATION_ATTESTATION_TYPE" \
+            --format json \
+            > evidence/edge-certification-attestation-verification.json
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: beyvra-backend-certification-${{ needs.inspect.outputs.target }}-${{ needs.inspect.outputs.change_id }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 90
