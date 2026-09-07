@@ -75,7 +75,7 @@ jobs:
             YAML.load_file(".github/workflows/go-live-readonly.yml")
           '
 
-          attest_sha=508db95dd578ae2727ebd6217d5ba78e4fbda05d
+          attest_sha=1e69f48acb82d1966a394da916b4c1698aa569d6
           test "$(grep -Fc "actions/attest@$attest_sha" \
             .github/workflows/deploy.yml)" -eq 2
           test "$(grep -Fc "actions/attest@$attest_sha" \
