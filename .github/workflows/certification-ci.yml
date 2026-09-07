@@ -6,14 +6,19 @@ on:
       - "FX/web-start-prod.sh"
       - "FX/release-init-prod.sh"
       - "FX/gunicorn_conf.py"
+      - ".release/intent.json"
       - ".github/workflows/deploy.yml"
       - ".github/workflows/certify-deployment.yml"
       - ".github/workflows/certification-ci.yml"
       - ".github/workflows/release-intent-dispatch.yml"
+      - ".github/workflows/promote-production-readonly.yml"
+      - ".github/workflows/go-live-readonly.yml"
       - "operations/certify_remote_readonly.sh"
       - "operations/inspect_deployment_run.sh"
       - "operations/dispatch_release_intent.sh"
       - "operations/validate_release_intent.py"
+      - "operations/validate_promotion_evidence.py"
+      - "operations/one_click_readonly_release.py"
       - "operations/run_deployment_certification.sh"
       - "operations/release_cert_runtime.sh"
       - "operations/release_cert_state.sh"
@@ -22,6 +27,8 @@ on:
       - "operations/verify_edge_policy.py"
       - "operations/verify_previous_release.py"
       - "scripts/database_fingerprint.py"
+      - "docs/SIGNED-PRODUCTION-READONLY-PROMOTION.md"
+      - "docs/ONE-CLICK-READONLY-GO-LIVE.md"
   push:
     branches: [main]
 
@@ -34,6 +41,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+
       - name: Validate certification authority
         shell: bash
         run: |
@@ -50,17 +58,51 @@ jobs:
           python -m py_compile \
             FX/gunicorn_conf.py \
             operations/validate_release_intent.py \
+            operations/validate_promotion_evidence.py \
+            operations/one_click_readonly_release.py \
             operations/verify_metrics_zero.py \
             operations/verify_edge_policy.py \
             operations/verify_previous_release.py \
             scripts/database_fingerprint.py
+
           ruby -e '
             require "yaml"
             YAML.load_file(".github/workflows/deploy.yml")
             YAML.load_file(".github/workflows/certify-deployment.yml")
             YAML.load_file(".github/workflows/certification-ci.yml")
             YAML.load_file(".github/workflows/release-intent-dispatch.yml")
+            YAML.load_file(".github/workflows/promote-production-readonly.yml")
+            YAML.load_file(".github/workflows/go-live-readonly.yml")
           '
+
+          attest_sha=508db95dd578ae2727ebd6217d5ba78e4fbda05d
+          test "$(grep -Fc "actions/attest@$attest_sha" \
+            .github/workflows/deploy.yml)" -eq 2
+          test "$(grep -Fc "actions/attest@$attest_sha" \
+            .github/workflows/certify-deployment.yml)" -eq 4
+          grep -Fq 'artifact-metadata: write' .github/workflows/deploy.yml
+          grep -Fq 'artifact-metadata: write' \
+            .github/workflows/certify-deployment.yml
+          grep -Fq 'signed_build_verified: true' \
+            .github/workflows/deploy.yml
+          grep -Fq 'backend-build-attestation-verification.json' \
+            operations/inspect_deployment_run.sh
+          grep -Fq 'edge-build-attestation-verification.json' \
+            operations/inspect_deployment_run.sh
+          grep -Fq 'publish_images]=false' \
+            .github/workflows/promote-production-readonly.yml
+          grep -Fq 'CANARY_TRAFFIC_PERCENT" =~ ^(0|1)$' \
+            .github/workflows/promote-production-readonly.yml
+          grep -Fq 'workflow_dispatch:' \
+            .github/workflows/go-live-readonly.yml
+          grep -Fq 'BEYVRA_RELEASE_BOT_TOKEN' \
+            .github/workflows/go-live-readonly.yml
+          grep -Fq 'canary_traffic_maximum_percent": 1' \
+            operations/one_click_readonly_release.py
+          jq -e '.enabled == false' .release/intent.json >/dev/null
+
+      - name: Exercise one-click orchestrator fail-closed models
+        run: python operations/one_click_readonly_release.py --self-test
 
       - name: Prove zero-change release never invokes migrate
         shell: bash
@@ -108,3 +150,82 @@ jobs:
             --after /tmp/metrics-after.prom \
             --output /tmp/zero-effects.json
           jq -e '.overall == "PASS"' /tmp/zero-effects.json >/dev/null
+
+      - name: Exercise signed promotion evidence parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = {
+              "schema_version": 1,
+              "source_sha": "a" * 40,
+              "backend_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend@sha256:"
+                  + "b" * 64
+              ),
+              "edge_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend-edge@sha256:"
+                  + "c" * 64
+              ),
+              "target": "staging-readonly",
+              "certification_result": "PASS",
+              "rollback_rehearsal": "PASS",
+              "zero_live_effects": "PASS",
+              "deployment_read_only": True,
+              "live_trading_authorized": False,
+              "real_money_authorized": False,
+              "payments_authorized": False,
+              "withdrawals_authorized": False,
+              "transactional_email_authorized": False,
+              "external_execution_authorized": False,
+          }
+          Path("/tmp/promotion-manifest.json").write_text(
+              json.dumps(value) + "\n"
+          )
+          PY
+          python operations/validate_promotion_evidence.py \
+            /tmp/promotion-manifest.json
+
+      - name: Reject unsafe promotion evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = {
+              "schema_version": 1,
+              "source_sha": "a" * 40,
+              "backend_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend@sha256:"
+                  + "b" * 64
+              ),
+              "edge_image": (
+                  "ghcr.io/appolon1908-hue/beyvra-backend-edge@sha256:"
+                  + "c" * 64
+              ),
+              "target": "staging-readonly",
+              "certification_result": "PASS",
+              "rollback_rehearsal": "PASS",
+              "zero_live_effects": "PASS",
+              "deployment_read_only": True,
+              "live_trading_authorized": True,
+              "real_money_authorized": False,
+              "payments_authorized": False,
+              "withdrawals_authorized": False,
+              "transactional_email_authorized": False,
+              "external_execution_authorized": False,
+          }
+          Path("/tmp/promotion-manifest-unsafe.json").write_text(
+              json.dumps(value) + "\n"
+          )
+          PY
+          if python operations/validate_promotion_evidence.py \
+            /tmp/promotion-manifest-unsafe.json; then
+            echo "Unsafe promotion evidence was accepted." >&2
+            exit 1
+          fi

@@ -104,14 +104,15 @@ def serialize_quality(row):
 
 
 @transaction.atomic
-def set_provider_halt(actor, provider_id, halted, reason):
+def set_provider_halt(actor, provider_id, halted, reason, expected_version, correlation_id=None):
     provider = ExecutionProviderRecord.objects.select_for_update().get(pk=provider_id)
     if provider.mode == "LIVE": raise ValueError("LIVE_EXECUTION_DISABLED")
+    if provider.updated_at.isoformat() != expected_version: raise ValueError("VERSION_CONFLICT")
     provider.health = "HALTED" if halted else "HEALTHY"
     provider.enabled = not halted
     provider.save(update_fields=("health", "enabled", "updated_at"))
     ApplicationAuditEvent.objects.create(actor_ref=str(actor.pk), action=f"execution.provider.{'halted' if halted else 'resumed'}",
-        resource_type="execution_provider", resource_id=provider_id, request_id="operator", correlation_id=uuid.uuid4(),
+        resource_type="execution_provider", resource_id=provider_id, request_id="operator", correlation_id=correlation_id or uuid.uuid4(),
         context={"mode": provider.mode}, reason=reason, occurred_at=timezone.now())
     enqueue_event(aggregate_type="execution_provider", aggregate_id=provider_id, event_type=f"trading.execution.provider.{'halted' if halted else 'resumed'}.v1",
         payload={"provider_id": provider_id, "mode": provider.mode, "health": provider.health, "live": False}, tenant_ref="default")
