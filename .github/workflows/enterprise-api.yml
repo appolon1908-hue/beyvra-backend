@@ -32,10 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin main:refs/remotes/origin/main
+          git fetch --no-tags origin 7de91225b40875d21229575ed7880f2f2c69877c:refs/remotes/origin/workspace-source
           mkdir -p /tmp/enterprise-evidence
-          printf 'HEAD_SHA=%s\nBASE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" | tee /tmp/enterprise-evidence/refs.txt
+          printf 'HEAD_SHA=%s\nBASE_SHA=%s\nWORKSPACE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" "$(git rev-parse origin/workspace-source)" | tee /tmp/enterprise-evidence/refs.txt
           git branch enterprise-source HEAD
-          git bundle create /tmp/enterprise-evidence/source.bundle enterprise-source refs/remotes/origin/main
+          git bundle create /tmp/enterprise-evidence/source.bundle enterprise-source refs/remotes/origin/main refs/remotes/origin/workspace-source
           git bundle verify /tmp/enterprise-evidence/source.bundle
       - uses: actions/upload-artifact@v7
         with:
