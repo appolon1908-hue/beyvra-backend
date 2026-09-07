@@ -15,6 +15,8 @@ email delivery, or a Keycloak client.
   posting and settlement finality.
 - Market data, reference data, valuation and risk return explicit quality and
   provenance. Missing evidence is unavailable, never synthetic.
+- Financial, API and authentication responses carry `private, no-store`; the
+  browser and service worker never retain or replay them.
 - Every real-value and external-execution capability is fail-closed. A live
   provider requires separate legal, security, financial, operational and
   maker-checker approval.
@@ -82,8 +84,16 @@ guessing whether an order exists at a venue.
 ## This baseline
 
 The first enterprise API baseline adds tenant-scoped watchlists, canonical
-alerts, portfolio summary/performance/allocation/risk projections, MFA-protected
-operator orders/halts/provider health/reconciliation breaks/audit projections,
-explicit unavailable advanced risk outputs, expanded CORS contract headers,
-and digest-locked deployments with BuildKit SBOM/provenance plus automatic
-rollback on a failed readiness smoke test.
+alerts, separate portfolio summary/positions/performance/allocation/risk and
+evidence-quality projections, MFA-protected operator orders/halts/provider
+health/reconciliation breaks/audit projections, explicit unavailable advanced
+risk outputs, expanded CORS contract headers, and digest-locked deployments
+with BuildKit SBOM/provenance plus automatic rollback on a failed readiness
+smoke test.
+
+Watchlist symbol and UUID mutations share one canonical active-instrument
+resolver. A symbol mapped to multiple venue instruments is rejected and must be
+reissued with its UUID; neither add nor delete guesses a venue. Portfolio risk
+reports gross exposure as the sum of absolute priced position values and net
+exposure as the signed sum. VaR and stress loss stay `null` until certified
+history, methodology, policy and scenario evidence exist.

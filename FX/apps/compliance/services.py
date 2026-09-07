@@ -36,7 +36,23 @@ def _invalidate_pending_simulation_orders_if_denied(profile):
     decision=_evaluate(profile,"TRADING",persist=False)
     if decision.result==EligibilityResult.ALLOWED:return 0
     from apps.trading.models import TradingOrder
-    return TradingOrder.objects.filter(subject_ref=str(profile.user_id),simulation=True,state="PENDING").update(state="REJECTED",eligibility_policy_version=decision.policy_version,eligibility_result=decision.result,eligibility_reason_codes=list(decision.reason_codes),eligibility_evaluated_at=decision.evaluated_at)
+    from integrations.models import OrganizationMembership
+    tenant_refs = [str(profile.organization_id)]
+    # "default" is a compatibility projection for accounts that have exactly
+    # one active tenant. It is never included for multi-tenant accounts.
+    active_memberships = OrganizationMembership.objects.filter(
+        user_id=profile.user_id,
+        is_active=True,
+        organization__is_active=True,
+    ).count()
+    if active_memberships == 1:
+        tenant_refs.append("default")
+    return TradingOrder.objects.filter(
+        tenant_ref__in=tenant_refs,
+        subject_ref=str(profile.user_id),
+        simulation=True,
+        state="PENDING",
+    ).update(state="REJECTED",eligibility_policy_version=decision.policy_version,eligibility_result=decision.result,eligibility_reason_codes=list(decision.reason_codes),eligibility_evaluated_at=decision.evaluated_at)
 
 
 def _active_restrictions(profile, now):

@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from integrations.models import Organization, OrganizationMembership
-from reference_data.models import Instrument, TradingCalendar
+from reference_data.models import Instrument, TradingCalendar, Venue
 from users.models import User
 
 from .models import Watchlist
@@ -100,5 +100,32 @@ class WatchlistApiTests(TestCase):
             format="json",
             **self.headers,
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"]["code"], "INVALID_REQUEST")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "INSTRUMENT_UNAVAILABLE")
+
+    def test_ambiguous_symbol_requires_the_canonical_uuid(self):
+        venue = Venue.objects.create(code="SECOND", name="Second venue")
+        Instrument.objects.create(
+            canonical_symbol="BTC-USD",
+            name="Venue-specific Bitcoin / US Dollar",
+            asset_class=Instrument.AssetClass.CRYPTO,
+            currency="USD",
+            venue=venue,
+            calendar=self.instrument.calendar,
+            tick_size="0.01",
+            lot_size="0.0001",
+        )
+        watchlist_id = self.client.post(
+            "/api/v1/watchlists",
+            {"name": "Primary"},
+            format="json",
+            **self.headers,
+        ).json()["id"]
+        response = self.client.post(
+            f"/api/v1/watchlists/{watchlist_id}/items",
+            {"instrument_id": "BTC-USD"},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "INSTRUMENT_AMBIGUOUS")

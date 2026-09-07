@@ -1,9 +1,6 @@
-import uuid
-
 from rest_framework import serializers
 
-from reference_data.models import Instrument
-
+from .instruments import InstrumentResolutionError, resolve_active_instrument
 from .models import Watchlist, WatchlistItem
 
 
@@ -17,31 +14,20 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "symbol", "created_at")
 
     def validate_instrument_id(self, value):
-        reference = value.strip()
-        if not reference:
-            raise serializers.ValidationError("Instrument is required.")
+        resolved = self.context.get("resolved_instrument")
+        if resolved is not None:
+            return str(resolved.instrument_id)
         try:
-            parsed_id = uuid.UUID(reference)
-        except (TypeError, ValueError):
-            parsed_id = None
-        instrument = None
-        if parsed_id is not None:
-            instrument = Instrument.objects.filter(
-                instrument_id=parsed_id,
-                status=Instrument.Status.ACTIVE,
-            ).first()
-        if instrument is None:
-            instrument = Instrument.objects.filter(
-                canonical_symbol=reference.upper(),
-                status=Instrument.Status.ACTIVE,
-            ).order_by("venue_id").first()
-        if instrument is None:
-            raise serializers.ValidationError("Instrument is unavailable.")
+            instrument = resolve_active_instrument(value)
+        except InstrumentResolutionError as exc:
+            raise serializers.ValidationError(exc.code) from exc
         return str(instrument.instrument_id)
 
     def get_symbol(self, obj):
-        instrument = Instrument.objects.filter(instrument_id=obj.instrument_id).first()
-        return instrument.canonical_symbol if instrument else None
+        try:
+            return resolve_active_instrument(obj.instrument_id).canonical_symbol
+        except InstrumentResolutionError:
+            return None
 
 
 class WatchlistSerializer(serializers.ModelSerializer):

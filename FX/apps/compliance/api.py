@@ -1,6 +1,6 @@
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from integrations.models import OrganizationMembership
+from integrations.permissions import organization_for_request
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,9 +23,8 @@ from .serializers import ComplianceProfileResponseSerializer, ComplianceRequirem
 SAFE_REQUIREMENT_ACTIONS={"IDENTITY_VERIFICATION":"Complete identity verification.","ADDRESS_VERIFICATION":"Provide address verification.","SOURCE_OF_FUNDS":"Provide the requested source-of-funds information.","TAX_INFORMATION":"Provide the requested tax information.","MANUAL_REVIEW":"No action is required while your account is reviewed."}
 
 def _profile(request):
-    org_id = OrganizationMembership.objects.filter(user=request.user).order_by("id").values_list("organization_id", flat=True).first()
-    if not org_id: return None
-    return ComplianceProfile.objects.filter(user=request.user, organization_id=org_id).first()
+    organization = organization_for_request(request)
+    return ComplianceProfile.objects.filter(user=request.user, organization=organization).first()
 
 class ComplianceProfileView(APIView):
     permission_classes = (IsAuthenticated,)

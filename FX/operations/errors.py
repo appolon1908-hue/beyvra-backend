@@ -36,6 +36,13 @@ def BeyvraErrorMapper(exc, context):  # noqa: N802 - public error-contract name
         response.data = _safe_error(context, "INVALID_CREDENTIALS", "Invalid credentials.")
         return response
     detail = getattr(exc, "detail", {})
+    if isinstance(detail, dict) and str(detail.get("code", "")) == "TENANT_SELECTION_REQUIRED":
+        response.data = _safe_error(
+            context,
+            "TENANT_SELECTION_REQUIRED",
+            "Select an active tenant with X-Organization-ID.",
+        )
+        return response
     if isinstance(detail, dict) and str(detail.get("code", "")) == "FINANCIAL_WALLET_ID_NOT_ACCEPTED":
         response.data = _safe_error(context, "FINANCIAL_WALLET_ID_NOT_ACCEPTED", "This wallet is not available for simulated trading.")
         return response
