@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -18,6 +20,43 @@ class EmailMiddlewareError(RuntimeError):
         super().__init__(error_class)
 
 
+def _canonical_email_origin(value: str) -> str:
+    """Normalize an exact origin without permitting URL parser ambiguities."""
+    if not isinstance(value, str) or not value or any(
+        ord(char) <= 32 or ord(char) >= 127 for char in value
+    ):
+        raise ValueError("Invalid email origin")
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower().removesuffix(".")
+    port = parsed.port  # Validate malformed and out-of-range ports now.
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or "?" in value
+        or "#" in value
+    ):
+        raise ValueError("Invalid email origin")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if len(host) > 253 or any(
+            not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+            for label in host.split(".")
+        ):
+            raise ValueError("Invalid email hostname") from None
+        authority = host
+    else:
+        authority = f"[{address.compressed}]" if address.version == 6 else str(address)
+    if port is not None and port != (443 if parsed.scheme == "https" else 80):
+        authority += f":{port}"
+    return f"{parsed.scheme}://{authority}"
+
+
 class EmailMiddlewareClient:
     _lock = threading.Lock()
     _token = ""
@@ -31,41 +70,22 @@ class EmailMiddlewareClient:
         return value
 
     def _middleware_base_url(self) -> str:
-        # There is deliberately no usable application default for this trust
-        # boundary. Runtime owners must bind the dedicated private Middleware
-        # base URL explicitly. We still inspect the legacy Django setting for
-        # compatibility with tests and older deployments, but the historical
-        # public Kong default is treated as unconfigured unless it was supplied
-        # explicitly through the environment.
+        # Destination and trust policy are independent configuration values.
+        # Never derive the allowlist from the destination being validated.
         configured_env = os.environ.get("BEYVRA_EMAIL_API_URL")
         configured_value = (
             configured_env
             if configured_env is not None
             else getattr(settings, "BEYVRA_EMAIL_API_URL", "")
         )
-        value = str(configured_value or "").strip().rstrip("/")
+        value = str(configured_value or "").strip()
         if not value:
-            # Configuration can be repaired without losing durable outbox
-            # intent, so the worker must keep the item pending rather than
-            # permanently dead-lettering it.
             raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_NOT_CONFIGURED", True)
-
-        parsed = urlsplit(value)
-        host = (parsed.hostname or "").lower().rstrip(".")
-        if (
-            parsed.scheme not in {"http", "https"}
-            or not host
-            or parsed.username
-            or parsed.password
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_INVALID", False)
-
-        # Product services must never route business mail through the public
-        # Kong edge or directly to Klyrow/Postal provider surfaces. A terminal
-        # DNS dot is normalized above so equivalent FQDN spellings cannot evade
-        # the boundary.
+        try:
+            origin = _canonical_email_origin(value)
+        except ValueError as exc:
+            raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_INVALID", False) from exc
+        host = urlsplit(origin).hostname
         forbidden_hosts = {
             "api.codestra.co",
             "api.codestra.agency",
@@ -74,14 +94,28 @@ class EmailMiddlewareClient:
         }
         if host in forbidden_hosts:
             if configured_env is None and host == "api.codestra.co":
-                # Neutralize the historical settings.py fallback. It is not an
-                # authorized destination and is handled like missing private
-                # configuration so queued mail remains recoverable.
-                raise EmailMiddlewareError(
-                    "MIDDLEWARE_ENDPOINT_NOT_CONFIGURED", True
-                )
+                # Preserve durable intent when only the legacy fallback exists.
+                raise EmailMiddlewareError("MIDDLEWARE_ENDPOINT_NOT_CONFIGURED", True)
             raise EmailMiddlewareError("DIRECT_INTEGRATION_BYPASS_BLOCKED", False)
-        return value
+
+        allowed = os.environ.get("BEYVRA_EMAIL_ALLOWED_ORIGINS")
+        if allowed is None:
+            allowed = getattr(settings, "BEYVRA_EMAIL_ALLOWED_ORIGINS", ())
+        if isinstance(allowed, str):
+            allowed = [entry.strip() for entry in allowed.split(",")]
+            if allowed == [""]:
+                allowed = []
+        if not isinstance(allowed, (list, tuple, set, frozenset)):
+            raise EmailMiddlewareError("MIDDLEWARE_ALLOWLIST_INVALID", False)
+        if not allowed:
+            raise EmailMiddlewareError("MIDDLEWARE_ALLOWLIST_NOT_CONFIGURED", True)
+        try:
+            allowed_origins = {_canonical_email_origin(entry) for entry in allowed}
+        except ValueError as exc:
+            raise EmailMiddlewareError("MIDDLEWARE_ALLOWLIST_INVALID", False) from exc
+        if origin not in allowed_origins:
+            raise EmailMiddlewareError("DIRECT_INTEGRATION_BYPASS_BLOCKED", False)
+        return origin
 
     def token(self) -> str:
         cls = type(self)
@@ -168,9 +202,14 @@ class EmailMiddlewareClient:
         if response.status_code >= 400:
             record_live_effect("transactional_email", "failure")
             raise EmailMiddlewareError("POLICY_REJECTION", False)
+        if not 200 <= response.status_code < 300:
+            record_live_effect("transactional_email", "failure")
+            raise EmailMiddlewareError("INVALID_RESPONSE", False)
 
         try:
             result = response.json()
+            if not isinstance(result, dict):
+                raise ValueError("Expected an object response")
         except ValueError as exc:
             record_live_effect("transactional_email", "failure")
             raise EmailMiddlewareError("INVALID_RESPONSE", False) from exc

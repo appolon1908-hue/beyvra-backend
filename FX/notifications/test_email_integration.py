@@ -13,8 +13,11 @@ from users.email_verification import queue_email
 from users.tasks import process_transactional_email_outbox
 
 
+@override_settings(BEYVRA_EMAIL_ALLOWED_ORIGINS=("https://middleware.internal",))
 class EmailIntegrationTests(TestCase):
     def setUp(self):
+        EmailMiddlewareClient._token = ""
+        EmailMiddlewareClient._expires_at = 0.0
         self.user = get_user_model().objects.create_user(
             email="email-test@example.test",
             password="test",

@@ -1,0 +1,76 @@
+name: Email boundary safety
+
+on:
+  pull_request:
+    paths:
+      - 'FX/notifications/**'
+      - 'FX/users/**'
+      - 'FX/FX/**'
+      - 'FX/requirements.txt'
+      - '.github/workflows/email-boundary-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'FX/notifications/**'
+      - 'FX/users/**'
+      - 'FX/FX/**'
+      - 'FX/requirements.txt'
+      - '.github/workflows/email-boundary-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: email-boundary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  email-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: codestra_ci
+          POSTGRES_USER: codestra_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U codestra_ci -d codestra_ci'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: FX/requirements.txt
+      - name: Install and validate dependencies
+        run: |
+          pip install -r FX/requirements.txt
+          pip check
+      - name: Verify exact-head email regressions with PostgreSQL
+        working-directory: FX
+        env:
+          DJANGO_SETTINGS_MODULE: FX.test_settings
+          SECRET_KEY: ci-only-secret-key-with-more-than-fifty-characters-for-checks
+          DEBUG: '0'
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+          CSRF_TRUSTED_ORIGINS: '[]'
+          REDIS_HOST: localhost
+          REDIS_PORT: '6379'
+          REDIS_PASSWORD: ci-only-password
+          REDIS_DATABASE: '0'
+          DB_NAME: codestra_ci
+          DB_USER: codestra_ci
+          DB_PASSWORD: ci-only-password
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          TEST_DB_NAME: test_codestra_ci
+          TRANSACTIONAL_EMAIL_ENABLED: 'false'
+        run: |
+          python -m compileall -q notifications
+          python manage.py test notifications.test_email_integration notifications.test_email_destination_policy --noinput
