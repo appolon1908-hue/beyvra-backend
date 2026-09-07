@@ -45,6 +45,8 @@ This repository provides the server-side Beyvra application: identity/session in
 
 ## Required safety posture
 
+Selected runtime flags also represented in the read-only release safety checks:
+
 ```text
 REAL_TRADING_ENABLED=false
 EXTERNAL_EXECUTION_ENABLED=false
@@ -52,11 +54,23 @@ LIVE_BROKER_ROUTING_ENABLED=false
 FIX_LIVE_SESSION_ENABLED=false
 REAL_MONEY_ENABLED=false
 PAYMENTS_ENABLED=false
-LIVE_CUSTODY_ENABLED=false
-CROSS_CHAIN_TRANSFERS_ENABLED=false
 ```
 
-These names are the actual runtime gates read by the current backend and read-only release policy. A separate protected activation release is required to change any live-effect capability. Source merge, image build, staging deployment, or read-only production canary does not authorize real trading or money movement.
+This is not the complete certification checklist. The authoritative release check list is `DISABLED_SAFETY_KEYS` in `operations/verify_edge_policy.py`, which validates the reported safety state and includes additional controls such as simulation and email delivery.
+
+Provider activation is a separate boundary in `FX/financial_boundary/providers.py::guard_outbound`:
+
+```text
+CUSTODY_PROVIDER_ACTIVATED=false
+PAYMENT_PROVIDER_ACTIVATED=false
+REAL_MONEY_ENABLED=false
+```
+
+That guard requires the relevant provider activation flag, `REAL_MONEY_ENABLED`, and every field in the `ProviderAuthorization` approval tuple before allowing an outbound operation. Keeping the activation or real-money flag false denies the operation; setting flags alone does not supply the required independent approvals.
+
+`LIVE_CUSTODY_ENABLED` is not the custody activation flag read by this guard and is not a key checked by the current edge-policy verifier. Likewise, configuration names such as `CROSS_CHAIN_TRANSFERS_ENABLED` must not be presented as proof that the edge-policy verifier checks them. Do not substitute either for the actual provider guard or claim that the release verifier independently checks provider activation flags that are absent from its list.
+
+A separate protected activation release is required to change any live-effect capability. Source merge, image build, staging deployment, or read-only production canary does not authorize real trading or money movement.
 
 ## Engineering and release rules
 
