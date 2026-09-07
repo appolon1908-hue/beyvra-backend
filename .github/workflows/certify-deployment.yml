@@ -136,7 +136,7 @@ jobs:
 
       - id: attest_backend_release
         name: Sign exact backend release identity
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ${{ steps.subjects.outputs.backend_name }}
           subject-digest: ${{ steps.subjects.outputs.backend_digest }}
@@ -147,7 +147,7 @@ jobs:
 
       - id: attest_edge_release
         name: Sign exact edge release identity
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ${{ steps.subjects.outputs.edge_name }}
           subject-digest: ${{ steps.subjects.outputs.edge_digest }}
@@ -226,7 +226,7 @@ jobs:
 
       - id: attest_backend_certification
         name: Sign successful backend certification
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ${{ steps.subjects.outputs.backend_name }}
           subject-digest: ${{ steps.subjects.outputs.backend_digest }}
@@ -237,7 +237,7 @@ jobs:
 
       - id: attest_edge_certification
         name: Sign successful edge certification
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ${{ steps.subjects.outputs.edge_name }}
           subject-digest: ${{ steps.subjects.outputs.edge_digest }}
