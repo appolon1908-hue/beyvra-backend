@@ -1,76 +1,599 @@
-name: Build and deploy backend
+name: Publish and deploy immutable Beyvra backend
 
 on:
   workflow_dispatch:
     inputs:
+      source_sha:
+        description: Full protected-main source SHA to certify
+        required: true
+        type: string
+      target:
+        description: Protected read-only environment
+        required: true
+        default: staging-readonly
+        type: choice
+        options:
+          - staging-readonly
+          - production-readonly
+      publish_images:
+        description: Build and publish new backend and edge images
+        required: true
+        default: true
+        type: boolean
+      backend_image:
+        description: Existing backend repository@sha256 digest for promotion
+        required: false
+        default: ""
+        type: string
+      edge_image:
+        description: Existing edge repository@sha256 digest for promotion
+        required: false
+        default: ""
+        type: string
       deploy:
-        description: Deploy after publishing the immutable image
+        description: Deploy after producing the release manifest
+        required: true
+        default: false
+        type: boolean
+      change_id:
+        description: Auditable change identifier
+        required: true
+        type: string
+      allow_schema_migrations:
+        description: Permit pending expand/contract migrations
+        required: true
+        default: false
+        type: boolean
+      migration_compatibility_approved:
+        description: Confirm previous-release compatibility after migration
         required: true
         default: false
         type: boolean
 
+concurrency:
+  group: beyvra-backend-${{ inputs.target }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+  actions: read
+  checks: read
 
 jobs:
-  publish:
+  eligibility:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      image: ${{ steps.image.outputs.ref }}
+      source_sha: ${{ steps.verify.outputs.source_sha }}
+      python_base_image: ${{ steps.verify.outputs.python_base_image }}
+      nginx_base_image: ${{ steps.verify.outputs.nginx_base_image }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      PYTHON_BASE_IMAGE: "docker.io/library/python:3.11-alpine3.22@sha256:a4fc589b32e824f3f02ed9d7e7be19518aa47e105b80416336af9f202275a489"
+      NGINX_BASE_IMAGE: "docker.io/nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
     steps:
-      - uses: actions/checkout@v5
-      - uses: docker/login-action@v3
+      - name: Require the workflow and source to come from protected main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - id: verify
+        name: Verify source authority and required checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch origin main
+          git cat-file -e "${SOURCE_SHA}^{commit}"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+
+          digest_pattern='@sha256:[0-9a-f]{64}$'
+          if [[ "${{ inputs.publish_images }}" == "true" ]]; then
+            test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
+            [[ "$PYTHON_BASE_IMAGE" =~ $digest_pattern ]]
+            [[ "$NGINX_BASE_IMAGE" =~ $digest_pattern ]]
+          fi
+
+          checks="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}/check-runs?per_page=100"
+          )"
+          for required in container secrets validate certification-static; do
+            jq -e --arg name "$required" \
+              '.check_runs | any(.name == $name and .conclusion == "success")' \
+              <<<"$checks" >/dev/null
+          done
+
+          for path in \
+            docker-compose.production.yaml \
+            operations/deploy_immutable_candidate.sh \
+            operations/verify_release_identity.py \
+            operations/certify_remote_readonly.sh \
+            operations/rehearse_readonly_rollback.sh \
+            operations/verify_metrics_zero.py \
+            .github/workflows/certify-deployment.yml \
+            scripts/backup-once.sh; do
+            git show "${SOURCE_SHA}:${path}" >/dev/null
+          done
+
+          [[ "${{ inputs.change_id }}" =~ ^[A-Za-z0-9._-]+$ ]]
+          if [[ "${{ inputs.allow_schema_migrations }}" != "false" \
+                || "${{ inputs.migration_compatibility_approved }}" != "false" ]]; then
+            echo "Read-only promotion forbids schema migration authorization." >&2
+            exit 1
+          fi
+
+          case "${{ inputs.target }}" in
+            staging-readonly)
+              test "${{ inputs.publish_images }}" = "true"
+              test "${{ inputs.deploy }}" = "true"
+              test -z "${{ inputs.backend_image }}"
+              test -z "${{ inputs.edge_image }}"
+              test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
+              ;;
+            production-readonly)
+              test "${{ inputs.publish_images }}" = "false"
+              test "${{ inputs.deploy }}" = "true"
+              [[ "${{ inputs.backend_image }}" =~ $digest_pattern ]]
+              [[ "${{ inputs.edge_image }}" =~ $digest_pattern ]]
+              ;;
+            *)
+              echo "Unsupported read-only deployment target." >&2
+              exit 1
+              ;;
+          esac
+
+          printf 'source_sha=%s\n' "$SOURCE_SHA" >>"$GITHUB_OUTPUT"
+          printf 'python_base_image=%s\n' "$PYTHON_BASE_IMAGE" >>"$GITHUB_OUTPUT"
+          printf 'nginx_base_image=%s\n' "$NGINX_BASE_IMAGE" >>"$GITHUB_OUTPUT"
+
+  publish:
+    needs: eligibility
+    if: inputs.publish_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      backend_image: ${{ steps.refs.outputs.backend_image }}
+      edge_image: ${{ steps.refs.outputs.edge_image }}
+      built_at: ${{ steps.metadata.outputs.built_at }}
+    env:
+      BUILD_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.eligibility.outputs.source_sha }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v3
-      - id: image
-        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+          password: ${{ github.token }}
+
+      - id: metadata
+        name: Define immutable artifact metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          edge_repository="${backend_repository}-edge"
+          built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf 'backend_repository=%s\n' "$backend_repository" >>"$GITHUB_OUTPUT"
+          printf 'edge_repository=%s\n' "$edge_repository" >>"$GITHUB_OUTPUT"
+          printf 'built_at=%s\n' "$built_at" >>"$GITHUB_OUTPUT"
+
+      - id: backend
+        name: Build and publish backend
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: FX/Dockerfile
+          platforms: linux/amd64
           push: true
-          tags: ${{ steps.image.outputs.ref }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          tags: ${{ steps.metadata.outputs.backend_repository }}:${{ needs.eligibility.outputs.source_sha }}
+          build-args: |
+            PYTHON_IMAGE=${{ needs.eligibility.outputs.python_base_image }}
+            VCS_REF=${{ needs.eligibility.outputs.source_sha }}
+            BUILD_VERSION=${{ inputs.change_id }}
+            BUILD_DATE=${{ steps.metadata.outputs.built_at }}
+          provenance: mode=max
+          sbom: true
 
-  deploy:
-    if: inputs.deploy
-    needs: publish
+      - id: edge
+        name: Build and publish read-only edge
+        uses: docker/build-push-action@v7
+        with:
+          context: ./nginx
+          file: ./nginx/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.edge_repository }}:${{ needs.eligibility.outputs.source_sha }}
+          build-args: |
+            NGINX_IMAGE=${{ needs.eligibility.outputs.nginx_base_image }}
+            VCS_REF=${{ needs.eligibility.outputs.source_sha }}
+            BUILD_VERSION=${{ inputs.change_id }}
+            BUILD_DATE=${{ steps.metadata.outputs.built_at }}
+          provenance: mode=max
+          sbom: true
+
+      - id: refs
+        name: Record registry digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_image="${{ steps.metadata.outputs.backend_repository }}@${{ steps.backend.outputs.digest }}"
+          edge_image="${{ steps.metadata.outputs.edge_repository }}@${{ steps.edge.outputs.digest }}"
+          [[ "$backend_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$edge_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          printf 'backend_image=%s\n' "$backend_image" >>"$GITHUB_OUTPUT"
+          printf 'edge_image=%s\n' "$edge_image" >>"$GITHUB_OUTPUT"
+
+      - name: Create exact build predicate
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg source_sha "${{ needs.eligibility.outputs.source_sha }}" \
+            --arg backend_image "${{ steps.refs.outputs.backend_image }}" \
+            --arg edge_image "${{ steps.refs.outputs.edge_image }}" \
+            --arg python_base_image "${{ needs.eligibility.outputs.python_base_image }}" \
+            --arg nginx_base_image "${{ needs.eligibility.outputs.nginx_base_image }}" \
+            --arg change_id "${{ inputs.change_id }}" \
+            --arg built_at "${{ steps.metadata.outputs.built_at }}" \
+            '{
+              schema_version: 1,
+              source_sha: $source_sha,
+              backend_image: $backend_image,
+              edge_image: $edge_image,
+              python_base_image: $python_base_image,
+              nginx_base_image: $nginx_base_image,
+              change_id: $change_id,
+              built_at: $built_at,
+              sbom_generated: true,
+              buildkit_provenance_generated: true,
+              deployment_read_only: true,
+              live_effects_authorized: false
+            }' > build-attestation-predicate.json
+
+      - id: attest_backend
+        name: Sign exact backend build
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.metadata.outputs.backend_repository }}
+          subject-digest: ${{ steps.backend.outputs.digest }}
+          predicate-type: ${{ env.BUILD_ATTESTATION_TYPE }}
+          predicate-path: build-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - id: attest_edge
+        name: Sign exact edge build
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-name: ${{ steps.metadata.outputs.edge_repository }}
+          subject-digest: ${{ steps.edge.outputs.digest }}
+          predicate-type: ${{ env.BUILD_ATTESTATION_TYPE }}
+          predicate-path: build-attestation-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+
+  resolve:
+    needs:
+      - eligibility
+      - publish
+    if: >-
+      always() &&
+      needs.eligibility.result == 'success' &&
+      (inputs.publish_images == false || needs.publish.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: production
+    outputs:
+      backend_image: ${{ steps.resolve.outputs.backend_image }}
+      edge_image: ${{ steps.resolve.outputs.edge_image }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1
     steps:
-      - uses: actions/checkout@v5
-      - name: Configure SSH trust
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.eligibility.outputs.source_sha }}
+          fetch-depth: 0
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: resolve
+        name: Resolve and verify the exact signed candidate
+        shell: bash
         env:
-          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          PUBLISHED_BACKEND: ${{ needs.publish.outputs.backend_image }}
+          PUBLISHED_EDGE: ${{ needs.publish.outputs.edge_image }}
+          PROVIDED_BACKEND: ${{ inputs.backend_image }}
+          PROVIDED_EDGE: ${{ inputs.edge_image }}
+          SOURCE_SHA: ${{ needs.eligibility.outputs.source_sha }}
         run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          set -euo pipefail
+          if [[ "${{ inputs.publish_images }}" == "true" ]]; then
+            backend_image="$PUBLISHED_BACKEND"
+            edge_image="$PUBLISHED_EDGE"
+          else
+            backend_image="$PROVIDED_BACKEND"
+            edge_image="$PROVIDED_EDGE"
+          fi
+
+          [[ "$backend_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$edge_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+
+          docker pull "$backend_image"
+          docker pull "$edge_image"
+
+          backend_revision="$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              "$backend_image"
+          )"
+          edge_revision="$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              "$edge_image"
+          )"
+          test "$backend_revision" = "$SOURCE_SHA"
+          test "$edge_revision" = "$SOURCE_SHA"
+
+          signer="$GITHUB_REPOSITORY/.github/workflows/deploy.yml"
+          gh attestation verify "oci://${backend_image}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --format json \
+            > backend-build-attestation-verification.json
+          gh attestation verify "oci://${edge_image}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --format json \
+            > edge-build-attestation-verification.json
+
+          for evidence in \
+            backend-build-attestation-verification.json \
+            edge-build-attestation-verification.json; do
+            jq -e \
+              --arg source_sha "$SOURCE_SHA" \
+              --arg backend_image "$backend_image" \
+              --arg edge_image "$edge_image" '
+                any(.[];
+                  .verificationResult.statement.predicate.source_sha == $source_sha and
+                  .verificationResult.statement.predicate.backend_image == $backend_image and
+                  .verificationResult.statement.predicate.edge_image == $edge_image and
+                  .verificationResult.statement.predicate.deployment_read_only == true and
+                  .verificationResult.statement.predicate.live_effects_authorized == false
+                )
+              ' "$evidence" >/dev/null
+          done
+
+          printf 'backend_image=%s\n' "$backend_image" >>"$GITHUB_OUTPUT"
+          printf 'edge_image=%s\n' "$edge_image" >>"$GITHUB_OUTPUT"
+
+          jq -n \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg backend_image "$backend_image" \
+            --arg edge_image "$edge_image" \
+            --arg target "${{ inputs.target }}" \
+            --arg change_id "${{ inputs.change_id }}" \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              schema_version: 1,
+              source_repository: env.GITHUB_SERVER_URL + "/" + env.GITHUB_REPOSITORY,
+              source_sha: $source_sha,
+              backend_image: $backend_image,
+              edge_image: $edge_image,
+              target: $target,
+              change_id: $change_id,
+              generated_at: $generated_at,
+              signed_build_verified: true,
+              live_trading_authorized: false,
+              real_money_authorized: false,
+              payments_authorized: false,
+              withdrawals_authorized: false,
+              transactional_email_authorized: false,
+              external_execution_authorized: false,
+              deployment_read_only: true
+            }' > release-manifest.json
+          sha256sum release-manifest.json > release-manifest.json.sha256
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: beyvra-backend-release-${{ needs.eligibility.outputs.source_sha }}
+          path: |
+            release-manifest.json
+            release-manifest.json.sha256
+            backend-build-attestation-verification.json
+            edge-build-attestation-verification.json
+          if-no-files-found: error
+          retention-days: 90
+
+  deploy:
+    needs:
+      - eligibility
+      - resolve
+    if: inputs.deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: ${{ inputs.target }}
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      GHCR_USER: ${{ secrets.GHCR_USER }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      PUBLIC_SERVER_NAME: ${{ vars.PUBLIC_SERVER_NAME }}
+      FINANCIAL_API_NETWORK: ${{ vars.FINANCIAL_API_NETWORK }}
+      MONITORING_NETWORK: ${{ vars.MONITORING_NETWORK }}
+      BACKUP_OFFHOST_PATH: ${{ vars.BACKUP_OFFHOST_PATH }}
+      POSTGRES_IMAGE: ${{ vars.POSTGRES_IMAGE }}
+      REDIS_IMAGE: ${{ vars.REDIS_IMAGE }}
+      NATS_IMAGE: ${{ vars.NATS_IMAGE }}
+      CENTRIFUGO_IMAGE: ${{ vars.CENTRIFUGO_IMAGE }}
+      STATSD_EXPORTER_IMAGE: ${{ vars.STATSD_EXPORTER_IMAGE }}
+      BACKEND_IMAGE: ${{ needs.resolve.outputs.backend_image }}
+      EDGE_IMAGE: ${{ needs.resolve.outputs.edge_image }}
+      SOURCE_SHA: ${{ needs.eligibility.outputs.source_sha }}
+      CHANGE_ID: ${{ inputs.change_id }}
+      DEPLOYMENT_TARGET: ${{ inputs.target }}
+      ALLOW_SCHEMA_MIGRATIONS: ${{ inputs.allow_schema_migrations }}
+      MIGRATION_COMPATIBILITY_APPROVED: ${{ inputs.migration_compatibility_approved }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.eligibility.outputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate protected environment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS
+            GHCR_USER GHCR_TOKEN DEPLOY_PATH PUBLIC_SERVER_NAME
+            FINANCIAL_API_NETWORK MONITORING_NETWORK BACKUP_OFFHOST_PATH
+            POSTGRES_IMAGE REDIS_IMAGE NATS_IMAGE CENTRIFUGO_IMAGE
+            STATSD_EXPORTER_IMAGE BACKEND_IMAGE EDGE_IMAGE
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              printf 'Protected environment value is missing: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$PUBLIC_SERVER_NAME" =~ ^[A-Za-z0-9.-]+$ ]]
+          digest_pattern='@sha256:[0-9a-f]{64}$'
+          for name in \
+            POSTGRES_IMAGE REDIS_IMAGE NATS_IMAGE CENTRIFUGO_IMAGE \
+            STATSD_EXPORTER_IMAGE BACKEND_IMAGE EDGE_IMAGE; do
+            [[ "${!name}" =~ $digest_pattern ]]
+          done
+
+      - name: Package the reviewed deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf release-bundle.tgz \
+            docker-compose.production.yaml \
+            operations/deploy_immutable_candidate.sh \
+            operations/verify_release_identity.py \
+            scripts/backup-loop.sh \
+            scripts/backup-once.sh \
+            infra/realtime-v2/nats.conf \
+            infra/realtime-v2/centrifugo.json \
+            statsd-exporter/statsd.conf
+          if tar -tzf release-bundle.tgz \
+            | grep -E '(^/|(^|/)\.\.(/|$))' >/dev/null; then
+            echo "Unsafe archive path detected." >&2
+            exit 1
+          fi
+
+          {
+            printf 'BACKEND_IMAGE=%q\n' "$BACKEND_IMAGE"
+            printf 'EDGE_IMAGE=%q\n' "$EDGE_IMAGE"
+            printf 'POSTGRES_IMAGE=%q\n' "$POSTGRES_IMAGE"
+            printf 'REDIS_IMAGE=%q\n' "$REDIS_IMAGE"
+            printf 'NATS_IMAGE=%q\n' "$NATS_IMAGE"
+            printf 'CENTRIFUGO_IMAGE=%q\n' "$CENTRIFUGO_IMAGE"
+            printf 'STATSD_EXPORTER_IMAGE=%q\n' "$STATSD_EXPORTER_IMAGE"
+            printf 'SOURCE_SHA=%q\n' "$SOURCE_SHA"
+            printf 'CHANGE_ID=%q\n' "$CHANGE_ID"
+            printf 'DEPLOYMENT_TARGET=%q\n' "$DEPLOYMENT_TARGET"
+            printf 'PUBLIC_SERVER_NAME=%q\n' "$PUBLIC_SERVER_NAME"
+            printf 'PUBLIC_BASE_URL=%q\n' "https://${PUBLIC_SERVER_NAME}"
+            printf 'FINANCIAL_API_NETWORK=%q\n' "$FINANCIAL_API_NETWORK"
+            printf 'MONITORING_NETWORK=%q\n' "$MONITORING_NETWORK"
+            printf 'BACKUP_OFFHOST_PATH=%q\n' "$BACKUP_OFFHOST_PATH"
+            printf 'ALLOW_SCHEMA_MIGRATIONS=%q\n' "$ALLOW_SCHEMA_MIGRATIONS"
+            printf 'MIGRATION_COMPATIBILITY_APPROVED=%q\n' \
+              "$MIGRATION_COMPATIBILITY_APPROVED"
+          } > release.env
+          chmod 600 release.env
+
+      - name: Configure exact SSH host authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-      - name: Package release manifests
-        run: tar -czf release-manifests.tar.gz docker-compose.yaml nginx statsd-exporter
-      - name: Upload release manifests
-        run: scp release-manifests.tar.gz "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/backend/"
-      - name: Back up and deploy
-        env:
-          IMAGE: ${{ needs.publish.outputs.image }}
-          GHCR_USER: ${{ secrets.GHCR_USER }}
-          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+
+      - name: Authenticate the server to GHCR
+        shell: bash
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd /srv/backend && set -eu && mkdir -p backups && tar -xzf release-manifests.tar.gz && test -f .env && docker compose -f docker-compose.yaml exec -T postgres sh -c 'pg_dump -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\"' | gzip > backups/predeploy-${GITHUB_SHA}.sql.gz && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml pull web daphne celery_worker celery_beat celery-flower chart-data-publisher && BACKEND_IMAGE='$IMAGE' docker compose -f docker-compose.yaml up -d --wait"
+          set -euo pipefail
+          [[ "$GHCR_USER" =~ ^[A-Za-z0-9_.-]+$ ]]
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+          printf '%s' "$GHCR_TOKEN" \
+            | ssh "$remote" \
+                "docker login ghcr.io --username '$GHCR_USER' --password-stdin"
+
+      - name: Deploy and verify with automatic rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+          incoming="/tmp/beyvra-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          scp release-bundle.tgz "${remote}:${incoming}.tgz"
+          scp release.env "${remote}:${incoming}.env"
+          ssh "$remote" "bash -se" <<REMOTE
+          set -euo pipefail
+          mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/releases/$CHANGE_ID'
+          tar -xzf '${incoming}.tgz' -C '$DEPLOY_PATH'
+          install -m 600 '${incoming}.env' \
+            '$DEPLOY_PATH/releases/$CHANGE_ID/workflow.env'
+          rm -f '${incoming}.tgz' '${incoming}.env'
+          cd '$DEPLOY_PATH'
+          set -a
+          . 'releases/$CHANGE_ID/workflow.env'
+          set +a
+          ./operations/deploy_immutable_candidate.sh
+          REMOTE
+
+      - name: Collect non-secret release evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+          scp -r \
+            "${remote}:${DEPLOY_PATH}/releases/${CHANGE_ID}/." \
+            evidence/ || true
+          rm -f evidence/workflow.env evidence/*/workflow.env
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: beyvra-backend-deployment-${{ inputs.target }}-${{ inputs.change_id }}
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Remove local SSH material
+        if: always()
+        run: rm -rf ~/.ssh release.env
