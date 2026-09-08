@@ -46,6 +46,9 @@ jobs:
 
   certify:
     needs: inspect
+    # RUNTIME_MUTATION_DISABLED=true
+    # Repository-only release preparation does not authorize SSH certification.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment:
