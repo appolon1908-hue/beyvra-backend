@@ -29,6 +29,9 @@ permissions:
 
 jobs:
   inspect:
+    # RUNTIME_MUTATION_DISABLED=true
+    # Legacy promotion is disabled in favor of the protected portfolio controller.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -220,7 +223,7 @@ jobs:
             -f "inputs[publish_images]=false" \
             -f "inputs[backend_image]=$BACKEND_IMAGE" \
             -f "inputs[edge_image]=$EDGE_IMAGE" \
-            -f "inputs[deploy]=true" \
+            -f "inputs[deploy]=false" \
             -f "inputs[change_id]=$PRODUCTION_CHANGE_ID" \
             -f "inputs[allow_schema_migrations]=false" \
             -f "inputs[migration_compatibility_approved]=false"

@@ -19,10 +19,9 @@ permissions:
 
 jobs:
   inspect:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
-      github.event.workflow_run.head_branch == 'main'
+    # RUNTIME_MUTATION_DISABLED=true
+    # Runtime certification is disabled after authority moved to Infustruction-repo.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:

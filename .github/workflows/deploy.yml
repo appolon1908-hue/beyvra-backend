@@ -357,6 +357,7 @@ jobs:
             --signer-workflow "$signer" \
             --source-ref refs/heads/main \
             --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --bundle-from-oci \
             --format json \
             > backend-build-attestation-verification.json
           gh attestation verify "oci://${edge_image}" \
@@ -364,6 +365,7 @@ jobs:
             --signer-workflow "$signer" \
             --source-ref refs/heads/main \
             --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --bundle-from-oci \
             --format json \
             > edge-build-attestation-verification.json
 

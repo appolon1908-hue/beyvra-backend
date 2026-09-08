@@ -25,6 +25,7 @@
     "require_provenance": true,
     "require_signature": false,
     "attestation_verifier": "github",
+    "attestation_storage": "oci",
     "signer_workflow": ".github/workflows/deploy.yml",
     "provenance_predicate_type": "https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1"
   },
