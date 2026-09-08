@@ -6,18 +6,27 @@
   "role": "application",
   "release_intent_workflow": ".github/workflows/manual-release-intent.yml",
   "deployment_authority": true,
+  "runtime_mutation_authority": false,
   "require_verified_commit": true,
+  "required_check_app_id": 15368,
   "required_checks": ["orchestrator-contract", "container", "exact-head-base-ci", "secrets", "validate"],
   "supported_phases": ["plan", "staging", "canary", "production"],
   "artifact_policy": {
     "minimum_images": 2,
     "maximum_images": 2,
+    "image_repositories": [
+      "ghcr.io/appolon1908-hue/beyvra-backend",
+      "ghcr.io/appolon1908-hue/beyvra-backend-edge"
+    ],
     "require_digest": true,
     "allow_rebuild_after_staging": false,
     "allow_retag_after_staging": false,
     "require_sbom": true,
     "require_provenance": true,
-    "require_signature": false
+    "require_signature": false,
+    "attestation_verifier": "github",
+    "signer_workflow": ".github/workflows/deploy.yml",
+    "provenance_predicate_type": "https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1"
   },
   "environments": {
     "staging": "staging-readonly",
