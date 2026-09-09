@@ -37,6 +37,11 @@ COMMAND_PARAMETERS = [
     OpenApiParameter("X-Correlation-ID", str, OpenApiParameter.HEADER, required=False),
 ]
 VERSIONED_COMMAND_PARAMETERS = [*COMMAND_PARAMETERS, OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True)]
+class InstitutionReferenceSerializer(serializers.Serializer):
+    """Validates a bare institution_id reference; not tied to any one endpoint's schema."""
+    institution_id = serializers.UUIDField()
+
+
 RECONCILIATION_REQUEST = inline_serializer("InstitutionalReconciliationCommand", {"institution_id": serializers.UUIDField()})
 RECONCILIATION_RESPONSE = inline_serializer("InstitutionalReconciliationResult", {
     "id": serializers.UUIDField(), "status": serializers.CharField(), "violations": serializers.ListField(child=serializers.DictField()),
@@ -253,7 +258,7 @@ class OperatorSubaccountsView(APIView):
     @extend_schema(parameters=COMMAND_PARAMETERS, request=InstitutionalSubaccountCreateSerializer, responses={201: InstitutionalSubaccountSerializer})
     @transaction.atomic
     def post(self, request):
-        reference = type(RECONCILIATION_REQUEST)(data=request.data)
+        reference = InstitutionReferenceSerializer(data=request.data)
         reference.is_valid(raise_exception=True)
         institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=reference.validated_data["institution_id"])
         command, error = _command_context(request)
@@ -338,7 +343,7 @@ class OperatorReconciliationView(APIView):
         command, error = _command_context(request)
         if error: return error
         key, request_id, correlation_id, _ = command
-        reference = type(RECONCILIATION_REQUEST)(data=request.data)
+        reference = InstitutionReferenceSerializer(data=request.data)
         reference.is_valid(raise_exception=True)
         institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=reference.validated_data["institution_id"])
         try:
