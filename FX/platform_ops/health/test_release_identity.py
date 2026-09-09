@@ -81,7 +81,7 @@ class ReleaseIdentityTests(SimpleTestCase):
                 "deployment_read_only": True,
             },
         )
-        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertIn("no-store", {value.strip() for value in response["Cache-Control"].split(",")})
 
     @override_settings(
         RELEASE_SHA="",

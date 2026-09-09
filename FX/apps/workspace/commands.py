@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
@@ -99,6 +100,12 @@ def begin_command(
     if created:
         return record, None
     if record.response_status is None:
+        # The caller's transaction retains the row lock through completion.
+        # Reclaim legacy abandoned claims only after their lease expires.
+        if record.expires_at <= timezone.now():
+            record.expires_at = timezone.now() + timedelta(hours=24)
+            record.save(update_fields=("expires_at",))
+            return record, None
         return None, Response(error_body("COMMAND_IN_PROGRESS"), status=409)
     body = record.response_body
     return None, Response(

@@ -1,4 +1,7 @@
 import uuid
+from unittest.mock import patch
+from datetime import timedelta
+from django.utils import timezone
 
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -281,3 +284,38 @@ class WatchlistApiTests(TestCase):
         )
         self.assertEqual(removed.status_code, 204)
         self.assertFalse(WatchlistItem.objects.exists())
+
+    def test_interrupted_command_rolls_back_claim_and_mutation(self):
+        with patch("apps.workspace.api.complete_response", side_effect=RuntimeError("interrupted")):
+            with self.assertRaises(RuntimeError):
+                self.create_watchlist("Retryable", key="interrupted-create")
+        self.assertFalse(IdempotencyRecord.objects.filter(key="interrupted-create").exists())
+        self.assertFalse(Watchlist.objects.filter(name="Retryable").exists())
+        self.assertEqual(self.create_watchlist("Retryable", key="interrupted-create").status_code, 201)
+
+    def test_item_replay_survives_instrument_becoming_inactive(self):
+        watchlist = self.create_watchlist().json()
+        path = f"/api/v1/watchlists/{watchlist['id']}/items"
+        payload = {"instrument_id": "btc-usd", "version": watchlist["version"]}
+        headers = self.command_headers("replay-inactive")
+        first = self.client.post(path, payload, format="json", **headers)
+        self.assertEqual(first.status_code, 201)
+        self.instrument.status = Instrument.Status.INACTIVE
+        self.instrument.save(update_fields=("status",))
+        replay = self.client.post(path, payload, format="json", **headers)
+        self.assertEqual(replay.status_code, first.status_code)
+        self.assertEqual(replay.json(), first.json())
+        conflict = self.client.post(path, {**payload, "sort_order": 1}, format="json", **headers)
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(conflict.json()["error"]["code"], "IDEMPOTENCY_CONFLICT")
+
+    def test_expired_legacy_claim_can_be_reclaimed(self):
+        original = self.create_watchlist("Legacy", key="legacy-claim")
+        self.assertEqual(original.status_code, 201)
+        Watchlist.objects.filter(name="Legacy").delete()
+        IdempotencyRecord.objects.filter(key="legacy-claim").update(
+            response_status=None, response_body={}, expires_at=timezone.now() - timedelta(seconds=1)
+        )
+        retry = self.create_watchlist("Legacy", key="legacy-claim")
+        self.assertEqual(retry.status_code, 201)
+        self.assertEqual(Watchlist.objects.filter(name="Legacy").count(), 1)

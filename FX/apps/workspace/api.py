@@ -65,6 +65,7 @@ class WatchlistCollectionView(WorkspaceOwnedView):
         rows = self.watchlists()
         return Response({"results": WatchlistSerializer(rows, many=True).data})
 
+    @transaction.atomic
     def post(self, request):
         serializer = WatchlistSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -134,6 +135,7 @@ class WatchlistDetailView(WorkspaceOwnedView):
             return Response(error_body("RESOURCE_NOT_FOUND"), status=404)
         return Response(WatchlistSerializer(row).data)
 
+    @transaction.atomic
     def patch(self, request, watchlist_id):
         input_serializer = WatchlistSerializer(data=request.data, partial=True)
         input_serializer.is_valid(raise_exception=True)
@@ -221,6 +223,7 @@ class WatchlistDetailView(WorkspaceOwnedView):
             )
         return Response(data)
 
+    @transaction.atomic
     def delete(self, request, watchlist_id):
         organization = self.organization()
         command, response = parse_command(request, require_version=True)
@@ -313,26 +316,8 @@ class WatchlistItemCollectionView(WorkspaceOwnedView):
             }
         )
 
+    @transaction.atomic
     def post(self, request, watchlist_id):
-        try:
-            instrument = resolve_active_instrument(request.data.get("instrument_id"))
-        except InstrumentResolutionError as exc:
-            status_code = {
-                "INSTRUMENT_REQUIRED": 400,
-                "INSTRUMENT_UNAVAILABLE": 404,
-                "INSTRUMENT_AMBIGUOUS": 409,
-            }.get(exc.code, 400)
-            return Response(error_body(exc.code), status=status_code)
-
-        item_serializer = WatchlistItemSerializer(
-            data={
-                "instrument_id": str(instrument.instrument_id),
-                "sort_order": request.data.get("sort_order", 0),
-            },
-            context={"resolved_instrument": instrument},
-        )
-        item_serializer.is_valid(raise_exception=True)
-
         organization = self.organization()
         command, response = parse_command(request, require_version=True)
         if response:
@@ -344,12 +329,32 @@ class WatchlistItemCollectionView(WorkspaceOwnedView):
             operation="watchlist_item.add",
             resource_ref=str(watchlist_id),
             payload={
-                "instrument_id": str(instrument.instrument_id),
-                "sort_order": item_serializer.validated_data.get("sort_order", 0),
+                "instrument_id": str(request.data.get("instrument_id", "")).strip(),
+                "sort_order": request.data.get("sort_order", 0),
             },
         )
         if response:
             return response
+
+        try:
+            instrument = resolve_active_instrument(request.data.get("instrument_id"))
+        except InstrumentResolutionError as exc:
+            status_code = {
+                "INSTRUMENT_REQUIRED": 400,
+                "INSTRUMENT_UNAVAILABLE": 404,
+                "INSTRUMENT_AMBIGUOUS": 409,
+            }.get(exc.code, 400)
+            record.delete()
+            return Response(error_body(exc.code), status=status_code)
+
+        item_serializer = WatchlistItemSerializer(
+            data={
+                "instrument_id": str(instrument.instrument_id),
+                "sort_order": request.data.get("sort_order", 0),
+            },
+            context={"resolved_instrument": instrument},
+        )
+        item_serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
             self.lock_membership()
@@ -431,6 +436,7 @@ class WatchlistItemCollectionView(WorkspaceOwnedView):
 
 
 class WatchlistItemDetailView(WorkspaceOwnedView):
+    @transaction.atomic
     def delete(self, request, watchlist_id, instrument_id):
         try:
             reference = normalize_removal_reference(instrument_id)
