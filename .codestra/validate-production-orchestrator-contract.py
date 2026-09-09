@@ -1434,6 +1434,16 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
                 lowered_arguments[method.end() :],
             ) is None:
                 return True
+    # Module imports can rename or construct clients in arbitrary ways. Until
+    # those bindings are parsed, networking imports cannot prove read-only use.
+    if re.search(
+        r"(?:\bfrom\s*|\b(?:require|import)\s*\(\s*|\bimport\s*)"
+        r"['\"](?:axios|got|superagent|undici|node-fetch|cross-fetch|"
+        r"(?:node:)?(?:http|https|http2|net|tls)|socket\.io-client)"
+        r"(?:/[^'\"]*)?['\"]",
+        lower,
+    ):
+        return True
     client_aliases = set(
         re.findall(
             r"\b(?:const|let|var)\s+([a-z_$][a-z0-9_$]*)\s*=\s*"
@@ -2872,6 +2882,7 @@ def validate_release_validator_operations(source: str) -> None:
                     callable_name.startswith("subprocess.")
                     or is_os_process_launcher(callable_name)
                     or callable_name in prohibited_url_calls
+                    or callable_name == "urllib.request.Request"
                 ):
                     aliases[target_name] = callable_name
             if isinstance(value, (ast.List, ast.Tuple)):
@@ -3042,6 +3053,41 @@ def validate_release_validator_operations(source: str) -> None:
                     and function_stack[-1] in {"api_request", "download_artifact_archive"},
                     "release-intent validator opens a URL outside the evidence clients",
                 )
+                require(
+                    len(node.args) <= 1
+                    and not any(isinstance(argument, ast.Starred) for argument in node.args),
+                    "evidence client uses unproved positional request arguments",
+                )
+                require(
+                    all(keyword.arg is not None for keyword in node.keywords),
+                    "evidence client uses unproved request keyword expansion",
+                )
+                for keyword in node.keywords:
+                    if keyword.arg == "data":
+                        require(
+                            isinstance(keyword.value, ast.Constant)
+                            and keyword.value.value is None,
+                            "evidence client request must not contain a body",
+                        )
+                    if keyword.arg == "method":
+                        require(
+                            qualified == "urllib.request.Request"
+                            and isinstance(keyword.value, ast.Constant)
+                            and keyword.value.value in {"GET", "HEAD"},
+                            "evidence client request method must be provably read-only",
+                        )
+            self.generic_visit(node)
+
+        def visit_Attribute(self, node: ast.Attribute) -> None:
+            require(
+                not (
+                    function_stack
+                    and function_stack[-1] in {"api_request", "download_artifact_archive"}
+                    and isinstance(node.ctx, (ast.Store, ast.Del))
+                    and node.attr in {"method", "data", "get_method"}
+                ),
+                "evidence client mutates request method or body after construction",
+            )
             self.generic_visit(node)
 
     OperationsVisitor().visit(tree)
@@ -4062,6 +4108,62 @@ open_url("https://runtime.example/mutate")
         raise ContractError(
             "negative regression unexpectedly passed: aliased URL opener"
         )
+    for function_name in ("api_request", "download_artifact_archive"):
+        for request_arguments in (
+            "url, method='POST'", "url, data=b'payload'",
+            "url, method=method", "url, **options", "url, b'payload'",
+            "*arguments", "url, method='GET', data=b'payload'",
+        ):
+            unsafe = (
+                "import urllib.request\n"
+                f"def {function_name}():\n"
+                f"    request = urllib.request.Request({request_arguments})\n"
+            )
+            try:
+                validate_release_validator_operations(unsafe)
+            except ContractError:
+                pass
+            else:
+                raise ContractError(f"mutating evidence request admitted: {request_arguments}")
+        for suffix in ("", ", method='GET'", ", method='HEAD'", ", data=None"):
+            validate_release_validator_operations(
+                "import urllib.request\n"
+                f"def {function_name}():\n"
+                f"    request = urllib.request.Request(url{suffix})\n"
+            )
+        for statement in (
+            "NO_REDIRECT_OPENER.open(request, data=b'payload')",
+            "NO_REDIRECT_OPENER.open(request, b'payload')",
+            "NO_REDIRECT_OPENER.open(request, **options)",
+            "request.method = 'POST'", "request.data = b'payload'",
+            "request.method: str = 'POST'",
+        ):
+            unsafe = (
+                "import urllib.request\n"
+                "NO_REDIRECT_OPENER = urllib.request.build_opener()\n"
+                f"def {function_name}():\n"
+                "    request = urllib.request.Request(url)\n"
+                f"    {statement}\n"
+            )
+            try:
+                validate_release_validator_operations(unsafe)
+            except ContractError:
+                pass
+            else:
+                raise ContractError(f"mutating evidence opener admitted: {statement}")
+    for source in (
+        'import transport from "axios"; transport.post(runtimeUrl, payload)',
+        'import { request as send } from "undici"; send(url, options)',
+        'import * as transport from "node:https"; transport.request(options)',
+        'const transport = require("axios"); transport.create().post(url, body)',
+        'const {default: transport} = await import("got"); transport.post(url)',
+        'import transport from "axios/dist/node/axios.cjs"; transport.post(url)',
+    ):
+        require(javascript_source_has_runtime_mutation(source),
+                f"imported network alias bypass admitted: {source}")
+    require(not javascript_source_has_runtime_mutation(
+        'import { strict as assert } from "node:assert"; assert.equal(1, 1)'
+    ), "read-only non-network import was rejected")
     unsafe_status_writer = """import subprocess
 subprocess.run([\"gh\", \"api\", \"--method\", \"POST\"], check=True)
 """
