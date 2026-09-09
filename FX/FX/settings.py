@@ -186,6 +186,7 @@ CORS_ALLOW_HEADERS = [
     "content-type",
     "dnt",
     "idempotency-key",
+    "if-match",
     "origin",
     "user-agent",
     "x-beyvra-simulation-mode",
@@ -193,6 +194,7 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-organization-id",
     "x-request-id",
+    "x-beyvra-tenant",
     "x-requested-with",
 ]
 
