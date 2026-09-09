@@ -8,6 +8,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 from rest_framework import serializers
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.views import APIView
 
 from integrations.models import OrganizationMembership
@@ -20,7 +21,7 @@ from .models import (
     InstitutionalSubaccount, InstitutionalTradeAllocationInstruction, InstitutionalAuditEvent, OmnibusAccount,
     SegregatedCustodyAccount,
 )
-from .permissions import OPERATOR_ROLES, IsInstitutionalManager, IsInstitutionalOperator
+from .permissions import MUTATION_ROLES, OPERATOR_ROLES, IsInstitutionalManager, IsInstitutionalOperator
 from .serializers import (
     AllocationGroupSerializer, AllocationInstructionSerializer, BrokerAccountMappingSerializer,
     ClearingBrokerSerializer, ClearingRelationshipSerializer, CustodyStructureSafeSerializer,
@@ -61,7 +62,7 @@ def _operator_scope(request, queryset, tenant_path="tenant"):
     return queryset.filter(**{
         f"{tenant_path}__memberships__user": request.user,
         f"{tenant_path}__memberships__is_active": True,
-        f"{tenant_path}__memberships__role__in": OPERATOR_ROLES,
+        f"{tenant_path}__memberships__role__in": OPERATOR_ROLES if request.method in SAFE_METHODS else MUTATION_ROLES,
     })
 
 
@@ -252,7 +253,9 @@ class OperatorSubaccountsView(APIView):
     @extend_schema(parameters=COMMAND_PARAMETERS, request=InstitutionalSubaccountCreateSerializer, responses={201: InstitutionalSubaccountSerializer})
     @transaction.atomic
     def post(self, request):
-        institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=request.data.get("institution_id"))
+        reference = type(RECONCILIATION_REQUEST)(data=request.data)
+        reference.is_valid(raise_exception=True)
+        institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=reference.validated_data["institution_id"])
         command, error = _command_context(request)
         if error: return error
         key, request_id, correlation_id, _ = command
@@ -335,7 +338,9 @@ class OperatorReconciliationView(APIView):
         command, error = _command_context(request)
         if error: return error
         key, request_id, correlation_id, _ = command
-        institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=request.data.get("institution_id"))
+        reference = type(RECONCILIATION_REQUEST)(data=request.data)
+        reference.is_valid(raise_exception=True)
+        institution = get_object_or_404(_operator_scope(request, InstitutionalAccount.objects.all()), pk=reference.validated_data["institution_id"])
         try:
             record, created = _begin_command(request, tenant=institution.tenant, key=key, endpoint="/api/v1/operator/institutional/reconciliation/run", payload={"institution_id": str(institution.pk)})
         except IdempotencyConflict:

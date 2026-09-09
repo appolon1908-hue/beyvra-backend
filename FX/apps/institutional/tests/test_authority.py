@@ -154,6 +154,29 @@ class InstitutionalAuthorityTests(TestCase):
         denied_create = operator.post("/api/v1/operator/institutional/subaccounts", {"institution_id": str(foreign.id)}, format="json", HTTP_IDEMPOTENCY_KEY="cross-tenant", HTTP_X_REQUEST_ID="44bb62c2-bc51-49fd-a490-2ccb62ea2730")
         self.assertEqual(denied_create.status_code, 404)
 
+    def test_read_only_roles_cannot_mutate_even_with_operator_role_in_other_tenant(self):
+        client = APIClient(); client.force_authenticate(self.operator)
+        headers = {"HTTP_IDEMPOTENCY_KEY": "viewer-write", "HTTP_X_REQUEST_ID": "44bb62c2-bc51-49fd-a490-2ccb62ea272d"}
+        url = "/api/v1/operator/institutional/reconciliation/run"
+        for role in ("institutional_viewer", "institutional_risk_analyst"):
+            OrganizationMembership.objects.filter(user=self.operator, organization=self.tenant).update(role=role)
+            self.assertEqual(client.get("/api/v1/operator/institutional/accounts").status_code, 200)
+            self.assertEqual(client.post(url, {"institution_id": str(self.institution.pk)}, format="json", **headers).status_code, 403)
+        other = Organization.objects.create(name="Writable Other Tenant")
+        OrganizationMembership.objects.create(user=self.operator, organization=other, role="institutional_operations")
+        self.assertEqual(client.post(url, {"institution_id": str(self.institution.pk)}, format="json", **headers).status_code, 404)
+        self.assertEqual(self.institution.reconciliation_runs.count(), 0)
+
+    def test_malformed_institution_references_return_validation_errors(self):
+        client = APIClient(); client.force_authenticate(self.operator)
+        headers = {"HTTP_IDEMPOTENCY_KEY": "invalid-reference", "HTTP_X_REQUEST_ID": "44bb62c2-bc51-49fd-a490-2ccb62ea272d"}
+        for endpoint in ("subaccounts", "reconciliation/run"):
+            for payload in ({}, [], {"institution_id": "invalid"}, {"institution_id": []}, {"institution_id": {}}):
+                with self.subTest(endpoint=endpoint, payload=payload):
+                    response = client.post(f"/api/v1/operator/institutional/{endpoint}", payload, format="json", **headers)
+                    self.assertEqual(response.status_code, 400)
+        self.assertFalse(IdempotencyRecord.objects.filter(key="invalid-reference").exists())
+
     def test_operator_subaccount_create_is_durably_idempotent(self):
         operator = APIClient(); operator.force_authenticate(self.operator)
         request_id = "44bb62c2-bc51-49fd-a490-2ccb62ea272d"
