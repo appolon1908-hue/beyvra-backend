@@ -9,6 +9,7 @@ on:
       - "FX/users/tasks.py"
       - "FX/users/migrations/**"
       - "FX/users/tests/test_email_verification.py"
+      - "FX/users/tests/test_registration_safety_regressions.py"
       - ".github/workflows/registration-safety-ci.yml"
   push:
     branches:
@@ -20,6 +21,7 @@ on:
       - "FX/users/tasks.py"
       - "FX/users/migrations/**"
       - "FX/users/tests/test_email_verification.py"
+      - "FX/users/tests/test_registration_safety_regressions.py"
       - ".github/workflows/registration-safety-ci.yml"
 
 permissions:
@@ -74,4 +76,4 @@ jobs:
         run: |
           python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
-          python manage.py test users.tests.test_email_verification --verbosity 2
+          python manage.py test users.tests.test_email_verification users.tests.test_registration_safety_regressions --verbosity 2
