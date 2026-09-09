@@ -155,6 +155,7 @@ class WebhookDelivery(models.Model):
     event = models.ForeignKey(NotificationEvent, on_delete=models.CASCADE, related_name="webhook_deliveries")
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default="P")
     attempts = models.PositiveSmallIntegerField(default=0)
+    attempt_limit = models.PositiveSmallIntegerField(default=5)
     response_code = models.PositiveSmallIntegerField(null=True, blank=True)
     last_error = models.CharField(max_length=500, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
