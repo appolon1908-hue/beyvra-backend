@@ -5,6 +5,7 @@ import json
 import requests
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from .models import NotificationEvent, WebhookDelivery
@@ -12,8 +13,19 @@ from .models import NotificationEvent, WebhookDelivery
 
 @shared_task(bind=True, autoretry_for=(requests.RequestException,), retry_backoff=True, retry_kwargs={"max_retries": 5})
 def deliver_webhook(self, delivery_id):
-    delivery = WebhookDelivery.objects.select_related("subscription", "event").get(id=delivery_id)
-    if delivery.status == "D" or delivery.attempts >= 5:
+    # Serialize duplicate task deliveries. Persist failure state before Celery
+    # retries; raising inside the transaction would roll back the attempt.
+    with transaction.atomic():
+        delivery = WebhookDelivery.objects.select_for_update().select_related("subscription", "event").get(id=delivery_id)
+        failure = _deliver_locked_webhook(delivery)
+    if failure is not None:
+        raise failure
+
+
+def _deliver_locked_webhook(delivery):
+    if delivery.status in {"S", "D"}:
+        return
+    if delivery.attempts >= 5:
         delivery.status = "D"
         delivery.last_error = "maximum delivery attempts exceeded"
         delivery.save(update_fields=["status", "last_error", "updated_at"])
@@ -44,6 +56,8 @@ def deliver_webhook(self, delivery_id):
         )
         delivery.response_code = response.status_code
         response.raise_for_status()
+        if not 200 <= response.status_code < 300:
+            raise requests.HTTPError("Webhook receiver returned a non-success status", response=response)
         delivery.status = "S"
         delivery.delivered_at = timezone.now()
         delivery.last_error = ""
@@ -51,7 +65,7 @@ def deliver_webhook(self, delivery_id):
         delivery.status = "D" if delivery.attempts >= 5 else "F"
         delivery.last_error = str(exc)[:500]
         delivery.save()
-        raise
+        return exc
     delivery.save()
 
 

@@ -41,6 +41,11 @@ def _canonical_email_origin(value: str) -> str:
         or "#" in value
     ):
         raise ValueError("Invalid email origin")
+    if "[" in parsed.netloc or "]" in parsed.netloc:
+        # IPv6 authorities must end at the bracket or a numeric port. Reject
+        # scoped literals and ignored suffixes before allowlist comparison.
+        if not re.fullmatch(r"\[[0-9a-fA-F:.]+\](?::[0-9]+)?", parsed.netloc):
+            raise ValueError("Invalid IPv6 email origin")
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
