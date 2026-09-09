@@ -60,7 +60,7 @@ class ExecutionAuthorityTests(TestCase):
         provider_result = next(row for row in listed.data["results"] if row["provider_id"] == provider.provider_id)
         self.assertEqual(provider_result["version"], provider.updated_at.isoformat())
         halted = self.client.post("/api/v1/operator/execution/providers/simulation/halt", {"reason": "drill"}, format="json",
-            HTTP_IDEMPOTENCY_KEY="halt-key", HTTP_IF_MATCH=provider.updated_at.isoformat(),
+            HTTP_IDEMPOTENCY_KEY="halt-key", HTTP_IF_MATCH=provider_result["version"],
             HTTP_X_CORRELATION_ID="incident-opaque-123")
         self.assertEqual(halted.data["health"], "HALTED")
         resumed = self.client.post("/api/v1/operator/execution/providers/simulation/resume", {"reason": "verified"}, format="json",

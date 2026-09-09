@@ -66,7 +66,7 @@ def _command_context(request, *, require_reason=False, require_version=False):
 
 
 def _version(row):
-    return row.updated_at.isoformat().replace("+00:00", "Z")
+    return row.updated_at.isoformat()
 
 
 def _begin_command(request, *, key, payload):

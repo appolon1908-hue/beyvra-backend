@@ -137,7 +137,7 @@ class ExecutionControlPlaneTests(TestCase):
     def test_paper_enable_requires_independent_manager_checker(self):
         managers=Group.objects.create(name="execution_manager");first=self.user;first.groups.add(managers)
         provider=seed_fixture_capabilities()[0][1];provider.enabled=False;provider.save(update_fields=("enabled","updated_at"))
-        version=provider.updated_at.isoformat().replace("+00:00","Z")
+        version=self.client.get(f"/api/v1/operator/execution/providers/{provider.pk}").data["version"]
         maker_headers={"HTTP_IDEMPOTENCY_KEY":"paper-enable-maker","HTTP_X_REQUEST_ID":"opaque-edge-request-id","HTTP_IF_MATCH":version}
         response=self.client.post(f"/api/v1/operator/execution/providers/{provider.pk}/paper-enable",{"reason":"fixture certification"},format="json",**maker_headers)
         self.assertEqual(response.status_code,202);self.assertFalse(response.data["enabled"])
