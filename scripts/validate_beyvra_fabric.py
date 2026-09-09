@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-import re
+import yaml
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +100,8 @@ def validate_fabric() -> None:
 
 def validate_n8n_manifest() -> None:
     manifest = load_json(N8N_MANIFEST_PATH)
+    fabric = load_json(FABRIC_PATH)
+    require(manifest.get("machine_client") == fabric.get("machine_client") == "n8n-product-automation", "machine-client identity drift")
     require(manifest.get("schema_version") == "2.0", "unexpected n8n manifest schema version")
     require(manifest.get("status") == "SOURCE_ONLY", "n8n manifest must remain SOURCE_ONLY")
     require(manifest.get("workflow_family") == WORKFLOW_FAMILY, "n8n workflow family drift")
@@ -142,35 +144,47 @@ def validate_n8n_manifest() -> None:
 
 def validate_openapi() -> None:
     try:
-        text = OPENAPI_PATH.read_text(encoding="utf-8")
-    except OSError as exc:
-        fail(f"cannot read {OPENAPI_PATH.relative_to(ROOT)}: {exc}")
-
-    require("openapi: 3.1.0" in text, "OpenAPI version drift")
-    require("https://beyvra.internal.invalid" in text, "OpenAPI server must remain private/non-routable")
-    require("beyvra.operations.write" in text, "OpenAPI write scope is missing")
-
-    path_lines = [
-        match.group(1)
-        for match in re.finditer(r"^  (/[^:]+):\s*$", text, flags=re.MULTILINE)
-    ]
-    require(path_lines, "OpenAPI contains no paths")
-    for path in path_lines:
-        require(path.startswith("/v1/automation/"), f"path escapes automation namespace: {path}")
-        lowered = path.lower()
-        require(
-            not any(term in lowered for term in PROHIBITED_PATH_TERMS),
-            f"prohibited financial/provider term in path: {path}",
-        )
-
-    operation_ids = re.findall(r"^\s+operationId:\s*(\S+)\s*$", text, flags=re.MULTILINE)
-    require(len(operation_ids) == len(set(operation_ids)), "OpenAPI operationId values must be unique")
-    for operation_id in operation_ids:
-        lowered = operation_id.lower()
-        require(
-            not any(term in lowered for term in PROHIBITED_PATH_TERMS),
-            f"prohibited financial/provider term in operationId: {operation_id}",
-        )
+        document = yaml.safe_load(OPENAPI_PATH.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        fail(f"cannot parse OpenAPI: {exc}")
+    require(isinstance(document, dict), "OpenAPI must be an object")
+    require(document.get("openapi") == "3.1.0", "OpenAPI version drift")
+    require(document.get("servers") == [{"url": "https://beyvra.internal.invalid"}], "OpenAPI server must remain private/non-routable")
+    paths = document.get("paths")
+    require(isinstance(paths, dict) and paths, "OpenAPI contains no paths")
+    operation_ids = set()
+    for path, item in paths.items():
+        require(isinstance(path, str) and path.startswith("/v1/automation/"), f"path escapes automation namespace: {path}")
+        require(not any(term in path.lower() for term in PROHIBITED_PATH_TERMS), f"prohibited financial/provider term in path: {path}")
+        require(isinstance(item, dict) and item, "path item must be an object")
+        for method, operation in item.items():
+            require(method in {"get", "post"}, f"unsupported path operation: {method}")
+            require(isinstance(operation, dict), "operation must be an object")
+            operation_id = operation.get("operationId")
+            require(isinstance(operation_id, str) and operation_id, "operationId is required")
+            require(operation_id not in operation_ids, "OpenAPI operationId values must be unique")
+            operation_ids.add(operation_id)
+            require(not any(term in operation_id.lower() for term in PROHIBITED_PATH_TERMS), f"prohibited financial/provider term in operationId: {operation_id}")
+            scope = "read" if method == "get" else "write"
+            require(operation.get("security", document.get("security")) == [{"oauth2": [f"beyvra.operations.{scope}"]}], f"incorrect {method} scope")
+            if method == "post":
+                body = operation.get("requestBody", {})
+                require(body.get("required") is True, "mutation body must be required")
+                schema = body.get("content", {}).get("application/json", {}).get("schema", {})
+                require(schema.get("type") == "object" and schema.get("required"), "mutation input schema must require fields")
+                require(all(name in schema.get("properties", {}) for name in schema["required"]), "required input property is undefined")
+                parameters = []
+                for parameter in operation.get("parameters", []):
+                    if "$ref" in parameter:
+                        prefix = "#/components/parameters/"
+                        require(parameter["$ref"].startswith(prefix), "unsupported parameter reference")
+                        parameter = document.get("components", {}).get("parameters", {}).get(parameter["$ref"][len(prefix):], {})
+                    parameters.append(parameter)
+                required_headers = {"Idempotency-Key", "X-Request-ID"}
+                if operation_id in {"requestComplianceReminder", "createSupportEscalation", "reconcileWebhookDelivery"}:
+                    required_headers.add("If-Match")
+                headers = {p.get("name") for p in parameters if p.get("in") == "header" and p.get("required") is True}
+                require(required_headers <= headers, "mutation safety headers are missing")
 
 
 def main() -> None:

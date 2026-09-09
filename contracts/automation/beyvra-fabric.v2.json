@@ -3,7 +3,7 @@
   "source_only": true,
   "workflow_family": "product.beyvra-nonfinancial",
   "n8n_cell": "beyvra-nonfinancial",
-  "machine_client": "n8n-beyvra-automation",
+  "machine_client": "n8n-product-automation",
   "middleware_adapter_client": "beyvra-automation-adapter",
   "allowed_command_prefixes": ["beyvra.operations."],
   "prohibited_command_prefixes": ["trade.","order.","wallet.","ledger.","hold.","payment.","deposit.","withdrawal.","transfer.","custody.","chain.","broker.","provider."],
