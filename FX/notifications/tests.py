@@ -261,6 +261,35 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(delivery.attempts, 1)
         self.assertIn("receiver timeout", delivery.last_error)
 
+    @patch("notifications.tasks.requests.post")
+    def test_successful_delivery_is_not_sent_again(self, post):
+        post.return_value.status_code = 202
+        subscription = WebhookSubscription.objects.create(user=self.user, url="https://example.com/events", secret="test-secret")
+        event = NotificationEvent.objects.create(user=self.user, title="Once", message="Once")
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=event)
+        deliver_webhook.run(str(delivery.pk))
+        deliver_webhook.run(str(delivery.pk))
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, "S")
+        self.assertEqual(delivery.attempts, 1)
+        post.assert_called_once()
+
+    @patch("notifications.tasks.requests.post")
+    def test_redirects_are_failed_deliveries(self, post):
+        subscription = WebhookSubscription.objects.create(user=self.user, url="https://example.com/events", secret="test-secret")
+        for code in (301, 302, 307, 308):
+            with self.subTest(code=code):
+                event = NotificationEvent.objects.create(user=self.user, title="Redirect", message="Reject")
+                delivery = WebhookDelivery.objects.create(subscription=subscription, event=event)
+                post.return_value.status_code = code
+                with self.assertRaises(requests.HTTPError):
+                    deliver_webhook.run(str(delivery.pk))
+                delivery.refresh_from_db()
+                self.assertEqual(delivery.status, "F")
+                self.assertEqual(delivery.attempts, 1)
+                self.assertIsNone(delivery.delivered_at)
+                self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
     @override_settings(NOTIFICATION_RETENTION_DAYS=30)
     def test_retention_task_removes_only_expired_events(self):
         expired = NotificationEvent.objects.create(
