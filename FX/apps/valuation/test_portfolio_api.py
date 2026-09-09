@@ -10,7 +10,7 @@ from apps.trading.models import SimulatedPosition
 from integrations.models import Organization, OrganizationMembership
 from users.models import User
 
-from .models import PerformanceSnapshot, ValuationPrice
+from .models import FxValuationRate, PerformanceSnapshot, ValuationPrice
 
 
 @override_settings(
@@ -144,3 +144,54 @@ class CanonicalPortfolioApiTests(TestCase):
         self.assertEqual(risk.json()["gross_exposure"], "220.00000000")
         self.assertEqual(risk.json()["net_exposure"], "-220.00000000")
         self.assertEqual(risk.json()["largest_position_ratio"], "1")
+
+    def add_price(self, **changes):
+        values = {"instrument_id": "FX-FIXTURE", "valuation_time": self.now, "price": Decimal("110"),
+                  "currency": "USD", "price_type": "MID", "provider_id": "fixture",
+                  "market_data_ref": "fixture", "quality_state": "FRESH", "market_status": "OPEN",
+                  "policy_id": "SIMULATION", "policy_version": "1"}
+        values.update(changes)
+        return ValuationPrice.objects.create(**values)
+
+    def test_old_future_and_nonpositive_prices_are_unavailable(self):
+        for index, changes in enumerate((
+            {"valuation_time": self.now - timedelta(days=30)},
+            {"valuation_time": self.now + timedelta(days=1)},
+            {"price": Decimal("0")},
+            {"price": Decimal("-1")},
+        )):
+            with self.subTest(changes=changes):
+                reference = f"INVALID-{index}"
+                SimulatedPosition.objects.filter(account=self.account).update(instrument_id=reference)
+                self.add_price(instrument_id=reference, **changes)
+                body = self.client.get("/api/v1/portfolio/summary").json()
+                self.assertEqual(body["valuation_quality"], "UNAVAILABLE")
+                self.assertIsNone(body["positions"][0]["market_value"])
+
+    def test_foreign_price_is_converted_and_missing_or_stale_fx_fails_closed(self):
+        SimulatedPosition.objects.filter(account=self.account).update(instrument_id="FX-FIXTURE")
+        self.add_price(currency="EUR")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["valuation_quality"], "UNAVAILABLE")
+        fx = {"base_currency": "EUR", "quote_currency": "USD", "rate": Decimal("1.2"),
+              "provider_id": "fixture", "quality_state": "FRESH", "policy_version": "1"}
+        FxValuationRate.objects.create(**fx, rate_time=self.now - timedelta(days=1), source_ref="stale")
+        self.assertEqual(self.client.get("/api/v1/portfolio/summary").json()["valuation_quality"], "UNAVAILABLE")
+        FxValuationRate.objects.create(**fx, rate_time=self.now, source_ref="fresh")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["market_value"], "264.00000000")
+        self.assertEqual(body["unrealized_pnl"], "64.00000000")
+        self.assertEqual(body["positions"][0]["price_currency"], "EUR")
+        self.assertEqual(body["positions"][0]["valuation_currency"], "USD")
+        self.assertEqual(self.client.get("/api/v1/portfolio/risk").json()["gross_exposure"], "264.00000000")
+        fx["rate"] = Decimal("0")
+        FxValuationRate.objects.create(**fx, rate_time=timezone.now(), source_ref="invalid")
+        self.assertEqual(self.client.get("/api/v1/portfolio/summary").json()["valuation_quality"], "UNAVAILABLE")
+
+    def test_same_timestamp_evidence_selects_price_and_currency_from_one_source(self):
+        SimulatedPosition.objects.filter(account=self.account).update(instrument_id="FX-FIXTURE")
+        self.add_price(price=Decimal("500"), currency="EUR", provider_id="first")
+        self.add_price(price=Decimal("120"), currency="USD", provider_id="second")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["market_value"], "240.00000000")
+        self.assertEqual(body["positions"][0]["price_currency"], "USD")

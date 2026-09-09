@@ -174,16 +174,54 @@ class UserAlertDetail(generics.GenericAPIView):
         except Http404:
             return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def patch(self, request, alert_id):
-        user_alert = self.get_object(alert_id)
-        serializer = self.serializer_class(user_alert, data=request.data, partial=True)
+        organization = organization_for_request(request)
+        command, error = context(request, require_version=True)
+        if error:
+            return error
+        key, _, correlation_id, expected_version = command
+        serializer = self.serializer_class(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        record, replay = begin(request, organization=organization, key=key, payload={
+            "alert_id": str(alert_id), "expected_version": expected_version,
+            "changes": serializer.validated_data,
+        })
+        if replay:
+            return replay
+        user_alert = generics.get_object_or_404(self.get_queryset().select_for_update(), pk=alert_id)
+        if expected_version != user_alert.updated_at.isoformat().replace("+00:00", "Z"):
+            record.delete()
+            return Response({"detail": "VERSION_CONFLICT"}, status=409)
+        serializer.instance = user_alert
         serializer.save()
-        return Response(serializer.data)
+        body = complete(record, request=request, organization=organization,
+                        correlation_id=correlation_id, action="notification.price_alert.update",
+                        status=200, body=serializer.data, resource_type="price_alert", resource_id=alert_id)
+        return Response(body)
 
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @transaction.atomic
     def delete(self, request, alert_id):
-        user_alert = self.get_object(alert_id)
+        organization = organization_for_request(request)
+        command, error = context(request, require_version=True)
+        if error:
+            return error
+        key, _, correlation_id, expected_version = command
+        record, replay = begin(request, organization=organization, key=key, payload={
+            "alert_id": str(alert_id), "action": "delete", "expected_version": expected_version,
+        })
+        if replay:
+            return replay
+        user_alert = generics.get_object_or_404(self.get_queryset().select_for_update(), pk=alert_id)
+        if expected_version != user_alert.updated_at.isoformat().replace("+00:00", "Z"):
+            record.delete()
+            return Response({"detail": "VERSION_CONFLICT"}, status=409)
         user_alert.delete()
+        complete(record, request=request, organization=organization,
+                 correlation_id=correlation_id, action="notification.price_alert.delete",
+                 status=204, body={}, resource_type="price_alert", resource_id=alert_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -45,6 +45,26 @@ class InstitutionalAuthorityTests(TestCase):
         self.sub_c = SubaccountService.create(institution=self.institution, actor=self.operator, code="C", display_name="Sleeve C", subaccount_type="TEST", base_currency="USD", status="ACTIVE", allocation_eligible=True, effective_from=self.now)
         self.client = APIClient(); self.client.force_authenticate(self.user)
 
+    def test_revoked_memberships_and_inactive_tenants_have_no_operator_scope(self):
+        from apps.institutional.api import _operator_scope, _membership
+        from apps.institutional.permissions import IsInstitutionalOperator, IsInstitutionalManager, IsInstitutionMember
+        request = APIRequestFactory().get("/")
+        for user, permission in ((self.operator, IsInstitutionalOperator), (self.checker, IsInstitutionalManager), (self.user, IsInstitutionMember)):
+            request.user = user
+            membership = OrganizationMembership.objects.get(user=user, organization=self.tenant)
+            membership.is_active = False
+            membership.save(update_fields=["is_active"])
+            self.assertFalse(permission().has_permission(request, None))
+            self.assertIsNone(_membership(request))
+            self.assertFalse(_operator_scope(request, InstitutionalAccount.objects.all()).exists())
+            membership.is_active = True
+            membership.save(update_fields=["is_active"])
+        self.tenant.is_active = False
+        self.tenant.save(update_fields=["is_active"])
+        request.user = self.operator
+        self.assertFalse(IsInstitutionalOperator().has_permission(request, None))
+        self.assertFalse(_operator_scope(request, InstitutionalAccount.objects.all()).exists())
+
     def test_account_and_hierarchy_authority(self):
         self.assertEqual(self.client.get("/api/v1/institutional/account").status_code, 200)
         hierarchy = self.client.get("/api/v1/institutional/account/hierarchy").json()

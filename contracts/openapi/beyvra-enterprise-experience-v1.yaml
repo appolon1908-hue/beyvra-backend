@@ -75,12 +75,78 @@ paths:
       operationId: createPriceAlert
       responses:
         "201": {description: Alert created}
+  /alerts/{alert_id}:
+    parameters:
+      - in: path
+        name: alert_id
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: getPriceAlert
+      responses:
+        "200": {description: Alert including updated_at, used verbatim as If-Match}
+        "404": {description: Alert absent or outside the caller scope}
+    patch:
+      operationId: updatePriceAlert
+      description: Atomic versioned command; identical retries replay the stored result.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 255}
+        - in: header
+          name: X-Request-ID
+          required: true
+          schema: {type: string, format: uuid}
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                asset_id: {type: string, maxLength: 255}
+                price_threshold: {type: string, format: decimal}
+                direction: {type: string, enum: [UP, DOWN]}
+                status: {type: boolean}
+      responses:
+        "200": {description: Command completed}
+        "400": {description: Invalid command input or missing command headers}
+        "404": {description: Alert absent or outside the caller scope}
+        "409": {description: Version or idempotency conflict}
+        "428": {description: Missing If-Match}
+    delete:
+      operationId: deletePriceAlert
+      description: Atomic versioned command; identical retries replay the stored result.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 255}
+        - in: header
+          name: X-Request-ID
+          required: true
+          schema: {type: string, format: uuid}
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: string}
+      responses:
+        "204": {description: Command completed}
+        "400": {description: Invalid command input or missing command headers}
+        "404": {description: Alert absent or outside the caller scope}
+        "409": {description: Version or idempotency conflict}
+        "428": {description: Missing If-Match}
   /portfolio/summary:
     get:
       operationId: getPortfolioSummary
       responses:
         "200":
-          description: Simulation cash, positions, P&L and valuation quality.
+          description: Simulation cash, positions and P&L in account currency. Prices and FX evidence must be no older than five minutes; missing evidence is unpriced.
           content:
             application/json:
               schema:

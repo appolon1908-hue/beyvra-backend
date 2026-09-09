@@ -43,7 +43,7 @@ RECONCILIATION_RESPONSE = inline_serializer("InstitutionalReconciliationResult",
 
 
 def _membership(request):
-    return OrganizationMembership.objects.select_related("organization").filter(user=request.user).order_by("organization_id").first()
+    return OrganizationMembership.objects.select_related("organization").filter(user=request.user, is_active=True, organization__is_active=True).order_by("organization_id").first()
 
 
 def _customer_institution(request):
@@ -55,10 +55,12 @@ def _customer_institution(request):
 
 def _operator_scope(request, queryset, tenant_path="tenant"):
     """Scope data to every tenant where the caller actually holds an operator role."""
+    queryset = queryset.filter(**{f"{tenant_path}__is_active": True})
     if request.user.is_superuser:
         return queryset
     return queryset.filter(**{
         f"{tenant_path}__memberships__user": request.user,
+        f"{tenant_path}__memberships__is_active": True,
         f"{tenant_path}__memberships__role__in": OPERATOR_ROLES,
     })
 

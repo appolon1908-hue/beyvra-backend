@@ -52,6 +52,29 @@ class NotificationInboxTests(TestCase):
             headers["HTTP_IF_MATCH"] = version
         return headers
 
+    def test_alert_updates_and_deletes_require_versions_and_replay_once(self):
+        from notifications.models import UserAlerts
+        from apps.foundation.models import ApplicationAuditEvent
+        alert = UserAlerts.objects.create(user=self.user, organization=self.organization,
+            asset_id="BTC-USD", price_threshold="100", direction="UP")
+        url = f"/api/notification/alerts/{alert.pk}/"
+        version = self.client.get(url, secure=True).data["updated_at"]
+        self.assertEqual(self.client.patch(url, {"price_threshold": "120"}, secure=True).status_code, 400)
+        self.assertEqual(self.client.patch(url, {"price_threshold": "120"}, secure=True, **self.command_headers()).status_code, 428)
+        headers = self.command_headers(version=version)
+        first = self.client.patch(url, {"price_threshold": "120"}, secure=True, **headers)
+        self.assertEqual(first.status_code, 200)
+        replay = self.client.patch(url, {"price_threshold": "120"}, secure=True, **headers)
+        self.assertEqual(replay.data, first.data)
+        stale = self.client.patch(url, {"price_threshold": "130"}, secure=True, **self.command_headers(version=version))
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="notification.price_alert.update", resource_id=str(alert.pk)).count(), 1)
+        self.assertEqual(self.client.delete(url, secure=True, **self.command_headers(version=version)).status_code, 409)
+        delete_headers = self.command_headers(version=first.data["updated_at"])
+        self.assertEqual(self.client.delete(url, secure=True, **delete_headers).status_code, 204)
+        self.assertEqual(self.client.delete(url, secure=True, **delete_headers).status_code, 204)
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="notification.price_alert.delete", resource_id=str(alert.pk)).count(), 1)
+
     def test_inbox_is_user_scoped_and_can_mark_read(self):
         response = self.client.get("/api/notification/inbox/", secure=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

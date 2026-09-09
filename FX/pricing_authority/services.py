@@ -51,9 +51,8 @@ def resolve_entitlement(account, code, at=None, tenant_ref=None):
     if not assignment:
         return EntitlementDecision(code, "DENY", None, "default-deny-v1", source="DEFAULT_DENY")
     selected_tenant = assignment.tenant_ref
-    override = AccountEntitlementOverride.objects.filter(
+    overrides = AccountEntitlementOverride.objects.filter(
         account=account,
-        tenant_ref=selected_tenant,
         entitlement__code=code,
         entitlement__status="ACTIVE",
         entitlement__effective_from__lte=at,
@@ -62,7 +61,13 @@ def resolve_entitlement(account, code, at=None, tenant_ref=None):
     ).filter(
         Q(effective_to__isnull=True) | Q(effective_to__gt=at),
         Q(entitlement__effective_to__isnull=True) | Q(entitlement__effective_to__gt=at),
-    ).order_by("-effective_from", "-pk").first()
+    ).order_by("-effective_from", "-pk")
+    # Ambiguous pre-tenant restrictions remain a global deny until explicitly
+    # scoped by an administrator. Never propagate a legacy enabling override.
+    legacy = overrides.filter(tenant_ref="", override_type__in=("DISABLE", "LIMIT_OVERRIDE")).first()
+    if legacy and selected_tenant:
+        return EntitlementDecision(code, "DENY", None, f"override-{legacy.pk}", source="LEGACY_RESTRICTION")
+    override = overrides.filter(tenant_ref=selected_tenant).first()
     if override:
         state = "DENY" if override.override_type == "DISABLE" else ("LIMITED" if override.override_type == "LIMIT_OVERRIDE" else "ALLOW")
         return EntitlementDecision(code, state, override.value, f"override-{override.pk}", source="ACCOUNT_OVERRIDE")
@@ -96,10 +101,9 @@ def entitlement_decisions(account, tenant_ref, at=None):
     ).values_list("entitlement__code", flat=True))
     codes.update(AccountEntitlementOverride.objects.filter(
         account=account,
-        tenant_ref=str(tenant_ref),
         status="ACTIVE",
         effective_from__lte=at,
-    ).filter(Q(effective_to__isnull=True) | Q(effective_to__gt=at)).values_list("entitlement__code", flat=True))
+    ).filter(Q(tenant_ref=str(tenant_ref)) | Q(tenant_ref="", override_type__in=("DISABLE", "LIMIT_OVERRIDE"))).filter(Q(effective_to__isnull=True) | Q(effective_to__gt=at)).values_list("entitlement__code", flat=True))
     return [resolve_entitlement(account, code, at=at, tenant_ref=tenant_ref) for code in sorted(codes)]
 
 

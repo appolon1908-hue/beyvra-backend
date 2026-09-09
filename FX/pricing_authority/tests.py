@@ -133,6 +133,25 @@ class PricingAuthorityTests(TestCase):
         )
         self.assertEqual(decision.state, "ALLOW")
 
+    def test_ambiguous_legacy_restrictions_survive_tenant_migration(self):
+        from importlib import import_module
+        from django.apps import apps
+        other = "second-tenant"
+        AccountPlanAssignment.objects.create(account=self.user, tenant_ref=other,
+            plan_version=self.version, source="DEFAULT", effective_from=self.now)
+        legacy = AccountEntitlementOverride.objects.create(account=self.user, tenant_ref="",
+            entitlement=self.delayed, override_type="DISABLE", reason_code="FIXTURE",
+            effective_from=self.now, approved_by=self.user)
+        import_module("pricing_authority.migrations.0002_tenant_scoped_entitlements").scope_unambiguous_overrides(apps, None)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.tenant_ref, "")
+        for kind in ("DISABLE", "LIMIT_OVERRIDE"):
+            AccountEntitlementOverride.objects.filter(pk=legacy.pk).update(override_type=kind)
+            for tenant in (str(self.org.pk), other):
+                self.assertEqual(resolve_entitlement(self.user, self.delayed.code, tenant_ref=tenant).state, "DENY")
+        AccountEntitlementOverride.objects.filter(pk=legacy.pk).update(effective_to=self.now)
+        self.assertEqual(resolve_entitlement(self.user, self.delayed.code, tenant_ref=other).state, "ALLOW")
+
     def test_basis_points_min_max_and_decimal(self):
         minimum = calculate_fee(
             account=self.user,

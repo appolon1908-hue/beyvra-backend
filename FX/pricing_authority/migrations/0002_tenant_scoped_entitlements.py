@@ -11,6 +11,8 @@ def scope_unambiguous_overrides(apps, schema_editor):
             status="ACTIVE",
             effective_to__isnull=True,
         ).values_list("tenant_ref", flat=True).distinct()[:2])
+        # Ambiguous rows retain their legacy scope. The resolver preserves
+        # restrictive blank-scope overrides as a deny until explicitly scoped.
         if len(tenants) == 1:
             Override.objects.filter(account_id=account_id, tenant_ref="").update(tenant_ref=tenants[0])
 

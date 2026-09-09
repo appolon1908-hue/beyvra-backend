@@ -14,6 +14,7 @@ from integrations.financial.simulated import SimulatedFinancialAdapter
 from reference_data.models import Instrument
 
 from .models import PerformanceSnapshot, ValuationPrice
+from .fx import FxValuationService
 
 
 ZERO = Decimal("0")
@@ -52,14 +53,18 @@ def _instrument_metadata(instrument_id, instruments):
 
 
 def _position_rows(account):
+    at = timezone.now()
+    cutoff = at - timedelta(minutes=5)
     latest_price = ValuationPrice.objects.filter(
         instrument_id=OuterRef("instrument_id"),
+        valuation_time__gte=cutoff, valuation_time__lte=at, price__gt=0,
         quality_state__in=("FRESH", "CORRECTED"),
-    ).order_by("-valuation_time")
+    ).order_by("-valuation_time", "-created_at", "-pk")
     positions = list(
         SimulatedPosition.objects.filter(account=account)
         .annotate(
             selected_market_price=Subquery(latest_price.values("price")[:1]),
+            selected_price_currency=Subquery(latest_price.values("currency")[:1]),
             selected_price_time=Subquery(latest_price.values("valuation_time")[:1]),
             selected_price_quality=Subquery(latest_price.values("quality_state")[:1]),
         )
@@ -88,10 +93,23 @@ def _position_rows(account):
     rows = []
     for position in positions:
         price = position.selected_market_price
-        market_value = position.quantity * price if price is not None else None
+        market_value = None
+        valuation_error = None
+        if price is not None:
+            try:
+                market_value, fx_refs, _ = FxValuationService.convert(
+                    position.quantity * price, position.selected_price_currency,
+                    account.quote_currency, at=at,
+                )
+                if any(ref.rate <= 0 or ref.rate_time < cutoff for ref in fx_refs):
+                    raise ValueError("FX_RATE_STALE_OR_INVALID")
+            except ValueError as exc:
+                market_value = None
+                valuation_error = str(exc)
+        # Simulated settlement debits cash and records cost in account currency.
         unrealized = (
             market_value - (position.quantity * position.average_price)
-            if price is not None
+            if market_value is not None
             else None
         )
         rows.append(
@@ -101,6 +119,9 @@ def _position_rows(account):
                 **_instrument_metadata(position.instrument_id, instruments),
                 "quantity": str(position.quantity),
                 "average_entry_price": str(position.average_price),
+                "valuation_currency": account.quote_currency,
+                "price_currency": position.selected_price_currency,
+                "valuation_error": valuation_error,
                 "market_price": str(price) if price is not None else None,
                 "market_value": _money(market_value) if market_value is not None else None,
                 "unrealized_pnl": _money(unrealized) if unrealized is not None else None,
@@ -242,7 +263,7 @@ class PortfolioPerformanceView(PortfolioBaseView):
 
 class PortfolioAllocationsView(PortfolioBaseView):
     def get(self, request):
-        _account, positions, _available, market_value, _unrealized, _realized = self.portfolio(request)
+        account, positions, _available, market_value, _unrealized, _realized = self.portfolio(request)
         buckets = defaultdict(Decimal)
         unpriced = []
         for row in positions:
@@ -260,7 +281,7 @@ class PortfolioAllocationsView(PortfolioBaseView):
         ]
         return Response(
             {
-                "currency": "USD",
+                "currency": account.quote_currency,
                 "results": results,
                 "unpriced_instruments": unpriced,
                 "quality": _valuation_quality(positions),
