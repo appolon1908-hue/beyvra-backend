@@ -1,6 +1,7 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 
 from apps.trading.application.simulation import account_for, cancel, create, preview, serialize_account, serialize_order, simulation_authorized
 from apps.trading.models import SimulatedPosition, SimulatedTrade, TradingOrder
@@ -59,11 +60,19 @@ class OrderDetailView(APIView):
 
 class OrderCancelView(APIView):
     permission_classes = (IsAuthenticated,)
+    @extend_schema(parameters=[
+        OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True),
+        OpenApiParameter("If-Match", str, OpenApiParameter.HEADER, required=True, description="Order version returned by the API."),
+    ])
     def post(self, request, order_id):
         if blocked := _guard(request): return blocked
-        try: return Response(cancel(request.user, order_id))
+        key = request.headers.get("Idempotency-Key")
+        expected_version = request.headers.get("If-Match")
+        if not key or not expected_version:
+            return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "If-Match"]})
+        try: return Response(cancel(request.user, order_id, key, expected_version, getattr(request, "correlation_id", None)))
         except TradingOrder.DoesNotExist: return error_response(request, "RESOURCE_NOT_FOUND", 404)
-        except (ValueError, SimulationFinancialError) as error: return _failure(request, error)
+        except (ValueError, SimulationFinancialError, IdempotencyConflict) as error: return _failure(request, error)
 
 
 class OrderReplaceView(APIView):
