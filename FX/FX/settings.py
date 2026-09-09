@@ -185,9 +185,16 @@ CORS_ALLOW_HEADERS = [
     "authorization",
     "content-type",
     "dnt",
+    "idempotency-key",
+    "if-match",
     "origin",
     "user-agent",
+    "x-beyvra-simulation-mode",
+    "x-correlation-id",
     "x-csrftoken",
+    "x-organization-id",
+    "x-request-id",
+    "x-beyvra-tenant",
     "x-requested-with",
 ]
 
@@ -243,6 +250,7 @@ INSTALLED_APPS = [
     "apps.post_trade",
     "apps.valuation",
     "apps.institutional",
+    "apps.workspace",
 ]
 
 # Treasury is an application-side simulation/read-model boundary. These flags
@@ -260,6 +268,7 @@ MIDDLEWARE = [
     "apps.foundation.middleware.CanonicalHTTPMetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "middleware.no_store.SensitiveResponseNoStoreMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "middleware.deprecation.LegacyApiDeprecationMiddleware",

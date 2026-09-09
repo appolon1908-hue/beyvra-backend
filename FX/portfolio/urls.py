@@ -1,5 +1,7 @@
 from django.urls import path
-from .views import CryptoMarketDataView, StockMarketDataView, AssetView, CreateAssetView, TotalBalanceView, TotalProfitLossView, PortfolioSummaryView
+from apps.valuation.portfolio_api import PortfolioSummaryView
+
+from .views import CryptoMarketDataView, StockMarketDataView, AssetView, CreateAssetView, TotalBalanceView, TotalProfitLossView
 
 app_name = "portfolio"
 

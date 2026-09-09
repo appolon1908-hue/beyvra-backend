@@ -426,7 +426,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
         ),
     },
     "appolon1908-hue/beyvra-backend": {
-        ".github/workflows/ci.yml": "f10b269e0faf54b23582ca1ee9700de6f2ec9f5481f6b2be20e40b9f6d428945",
+        ".github/workflows/ci.yml": "073aefdc21de3417853c0963ce2d6ebca7f34815fac802b6aa14c7122a597124",
     },
     "appolon1908-hue/beyvra-frontend": {
         ".github/workflows/ci.yml": "8dfd828f1c50f774d34d22008cc8e5eb3ce4961165b388e058fd3cab6130e2e5",
@@ -468,6 +468,12 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/odoo-calling-contract.yml": "a186063edd3d780a5f813090b7364edb9af23e3dba845dc49c476e62acd44fd9",
     },
     "appolon1908-hue/beyvra-backend": {
+        # Isolated PostgreSQL test services; exact workflow bytes remain pinned.
+        ".github/workflows/enterprise-api.yml": ("59cefdff03e0524db9e55202a5d87376" "d8e296dc9842daf853afb7698f1ffb3d"),
+        ".github/workflows/workspace-api.yml": ("cc81f48ede81ffd8425e256c0cb44972" "6490e7937f5a2e6fce23aaca6ccbb86b"),
+        ".github/workflows/registration-safety-ci.yml": ("ad1a8a5da49415b1ee672000409cc3f7" "1acafebe149038abeb576ae1778691e8"),
+        ".github/workflows/security-command-ci.yml": ("a47a0f78eb38348b2c23e784e9048b13" "11297ffe30080c4b063048b296e66d41"),
+
         ".github/workflows/email-boundary-ci.yml": "13ec97e8fb3cf77dcea400c2c8d4d5f089a567852ebcfa7f8efc581efa6f1fd6",
     },
     "appolon1908-hue/scrapper": {

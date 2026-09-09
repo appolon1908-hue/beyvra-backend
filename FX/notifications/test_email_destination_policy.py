@@ -48,6 +48,8 @@ class EmailDestinationPolicyTests(TestCase):
             "https://other.internal", "https://127.0.0.1",
             "http://169.254.169.254", "http://middleware.internal",
             "https://middleware.internal:8443",
+            "http://[::1]", "http://[::ffff:127.0.0.1]",
+            "http://[fe80::1]", "https://[fd00::2]",
         ):
             with self.subTest(origin=origin):
                 os.environ["BEYVRA_EMAIL_API_URL"] = origin
@@ -87,6 +89,9 @@ class EmailDestinationPolicyTests(TestCase):
             "https://middleware.in\nternal", "https://%6diddleware.internal",
             "https://middleware.internal\\example.com", "ftp://middleware.internal",
             "https://middleware.internal..",
+            "https://[fd00::1]ignored", "https://[fd00::1]:",
+            "https://[fe80::1%eth0]", "https://[fe80::1%25eth0]",
+            "https://[fd00::1]:443:80",
         ):
             with self.subTest(origin=origin):
                 os.environ["BEYVRA_EMAIL_API_URL"] = origin
@@ -155,3 +160,18 @@ class EmailDestinationPolicyTests(TestCase):
                 with self.assertRaises(email_client.EmailMiddlewareError) as raised:
                     self.client.submit(self.item, {})
                 self.assertEqual(raised.exception.error_class, "INVALID_RESPONSE")
+
+    def test_malformed_ipv6_allowlist_is_rejected(self):
+        for origin in ("https://[fd00::1]ignored", "https://[fe80::1%25eth0]"):
+            with self.subTest(origin=origin):
+                os.environ["BEYVRA_EMAIL_ALLOWED_ORIGINS"] = origin
+                self.assert_blocked("MIDDLEWARE_ALLOWLIST_INVALID")
+
+    def test_ipv6_equivalent_forms_use_one_canonical_destination(self):
+        os.environ["BEYVRA_EMAIL_API_URL"] = "https://[FD00:0:0:0:0:0:0:1]:443/"
+        os.environ["BEYVRA_EMAIL_ALLOWED_ORIGINS"] = "https://[fd00::1]"
+        self.post.return_value = Mock(status_code=202)
+        self.post.return_value.json.return_value = {"status": "QUEUED"}
+        self.client.submit(self.item, {})
+        self.assertEqual(self.post.call_args.args[0], "https://[fd00::1]/v1/email/messages")
+        self.assertFalse(self.post.call_args.kwargs["allow_redirects"])

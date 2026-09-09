@@ -49,7 +49,7 @@ class PriceAlertSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAlerts
-        exclude = ("user",)
+        exclude = ("user", "organization")
 
 
 class NotificationEventSerializer(serializers.ModelSerializer):
@@ -78,17 +78,30 @@ class WebhookSubscriptionSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
     def validate_url(self, value):
-        parsed = urlparse(value)
+        try:
+            parsed = urlparse(value)
+            port = parsed.port
+            if (not parsed.hostname or parsed.username is not None or parsed.password is not None
+                    or parsed.fragment or "%" in parsed.hostname
+                    or parsed.scheme not in {"http", "https"}
+                    or any(ord(char) <= 32 for char in value)):
+                raise ValueError("invalid webhook authority")
+        except ValueError as exc:
+            raise serializers.ValidationError("Webhook URL is invalid.") from exc
         if parsed.scheme != "https" and not settings.DEBUG:
             raise serializers.ValidationError("Webhook URLs must use HTTPS.")
         try:
-            addresses = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
-        except socket.gaierror as exc:
-            raise serializers.ValidationError("Webhook hostname could not be resolved.") from exc
-        for address in addresses:
-            ip = ipaddress.ip_address(address[4][0])
-            if not settings.DEBUG and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved):
-                raise serializers.ValidationError("Webhook URLs cannot target private network addresses.")
+            addresses = socket.getaddrinfo(parsed.hostname, port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+            if not addresses:
+                raise ValueError("empty DNS answer")
+            for address in addresses:
+                ip = ipaddress.ip_address(address[4][0])
+                if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+                    ip = ip.ipv4_mapped
+                if not settings.DEBUG and (not ip.is_global or ip.is_multicast or ip.is_reserved):
+                    raise serializers.ValidationError("Webhook URLs must target public unicast addresses.")
+        except (socket.gaierror, ValueError) as exc:
+            raise serializers.ValidationError("Webhook hostname could not be resolved safely.") from exc
         return value
 
     def validate_categories(self, value):

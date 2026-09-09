@@ -1,0 +1,197 @@
+from datetime import timedelta
+from decimal import Decimal
+
+from django.test import TestCase, override_settings
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.trading.application.simulation import account_for
+from apps.trading.models import SimulatedPosition
+from integrations.models import Organization, OrganizationMembership
+from users.models import User
+
+from .models import FxValuationRate, PerformanceSnapshot, ValuationPrice
+
+
+@override_settings(
+    SIMULATED_TRADING_ENABLED=True,
+    DEPLOYMENT_ENV="test",
+    REAL_TRADING_ENABLED=False,
+    EXTERNAL_EXECUTION_ENABLED=False,
+    REAL_MONEY_ENABLED=False,
+)
+class CanonicalPortfolioApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="portfolio-api@example.test", password="safe-password")
+        organization = Organization.objects.create(name="Portfolio API Tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=organization)
+        self.account = account_for(self.user)
+        SimulatedPosition.objects.create(
+            account=self.account,
+            instrument_id="BTC-USD",
+            quantity=Decimal("2"),
+            average_price=Decimal("100"),
+            realized_pnl=Decimal("5"),
+        )
+        self.now = timezone.now()
+        ValuationPrice.objects.create(
+            instrument_id="BTC-USD",
+            valuation_time=self.now,
+            price=Decimal("110"),
+            currency="USD",
+            price_type="MID",
+            provider_id="certified-simulation-fixture",
+            market_data_ref="fixture:btc-usd:110",
+            quality_state="FRESH",
+            market_status="OPEN",
+            policy_id="SIMULATION",
+            policy_version="1",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_summary_allocations_and_risk_share_one_valuation(self):
+        summary = self.client.get("/api/v1/portfolio/summary")
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary["Cache-Control"], "private, no-store")
+        self.assertEqual(summary["Pragma"], "no-cache")
+        self.assertEqual(summary.json()["market_value"], "220.00000000")
+        self.assertEqual(summary.json()["unrealized_pnl"], "20.00000000")
+        self.assertEqual(summary.json()["valuation_quality"], "COMPLETE")
+        self.assertFalse(summary.json()["live_trading_enabled"])
+
+        positions = self.client.get("/api/v1/portfolio/positions")
+        self.assertEqual(positions.status_code, 200)
+        self.assertEqual(positions.json()["quality"], "COMPLETE")
+        self.assertEqual(positions.json()["count"], 1)
+        self.assertEqual(positions.json()["results"][0]["market_value"], "220.00000000")
+
+        allocations = self.client.get("/api/v1/portfolio/allocations")
+        self.assertEqual(allocations.json()["results"][0]["weight"], "1")
+
+        risk = self.client.get("/api/v1/portfolio/risk")
+        self.assertEqual(risk.json()["gross_exposure"], "220.00000000")
+        self.assertEqual(risk.json()["net_exposure"], "220.00000000")
+        self.assertEqual(risk.json()["largest_position_ratio"], "1")
+        self.assertIsNone(risk.json()["value_at_risk"])
+        self.assertEqual(risk.json()["advanced_risk_reason"], "CERTIFIED_HISTORY_AND_POLICY_REQUIRED")
+        self.assertEqual(
+            risk.json()["methodology"]["gross_exposure"],
+            "SUM_ABSOLUTE_PRICED_POSITION_MARKET_VALUE",
+        )
+
+        evidence = self.client.get("/api/v1/portfolio/evidence-quality")
+        self.assertEqual(evidence.status_code, 200)
+        self.assertEqual(evidence.json()["overall_quality"], "PARTIAL")
+        self.assertEqual(evidence.json()["valuation"]["priced_position_count"], 1)
+        self.assertFalse(evidence.json()["advanced_risk"]["fabricated_values"])
+
+    def test_performance_returns_only_persisted_evidence(self):
+        empty = self.client.get("/api/v1/portfolio/performance?range=1M")
+        self.assertEqual(empty.json()["quality"], "UNAVAILABLE")
+        self.assertEqual(empty.json()["results"], [])
+
+        PerformanceSnapshot.objects.create(
+            tenant_ref="default",
+            account_ref=f"sim:{self.user.pk}",
+            period_start=self.now - timedelta(days=1),
+            period_end=self.now,
+            opening_value=Decimal("10000"),
+            closing_value=Decimal("10100"),
+            external_flows=Decimal("0"),
+            income=Decimal("0"),
+            fees=Decimal("0"),
+            pnl=Decimal("100"),
+            return_value=Decimal("0.01"),
+            return_method="SIMPLE_RETURN",
+            quality_state="FRESH",
+            policy_version="1",
+        )
+        response = self.client.get("/api/v1/portfolio/performance?range=1M")
+        self.assertEqual(response.json()["quality"], "COMPLETE")
+        self.assertEqual(response.json()["results"][0]["return"], "0.010000000000000000")
+
+    def test_performance_range_is_enforced_server_side(self):
+        PerformanceSnapshot.objects.create(
+            tenant_ref="default",
+            account_ref=f"sim:{self.user.pk}",
+            period_start=self.now - timedelta(days=5),
+            period_end=self.now - timedelta(days=4),
+            opening_value=Decimal("10000"),
+            closing_value=Decimal("10010"),
+            external_flows=Decimal("0"),
+            income=Decimal("0"),
+            fees=Decimal("0"),
+            pnl=Decimal("10"),
+            return_value=Decimal("0.001"),
+            return_method="SIMPLE_RETURN",
+            quality_state="FRESH",
+            policy_version="1",
+        )
+        response = self.client.get("/api/v1/portfolio/performance?range=1D")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["range"], "1D")
+        self.assertEqual(response.json()["results"], [])
+        self.assertEqual(response.json()["quality"], "UNAVAILABLE")
+
+    def test_gross_exposure_uses_absolute_position_values(self):
+        position = SimulatedPosition.objects.get(account=self.account, instrument_id="BTC-USD")
+        position.quantity = Decimal("-2")
+        position.save(update_fields=("quantity", "updated_at"))
+
+        risk = self.client.get("/api/v1/portfolio/risk")
+        self.assertEqual(risk.status_code, 200)
+        self.assertEqual(risk.json()["gross_exposure"], "220.00000000")
+        self.assertEqual(risk.json()["net_exposure"], "-220.00000000")
+        self.assertEqual(risk.json()["largest_position_ratio"], "1")
+
+    def add_price(self, **changes):
+        values = {"instrument_id": "FX-FIXTURE", "valuation_time": self.now, "price": Decimal("110"),
+                  "currency": "USD", "price_type": "MID", "provider_id": "fixture",
+                  "market_data_ref": "fixture", "quality_state": "FRESH", "market_status": "OPEN",
+                  "policy_id": "SIMULATION", "policy_version": "1"}
+        values.update(changes)
+        return ValuationPrice.objects.create(**values)
+
+    def test_old_future_and_nonpositive_prices_are_unavailable(self):
+        for index, changes in enumerate((
+            {"valuation_time": self.now - timedelta(days=30)},
+            {"valuation_time": self.now + timedelta(days=1)},
+            {"price": Decimal("0")},
+            {"price": Decimal("-1")},
+        )):
+            with self.subTest(changes=changes):
+                reference = f"INVALID-{index}"
+                SimulatedPosition.objects.filter(account=self.account).update(instrument_id=reference)
+                self.add_price(instrument_id=reference, **changes)
+                body = self.client.get("/api/v1/portfolio/summary").json()
+                self.assertEqual(body["valuation_quality"], "UNAVAILABLE")
+                self.assertIsNone(body["positions"][0]["market_value"])
+
+    def test_foreign_price_is_converted_and_missing_or_stale_fx_fails_closed(self):
+        SimulatedPosition.objects.filter(account=self.account).update(instrument_id="FX-FIXTURE")
+        self.add_price(currency="EUR")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["valuation_quality"], "UNAVAILABLE")
+        fx = {"base_currency": "EUR", "quote_currency": "USD", "rate": Decimal("1.2"),
+              "provider_id": "fixture", "quality_state": "FRESH", "policy_version": "1"}
+        FxValuationRate.objects.create(**fx, rate_time=self.now - timedelta(days=1), source_ref="stale")
+        self.assertEqual(self.client.get("/api/v1/portfolio/summary").json()["valuation_quality"], "UNAVAILABLE")
+        FxValuationRate.objects.create(**fx, rate_time=self.now, source_ref="fresh")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["market_value"], "264.00000000")
+        self.assertEqual(body["unrealized_pnl"], "64.00000000")
+        self.assertEqual(body["positions"][0]["price_currency"], "EUR")
+        self.assertEqual(body["positions"][0]["valuation_currency"], "USD")
+        self.assertEqual(self.client.get("/api/v1/portfolio/risk").json()["gross_exposure"], "264.00000000")
+        fx["rate"] = Decimal("0")
+        FxValuationRate.objects.create(**fx, rate_time=timezone.now(), source_ref="invalid")
+        self.assertEqual(self.client.get("/api/v1/portfolio/summary").json()["valuation_quality"], "UNAVAILABLE")
+
+    def test_same_timestamp_evidence_selects_price_and_currency_from_one_source(self):
+        SimulatedPosition.objects.filter(account=self.account).update(instrument_id="FX-FIXTURE")
+        self.add_price(price=Decimal("500"), currency="EUR", provider_id="first")
+        self.add_price(price=Decimal("120"), currency="USD", provider_id="second")
+        body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["market_value"], "240.00000000")
+        self.assertEqual(body["positions"][0]["price_currency"], "USD")
