@@ -319,3 +319,16 @@ class WatchlistApiTests(TestCase):
         retry = self.create_watchlist("Legacy", key="legacy-claim")
         self.assertEqual(retry.status_code, 201)
         self.assertEqual(Watchlist.objects.filter(name="Legacy").count(), 1)
+
+    def test_version_rejects_boolean_and_fractional_inputs(self):
+        watchlist = self.create_watchlist().json()
+        for version in (True, 1.5, "1.0", "1e0"):
+            with self.subTest(version=version):
+                response = self.client.post(
+                    f"/api/v1/watchlists/{watchlist['id']}/items",
+                    {"instrument_id": "btc-usd", "version": version},
+                    format="json", **self.command_headers(f"invalid-version-{version}"),
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "VERSION_INVALID")
+        self.assertEqual(WatchlistItem.objects.count(), 0)

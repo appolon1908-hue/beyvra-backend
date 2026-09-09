@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -41,6 +42,8 @@ def parse_command(request, *, require_version: bool):
         raw_version = request.query_params.get("version")
     expected_version = None
     if raw_version not in (None, ""):
+        if isinstance(raw_version, bool) or not isinstance(raw_version, (int, str)) or not re.fullmatch(r"[0-9]+", str(raw_version)):
+            return None, Response(error_body("VERSION_INVALID"), status=400)
         try:
             expected_version = int(raw_version)
         except (TypeError, ValueError):
