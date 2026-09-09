@@ -1276,9 +1276,11 @@ def python_source_has_runtime_mutation(source: str) -> bool:
                     return True
                 if (
                     keyword.arg == "method"
-                    and isinstance(keyword.value, ast.Constant)
-                    and isinstance(keyword.value.value, str)
-                    and keyword.value.value.lower() in HTTP_MUTATION_METHODS
+                    and not (
+                        isinstance(keyword.value, ast.Constant)
+                        and isinstance(keyword.value.value, str)
+                        and keyword.value.value.lower() in {"get", "head", "options"}
+                    )
                 ):
                     return True
         if qualified == "urllib.request.urlopen":
@@ -1350,11 +1352,9 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
         )
     ) and re.search(r"\b(?:exec|execfile|execsync|spawn|spawnsync)\s*\(", lower):
         return True
-    if re.search(
-        r"\bfetch\s*\([^)]*\{[^}]*\bmethod\s*:\s*['\"](?:delete|patch|post|put)['\"]",
-        lower,
-        re.DOTALL,
-    ):
+    # Nested expressions and computed options require a JavaScript parser to
+    # prove read-only behavior. Treat unproved fetch calls as runtime effects.
+    if re.search(r"\bfetch\s*\(", lower):
         return True
     if re.search(
         r"\b(?:api|api_client|axios|client|connection|http|session|socket)"
@@ -1862,8 +1862,12 @@ def package_manager_payloads(
         if "--ignore-scripts" in arguments:
             return []
         selected = ["preinstall", "install", "postinstall", "prepublish", "prepare"]
+    elif name == "npm" and lower == "pack":
+        if "--ignore-scripts" in arguments:
+            return []
+        selected = ["prepack", "prepare", "postpack"]
     else:
-        return []
+        return None
     payloads: list[str] = []
     for selected_name in selected:
         payload = scripts.get(selected_name)
@@ -3442,6 +3446,33 @@ jobs:
             ),
             "read-only package script regression failed",
         )
+    for hook in ("prepack", "prepare", "postpack"):
+        with tempfile.TemporaryDirectory() as directory:
+            working_directory = Path(directory)
+            (working_directory / "package.json").write_text(json.dumps(
+                {"scripts": {hook: "kubectl apply -f runtime.yml"}}
+            ), encoding="utf-8")
+            require(contains_runtime_mutation("npm pack", working_directory=working_directory),
+                    f"negative npm pack {hook} regression passed")
+            require(not contains_runtime_mutation("npm pack --ignore-scripts", working_directory=working_directory),
+                    f"ignored npm pack {hook} regression failed")
+    require(
+        python_source_has_runtime_mutation(
+            'import os, urllib.request\n'
+            'request = urllib.request.Request(url, method=os.environ["METHOD"])\n'
+            'urllib.request.urlopen(request)\n'
+        ), "negative computed urllib method regression passed",
+    )
+    require(
+        not python_source_has_runtime_mutation(
+            'import urllib.request\nurllib.request.Request(url, method="GET")\n'
+        ), "read-only urllib method regression failed",
+    )
+    require(
+        javascript_source_has_runtime_mutation(
+            'fetch(new URL(endpoint), {method: "POST", body})'
+        ), "negative nested fetch expression regression passed",
+    )
     require(
         contains_runtime_mutation("bash generated-runtime.sh"),
         "negative unresolved script regression passed",
