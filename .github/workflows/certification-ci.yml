@@ -99,6 +99,16 @@ jobs:
             .github/workflows/go-live-readonly.yml
           grep -Fq 'canary_traffic_maximum_percent": 1' \
             operations/one_click_readonly_release.py
+          grep -Eq '^    if:.*false' \
+            .github/workflows/release-intent-dispatch.yml
+          grep -Eq '^    if:.*false' \
+            .github/workflows/promote-production-readonly.yml
+          grep -Eq '^    if:.*false' \
+            .github/workflows/certify-deployment.yml
+          test "$(grep -Fc 'inputs[deploy]=true' \
+            .github/workflows/promote-production-readonly.yml)" -eq 0
+          grep -Fq 'legacy one-click runtime orchestration is disabled' \
+            operations/one_click_readonly_release.py
           jq -e '.enabled == false' .release/intent.json >/dev/null
 
       - name: Exercise one-click orchestrator fail-closed models

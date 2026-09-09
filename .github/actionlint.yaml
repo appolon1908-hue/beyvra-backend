@@ -1,0 +1,4 @@
+paths:
+  .github/workflows/certify-deployment.yml:
+    ignore:
+      - 'constant expression "false" in condition'

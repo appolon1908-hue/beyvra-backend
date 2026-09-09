@@ -15,6 +15,9 @@ permissions:
 jobs:
   go-live:
     name: Build, sign, certify, roll back, and promote
+    # RUNTIME_MUTATION_DISABLED=true: this repository has no runtime mutation
+    # authority; release orchestration remains plan-only until external gates.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:

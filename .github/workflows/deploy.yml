@@ -31,7 +31,7 @@ on:
         default: ""
         type: string
       deploy:
-        description: Deploy after producing the release manifest
+        description: Legacy deploy switch; must remain false (infrastructure is runtime authority)
         required: true
         default: false
         type: boolean
@@ -129,18 +129,17 @@ jobs:
             echo "Read-only promotion forbids schema migration authorization." >&2
             exit 1
           fi
+          test "${{ inputs.deploy }}" = "false"
 
           case "${{ inputs.target }}" in
             staging-readonly)
               test "${{ inputs.publish_images }}" = "true"
-              test "${{ inputs.deploy }}" = "true"
               test -z "${{ inputs.backend_image }}"
               test -z "${{ inputs.edge_image }}"
               test "$SOURCE_SHA" = "$(git rev-parse origin/main)"
               ;;
             production-readonly)
               test "${{ inputs.publish_images }}" = "false"
-              test "${{ inputs.deploy }}" = "true"
               [[ "${{ inputs.backend_image }}" =~ $digest_pattern ]]
               [[ "${{ inputs.edge_image }}" =~ $digest_pattern ]]
               ;;
@@ -358,6 +357,7 @@ jobs:
             --signer-workflow "$signer" \
             --source-ref refs/heads/main \
             --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --bundle-from-oci \
             --format json \
             > backend-build-attestation-verification.json
           gh attestation verify "oci://${edge_image}" \
@@ -365,6 +365,7 @@ jobs:
             --signer-workflow "$signer" \
             --source-ref refs/heads/main \
             --predicate-type "$BUILD_ATTESTATION_TYPE" \
+            --bundle-from-oci \
             --format json \
             > edge-build-attestation-verification.json
 
@@ -430,7 +431,10 @@ jobs:
     needs:
       - eligibility
       - resolve
-    if: inputs.deploy
+    # RUNTIME_MUTATION_DISABLED=true
+    # Runtime mutation is exclusively owned by Infustruction-repo. Retain this
+    # historical job as reviewable rollback context, but make it unreachable.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
