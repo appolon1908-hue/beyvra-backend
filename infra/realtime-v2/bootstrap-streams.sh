@@ -22,5 +22,6 @@ create VALUATION_EVENTS --subjects 'valuation.>'
 create TREASURY_EVENTS --subjects 'treasury.>'
 create REGULATORY_EVENTS --subjects 'regulatory.>'
 create COMPLIANCE_EVENTS --subjects 'compliance.>'
+create IDENTITY_EVENTS --subjects 'identity.>'
 
 nats --server "$SERVER" $TLS_ARGS server check jetstream
