@@ -106,7 +106,7 @@ jobs:
         run: |
           python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
-          python manage.py test financial_boundary.tests bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
+          python manage.py test financial_boundary.tests bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security users.tests.test_account_enumeration ws.test_security
           python manage.py test integrations.tests integrations.test_crm_inbound_safety
           python manage.py test notifications
           python manage.py test news_app.test_phase5_contracts ws.test_v2
@@ -115,7 +115,13 @@ jobs:
           python manage.py test apps.compliance apps.post_trade apps.surveillance apps.institutional operations treasury platform_ops security.tests.test_commands security.tests.test_command_regressions apps.workspace users.tests.test_email_verification users.tests.test_registration_safety_regressions
           python manage.py test api_trade.tests.test_openapi_stability apps.foundation.test_publisher security.tests.test_apps platform_ops.health.test_release_identity
 
-      - name: Verify public identity surfaces
+      - name: Validate API and event contracts
+        run: |
+          python scripts/validate_openapi.py
+          python scripts/validate_financial_service_contract.py
+          python scripts/validate_event_topology.py
+
+      - name: Verify Beyvra public identity surfaces
         run: python scripts/check_public_identity.py
 
       - name: Validate deployment authority
