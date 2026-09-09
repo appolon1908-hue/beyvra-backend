@@ -3,7 +3,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[2]
 
 class ObservabilityAssetTests(unittest.TestCase):
     def test_dashboards_are_valid_json_without_secrets(self):
-        files=list((ROOT/"monitoring/grafana").glob("beyvra-*.json")); self.assertGreaterEqual(len(files),5)
+        files=[p for d in ("monitoring/grafana","observability/grafana") for p in (ROOT/d).rglob("*.json")]; self.assertGreaterEqual(len(files),10)
         for path in files:
             data=json.loads(path.read_text()); self.assertTrue(data["title"]); self.assertTrue(data["panels"])
             text=path.read_text().lower(); self.assertNotRegex(text,r"password|api[_-]?key|authorization|jwt|private[_-]?key")
