@@ -11,6 +11,6 @@ IMPORT_QUEUE_DEPTH = Gauge("codestra_import_queue_depth", "Queued imports")
 
 def count(metric, status="ok"):
     try:
-        metric.labels(status=status).inc()
+        metric.labels(status).inc()
     except (AttributeError, ValueError):
         metric.inc()

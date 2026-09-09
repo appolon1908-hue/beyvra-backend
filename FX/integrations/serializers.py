@@ -37,22 +37,32 @@ class DemoAccountSerializer(serializers.ModelSerializer):
 
 
 class CRMConnectionSerializer(serializers.ModelSerializer):
-    secret = serializers.CharField(write_only=True, required=True)
+    secret = serializers.CharField(write_only=True, required=True, min_length=16)
     class Meta:
         model = CRMConnection
         fields = ("id", "name", "provider", "endpoint", "secret", "field_mapping", "event_categories", "is_active", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
 
     def validate_endpoint(self, value):
-        parsed = urlparse(value)
-        if parsed.scheme != "https" or not parsed.hostname:
-            raise serializers.ValidationError("CRM endpoints must use HTTPS")
         try:
-            addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)}
-            if any(ipaddress.ip_address(address).is_private or ipaddress.ip_address(address).is_loopback or ipaddress.ip_address(address).is_link_local for address in addresses):
-                raise serializers.ValidationError("private and metadata destinations are not allowed")
-        except socket.gaierror:
-            raise serializers.ValidationError("endpoint hostname could not be resolved")
+            parsed = urlparse(value)
+            port = parsed.port
+            if (parsed.scheme != "https" or not parsed.hostname
+                    or parsed.username is not None or parsed.password is not None
+                    or parsed.fragment or "%" in parsed.hostname
+                    or any(ord(char) <= 32 for char in value)):
+                raise ValueError("invalid HTTPS authority")
+            addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, port or 443, type=socket.SOCK_STREAM)}
+            if not addresses:
+                raise ValueError("empty DNS answer")
+            for address in addresses:
+                ip = ipaddress.ip_address(address)
+                if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+                    ip = ip.ipv4_mapped
+                if not ip.is_global or ip.is_multicast or ip.is_reserved:
+                    raise ValueError("nonpublic destination")
+        except (ValueError, socket.gaierror) as exc:
+            raise serializers.ValidationError("CRM endpoint must resolve to public HTTPS destinations") from exc
         return value
 
 
@@ -73,3 +83,21 @@ class ServiceTokenMetadataSerializer(serializers.ModelSerializer):
         model = ServiceToken
         fields = ("id", "name", "scopes", "environment", "fingerprint", "last_four", "expires_at", "last_used_at", "revoked_at", "created_at")
         read_only_fields = fields
+
+
+class ServiceTokenIssueSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, default="integration")
+    scopes = serializers.ListField(
+        child=serializers.ChoiceField(choices=(
+            "users:read", "users:write", "users:import", "demo_accounts:read",
+            "crm_connections:read", "crm_connections:write", "crm_deliveries:read",
+            "crm_deliveries:retry", "webhooks:read", "webhooks:write",
+        )), default=list, max_length=10,
+    )
+
+    def validate_scopes(self, value):
+        return sorted(set(value))
+
+
+class ServiceTokenActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("revoke", "rotate"), default="revoke")
