@@ -2,6 +2,8 @@
 import multiprocessing
 import os
 
+from prometheus_client import multiprocess
+
 workers_per_core_str = os.getenv("GUNICORN_WORKERS_PER_CORE", "1")
 max_workers_str = os.getenv("GUNICORN_MAX_WORKERS", "10")
 use_max_workers = None
@@ -73,12 +75,18 @@ log_data = {
     "use_max_workers": use_max_workers,
     "web_concurrency": web_concurrency,
     "host": host,
-    "port": '8000',
+    "port": "8000",
     "cores": cores,
 }
 
 # for monitoring
 statsd_host = os.getenv("STATSD_HOST", None)
 statsd_prefix = os.getenv("STATSD_PREFIX", "")
+
+
+def child_exit(_server, worker):
+    """Remove stale live-gauge files when a Gunicorn worker exits."""
+    multiprocess.mark_process_dead(worker.pid)
+
 
 # print(json.dumps(log_data))

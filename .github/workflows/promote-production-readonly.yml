@@ -1,0 +1,257 @@
+name: Promote certified Beyvra backend to production read-only
+
+on:
+  workflow_dispatch:
+    inputs:
+      certification_run_id:
+        description: Successful staging certification workflow run ID
+        required: true
+        type: string
+      change_id:
+        description: Auditable production change identifier
+        required: true
+        type: string
+      deploy:
+        description: Dispatch the exact certified candidate
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: beyvra-backend-production-readonly-promotion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+  packages: read
+  attestations: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.manifest.outputs.source_sha }}
+      backend_image: ${{ steps.manifest.outputs.backend_image }}
+      edge_image: ${{ steps.manifest.outputs.edge_image }}
+      staging_change_id: ${{ steps.manifest.outputs.staging_change_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
+      PRODUCTION_CHANGE_ID: ${{ inputs.change_id }}
+      CERTIFICATION_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/certification/v1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: manifest
+        name: Verify staging certification and exact signed digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CERTIFICATION_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$PRODUCTION_CHANGE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "${{ inputs.deploy }}" == "true" ]]
+
+          run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CERTIFICATION_RUN_ID}")"
+          jq -e '
+            .name == "Certify deployed immutable Beyvra backend" and
+            .event == "workflow_run" and
+            .head_branch == "main" and
+            .status == "completed" and
+            .conclusion == "success"
+          ' <<<"$run" >/dev/null
+
+          rm -rf staging-certification
+          mkdir -p staging-certification promotion-evidence
+          gh run download "$CERTIFICATION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'beyvra-backend-certification-staging-readonly-*' \
+            --dir staging-certification
+
+          mapfile -t manifests < <(
+            find staging-certification -type f \
+              -name production-promotion-manifest.json -print
+          )
+          [[ "${#manifests[@]}" -eq 1 ]]
+          manifest="${manifests[0]}"
+          manifest_dir="$(dirname "$manifest")"
+          (
+            cd "$manifest_dir"
+            sha256sum -c production-promotion-manifest.json.sha256
+          )
+
+          source_sha="$(jq -r .source_sha "$manifest")"
+          backend_image="$(jq -r .backend_image "$manifest")"
+          edge_image="$(jq -r .edge_image "$manifest")"
+          staging_change_id="$(jq -r .change_id "$manifest")"
+
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$backend_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$edge_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          [[ "$staging_change_id" =~ ^[A-Za-z0-9._-]+$ ]]
+          jq -e '
+            .target == "staging-readonly" and
+            .certification_result == "PASS" and
+            .rollback_rehearsal == "PASS" and
+            .zero_live_effects == "PASS" and
+            .deployment_read_only == true and
+            .live_trading_authorized == false and
+            .real_money_authorized == false and
+            .payments_authorized == false and
+            .withdrawals_authorized == false and
+            .transactional_email_authorized == false and
+            .external_execution_authorized == false
+          ' "$manifest" >/dev/null
+
+          git cat-file -e "${source_sha}^{commit}"
+          git merge-base --is-ancestor "$source_sha" origin/main
+
+          signer="$GITHUB_REPOSITORY/.github/workflows/certify-deployment.yml"
+          gh attestation verify "oci://${backend_image}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$CERTIFICATION_ATTESTATION_TYPE" \
+            --format json \
+            > promotion-evidence/backend-certification-attestation.json
+          gh attestation verify "oci://${edge_image}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$signer" \
+            --source-ref refs/heads/main \
+            --predicate-type "$CERTIFICATION_ATTESTATION_TYPE" \
+            --format json \
+            > promotion-evidence/edge-certification-attestation.json
+
+          for evidence in \
+            promotion-evidence/backend-certification-attestation.json \
+            promotion-evidence/edge-certification-attestation.json; do
+            jq -e \
+              --arg source_sha "$source_sha" \
+              --arg backend_image "$backend_image" \
+              --arg edge_image "$edge_image" '
+                any(.[];
+                  .verificationResult.statement.predicate.source_sha == $source_sha and
+                  .verificationResult.statement.predicate.backend_image == $backend_image and
+                  .verificationResult.statement.predicate.edge_image == $edge_image and
+                  .verificationResult.statement.predicate.target == "staging-readonly" and
+                  .verificationResult.statement.predicate.certification_result == "PASS" and
+                  .verificationResult.statement.predicate.rollback_rehearsal == "PASS" and
+                  .verificationResult.statement.predicate.zero_live_effects == "PASS" and
+                  .verificationResult.statement.predicate.deployment_read_only == true
+                )
+              ' "$evidence" >/dev/null
+          done
+
+          docker pull "$backend_image"
+          docker pull "$edge_image"
+          test "$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              "$backend_image"
+          )" = "$source_sha"
+          test "$(
+            docker image inspect \
+              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+              "$edge_image"
+          )" = "$source_sha"
+
+          cp "$manifest" promotion-evidence/staging-promotion-manifest.json
+          printf 'source_sha=%s\n' "$source_sha" >>"$GITHUB_OUTPUT"
+          printf 'backend_image=%s\n' "$backend_image" >>"$GITHUB_OUTPUT"
+          printf 'edge_image=%s\n' "$edge_image" >>"$GITHUB_OUTPUT"
+          printf 'staging_change_id=%s\n' "$staging_change_id" >>"$GITHUB_OUTPUT"
+
+  authorize:
+    needs: inspect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production-readonly
+    env:
+      CANARY_TRAFFIC_PERCENT: ${{ vars.CANARY_TRAFFIC_PERCENT }}
+      EXTERNAL_CANARY_ROUTING_VERIFIED: ${{ vars.EXTERNAL_CANARY_ROUTING_VERIFIED }}
+    steps:
+      - name: Enforce protected production canary boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANARY_TRAFFIC_PERCENT" =~ ^(0|1)$ ]]
+          [[ "$EXTERNAL_CANARY_ROUTING_VERIFIED" == "true" ]]
+
+  dispatch:
+    needs:
+      - inspect
+      - authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+      BACKEND_IMAGE: ${{ needs.inspect.outputs.backend_image }}
+      EDGE_IMAGE: ${{ needs.inspect.outputs.edge_image }}
+      STAGING_CHANGE_ID: ${{ needs.inspect.outputs.staging_change_id }}
+      PRODUCTION_CHANGE_ID: ${{ inputs.change_id }}
+      CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
+    steps:
+      - name: Dispatch same-digest production read-only candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          git_source="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}" --jq .sha)"
+          test "$git_source" = "$SOURCE_SHA"
+          [[ "$current_main" =~ ^[0-9a-f]{40}$ ]]
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/dispatches" \
+            -f ref=main \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[target]=production-readonly" \
+            -f "inputs[publish_images]=false" \
+            -f "inputs[backend_image]=$BACKEND_IMAGE" \
+            -f "inputs[edge_image]=$EDGE_IMAGE" \
+            -f "inputs[deploy]=true" \
+            -f "inputs[change_id]=$PRODUCTION_CHANGE_ID" \
+            -f "inputs[allow_schema_migrations]=false" \
+            -f "inputs[migration_compatibility_approved]=false"
+
+          jq -n \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg backend_image "$BACKEND_IMAGE" \
+            --arg edge_image "$EDGE_IMAGE" \
+            --arg staging_change_id "$STAGING_CHANGE_ID" \
+            --arg production_change_id "$PRODUCTION_CHANGE_ID" \
+            --arg certification_run_id "$CERTIFICATION_RUN_ID" \
+            --arg dispatched_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              schema_version: 1,
+              source_sha: $source_sha,
+              backend_image: $backend_image,
+              edge_image: $edge_image,
+              staging_change_id: $staging_change_id,
+              production_change_id: $production_change_id,
+              certification_run_id: $certification_run_id,
+              dispatched_at: $dispatched_at,
+              target: "production-readonly",
+              publish_images: false,
+              canary_traffic_maximum_percent: 1,
+              deployment_read_only: true,
+              live_effects_authorized: false
+            }' > production-promotion-dispatch.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: beyvra-backend-production-promotion-${{ inputs.change_id }}
+          path: production-promotion-dispatch.json
+          if-no-files-found: error
+          retention-days: 90
