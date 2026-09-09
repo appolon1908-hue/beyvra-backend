@@ -1,4 +1,7 @@
 from unittest.mock import patch
+from datetime import timedelta
+import uuid
+from django.utils import timezone
 
 from django.test import override_settings
 from django.urls import reverse
@@ -6,7 +9,7 @@ from operations.models import AuditEvent, SecurityEvent
 from rest_framework.exceptions import APIException
 from rest_framework.test import APITestCase
 from rest_framework.test import APIClient
-from users.models import PendingRegistration, User
+from users.models import PendingRegistration, User, EmailVerificationChallenge, TransactionalEmailOutbox
 from users.serializers import LoginSerializer
 
 
@@ -71,12 +74,8 @@ class AccountEnumerationTests(APITestCase):
         # A differing key set is itself an enumeration oracle.
         self.assertEqual(set(known.data), set(unknown.data))
         self.assertTrue(str(known.data["registrationId"]).startswith("reg_"))
-        # The registered address must not gain a pending registration.
-        self.assertFalse(
-            PendingRegistration.objects.filter(
-                email_normalized=self.user.email
-            ).exists()
-        )
+        self.assertTrue(PendingRegistration.objects.get(email_normalized=self.user.email).is_decoy)
+        self.assertFalse(TransactionalEmailOutbox.objects.filter(recipient_email=self.user.email).exists())
 
     @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
     def test_registered_address_returns_a_stable_registration_id(self):
@@ -95,6 +94,68 @@ class AccountEnumerationTests(APITestCase):
         self.assertEqual(
             first.data["registrationId"], second.data["registrationId"]
         )
+
+    @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
+    def test_registration_and_status_follow_the_same_decoy_lifecycle(self):
+        now = timezone.now()
+        addresses = [self.user.email, "new@example.test"]
+        with patch("users.registration_safety.timezone.now", return_value=now):
+            first = [self.client.post("/api/v1/auth/register", _registration_payload(email), format="json").data for email in addresses]
+        for body in first:
+            self.assertEqual(uuid.UUID(body["registrationId"].removeprefix("reg_")).version, 4)
+        with patch("users.registration_safety.timezone.now", return_value=now + timedelta(seconds=2)):
+            repeated = [self.client.post("/api/v1/auth/register", _registration_payload(email), format="json").data for email in addresses]
+            statuses = [self.client.get("/api/v1/auth/email-verification/status", {"registrationId": body["registrationId"]}).data for body in first]
+        for old, new in zip(first, repeated):
+            self.assertEqual(old["registrationId"], new["registrationId"])
+            self.assertEqual(old["expiresIn"] - new["expiresIn"], 2)
+            self.assertEqual(old["registrationExpiresIn"] - new["registrationExpiresIn"], 2)
+        self.assertEqual({k:v for k,v in statuses[0].items() if k != "maskedEmail"},
+                         {k:v for k,v in statuses[1].items() if k != "maskedEmail"})
+        self.assertEqual(statuses[0]["status"], "pending_email_verification")
+        with patch("users.registration_safety.timezone.now", return_value=now + timedelta(days=2)):
+            renewed = [self.client.post("/api/v1/auth/register", _registration_payload(email), format="json").data for email in addresses]
+        for old, new in zip(first, renewed):
+            self.assertNotEqual(old["registrationId"], new["registrationId"])
+            self.assertEqual(uuid.UUID(new["registrationId"].removeprefix("reg_")).version, 4)
+
+    @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
+    @patch("users.registration_safety.generate_otp", return_value="482913")
+    @patch("users.email_verification.generate_otp", return_value="482913")
+    def test_decoy_resend_and_verification_cannot_activate_or_send_mail(self, *_):
+        now = timezone.now()
+        password_before = self.user.password
+        with patch("users.registration_safety.timezone.now", return_value=now):
+            bodies = [self.client.post("/api/v1/auth/register", _registration_payload(email), format="json").data
+                      for email in (self.user.email, "new@example.test")]
+        with patch("users.registration_safety.timezone.now", return_value=now + timedelta(seconds=61)):
+            resends = [self.client.post("/api/v1/auth/email-verification/resend", {"registrationId": body["registrationId"]}, format="json") for body in bodies]
+        self.assertEqual(resends[0].data, resends[1].data)
+        self.assertEqual(resends[0].status_code, 200)
+        pending = PendingRegistration.objects.get(email_normalized=self.user.email)
+        self.assertEqual(pending.challenges.count(), 2)
+        self.assertFalse(TransactionalEmailOutbox.objects.filter(recipient_email=self.user.email).exists())
+        response = self.client.post("/api/v1/auth/email-verification/verify", {"registrationId": bodies[0]["registrationId"], "code": "482913"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "OTP_INVALID")
+        self.assertFalse(response.cookies)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.password, password_before)
+        self.assertEqual(User.objects.count(), 1)
+        pending.refresh_from_db()
+        self.assertIsNone(pending.activated_user_id)
+
+    @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
+    def test_registration_rejects_malformed_inputs_and_false_consent(self):
+        for payload in ([], {}, {**_registration_payload("bad"), "legalAccepted": True},
+                        {**_registration_payload("new@example.test"), "legalAccepted": "false"},
+                        {**_registration_payload("new@example.test"), "legalAccepted": 1},
+                        {**_registration_payload("new@example.test"), "password": {}},
+                        {**_registration_payload("new@example.test"), "password": "x" * 129}):
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/v1/auth/register", payload, format="json")
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(PendingRegistration.objects.exists())
 
     def test_known_account_failures_create_safe_escalating_signals(self):
         for _ in range(5):

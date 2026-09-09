@@ -9,15 +9,13 @@ idempotent 202 response instead of a 500.
 from __future__ import annotations
 
 from datetime import timedelta
-import hashlib
-import hmac
-import uuid
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from rest_framework import permissions
+from rest_framework import permissions, serializers
+from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -65,44 +63,25 @@ def _pending_registration_response(
     )
 
 
-def _decoy_registration_id(email: str) -> uuid.UUID:
-    """Stable, unguessable identifier for an address that cannot be registered.
-
-    Derived from SECRET_KEY so repeating the request returns the same value,
-    the way a real pending registration does. A random identifier per call
-    would itself distinguish registered addresses from new ones.
-    """
-    digest = hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
-        f"registration-decoy:{email}".encode("utf-8"),
-        hashlib.sha256,
-    ).digest()
-    return uuid.UUID(bytes=digest[:16])
+class RegistrationConsentField(serializers.BooleanField):
+    def to_internal_value(self, data):
+        if data is not True:
+            self.fail("invalid", input=data)
+        return True
 
 
-def _unavailable_registration_response(email: str) -> Response:
-    """Mirror the accepted-registration body exactly.
-
-    An address that is already registered must not be distinguishable from a
-    new one. The identifier resolves to no PendingRegistration, so verify and
-    resend already treat it exactly like an expired registration.
-    """
-    return Response(
-        {
-            "registrationId": f"reg_{_decoy_registration_id(email)}",
-            "status": "pending_email_verification",
-            "maskedEmail": mask_email(email),
-            "expiresIn": settings.EMAIL_OTP_TTL_SECONDS,
-            "registrationExpiresIn": settings.PENDING_REGISTRATION_TTL_SECONDS,
-            "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
-        },
-        status=202,
-    )
+class EmailRegistrationInputSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+    password = serializers.CharField(min_length=8, max_length=128, trim_whitespace=False)
+    displayName = serializers.CharField(max_length=120, required=False, default="", allow_blank=True)
+    locale = serializers.CharField(max_length=16, required=False, default="en")
+    legalAccepted = RegistrationConsentField()
 
 
 class EmailRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(request=EmailRegistrationInputSerializer)
     def post(self, request):
         if (
             not settings.EMAIL_REGISTRATION_ENABLED
@@ -116,15 +95,8 @@ class EmailRegistrationView(APIView):
                 status=503,
             )
 
-        email = str(request.data.get("email", "")).strip().lower()
-        password = str(request.data.get("password", ""))
-        display_name = str(request.data.get("displayName", "")).strip()[:120]
-        if (
-            not email
-            or "@" not in email
-            or len(password) < 8
-            or not request.data.get("legalAccepted")
-        ):
+        serializer = EmailRegistrationInputSerializer(data=request.data)
+        if not serializer.is_valid():
             return Response(
                 {
                     "code": "REGISTRATION_INVALID",
@@ -133,11 +105,13 @@ class EmailRegistrationView(APIView):
                 status=400,
             )
 
-        # Registered addresses get a body identical to an accepted
-        # registration. Returning a different shape here was an enumeration
-        # oracle: callers could tell registered from unregistered addresses.
-        if User.objects.filter(email__iexact=email).exists():
-            return _unavailable_registration_response(email)
+        data = serializer.validated_data
+        email = data["email"].strip().lower()
+        password = data["password"]
+        display_name = data["displayName"]
+        # Persist both flows so status, expiry, UUID format and resend state
+        # follow the same lifecycle. Decoys can never activate an account.
+        is_decoy = User.objects.filter(email__iexact=email).exists()
 
         now = timezone.now()
         versions = {
@@ -178,7 +152,8 @@ class EmailRegistrationView(APIView):
                             email_normalized=email,
                             display_name=display_name,
                             password_hash=make_password(password),
-                            locale=str(request.data.get("locale", "en"))[:16],
+                            is_decoy=is_decoy,
+                            locale=data["locale"],
                             legal_confirmation=True,
                             legal_document_versions=versions,
                             expires_at=now
@@ -200,19 +175,20 @@ class EmailRegistrationView(APIView):
                             max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS,
                             send_count=1,
                         )
-                        queue_email(
-                            event_type="email_otp_created",
-                            email=email,
-                            template_key="email_otp",
-                            payload={
-                                "code_encrypted": _encrypted_code(code),
-                                "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS
-                                // 60,
-                                "purpose": "registration",
-                            },
-                            idempotency_key=f"otp:{pending.pk}:1",
-                            locale=pending.locale,
-                        )
+                        if not pending.is_decoy:
+                            queue_email(
+                                event_type="email_otp_created",
+                                email=email,
+                                template_key="email_otp",
+                                payload={
+                                    "code_encrypted": _encrypted_code(code),
+                                    "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS
+                                    // 60,
+                                    "purpose": "registration",
+                                },
+                                idempotency_key=f"otp:{pending.pk}:1",
+                                locale=pending.locale,
+                            )
                         created = True
                 except IntegrityError:
                     pending = (
