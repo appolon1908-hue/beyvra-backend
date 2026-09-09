@@ -65,6 +65,8 @@ permissions:
 
 jobs:
   eligibility:
+    # RUNTIME_MUTATION_DISABLED=true: this non-deployment authority is plan-only.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -154,8 +156,9 @@ jobs:
           printf 'nginx_base_image=%s\n' "$NGINX_BASE_IMAGE" >>"$GITHUB_OUTPUT"
 
   publish:
+    # RUNTIME_MUTATION_DISABLED=true: image publication requires separate release authority.
     needs: eligibility
-    if: inputs.publish_images
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -286,13 +289,11 @@ jobs:
           create-storage-record: false
 
   resolve:
+    # RUNTIME_MUTATION_DISABLED=true: candidate resolution remains inert until separately authorized.
     needs:
       - eligibility
       - publish
-    if: >-
-      always() &&
-      needs.eligibility.result == 'success' &&
-      (inputs.publish_images == false || needs.publish.result == 'success')
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
