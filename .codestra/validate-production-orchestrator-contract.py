@@ -1884,12 +1884,28 @@ def javascript_source_has_runtime_mutation(source: str) -> bool:
         if open_index >= len(lower) or lower[open_index] != "(":
             continue
         arguments = call_arguments(open_index)
-        if arguments is None or re.fullmatch(
-            r"""\s*(['"])[^'"\r\n]+\1\s*""",
+        literal = None if arguments is None else re.fullmatch(
+            r"""\s*(['"])([^'"\r\n]+)\1\s*""",
             arguments,
-        ) is None:
+        )
+        if literal is None:
             # Computed module specifiers can conceal networking or process
             # modules behind an otherwise arbitrary binding.
+            return True
+        module = literal.group(2).lower()
+        if "\\" in module:
+            # JavaScript escape sequences are resolved before module lookup.
+            # Reject them rather than comparing an encoded spelling to the
+            # runtime-module denylist.
+            return True
+        if re.fullmatch(
+            r"(?:axios|got|superagent|undici|node-fetch|cross-fetch|"
+            r"(?:node:)?(?:child_process|http|https|http2|net|tls)|"
+            r"socket\.io-client)(?:/.*)?",
+            module,
+        ):
+            # This parsed path is comment-aware, unlike a source regex, so a
+            # renamed binding cannot conceal a mutating transport or launcher.
             return True
 
     if any(
@@ -3510,7 +3526,7 @@ def strip_condition_parentheses(expression: str) -> str:
 
 
 def condition_constant_value(expression: str) -> tuple[bool, object]:
-    value = expression.strip()
+    value = strip_condition_parentheses(expression.strip())
     if value == "true":
         return True, True
     if value == "false":
@@ -3817,7 +3833,43 @@ def step_has_reachable_attestation(step: dict[str, Any]) -> bool:
         ("actions/attest@", "actions/attest-build-provenance@")
     ):
         return True
-    raw_tokens = shell_tokens(str(step.get("run", "")))
+    run = str(step.get("run", ""))
+    shell_source = shell_without_heredoc_bodies(run)
+    raw_tokens = shell_tokens(shell_source)
+    ambiguous_control = {
+        "(",
+        ")",
+        "&&",
+        "||",
+        "case",
+        "do",
+        "done",
+        "elif",
+        "else",
+        "esac",
+        "fi",
+        "for",
+        "function",
+        "if",
+        "select",
+        "then",
+        "until",
+        "while",
+        "{",
+        "}",
+    }
+    if any(token.lower() in ambiguous_control for token in raw_tokens):
+        # A syntactic cosign command inside shell control flow is not proof
+        # that an attestation is executable on a successful publication path.
+        return False
+    for command_index in command_indexes(raw_tokens):
+        if executable_name(raw_tokens[command_index]).lower() in {
+            "break",
+            "continue",
+            "exit",
+            "return",
+        }:
+            return False
     for index in command_indexes(raw_tokens):
         if executable_name(raw_tokens[index]).lower() != "cosign":
             continue
@@ -4950,6 +5002,8 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         "${{ false == true }}",
         "${{ true != true }}",
         "${{ 'a' == 'b' }}",
+        "${{ (false) == true }}",
+        "${{ 'a' == ('b') }}",
         "${{ false && github.ref == 'refs/heads/main' }}",
     ):
         try:
@@ -5007,6 +5061,22 @@ def validate_negative_regressions(contract: dict[str, Any]) -> None:
         cosign_signer,
         "synthetic-cosign-signer.yml",
     )
+    unreachable_cosign = cosign_signer.replace(
+        "      - run: cosign attest --yes image@example",
+        "      - run: if false; then cosign attest --yes image@example; fi",
+        1,
+    )
+    try:
+        require_reachable_signer_workflow(
+            unreachable_cosign,
+            "synthetic-unreachable-cosign-signer.yml",
+        )
+    except ContractError:
+        pass
+    else:
+        raise ContractError(
+            "negative regression unexpectedly passed: unreachable cosign attestation"
+        )
     split_attestation = """jobs:
   publish:
     runs-on: ubuntu-latest
@@ -5947,6 +6017,9 @@ PY
         "const transport = await import // line comment\n"
         "('node:' + 'https'); "
         "transport.request(url, {method: 'POST'}).end(data)\n",
+        "const transport = await import // line comment\n"
+        "('node:https'); "
+        "transport.request({method: 'POST'}).end(data)\n",
         "const transport = await import"
         + "/* adjacent loader comment */" * 128
         + "('node:' + 'https'); "
@@ -5955,6 +6028,8 @@ PY
         "ws.addEventListener('open', () => ws.send(payload))\n",
         'const {exec: run} = require("node:child_process"); '
         'run("kubectl apply -f runtime.yml")\n',
+        "const cp = require('\\x63hild_process'); "
+        "cp.execSync('kubectl apply -f runtime.yml')\n",
         "fetch(...args)\n",
         "process.getBuiltinModule('child_process').exec('kubectl apply')\n",
     ):
