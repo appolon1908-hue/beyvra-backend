@@ -95,11 +95,13 @@ def _position_rows(account):
     def _resolve_cached_rate(base_currency):
         # Most positions in a portfolio share a handful of currency pairs, so
         # resolve each pair's rate once per request instead of once per position.
-        cache_key = (base_currency, account.quote_currency)
+        base_currency = base_currency.upper()
+        quote_currency = account.quote_currency.upper()
+        cache_key = (base_currency, quote_currency)
         if cache_key not in fx_rate_cache:
             try:
                 rate, fx_refs, _ = FxValuationService.resolve_rate(
-                    base_currency, account.quote_currency, at=at,
+                    base_currency, quote_currency, at=at,
                 )
                 if any(ref.rate <= 0 or ref.rate_time < cutoff for ref in fx_refs):
                     raise ValueError("FX_RATE_STALE_OR_INVALID")

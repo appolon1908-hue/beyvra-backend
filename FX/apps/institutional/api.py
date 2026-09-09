@@ -42,6 +42,11 @@ class InstitutionReferenceSerializer(serializers.Serializer):
     """Validates a bare institution_id reference; not tied to any one endpoint's schema."""
     institution_id = serializers.UUIDField()
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and "institution_id" in data and not isinstance(data["institution_id"], str):
+            raise serializers.ValidationError({"institution_id": "A UUID string is required."})
+        return super().to_internal_value(data)
+
 
 RECONCILIATION_REQUEST = inline_serializer("InstitutionalReconciliationCommand", {"institution_id": serializers.UUIDField()})
 RECONCILIATION_RESPONSE = inline_serializer("InstitutionalReconciliationResult", {
