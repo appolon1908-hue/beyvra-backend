@@ -1,0 +1,46 @@
+name: Beyvra automation contract
+
+on:
+  pull_request:
+    paths:
+      - "contracts/automation/**"
+      - "docs/integrations/n8n/**"
+      - "docs/integrations/CODESTRA_BEYVRA_FABRIC_V2.md"
+      - "docs/branches/BEYVRA_FABRIC_BRANCH_MAP.md"
+      - "scripts/validate_beyvra_fabric.py"
+      - "scripts/test_beyvra_fabric.py"
+      - ".github/workflows/beyvra-automation-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beyvra-automation-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  automation-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.11"
+      - name: Compile validators and tests
+        run: python -m py_compile scripts/validate_beyvra_fabric.py scripts/test_beyvra_fabric.py
+      - name: Parse structured contracts
+        run: |
+          python -m json.tool contracts/automation/beyvra-fabric.v2.json >/dev/null
+          python -m json.tool docs/integrations/n8n/manifest.v2.json >/dev/null
+          python -m json.tool contracts/automation/beyvra-operations-api.v1.yaml >/dev/null
+      - name: Enforce fail-closed automation boundary
+        run: python scripts/validate_beyvra_fabric.py
+      - name: Exercise actual contracts and negative boundary regressions
+        run: python -m unittest discover -s scripts -p test_beyvra_fabric.py -v

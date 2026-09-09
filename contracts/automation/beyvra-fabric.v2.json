@@ -1,0 +1,55 @@
+{
+  "schema_version": "2.0",
+  "source_only": true,
+  "workflow_family": "product.beyvra-nonfinancial",
+  "n8n_cell": "beyvra-nonfinancial",
+  "machine_client": "n8n-product-automation",
+  "middleware_adapter_client": "beyvra-automation-adapter",
+  "allowed_command_prefixes": [
+    "beyvra.operations."
+  ],
+  "prohibited_command_prefixes": [
+    "trade.",
+    "order.",
+    "wallet.",
+    "ledger.",
+    "hold.",
+    "payment.",
+    "deposit.",
+    "withdrawal.",
+    "transfer.",
+    "custody.",
+    "chain.",
+    "broker.",
+    "provider."
+  ],
+  "allowed_operations": [
+    "onboarding.case.create",
+    "compliance.reminder.request",
+    "support.escalation.create",
+    "security.alert.create",
+    "report.request.create",
+    "notification.request",
+    "crm.projection.request",
+    "webhook.reconciliation.request",
+    "operation.status.read"
+  ],
+  "direct_n8n_backend_access": false,
+  "direct_n8n_database_access": false,
+  "direct_browser_n8n_access": false,
+  "capabilities": {
+    "BEYVRA_OPERATIONS_WRITE": false,
+    "BEYVRA_NOTIFICATION_REQUEST": false,
+    "BEYVRA_REPORT_REQUEST": false,
+    "ODOO_WRITE": false,
+    "ENABLE_EXTERNAL_DELIVERY": false,
+    "DEAD_LETTER_REPLAY": false,
+    "REAL_TRADING_EXECUTION": false,
+    "REAL_WALLET_DEPOSITS": false,
+    "REAL_WALLET_WITHDRAWALS": false,
+    "REAL_WALLET_TRANSFERS": false,
+    "PAYMENT_EXECUTION": false,
+    "CUSTODY_EXECUTION": false,
+    "CHAIN_BROADCAST": false
+  }
+}
