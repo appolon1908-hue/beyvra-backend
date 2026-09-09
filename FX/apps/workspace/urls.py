@@ -10,7 +10,11 @@ from .api import (
 
 urlpatterns = [
     path("watchlists", WatchlistCollectionView.as_view(), name="watchlist-collection"),
-    path("watchlists/<uuid:watchlist_id>", WatchlistDetailView.as_view(), name="watchlist-detail"),
+    path(
+        "watchlists/<uuid:watchlist_id>",
+        WatchlistDetailView.as_view(),
+        name="watchlist-detail",
+    ),
     path(
         "watchlists/<uuid:watchlist_id>/items",
         WatchlistItemCollectionView.as_view(),

@@ -41,3 +41,15 @@ def resolve_active_instrument(reference):
     if len(matches) > 1:
         raise InstrumentResolutionError("INSTRUMENT_AMBIGUOUS")
     return matches[0]
+
+
+def normalize_removal_reference(reference):
+    """Allow removal by canonical UUID even after an instrument becomes inactive."""
+
+    value = str(reference or "").strip()
+    if not value:
+        raise InstrumentResolutionError("INSTRUMENT_REQUIRED")
+    try:
+        return str(uuid.UUID(value))
+    except (TypeError, ValueError):
+        return str(resolve_active_instrument(value).instrument_id)

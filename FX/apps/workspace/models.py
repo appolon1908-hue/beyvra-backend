@@ -23,6 +23,7 @@ class Watchlist(models.Model):
     )
     name = models.CharField(max_length=80)
     is_default = models.BooleanField(default=False)
+    version = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -39,6 +40,10 @@ class Watchlist(models.Model):
                 fields=("organization", "user"),
                 condition=models.Q(is_default=True),
                 name="workspace_one_default_watchlist",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1),
+                name="workspace_watchlist_version_positive",
             ),
         ]
         indexes = [

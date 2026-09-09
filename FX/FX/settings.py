@@ -196,12 +196,6 @@ CORS_ALLOW_HEADERS = [
     "x-request-id",
     "x-beyvra-tenant",
     "x-requested-with",
-    "idempotency-key",
-    "if-match",
-    "x-request-id",
-    "x-correlation-id",
-    "x-beyvra-tenant",
-    "x-organization-id",
 ]
 
 SHORT_UUID_LEN = os.getenv("SHORT_UUID_LEN", 9)
