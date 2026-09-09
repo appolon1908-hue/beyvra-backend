@@ -187,6 +187,7 @@ class PendingRegistration(models.Model):
     email_normalized = models.EmailField()
     display_name = models.CharField(max_length=120, blank=True)
     password_hash = models.CharField(max_length=128)
+    is_decoy = models.BooleanField(default=False)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default="pending_email_verification")
     locale = models.CharField(max_length=16, default="en")
     legal_confirmation = models.BooleanField(default=False)
