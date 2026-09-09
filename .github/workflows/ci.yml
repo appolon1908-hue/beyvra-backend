@@ -70,6 +70,11 @@ jobs:
       - name: Install application and audit tools
         run: pip install -r FX/requirements.txt pip-audit bandit pyyaml
 
+      - name: Validate automation fabric and regressions
+        run: |
+          python scripts/validate_beyvra_fabric.py
+          python -m unittest discover -s scripts -p "*beyvra_fabric.py"
+
       - name: Verify installed dependency graph
         run: pip check
 
@@ -107,6 +112,7 @@ jobs:
           python manage.py test news_app.test_phase5_contracts ws.test_v2
           python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
+          python manage.py test apps.compliance apps.post_trade apps.surveillance apps.institutional operations treasury platform_ops security.tests.test_commands security.tests.test_command_regressions apps.workspace users.tests.test_email_verification users.tests.test_registration_safety_regressions
           python manage.py test api_trade.tests.test_openapi_stability apps.foundation.test_publisher security.tests.test_apps platform_ops.health.test_release_identity
 
       - name: Verify public identity surfaces

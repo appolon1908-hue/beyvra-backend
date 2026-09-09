@@ -35,6 +35,39 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "account_id",
+                  "reason"
+                ],
+                "properties": {
+                  "account_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -93,11 +126,41 @@
           },
           {
             "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/ExpectedVersion"
           }
         ],
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -121,11 +184,47 @@
           },
           {
             "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/ExpectedVersion"
           }
         ],
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "case_id",
+                  "reason"
+                ],
+                "properties": {
+                  "case_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -154,6 +253,39 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "report_type",
+                  "account_id"
+                ],
+                "properties": {
+                  "report_type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "account_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -209,6 +341,39 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "template_key",
+                  "recipient_ref"
+                ],
+                "properties": {
+                  "template_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "recipient_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -237,6 +402,39 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "subject_ref",
+                  "alert_type"
+                ],
+                "properties": {
+                  "subject_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "alert_type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -260,11 +458,47 @@
           },
           {
             "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/ExpectedVersion"
           }
         ],
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Invalid command input"
+          },
+          "409": {
+            "description": "Idempotency or resource version conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "delivery_id",
+                  "reason"
+                ],
+                "properties": {
+                  "delivery_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -324,6 +558,16 @@
         "schema": {
           "type": "string",
           "maxLength": 128
+        }
+      },
+      "ExpectedVersion": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
         }
       }
     },

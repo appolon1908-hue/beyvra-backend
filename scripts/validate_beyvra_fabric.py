@@ -64,6 +64,7 @@ EXPECTED_OPENAPI = {
     "/v1/automation/operations/{operation_id}": {"get": ("getAutomationOperation", READ_SCOPE)},
 }
 EXPECTED_HEADERS = {
+    "ExpectedVersion": {'name': 'If-Match', 'in': 'header', 'required': True, 'schema': {'type': 'string', 'minLength': 1, 'maxLength': 255}},
     "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": True,
                        "schema": {"type": "string", "maxLength": 255}},
     "RequestId": {"name": "X-Request-ID", "in": "header", "required": True,
@@ -238,7 +239,7 @@ def validate_openapi() -> None:
     require(isinstance(paths, dict), "OpenAPI paths must be an object")
     require(set(paths) == set(EXPECTED_OPENAPI), "OpenAPI paths must match the reviewed exact allowlist")
     header_components = validate_header_components(contract)
-    required_refs = {f"#/components/parameters/{key}" for key in EXPECTED_HEADERS}
+    required_refs = {f"#/components/parameters/{key}" for key in EXPECTED_HEADERS if key != "ExpectedVersion"}
     seen_operation_ids = set()
     for path, expected_methods in EXPECTED_OPENAPI.items():
         require(not has_prohibited_token(path), f"prohibited financial/provider token in path: {path}")
@@ -260,6 +261,14 @@ def validate_openapi() -> None:
             refs = parameter_refs(operation, header_components)
             if method == "post":
                 require(required_refs <= refs, f"command identity headers missing for POST {path}")
+                if operation_id in {"requestComplianceReminder", "createSupportEscalation", "reconcileWebhookDelivery"}:
+                    require("#/components/parameters/ExpectedVersion" in refs, "mutation resource version header missing")
+                body = operation.get("requestBody", {})
+                require(isinstance(body, dict) and body.get("required") is True, "mutation body must be required")
+                schema = body.get("content", {}).get("application/json", {}).get("schema", {})
+                require(schema.get("type") == "object" and schema.get("required"), "mutation input schema must require fields")
+                require(all(name in schema.get("properties", {}) for name in schema["required"]), "required input property is undefined")
+
     schemes = contract["components"].get("securitySchemes")
     require(isinstance(schemes, dict), "OAuth security schemes missing")
     oauth = schemes.get("oauth2")

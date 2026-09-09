@@ -382,7 +382,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
         ".github/workflows/required-ci.yml": "5b135f1eec36d3baa8d605ecddf3d37aa1fbfa7bd9d58e61ba58a5324a087d5e",
     },
     "appolon1908-hue/beyvra-backend": {
-        ".github/workflows/ci.yml": "f10b269e0faf54b23582ca1ee9700de6f2ec9f5481f6b2be20e40b9f6d428945",
+        ".github/workflows/ci.yml": "073aefdc21de3417853c0963ce2d6ebca7f34815fac802b6aa14c7122a597124",
     },
 }
 APPROVED_UNRESOLVED_SCRIPT_TARGETS: dict[str, frozenset[str]] = {
