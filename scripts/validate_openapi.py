@@ -50,7 +50,7 @@ def canonical_specs():
 
 def main(paths):
     # An empty argv means "validate the whole contract surface", never
-    # "validate nothing" -- reporting success without opening a file would
+    # "validate nothing" -- reporting success without reading a file would
     # let a broken spec reach production behind a green check.
     documents = [Path(path) for path in paths] or canonical_specs()
     if not documents:
@@ -58,8 +58,7 @@ def main(paths):
             "no OpenAPI documents found; refusing to report success vacuously"
         )
     for path in documents:
-        with open(path, encoding="utf-8") as source:
-            document = yaml.load(source, Loader=UniqueKeyLoader)
+        document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
         if document.get("openapi") is None or document.get("paths") is None:
             raise ValueError(f"not an OpenAPI document: {path}")
         print(f"OPENAPI_VALID={path}")
