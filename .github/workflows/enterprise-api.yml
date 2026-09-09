@@ -1,0 +1,131 @@
+name: Enterprise API integration
+
+on:
+  push:
+    branches: [feature/beyvra/enterprise-api-foundation-v1]
+  pull_request:
+    paths:
+      - 'FX/**'
+      - 'contracts/openapi/**'
+      - '.github/workflows/enterprise-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enterprise-api-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cache-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Install isolated Django test dependency
+        run: pip install Django==5.2.17
+      - name: Verify sensitive cache policies in isolation
+        working-directory: FX
+        run: |
+          python - <<'PY'
+          import sys
+          import unittest
+          import django
+          from django.conf import settings
+          settings.configure(SECRET_KEY='ci-only-cache-test', INSTALLED_APPS=[], DATABASES={})
+          django.setup()
+          suite = unittest.defaultTestLoader.loadTestsFromName('middleware.test_no_store')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          sys.exit(0 if result.wasSuccessful() else 1)
+          PY
+
+  enterprise-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: enterprise_ci
+          POSTGRES_USER: enterprise_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U enterprise_ci -d enterprise_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: FX.test_settings
+      SECRET_KEY: ci-only-secret-key-with-more-than-fifty-characters-for-checks
+      DEPLOYMENT_ENV: test
+      DEBUG: '0'
+      ALLOWED_HOSTS: '["localhost","testserver"]'
+      CSRF_TRUSTED_ORIGINS: '[]'
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: ci-only-password
+      REDIS_DATABASE: '0'
+      DB_NAME: enterprise_ci
+      DB_USER: enterprise_ci
+      DB_PASSWORD: ci-only-password
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      TEST_DB_NAME: test_enterprise_ci
+      REAL_TRADING_ENABLED: 'false'
+      EXTERNAL_EXECUTION_ENABLED: 'false'
+      REAL_MONEY_ENABLED: 'false'
+      PAYMENTS_ENABLED: 'false'
+      TRANSACTIONAL_EMAIL_ENABLED: 'false'
+      WELCOME_EMAIL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source and require current main ancestry
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/enterprise-evidence
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          printf 'HEAD_SHA=%s\nBASE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" | tee /tmp/enterprise-evidence/refs.txt
+          git merge-base --is-ancestor origin/main HEAD
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: FX/requirements.txt
+      - name: Install application test dependencies
+        run: pip install -r FX/requirements.txt pyyaml && pip check
+      - name: Validate enterprise APIs with PostgreSQL
+        working-directory: FX
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q .
+          python manage.py check 2>&1 | tee /tmp/enterprise-evidence/check.log
+          python manage.py makemigrations --check --dry-run 2>&1 | tee /tmp/enterprise-evidence/migrations.log
+          python manage.py test --verbosity 2 \
+            apps.workspace apps.valuation.test_portfolio_api \
+            apps.trading.tests.test_operator_platform_api \
+            integrations.tests pricing_authority.tests portfolio.tests \
+            middleware.test_no_store platform_ops.health.test_release_identity \
+            trade.test_market_data apps.compliance apps.surveillance \
+            2>&1 | tee /tmp/enterprise-evidence/tests.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: enterprise-evidence-${{ github.event_name }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/enterprise-evidence/
+          retention-days: 7
+          if-no-files-found: error

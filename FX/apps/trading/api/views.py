@@ -10,6 +10,7 @@ from apps.post_trade.models import Trade
 from apps.foundation.services import IdempotencyConflict
 from integrations.financial.simulated import SimulationFinancialError
 from .errors import error_response
+from apps.valuation.portfolio_api import PortfolioSummaryView
 
 
 def _guard(request):
@@ -113,21 +114,15 @@ class AccountsView(APIView):
         return Response({"results": [serialize_account(account_for(request.user))]})
 
 
-class PortfolioView(APIView):
-    permission_classes = (IsAuthenticated,)
+class PortfolioView(PortfolioSummaryView):
+    """Keep legacy presentation fields without a second valuation authority."""
+
     def get(self, request):
-        if not simulation_authorized(request):
-            return Response({"cash": "0", "buying_power": "0", "equity": "0", "market_value": "0", "unrealized_pnl": "0", "realized_pnl": "0", "margin_if_applicable": None, "positions": [], "simulation": True})
-        account = account_for(request.user)
-        positions = list(SimulatedPosition.objects.filter(account=account))
-        serialized = [{"instrument_id": row.instrument_id, "quantity": str(row.quantity), "average_entry_price": str(row.average_price), "market_price": None, "market_value": None, "unrealized_pnl": None, "realized_pnl": str(row.realized_pnl), "updated_at": row.updated_at.isoformat(), "simulation": True} for row in positions]
-        return Response({
-            "cash": serialize_account(account)["available"], "buying_power": serialize_account(account)["available"],
-            "equity": str(account.total_balance), "market_value": None, "unrealized_pnl": None,
-            "realized_pnl": str(sum((row.realized_pnl for row in positions), 0)),
-            "margin_if_applicable": None, "as_of": account.updated_at.isoformat(),
-            "positions": serialized, "simulation": True,
-        })
+        response = super().get(request)
+        if response.status_code == 200:
+            response.data["buying_power"] = response.data["available_cash"]
+            response.data["margin_if_applicable"] = None
+        return response
 
 
 class EmptyDetailView(APIView):

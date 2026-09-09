@@ -119,7 +119,10 @@ class UserAlertDetail(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserAlerts.objects.filter(user=self.request.user)
+        return UserAlerts.objects.filter(
+            user=self.request.user,
+            organization=organization_for_request(self.request),
+        )
 
     def get_object(self, alert_id):
         try:
@@ -137,6 +140,18 @@ class UserAlertDetail(generics.GenericAPIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Http404:
             return Response({"error": "Alert not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def patch(self, request, alert_id):
+        user_alert = self.get_object(alert_id)
+        serializer = self.serializer_class(user_alert, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, alert_id):
+        user_alert = self.get_object(alert_id)
+        user_alert.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NotificationInbox(generics.ListAPIView):

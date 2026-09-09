@@ -24,6 +24,7 @@ from users.views import GuestDemoSessionView, ManageUserView, SessionResolveView
 from trade.demo_engine import DemoConfigView, WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
+from notifications import views as notification_views
 from users import urls as user_urls
 from treasury.api import LiquidityView as InstitutionalLiquidityView
 
@@ -42,6 +43,8 @@ urlpatterns = [
     path("api/v1/auth/", include("users.google_urls")),
     path("api/v1/me/", ManageUserView.as_view(), name="me_v1"),
     path("api/v1/notifications/", include("notifications.urls")),
+    path("api/v1/alerts", notification_views.UserAlertsListing.as_view(), name="alerts_v1"),
+    path("api/v1/alerts/<uuid:alert_id>", notification_views.UserAlertDetail.as_view(), name="alert_detail_v1"),
     path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
@@ -62,6 +65,7 @@ urlpatterns = [
     path("api/v1/trading/", include("apps.trading.api.urls")),
     path("api/v1/execution/", include("apps.trading.api.execution_urls")),
     path("api/v1/operator/execution/", include("apps.trading.api.operator_execution_urls")),
+    path("api/v1/operator/", include("apps.trading.api.operator_urls")),
     path("api/v1/compliance/", include("apps.compliance.urls")),
     path("api/v1/institutional/", include("apps.institutional.urls")),
     path("api/v1/operator/institutional/", include("apps.institutional.operator_urls")),
@@ -71,6 +75,7 @@ urlpatterns = [
     path("api/v1/post-trade/", include("apps.post_trade.urls")),
     path("api/v1/operator/post-trade/", include("apps.post_trade.operator_urls")),
     path("api/v1/", include("apps.valuation.urls")),
+    path("api/v1/", include("apps.workspace.urls")),
     path("api/v1/operator/valuation/", include("apps.valuation.operator_urls")),
     path("api/v1/news", news_views.news_list_v1, name="news_v1"),
     path("api/v1/news/crypto", news_views.news_crypto_v1, name="news_crypto_v1"),
