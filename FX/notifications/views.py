@@ -405,7 +405,7 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         return Response(body, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=["post"], throttle_classes=[WebhookRetryThrottle])
-    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
+    @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS, request=WebhookRetrySerializer)
     @transaction.atomic
     def retry(self, request, pk=None):
         """Retry only a failed/dead-letter delivery owned by this user."""
@@ -413,7 +413,9 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         command, error = context(request, require_version=True)
         if error: return error
         key, _, correlation_id, expected_version = command
-        delivery_id = request.data.get("delivery_id")
+        serializer = WebhookRetrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        delivery_id = serializer.validated_data["delivery_id"]
         record, replay = begin(request, organization=organization, key=key, payload={"subscription_id": str(subscription.pk), "delivery_id": str(delivery_id), "action": "retry", "expected_version": expected_version})
         if replay: return replay
         delivery = WebhookDelivery.objects.select_for_update().filter(subscription=subscription, id=delivery_id, status__in=["F", "D"]).first()
@@ -423,7 +425,13 @@ class WebhookSubscriptionViewSet(viewsets.ModelViewSet):
         current_version = f"{delivery.status}:{delivery.attempts}"
         if expected_version != current_version:
             record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
-        delivery.status = "P"; delivery.last_error = ""; delivery.save(update_fields=["status", "last_error", "updated_at"])
+        if delivery.attempts >= 32767:
+            record.delete()
+            return Response({"detail": "delivery attempt limit exhausted"}, status=409)
+        delivery.attempt_limit = min(delivery.attempts + 5, 32767)
+        delivery.status = "P"
+        delivery.last_error = ""
+        delivery.save(update_fields=["status", "last_error", "attempt_limit", "updated_at"])
         from .services import _queue_webhook
         transaction.on_commit(lambda: _queue_webhook(delivery.id))
         body = complete(record, request=request, organization=organization, correlation_id=correlation_id, action="notification.webhook.retry", status=202, body={"delivery_id": str(delivery.id), "status": delivery.status}, resource_type="webhook_delivery", resource_id=delivery.pk)
