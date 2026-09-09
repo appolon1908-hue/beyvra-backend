@@ -175,6 +175,8 @@ jobs:
           printf 'staging_change_id=%s\n' "$staging_change_id" >>"$GITHUB_OUTPUT"
 
   authorize:
+    # RUNTIME_MUTATION_DISABLED=true
+    if: ${{ false }}
     needs: inspect
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -192,6 +194,8 @@ jobs:
           [[ "$EXTERNAL_CANARY_ROUTING_VERIFIED" == "true" ]]
 
   dispatch:
+    # RUNTIME_MUTATION_DISABLED=true
+    if: ${{ false }}
     needs:
       - inspect
       - authorize
