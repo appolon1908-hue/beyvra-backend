@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
 """Parse OpenAPI YAML while rejecting duplicate mapping keys."""
 
+from pathlib import Path
 import sys
 
 import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# Single source of truth for the checked-in contract surface. CI and
+# scripts/production_gate.py both invoke this script with no arguments, so a
+# spec added under these paths is covered everywhere without touching either.
+CANONICAL_SPEC_GLOBS = (
+    "contracts/openapi/*.yaml",
+    "contracts/financial-service/v1/openapi.yaml",
+    "FX/openapi.platform-ops.yaml",
+)
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -26,13 +39,31 @@ UniqueKeyLoader.add_constructor(
 )
 
 
+def canonical_specs():
+    discovered = []
+    for pattern in CANONICAL_SPEC_GLOBS:
+        for path in sorted(ROOT.glob(pattern)):
+            if path not in discovered:
+                discovered.append(path)
+    return discovered
+
+
 def main(paths):
-    for path in paths:
+    # An empty argv means "validate the whole contract surface", never
+    # "validate nothing" -- reporting success without opening a file would
+    # let a broken spec reach production behind a green check.
+    documents = [Path(path) for path in paths] or canonical_specs()
+    if not documents:
+        raise SystemExit(
+            "no OpenAPI documents found; refusing to report success vacuously"
+        )
+    for path in documents:
         with open(path, encoding="utf-8") as source:
             document = yaml.load(source, Loader=UniqueKeyLoader)
         if document.get("openapi") is None or document.get("paths") is None:
             raise ValueError(f"not an OpenAPI document: {path}")
         print(f"OPENAPI_VALID={path}")
+    print(f"OPENAPI_DOCUMENTS_VALIDATED={len(documents)}")
 
 
 if __name__ == "__main__":

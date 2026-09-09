@@ -51,6 +51,17 @@ class EmailVerificationTests(TestCase):
             },
         )
 
+    def test_legacy_registration_view_delegates_to_safe_flow(self):
+        from rest_framework.test import APIRequestFactory
+        from users.email_verification import EmailRegistrationView
+        User.objects.create_user(email="legacy@example.test", password="OriginalPass9!")
+        request = APIRequestFactory().post("/", {"email": "legacy@example.test", "password": "StrongPass9!", "legalAccepted": True}, format="json")
+        response = EmailRegistrationView.as_view()(request)
+        self.assertEqual(response.status_code, 202)
+        self.assertIn("registrationId", response.data)
+        self.assertTrue(PendingRegistration.objects.get().is_decoy)
+        self.assertFalse(TransactionalEmailOutbox.objects.exists())
+
     @patch("users.registration_safety.generate_otp", return_value="482913")
     def test_registration_creates_hashed_otp_and_outbox(self, _):
         response = self.client.post(
@@ -168,8 +179,24 @@ class EmailVerificationTests(TestCase):
         )
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.data["status"], "pending_email_verification")
-        self.assertNotIn("registrationId", response.data)
-        self.assertFalse(PendingRegistration.objects.exists())
+        # Enumeration protection means the body is shaped exactly like an
+        # accepted registration. Asserting registrationId was *absent* here
+        # enforced the very oracle this test is named for: a caller could
+        # separate registered from unregistered addresses by that key alone.
+        self.assertIn("registrationId", response.data)
+        self.assertEqual(
+            set(response.data),
+            {
+                "registrationId",
+                "status",
+                "maskedEmail",
+                "expiresIn",
+                "registrationExpiresIn",
+                "resendAvailableIn",
+            },
+        )
+        self.assertTrue(PendingRegistration.objects.get().is_decoy)
+        self.assertFalse(TransactionalEmailOutbox.objects.exists())
 
     @patch("users.registration_safety.generate_otp", return_value="482913")
     def test_valid_otp_activates_once_and_queues_welcome(self, _):
@@ -341,3 +368,22 @@ class ConcurrentEmailRegistrationTests(TransactionTestCase):
             TransactionalEmailOutbox.objects.filter(template_key="email_otp").count(),
             1,
         )
+
+    def test_concurrent_existing_address_requests_share_one_decoy(self):
+        User.objects.create_user(email="known-concurrent@example.test", password="OriginalPass9!")
+        payload = {"email": "known-concurrent@example.test", "password": "StrongPass9!", "legalAccepted": True}
+
+        def submit(_):
+            close_old_connections()
+            try:
+                return APIClient().post("/api/v1/auth/register", payload, format="json")
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(submit, range(2)))
+        self.assertEqual([response.status_code for response in responses], [202, 202])
+        self.assertEqual(len({response.data["registrationId"] for response in responses}), 1)
+        self.assertTrue(PendingRegistration.objects.get().is_decoy)
+        self.assertEqual(EmailVerificationChallenge.objects.filter(status="active").count(), 1)
+        self.assertFalse(TransactionalEmailOutbox.objects.exists())

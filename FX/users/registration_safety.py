@@ -14,7 +14,8 @@ from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from rest_framework import permissions
+from rest_framework import permissions, serializers
+from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -62,9 +63,25 @@ def _pending_registration_response(
     )
 
 
+class RegistrationConsentField(serializers.BooleanField):
+    def to_internal_value(self, data):
+        if data is not True:
+            self.fail("invalid", input=data)
+        return True
+
+
+class EmailRegistrationInputSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+    password = serializers.CharField(min_length=8, max_length=128, trim_whitespace=False)
+    displayName = serializers.CharField(max_length=120, required=False, default="", allow_blank=True)
+    locale = serializers.CharField(max_length=16, required=False, default="en")
+    legalAccepted = RegistrationConsentField()
+
+
 class EmailRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(request=EmailRegistrationInputSerializer)
     def post(self, request):
         if (
             not settings.EMAIL_REGISTRATION_ENABLED
@@ -78,15 +95,8 @@ class EmailRegistrationView(APIView):
                 status=503,
             )
 
-        email = str(request.data.get("email", "")).strip().lower()
-        password = str(request.data.get("password", ""))
-        display_name = str(request.data.get("displayName", "")).strip()[:120]
-        if (
-            not email
-            or "@" not in email
-            or len(password) < 8
-            or not request.data.get("legalAccepted")
-        ):
+        serializer = EmailRegistrationInputSerializer(data=request.data)
+        if not serializer.is_valid():
             return Response(
                 {
                     "code": "REGISTRATION_INVALID",
@@ -95,15 +105,13 @@ class EmailRegistrationView(APIView):
                 status=400,
             )
 
-        # Preserve the existing non-enumerating response for registered users.
-        if User.objects.filter(email__iexact=email).exists():
-            return Response(
-                {
-                    "status": "pending_email_verification",
-                    "message": "If this address can be registered, a verification code will be sent.",
-                },
-                status=202,
-            )
+        data = serializer.validated_data
+        email = data["email"].strip().lower()
+        password = data["password"]
+        display_name = data["displayName"]
+        # Persist both flows so status, expiry, UUID format and resend state
+        # follow the same lifecycle. Decoys can never activate an account.
+        is_decoy = User.objects.filter(email__iexact=email).exists()
 
         now = timezone.now()
         versions = {
@@ -144,7 +152,8 @@ class EmailRegistrationView(APIView):
                             email_normalized=email,
                             display_name=display_name,
                             password_hash=make_password(password),
-                            locale=str(request.data.get("locale", "en"))[:16],
+                            is_decoy=is_decoy,
+                            locale=data["locale"],
                             legal_confirmation=True,
                             legal_document_versions=versions,
                             expires_at=now
@@ -166,19 +175,20 @@ class EmailRegistrationView(APIView):
                             max_attempts=settings.EMAIL_OTP_MAX_ATTEMPTS,
                             send_count=1,
                         )
-                        queue_email(
-                            event_type="email_otp_created",
-                            email=email,
-                            template_key="email_otp",
-                            payload={
-                                "code_encrypted": _encrypted_code(code),
-                                "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS
-                                // 60,
-                                "purpose": "registration",
-                            },
-                            idempotency_key=f"otp:{pending.pk}:1",
-                            locale=pending.locale,
-                        )
+                        if not pending.is_decoy:
+                            queue_email(
+                                event_type="email_otp_created",
+                                email=email,
+                                template_key="email_otp",
+                                payload={
+                                    "code_encrypted": _encrypted_code(code),
+                                    "expires_minutes": settings.EMAIL_OTP_TTL_SECONDS
+                                    // 60,
+                                    "purpose": "registration",
+                                },
+                                idempotency_key=f"otp:{pending.pk}:1",
+                                locale=pending.locale,
+                            )
                         created = True
                 except IntegrityError:
                     pending = (
