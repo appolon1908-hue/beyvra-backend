@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "source_sha": "CURRENT_MAIN",
+  "target": "staging-readonly",
+  "publish_images": true,
+  "backend_image": "",
+  "edge_image": "",
+  "deploy": true,
+  "change_id": "manual-one-click-readonly-only",
+  "allow_schema_migrations": false,
+  "migration_compatibility_approved": false
+}
