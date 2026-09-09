@@ -424,7 +424,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
         ),
     },
     "appolon1908-hue/beyvra-backend": {
-        ".github/workflows/ci.yml": "073aefdc21de3417853c0963ce2d6ebca7f34815fac802b6aa14c7122a597124",
+        ".github/workflows/ci.yml": "8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67",
     },
     "appolon1908-hue/beyvra-frontend": {
         ".github/workflows/ci.yml": "8dfd828f1c50f774d34d22008cc8e5eb3ce4961165b388e058fd3cab6130e2e5",
