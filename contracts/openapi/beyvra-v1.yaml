@@ -10161,6 +10161,27 @@ paths:
     post:
       operationId: v1_operator_system_incidents_acknowledge_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: incident_id
         schema:
@@ -10191,6 +10212,27 @@ paths:
     post:
       operationId: v1_operator_system_incidents_resolve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: incident_id
         schema:
@@ -10233,6 +10275,27 @@ paths:
     post:
       operationId: v1_operator_system_kill_switches_activate_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: code
         schema:
@@ -10262,6 +10325,27 @@ paths:
     post:
       operationId: v1_operator_system_kill_switches_approve_deactivation_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: code
         schema:
@@ -10291,6 +10375,27 @@ paths:
     post:
       operationId: v1_operator_system_kill_switches_request_deactivation_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: code
         schema:
@@ -10343,6 +10448,23 @@ paths:
   /api/v1/operator/system/reconciliation/run:
     post:
       operationId: v1_operator_system_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
