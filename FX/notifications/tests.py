@@ -148,7 +148,7 @@ class NotificationInboxTests(TestCase):
 
     def test_webhook_api_is_user_scoped_and_secret_is_write_only(self):
         headers = self.command_headers()
-        with patch("notifications.serializers.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
+        with patch("notifications.webhook_transport.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
             response = self.client.post(
                 "/api/notification/webhooks/",
                 {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
@@ -171,7 +171,7 @@ class NotificationInboxTests(TestCase):
         self.assertNotIn("secret", response.data)
         self.assertEqual(WebhookSubscription.objects.filter(user=self.user).count(), 1)
 
-    @patch("notifications.tasks.requests.post")
+    @patch("notifications.tasks.post_webhook")
     def test_webhook_delivery_posts_signed_json_and_records_success(self, post):
         response = post.return_value
         response.status_code = 202
@@ -199,7 +199,7 @@ class NotificationInboxTests(TestCase):
         self.assertIn(b'"type":"DEPOSIT"', post.call_args.kwargs["data"])
 
     def test_webhook_update_keeps_secret_when_omitted(self):
-        with patch("notifications.serializers.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
+        with patch("notifications.webhook_transport.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
             created = self.client.post(
                 "/api/notification/webhooks/",
                 {"url": "https://example.com/events", "secret": "a-secure-test-secret", "categories": ["TRADE"]},
@@ -247,6 +247,58 @@ class NotificationInboxTests(TestCase):
             replay = self.client.post(f"/api/notification/webhooks/{subscription.id}/retry/", {"delivery_id": str(delivery.id)}, format="json", secure=True, **headers)
         self.assertEqual(first.status_code, 202); self.assertEqual(replay.data, first.data)
 
+    def test_dead_letter_retry_grants_five_attempts_without_erasing_history(self):
+        from apps.foundation.models import ApplicationAuditEvent
+        subscription = WebhookSubscription.objects.create(user=self.user, organization=self.organization, url="https://example.com/retry", secret="test-secret")
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=self.event, status="D", attempts=5)
+        url = f"/api/notification/webhooks/{subscription.pk}/retry/"
+        headers = self.command_headers(version="D:5")
+        with patch("notifications.services._queue_webhook") as queue:
+            with self.captureOnCommitCallbacks(execute=True):
+                first = self.client.post(url, {"delivery_id": str(delivery.pk)}, format="json", secure=True, **headers)
+                replay = self.client.post(url, {"delivery_id": str(delivery.pk)}, format="json", secure=True, **headers)
+            self.assertEqual(first.status_code, 202)
+            self.assertEqual(replay.data, first.data)
+            queue.assert_called_once_with(delivery.pk)
+        delivery.refresh_from_db()
+        self.assertEqual((delivery.attempts, delivery.attempt_limit), (5, 10))
+        self.assertEqual(ApplicationAuditEvent.objects.filter(action="notification.webhook.retry", resource_id=str(delivery.pk)).count(), 1)
+        with patch("notifications.tasks.post_webhook", side_effect=requests.Timeout("fixture")) as post:
+            for _ in range(5):
+                with self.assertRaises(requests.Timeout):
+                    deliver_webhook.run(str(delivery.pk))
+            deliver_webhook.run(str(delivery.pk))
+            self.assertEqual(post.call_count, 5)
+        delivery.refresh_from_db()
+        self.assertEqual((delivery.status, delivery.attempts), ("D", 10))
+
+    def test_retry_can_succeed_after_exhaustion_and_rejects_total_limit(self):
+        subscription = WebhookSubscription.objects.create(user=self.user, organization=self.organization, url="https://example.com/retry", secret="test-secret")
+        delivery = WebhookDelivery.objects.create(subscription=subscription, event=self.event, status="D", attempts=5)
+        url = f"/api/notification/webhooks/{subscription.pk}/retry/"
+        with patch("notifications.services._queue_webhook"):
+            response = self.client.post(url, {"delivery_id": str(delivery.pk)}, format="json", secure=True, **self.command_headers(version="D:5"))
+        self.assertEqual(response.status_code, 202)
+        with patch("notifications.tasks.post_webhook") as post:
+            post.return_value.status_code = 204
+            deliver_webhook.run(str(delivery.pk))
+        delivery.refresh_from_db()
+        self.assertEqual((delivery.status, delivery.attempts), ("S", 6))
+        delivery.status, delivery.attempts = "D", 32767
+        delivery.save()
+        response = self.client.post(url, {"delivery_id": str(delivery.pk)}, format="json", secure=True, **self.command_headers(version="D:32767"))
+        self.assertEqual(response.status_code, 409)
+
+    def test_retry_rejects_malformed_bodies_before_claiming_idempotency(self):
+        from apps.foundation.models import IdempotencyRecord
+        subscription = WebhookSubscription.objects.create(user=self.user, organization=self.organization, url="https://example.com/retry", secret="test-secret")
+        for payload in ([], {}, {"delivery_id": None}, {"delivery_id": "invalid"}, {"delivery_id": []}, {"delivery_id": {}}, {"delivery_id": True}):
+            with self.subTest(payload=payload):
+                headers = self.command_headers(version="D:5")
+                response = self.client.post(f"/api/notification/webhooks/{subscription.pk}/retry/", payload, format="json", secure=True, **headers)
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(IdempotencyRecord.objects.filter(key=headers["HTTP_IDEMPOTENCY_KEY"]).exists())
+
     @override_settings(STAGING_WEBHOOK_RECEIVER_ENABLED=True, STAGING_WEBHOOK_RECEIVER_SECRET="receiver-secret")
     def test_staging_receiver_verifies_signature_and_supports_controlled_failure(self):
         body = json.dumps({"id": "event-1", "type": "TRADE"}, separators=(",", ":")).encode()
@@ -270,7 +322,7 @@ class NotificationInboxTests(TestCase):
         )
         self.assertEqual(failed.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @patch("notifications.tasks.requests.post", side_effect=requests.Timeout("receiver timeout"))
+    @patch("notifications.tasks.post_webhook", side_effect=requests.Timeout("receiver timeout"))
     def test_webhook_delivery_records_failure_before_celery_retry(self, post):
         subscription = WebhookSubscription.objects.create(
             user=self.user, url="https://example.com/events", secret="a-secure-test-secret"
@@ -284,7 +336,7 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(delivery.attempts, 1)
         self.assertIn("receiver timeout", delivery.last_error)
 
-    @patch("notifications.tasks.requests.post")
+    @patch("notifications.tasks.post_webhook")
     def test_successful_delivery_is_not_sent_again(self, post):
         post.return_value.status_code = 202
         subscription = WebhookSubscription.objects.create(user=self.user, url="https://example.com/events", secret="test-secret")
@@ -297,7 +349,7 @@ class NotificationInboxTests(TestCase):
         self.assertEqual(delivery.attempts, 1)
         post.assert_called_once()
 
-    @patch("notifications.tasks.requests.post")
+    @patch("notifications.tasks.post_webhook")
     def test_redirects_are_failed_deliveries(self, post):
         subscription = WebhookSubscription.objects.create(user=self.user, url="https://example.com/events", secret="test-secret")
         for code in (301, 302, 307, 308):

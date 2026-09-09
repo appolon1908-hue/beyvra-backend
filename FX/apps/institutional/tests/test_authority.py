@@ -71,6 +71,24 @@ class InstitutionalAuthorityTests(TestCase):
         self.assertEqual(len(hierarchy["subaccounts"]), 3)
         self.assertEqual(InstitutionalAuditEvent.objects.filter(event_type="institutional.account.created.v1").count(), 1)
 
+    def test_customer_reads_require_and_honor_explicit_tenant_selection(self):
+        other = Organization.objects.create(name="Second Customer Tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=other, role="member")
+        institution = InstitutionalAccount.objects.create(tenant=other, institution_code="SECOND", display_name="Second", account_type="INTERNAL_TEST", status="ACTIVE", base_currency="USD", effective_from=self.now)
+        url = "/api/v1/institutional/account"
+        self.assertEqual(self.client.get(url).status_code, 400)
+        first = self.client.get(url, HTTP_X_ORGANIZATION_ID=str(self.tenant.pk))
+        second = self.client.get(url, HTTP_X_ORGANIZATION_ID=str(other.pk))
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["id"], str(self.institution.pk))
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["id"], str(institution.pk))
+        self.assertEqual(self.client.get(url, HTTP_X_ORGANIZATION_ID="invalid").status_code, 403)
+        foreign = Organization.objects.create(name="Unauthorized Tenant")
+        self.assertEqual(self.client.get(url, HTTP_X_ORGANIZATION_ID=str(foreign.pk)).status_code, 403)
+        OrganizationMembership.objects.filter(user=self.user, organization=other).update(is_active=False)
+        self.assertEqual(self.client.get(url, HTTP_X_ORGANIZATION_ID=str(other.pk)).status_code, 403)
+
     def test_hierarchy_rejects_cycles_and_cross_institution_links(self):
         self.sub_b.parent_subaccount = self.sub_a; self.sub_b.full_clean(); self.sub_b.save()
         self.sub_a.parent_subaccount = self.sub_b
