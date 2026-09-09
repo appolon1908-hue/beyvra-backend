@@ -13,3 +13,10 @@ description = "Deleted generated Trivy image inventory contained the public Pyth
 paths = [
   '''^docs/evidence/disaster-recovery/latest/container-scans/backend\.json$''',
 ]
+
+[[allowlists]]
+description = "Reviewed SHA-256 of the immutable Middleware connector CI workflow; not credential material"
+condition = "AND"
+paths = ['''^\.codestra/validate-production-orchestrator-contract\.py$''']
+regexTarget = "line"
+regexes = ['''917ab06febf30f0d81146fc147794dace9510f7bb0a6fb903dd69b2244d4e1d0''']

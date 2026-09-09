@@ -1,0 +1,76 @@
+name: Workspace API
+
+on:
+  pull_request:
+    paths:
+      - "FX/apps/workspace/**"
+      - "FX/FX/settings.py"
+      - "FX/FX/urls.py"
+      - "contracts/openapi/beyvra-workspace-v1.yaml"
+      - "docs/architecture/BEYVRA_WORKSPACE_WATCHLIST_AUTHORITY.md"
+      - ".github/workflows/workspace-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workspace-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: codestra_ci
+          POSTGRES_USER: codestra_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U codestra_ci -d codestra_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: FX/requirements.txt
+      - name: Install application
+        run: pip install -r FX/requirements.txt pyyaml
+      - name: Validate workspace candidate
+        working-directory: FX
+        env:
+          DJANGO_SETTINGS_MODULE: FX.test_settings
+          SECRET_KEY: ci-only-secret-key-with-more-than-fifty-characters-for-checks
+          DEBUG: "0"
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+          CSRF_TRUSTED_ORIGINS: '[]'
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          REDIS_PASSWORD: ci-only-password
+          REDIS_DATABASE: "0"
+          DB_NAME: codestra_ci
+          DB_USER: codestra_ci
+          DB_PASSWORD: ci-only-password
+          DB_HOST: 127.0.0.1
+          DB_PORT: "5432"
+          TEST_DB_NAME: test_codestra_ci
+        run: |
+          python manage.py check --deploy
+          python manage.py makemigrations --check --dry-run
+          python manage.py test apps.workspace
+      - name: Validate source and contract syntax
+        run: |
+          python -m compileall -q FX/apps/workspace
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          value = yaml.safe_load(Path("contracts/openapi/beyvra-workspace-v1.yaml").read_text())
+          if not isinstance(value, dict) or value.get("openapi") != "3.1.0":
+              raise SystemExit("invalid workspace OpenAPI contract")
+          PY

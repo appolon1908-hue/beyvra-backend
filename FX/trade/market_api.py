@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 
+from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone as django_timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS, MarketDataError, get_market_history
 from .models import CanonicalMarketStatus, CanonicalQuote, CanonicalTradeTick, MarketCandle
@@ -12,7 +14,7 @@ from .market_authority import FIVE_SECOND_AVAILABLE, TIMEFRAME_AUTHORITY, Freshn
 
 CHART_INTERVALS = ("5s", "10s", "15s", "30s", "1m", "5m", "15m", "1h", "4h", "1d")
 INTERVAL_SECONDS = {"5s": 5, "10s": 10, "15s": 15, "30s": 30, "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
-INSTRUMENTS = {
+_DEMO_INSTRUMENT_FIXTURES = {
     "BTC-USD": {"provider_symbol": "BTCUSDT", "asset_class": "CRYPTO", "price_decimals": 2, "quantity_decimals": 8},
     "ETH-USD": {"provider_symbol": "ETHUSDT", "asset_class": "CRYPTO", "price_decimals": 2, "quantity_decimals": 8},
     "BNB-USD": {"provider_symbol": "BNBUSDT", "asset_class": "CRYPTO", "price_decimals": 2, "quantity_decimals": 8},
@@ -27,31 +29,80 @@ INSTRUMENTS = {
 }
 
 
+def _canonical_instrument_ids():
+    from reference_data.models import Instrument as ReferenceInstrument
+
+    symbols = list(ReferenceInstrument.objects.filter(
+        status=ReferenceInstrument.Status.ACTIVE,
+        provider_mappings__product="MARKET_DATA",
+        provider_mappings__effective_from__lte=django_timezone.now(),
+    ).filter(
+        Q(provider_mappings__effective_to__isnull=True) | Q(provider_mappings__effective_to__gt=django_timezone.now())
+    ).values_list("canonical_symbol", flat=True).order_by("canonical_symbol").distinct())
+    if symbols:
+        return symbols
+    if getattr(settings, "DEMO_MARKET_FIXTURE_ENABLED", False):
+        return sorted(_DEMO_INSTRUMENT_FIXTURES)
+    return []
+
+
 def _instrument(instrument_id):
     normalized = instrument_id.strip().upper()
-    try:
-        from reference_data.models import Instrument as ReferenceInstrument
+    from reference_data.models import Instrument as ReferenceInstrument
 
-        canonical = ReferenceInstrument.objects.select_related("venue", "calendar").filter(canonical_symbol=normalized).first()
-        if canonical is not None:
-            mapping = canonical.provider_mappings.filter(product="MARKET_DATA", effective_to__isnull=True).order_by("provider_id").first()
-            if mapping is None:
-                raise ValueError("INSTRUMENT_MAPPING_UNAVAILABLE")
-            return normalized, {
-                "provider_symbol": mapping.provider_symbol,
-                "asset_class": canonical.asset_class,
-                "price_decimals": max(-canonical.tick_size.as_tuple().exponent, 0),
-                "quantity_decimals": max(-canonical.lot_size.as_tuple().exponent, 0),
-                "instrument_uuid": str(canonical.instrument_id),
-            }
-    except (ImportError, RuntimeError):
-        # Compatibility during migrations only. Runtime provider identity is
-        # authoritative once reference_data is installed.
-        pass
-    definition = INSTRUMENTS.get(normalized)
-    if definition is None:
-        raise ValueError("INSTRUMENT_NOT_FOUND")
-    return normalized, definition
+    queryset = ReferenceInstrument.objects.select_related("venue", "calendar").filter(
+        status=ReferenceInstrument.Status.ACTIVE,
+    )
+    try:
+        import uuid
+        instrument_uuid = uuid.UUID(normalized)
+    except (ValueError, TypeError, AttributeError):
+        queryset = queryset.filter(canonical_symbol=normalized)
+    else:
+        queryset = queryset.filter(instrument_id=instrument_uuid)
+    matches = list(queryset[:2])
+    if len(matches) > 1:
+        raise ValueError("INSTRUMENT_AMBIGUOUS")
+    if len(matches) == 1:
+        canonical = matches[0]
+        now = django_timezone.now()
+        mappings = canonical.provider_mappings.filter(
+            product="MARKET_DATA",
+            effective_from__lte=now,
+        ).filter(Q(effective_to__isnull=True) | Q(effective_to__gt=now))
+        provider_priority = {
+            item.provider_id: item.priority
+            for item in __import__("provider_governance.models", fromlist=["ProviderDefinition"]).ProviderDefinition.objects.filter(
+                provider_id__in=mappings.values_list("provider_id", flat=True),
+                provider_type="MARKET_DATA",
+                enabled=True,
+                license_verified=True,
+                security_approved=True,
+                compliance_approved=True,
+                staging_approved=True,
+            )
+        }
+        mapping_rows = list(mappings)
+        mapping_rows.sort(key=lambda item: (provider_priority.get(item.provider_id, 10**9), item.provider_id, item.provider_symbol))
+        mapping = next((item for item in mapping_rows if item.provider_id in provider_priority), None)
+        if mapping is None:
+            raise ValueError("INSTRUMENT_MAPPING_UNAVAILABLE")
+        return canonical.canonical_symbol, {
+            "provider_id": mapping.provider_id,
+            "provider_symbol": mapping.provider_symbol,
+            "asset_class": canonical.asset_class,
+            "price_decimals": max(-canonical.tick_size.as_tuple().exponent, 0),
+            "quantity_decimals": max(-canonical.lot_size.as_tuple().exponent, 0),
+            "instrument_uuid": str(canonical.instrument_id),
+            "venue": canonical.venue.code if canonical.venue else "OTC",
+            "timezone": canonical.calendar.timezone,
+            "status": canonical.status,
+        }
+    if getattr(settings, "DEMO_MARKET_FIXTURE_ENABLED", False):
+        definition = _DEMO_INSTRUMENT_FIXTURES.get(normalized)
+        if definition is not None:
+            return normalized, {**definition, "provider_id": "demo-fixture", "venue": "DEMO", "timezone": "UTC", "status": "DEMO_ONLY"}
+    raise ValueError("INSTRUMENT_NOT_FOUND")
 
 
 def _chart_request(request):
@@ -122,7 +173,6 @@ def _market_status(definition):
 
 class MarketSnapshotV1View(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         try:
@@ -150,7 +200,6 @@ class MarketSnapshotV1View(APIView):
 
 class MarketCandlesV1View(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         try:
@@ -172,7 +221,6 @@ class MarketCandlesV1View(APIView):
 
 class MarketStatusV1View(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         try:
@@ -184,7 +232,6 @@ class MarketStatusV1View(APIView):
 
 class InstrumentV1View(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
 
     def get(self, request, instrument_id):
         try:
@@ -228,20 +275,20 @@ class InstrumentMarketDataCapabilitiesV1View(InstrumentV1View):
 
 class InstrumentRegistryView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol=None):
-        requested = [symbol.upper()] if symbol else sorted(INSTRUMENTS)
+        requested = [symbol.upper()] if symbol else _canonical_instrument_ids()
         results=[]
         for instrument_id in requested:
-            definition=INSTRUMENTS.get(instrument_id)
-            if definition:
-                results.append({"instrument_id":instrument_id,"symbol":instrument_id,"display_symbol":instrument_id,"asset_class":definition["asset_class"],"base_asset":instrument_id.split("-")[0],"quote_asset":instrument_id.split("-")[1] if "-" in instrument_id else None,"venue":"UNKNOWN","status":"DEMO_ONLY","price_precision":definition["price_decimals"],"quantity_precision":definition["quantity_decimals"],"timezone":"UTC"})
+            try:
+                normalized, definition = _instrument(instrument_id)
+            except ValueError:
+                continue
+            results.append({"instrument_id":definition.get("instrument_uuid",normalized),"symbol":normalized,"display_symbol":normalized,"asset_class":definition["asset_class"],"base_asset":normalized.split("-")[0],"quote_asset":normalized.split("-")[1] if "-" in normalized else None,"venue":definition.get("venue","UNKNOWN"),"status":definition.get("status","ACTIVE"),"price_precision":definition["price_decimals"],"quantity_precision":definition["quantity_decimals"],"timezone":definition.get("timezone","UTC")})
         return Response({"results":results})
 
 
 class MarketCandlesView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request):
         symbol = request.query_params.get("symbol", "BTCUSDT").upper()
         timeframe = request.query_params.get("timeframe", request.query_params.get("interval", "1m"))
@@ -255,13 +302,15 @@ class MarketCandlesView(APIView):
 
 class MarketQuotesView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request):
         requested=request.query_params.get("instrument_ids") or request.query_params.get("instrument_id") or request.query_params.get("symbol")
-        instrument_ids=[item.strip().upper() for item in requested.split(",")] if requested else sorted(INSTRUMENTS)
+        instrument_ids=[item.strip().upper() for item in requested.split(",")] if requested else _canonical_instrument_ids()
         results=[]
-        for instrument_id in instrument_ids:
-            if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND","instrument_id":instrument_id},status=404)
+        for requested_id in instrument_ids:
+            try:
+                instrument_id, _definition = _instrument(requested_id)
+            except ValueError as exc:
+                return Response({"code":str(exc),"instrument_id":requested_id},status=404)
             quote=CanonicalQuote.objects.filter(instrument_id=instrument_id,suspect=False).order_by("-provider_timestamp").first()
             if quote is None: continue
             freshness=_fresh(quote)
@@ -273,20 +322,23 @@ class MarketQuotesView(APIView):
 
 class MarketStatusView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
-        instrument_id=symbol.upper()
-        if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND"},status=404)
+        try:
+            instrument_id, _definition = _instrument(symbol)
+        except ValueError as exc:
+            return Response({"code":str(exc)},status=404)
         value=CanonicalMarketStatus.objects.filter(instrument_id=instrument_id).order_by("-provider_timestamp").first()
         if value is None or _fresh(value) in {FreshnessState.STALE,FreshnessState.UNAVAILABLE}: return Response({"instrument_id":instrument_id,"status":"UNKNOWN","halt_status":"UNKNOWN","provider_id":None},status=503)
         return Response({"instrument_id":instrument_id,"status":value.status,"halt_status":value.status if value.halt_status_available else "UNKNOWN","provider_timestamp":value.provider_timestamp.isoformat(),"received_at":value.received_at.isoformat(),"provider_id":value.provider_id,"provenance":value.provenance})
 
 
 class MarketTradesView(APIView):
-    permission_classes=[IsAuthenticated]; authentication_classes=[JWTAuthentication]
+    permission_classes=[IsAuthenticated]
     def get(self,request,symbol):
-        instrument_id=symbol.upper()
-        if instrument_id not in INSTRUMENTS: return Response({"code":"INSTRUMENT_NOT_FOUND"},status=404)
+        try:
+            instrument_id, _definition = _instrument(symbol)
+        except ValueError as exc:
+            return Response({"code":str(exc)},status=404)
         limit=min(max(int(request.query_params.get("limit",100)),1),1000)
         rows=CanonicalTradeTick.objects.filter(instrument_id=instrument_id).order_by("-provider_timestamp")[:limit]
         results=[{"instrument_id":row.instrument_id,"price":str(row.price),"size":str(row.size),"trade_id":row.trade_id,"provider_timestamp":row.provider_timestamp.isoformat(),"received_at":row.received_at.isoformat(),"provider_id":row.provider_id,"venue":row.venue,"sequence":row.sequence or None,"conditions":row.conditions,"provenance":row.provenance} for row in rows if _fresh(row) not in {FreshnessState.STALE,FreshnessState.UNAVAILABLE}]
@@ -296,13 +348,11 @@ class MarketTradesView(APIView):
 
 class MarketCapabilityUnsupportedView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request, symbol):
         return Response({"code": "CAPABILITY_UNSUPPORTED", "detail": "This provider does not expose the requested capability.", "symbol": symbol.upper()}, status=501)
 
 
 class FeedHealthView(APIView):
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     def get(self, request):
         return Response({"results": [], "status": "DISCONNECTED", "detail": "No live provider is configured in this environment."})

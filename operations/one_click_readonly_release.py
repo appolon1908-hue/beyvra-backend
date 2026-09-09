@@ -1070,10 +1070,10 @@ def main() -> int:
         if args.self_test:
             self_test()
             return 0
-        summary = execute_release()
-        output = write_summary(summary)
-        log(f"complete PASS: {output}")
-        return 0
+        raise ReleaseError(
+            "legacy one-click runtime orchestration is disabled; use the protected "
+            "Codestra controller for planning and Infustruction-repo for runtime changes"
+        )
     except (ReleaseError, json.JSONDecodeError, OSError, ValueError) as exc:
         print(f"BEYVRA_ONE_CLICK_GO_LIVE=FAIL: {exc}", file=sys.stderr, flush=True)
         return 1

@@ -11,7 +11,8 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name']
+        fields = ['id', 'email', 'first_name', 'last_name', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class UserActivitySerializer(serializers.ModelSerializer):
@@ -32,7 +33,8 @@ class TwoFactorAuthSerializer(serializers.ModelSerializer):
     """ User Global 2FA Settings Serializer """
     class Meta:
         model = models.TwoFactorAuth
-        fields = ['auth_type']
+        fields = ['auth_type', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class PasswordPolicySerializer(serializers.ModelSerializer):
@@ -41,7 +43,8 @@ class PasswordPolicySerializer(serializers.ModelSerializer):
     class Meta:
         model = PasswordPolicy
         fields = ['complexity', 'custom_characters',
-                  'min_length', 'max_length', 'strength']
+                  'min_length', 'max_length', 'strength', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class IPWhitelistSerializer(serializers.ModelSerializer):
@@ -49,7 +52,8 @@ class IPWhitelistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.IPWhitelist
-        fields = ['id', 'ip_address']
+        fields = ['id', 'ip_address', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class CountryWhitelistSerializer(serializers.ModelSerializer):
@@ -57,7 +61,8 @@ class CountryWhitelistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.CountryWhitelist
-        fields = ['id', 'country']
+        fields = ['id', 'country', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class IPBlacklistSerializer(serializers.ModelSerializer):
@@ -65,7 +70,8 @@ class IPBlacklistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.IPBlacklist
-        fields = ['id', 'ip_address']
+        fields = ['id', 'ip_address', 'updated_at']
+        read_only_fields = ['updated_at']
 
 
 class IPRestrictionsSerializer(serializers.ModelSerializer):
@@ -76,7 +82,8 @@ class IPRestrictionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.IPRestrictions
         fields = ['restriction_type', 'ip_whitelist',
-                  'country_whitelist', 'ip_blacklist']
+                  'country_whitelist', 'ip_blacklist', 'updated_at']
+        read_only_fields = ['updated_at']
 
     def create(self, validated_data):
 
@@ -300,5 +307,5 @@ class ResetUserSettingsSerializer(serializers.Serializer):
 class UserIPBlacklistSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.UserIPBlacklist
-        fields = ['ip_address', 'id']
+        fields = ['ip_address', 'id', 'updated_at']
         read_only_fields = ["created_at", "updated_at"]

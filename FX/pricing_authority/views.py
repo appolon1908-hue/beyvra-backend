@@ -1,9 +1,10 @@
 from django.utils import timezone
 from rest_framework import generics, permissions, response, status, views
 
-from .models import AccountPlan, AccountPlanAssignment, PlanEntitlement
+from integrations.permissions import organization_for_request
+from .models import AccountPlan
 from .serializers import FeePreviewSerializer, PlanSerializer
-from .services import calculate_fee
+from .services import calculate_fee, current_plan_assignment, entitlement_decisions
 
 
 class PlanListView(generics.ListAPIView):
@@ -15,18 +16,32 @@ class PlanListView(generics.ListAPIView):
 class CurrentPlanView(views.APIView):
     permission_classes = (permissions.IsAuthenticated,)
     def get(self, request):
-        assignment = AccountPlanAssignment.objects.filter(account=request.user, status="ACTIVE", effective_to__isnull=True).select_related("plan_version__plan").first()
+        organization = organization_for_request(request)
+        assignment, _ambiguous = current_plan_assignment(request.user, tenant_ref=str(organization.id))
         if not assignment: return response.Response({"code":"PLAN_NOT_ASSIGNED"}, status=404)
-        return response.Response(PlanSerializer(assignment.plan_version.plan).data)
+        return response.Response({
+            **PlanSerializer(assignment.plan_version.plan).data,
+            "tenant_id": str(organization.id),
+            "plan_version": assignment.plan_version.version,
+        })
 
 
 class EntitlementsView(views.APIView):
     permission_classes = (permissions.IsAuthenticated,)
     def get(self, request):
-        assignment = AccountPlanAssignment.objects.filter(account=request.user, status="ACTIVE", effective_to__isnull=True).first()
-        if not assignment: return response.Response({"results": []})
-        rows = PlanEntitlement.objects.filter(plan_version=assignment.plan_version, enabled=True).select_related("entitlement")
-        return response.Response({"results":[{"entitlement": x.entitlement.code, "state":"LIMITED" if x.limit_value is not None else "ALLOW", "limit":str(x.limit_value) if x.limit_value is not None else None, "unit":x.limit_unit} for x in rows]})
+        organization = organization_for_request(request)
+        decisions = entitlement_decisions(request.user, str(organization.id))
+        return response.Response({
+            "tenant_id": str(organization.id),
+            "results": [{
+                "entitlement": item.entitlement_code,
+                "state": item.state,
+                "limit": str(item.limit) if item.limit is not None else None,
+                "unit": item.limit_unit,
+                "policy_version": item.effective_policy_version,
+                "source": item.source,
+            } for item in decisions],
+        })
 
 
 class FeePreviewView(views.APIView):

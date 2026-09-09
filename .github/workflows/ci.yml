@@ -70,6 +70,11 @@ jobs:
       - name: Install application and audit tools
         run: pip install -r FX/requirements.txt pip-audit bandit pyyaml
 
+      - name: Validate automation fabric and regressions
+        run: |
+          python scripts/validate_beyvra_fabric.py
+          python -m unittest discover -s scripts -p "*beyvra_fabric.py"
+
       - name: Verify installed dependency graph
         run: pip check
 
@@ -102,9 +107,12 @@ jobs:
           python manage.py check --deploy
           python manage.py makemigrations --check --dry-run
           python manage.py test financial_boundary.tests bank_account_app.test_security payments.test_security trade.test_security users.tests.test_mfa_security ws.test_security
+          python manage.py test integrations.tests integrations.test_crm_inbound_safety
+          python manage.py test notifications
           python manage.py test news_app.test_phase5_contracts ws.test_v2
           python manage.py test reference_data trade.test_market_data news_app.test_newsdata_api news_app.test_newsdata_client
           python manage.py test apps.trading.tests
+          python manage.py test apps.compliance apps.post_trade apps.surveillance apps.institutional operations treasury platform_ops security.tests.test_commands security.tests.test_command_regressions apps.workspace users.tests.test_email_verification users.tests.test_registration_safety_regressions
           python manage.py test api_trade.tests.test_openapi_stability apps.foundation.test_publisher security.tests.test_apps platform_ops.health.test_release_identity
 
       - name: Verify public identity surfaces
@@ -224,34 +232,52 @@ jobs:
   exact-head-base-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'pull_request'
     env:
-      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Verify exact tuple at start
         run: |
-          observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
-          observed_base=$(jq -r .base.sha <<<"$observed")
-          test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
+          set -Eeuo pipefail
+          [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_BASE_SHA" != "0000000000000000000000000000000000000000"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+            observed_head=$(jq -r .head.sha <<<"$observed")
+            observed_base=$(jq -r .base.sha <<<"$observed")
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            test "$GITHUB_REF" = "refs/heads/main"
+            observed_head=$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)
+            observed_base="$EXPECTED_BASE_SHA"
+          else
+            echo "Unsupported exact-head event: $GITHUB_EVENT_NAME" >&2
+            exit 1
+          fi
+          test "$observed_head" = "$EXPECTED_HEAD_SHA"
           test "$observed_base" = "$EXPECTED_BASE_SHA"
-          printf 'EXPECTED_HEAD_SHA=%s\nEXPECTED_BASE_SHA=%s\nOBSERVED_HEAD_SHA=%s\nOBSERVED_BASE_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$EXPECTED_BASE_SHA" "$(jq -r .head.sha <<<"$observed")" "$observed_base"
+          printf 'EXPECTED_HEAD_SHA=%s\nEXPECTED_BASE_SHA=%s\nOBSERVED_HEAD_SHA=%s\nOBSERVED_BASE_SHA=%s\n' "$EXPECTED_HEAD_SHA" "$EXPECTED_BASE_SHA" "$observed_head" "$observed_base"
 
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.EXPECTED_HEAD_SHA }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify exact tuple and ancestry at end
         run: |
+          set -Eeuo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           git fetch origin "$EXPECTED_BASE_SHA"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA"
-          observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
-          observed_base=$(jq -r .base.sha <<<"$observed")
-          test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
-          test "$observed_base" = "$EXPECTED_BASE_SHA"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            observed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}")
+            test "$(jq -r .head.sha <<<"$observed")" = "$EXPECTED_HEAD_SHA"
+            test "$(jq -r .base.sha <<<"$observed")" = "$EXPECTED_BASE_SHA"
+          else
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$EXPECTED_HEAD_SHA"
+          fi
 
   container:
     runs-on: ubuntu-latest
