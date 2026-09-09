@@ -1,12 +1,33 @@
 from unittest.mock import patch
 
+from django.test import override_settings
 from django.urls import reverse
 from operations.models import AuditEvent, SecurityEvent
 from rest_framework.exceptions import APIException
 from rest_framework.test import APITestCase
 from rest_framework.test import APIClient
-from users.models import User
+from users.models import PendingRegistration, User
 from users.serializers import LoginSerializer
+
+
+REGISTRATION_ENUMERATION_SETTINGS = {
+    "EMAIL_REGISTRATION_ENABLED": True,
+    "EMAIL_OTP_VERIFICATION_ENABLED": True,
+    "EMAIL_OTP_PEPPER": "enumeration-test-pepper",
+    "EMAIL_OTP_TTL_SECONDS": 600,
+    "PENDING_REGISTRATION_TTL_SECONDS": 86400,
+    "EMAIL_OTP_RESEND_COOLDOWN_SECONDS": 60,
+    "TRANSACTIONAL_EMAIL_ENABLED": False,
+}
+
+
+def _registration_payload(email):
+    return {
+        "email": email,
+        "password": "StrongPass9!",
+        "displayName": "Enumeration Probe",
+        "legalAccepted": True,
+    }
 
 
 class AccountEnumerationTests(APITestCase):
@@ -31,6 +52,49 @@ class AccountEnumerationTests(APITestCase):
         self.assertEqual(unknown.status_code, 200)
         self.assertEqual(known.data, unknown.data)
         delay.assert_called_once_with(self.user.pk)
+
+    @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
+    def test_registration_response_does_not_reveal_account_existence(self):
+        known = self.client.post(
+            "/api/v1/auth/register",
+            _registration_payload(self.user.email),
+            format="json",
+        )
+        unknown = self.client.post(
+            "/api/v1/auth/register",
+            _registration_payload("unknown@example.test"),
+            format="json",
+        )
+
+        self.assertEqual(known.status_code, 202)
+        self.assertEqual(unknown.status_code, 202)
+        # A differing key set is itself an enumeration oracle.
+        self.assertEqual(set(known.data), set(unknown.data))
+        self.assertTrue(str(known.data["registrationId"]).startswith("reg_"))
+        # The registered address must not gain a pending registration.
+        self.assertFalse(
+            PendingRegistration.objects.filter(
+                email_normalized=self.user.email
+            ).exists()
+        )
+
+    @override_settings(**REGISTRATION_ENUMERATION_SETTINGS)
+    def test_registered_address_returns_a_stable_registration_id(self):
+        first = self.client.post(
+            "/api/v1/auth/register",
+            _registration_payload(self.user.email),
+            format="json",
+        )
+        second = self.client.post(
+            "/api/v1/auth/register",
+            _registration_payload(self.user.email),
+            format="json",
+        )
+        # A fresh identifier per call would distinguish registered addresses
+        # from new ones, which return the same pending row on every retry.
+        self.assertEqual(
+            first.data["registrationId"], second.data["registrationId"]
+        )
 
     def test_known_account_failures_create_safe_escalating_signals(self):
         for _ in range(5):

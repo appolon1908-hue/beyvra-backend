@@ -168,7 +168,22 @@ class EmailVerificationTests(TestCase):
         )
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.data["status"], "pending_email_verification")
-        self.assertNotIn("registrationId", response.data)
+        # Enumeration protection means the body is shaped exactly like an
+        # accepted registration. Asserting registrationId was *absent* here
+        # enforced the very oracle this test is named for: a caller could
+        # separate registered from unregistered addresses by that key alone.
+        self.assertIn("registrationId", response.data)
+        self.assertEqual(
+            set(response.data),
+            {
+                "registrationId",
+                "status",
+                "maskedEmail",
+                "expiresIn",
+                "registrationExpiresIn",
+                "resendAvailableIn",
+            },
+        )
         self.assertFalse(PendingRegistration.objects.exists())
 
     @patch("users.registration_safety.generate_otp", return_value="482913")

@@ -9,6 +9,9 @@ idempotent 202 response instead of a 500.
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
+import hmac
+import uuid
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -62,6 +65,41 @@ def _pending_registration_response(
     )
 
 
+def _decoy_registration_id(email: str) -> uuid.UUID:
+    """Stable, unguessable identifier for an address that cannot be registered.
+
+    Derived from SECRET_KEY so repeating the request returns the same value,
+    the way a real pending registration does. A random identifier per call
+    would itself distinguish registered addresses from new ones.
+    """
+    digest = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        f"registration-decoy:{email}".encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return uuid.UUID(bytes=digest[:16])
+
+
+def _unavailable_registration_response(email: str) -> Response:
+    """Mirror the accepted-registration body exactly.
+
+    An address that is already registered must not be distinguishable from a
+    new one. The identifier resolves to no PendingRegistration, so verify and
+    resend already treat it exactly like an expired registration.
+    """
+    return Response(
+        {
+            "registrationId": f"reg_{_decoy_registration_id(email)}",
+            "status": "pending_email_verification",
+            "maskedEmail": mask_email(email),
+            "expiresIn": settings.EMAIL_OTP_TTL_SECONDS,
+            "registrationExpiresIn": settings.PENDING_REGISTRATION_TTL_SECONDS,
+            "resendAvailableIn": settings.EMAIL_OTP_RESEND_COOLDOWN_SECONDS,
+        },
+        status=202,
+    )
+
+
 class EmailRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -95,15 +133,11 @@ class EmailRegistrationView(APIView):
                 status=400,
             )
 
-        # Preserve the existing non-enumerating response for registered users.
+        # Registered addresses get a body identical to an accepted
+        # registration. Returning a different shape here was an enumeration
+        # oracle: callers could tell registered from unregistered addresses.
         if User.objects.filter(email__iexact=email).exists():
-            return Response(
-                {
-                    "status": "pending_email_verification",
-                    "message": "If this address can be registered, a verification code will be sent.",
-                },
-                status=202,
-            )
+            return _unavailable_registration_response(email)
 
         now = timezone.now()
         versions = {
