@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import NotificationEvent, WebhookDelivery
+from .webhook_transport import post_webhook
 
 
 @shared_task(bind=True, autoretry_for=(requests.RequestException,), retry_backoff=True, retry_kwargs={"max_retries": 5})
@@ -25,7 +26,7 @@ def deliver_webhook(self, delivery_id):
 def _deliver_locked_webhook(delivery):
     if delivery.status in {"S", "D"}:
         return
-    if delivery.attempts >= 5:
+    if delivery.attempts >= min(delivery.attempt_limit, 32767):
         delivery.status = "D"
         delivery.last_error = "maximum delivery attempts exceeded"
         delivery.save(update_fields=["status", "last_error", "updated_at"])
@@ -47,7 +48,7 @@ def _deliver_locked_webhook(delivery):
     signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     delivery.attempts = min(delivery.attempts + 1, 32767)
     try:
-        response = requests.post(
+        response = post_webhook(
             delivery.subscription.url, data=body,
             headers={"Content-Type": "application/json", "X-Codestra-Event": event.category,
                      "X-Codestra-Event-Id": str(event.id), "X-Codestra-Signature-Version": "HMAC-SHA256",
@@ -62,7 +63,7 @@ def _deliver_locked_webhook(delivery):
         delivery.delivered_at = timezone.now()
         delivery.last_error = ""
     except requests.RequestException as exc:
-        delivery.status = "D" if delivery.attempts >= 5 else "F"
+        delivery.status = "D" if delivery.attempts >= min(delivery.attempt_limit, 32767) else "F"
         delivery.last_error = str(exc)[:500]
         delivery.save()
         return exc

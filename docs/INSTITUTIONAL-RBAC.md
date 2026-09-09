@@ -11,3 +11,7 @@ Institutional viewers and risk analysts have read access only. Mutations require
 active operations or manager membership in the target tenant; a writable role in
 another tenant cannot elevate read-only access. Inactive tenants grant no operator
 scope. Institution references are validated as UUIDs before database lookup.
+
+Customer institutional reads use the shared tenant resolver. Accounts with more
+than one active membership must send `X-Organization-ID`; missing selection
+returns 400 and unauthorized, inactive or malformed selections return 403.

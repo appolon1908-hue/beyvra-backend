@@ -10,7 +10,7 @@ from notifications.serializers import WebhookSubscriptionSerializer
 class WebhookDestinationPolicyTests(SimpleTestCase):
     def validate_addresses(self, addresses):
         records = [(None, None, None, None, (address, 443)) for address in addresses]
-        with patch('notifications.serializers.socket.getaddrinfo', return_value=records):
+        with patch('notifications.webhook_transport.socket.getaddrinfo', return_value=records):
             return WebhookSubscriptionSerializer().validate_url('https://webhook.example.test/events')
 
     def test_nonpublic_ipv6_and_mixed_answers_are_rejected(self):
@@ -28,7 +28,7 @@ class WebhookDestinationPolicyTests(SimpleTestCase):
 
     def test_invalid_authority_is_rejected_before_dns(self):
         for url in ('https://user:password@example.test', 'https://[fe80::1%25eth0]/', 'https://example.test:bad', 'https://example.test/#fragment'):
-            with self.subTest(url=url), patch('notifications.serializers.socket.getaddrinfo') as resolve:
+            with self.subTest(url=url), patch('notifications.webhook_transport.socket.getaddrinfo') as resolve:
                 with self.assertRaises(ValidationError):
                     WebhookSubscriptionSerializer().validate_url(url)
                 resolve.assert_not_called()

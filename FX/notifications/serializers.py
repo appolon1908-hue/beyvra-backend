@@ -1,11 +1,7 @@
-import ipaddress
-import socket
-from urllib.parse import urlparse
-
-from django.conf import settings
 from rest_framework import serializers
 
 from .models import *
+from .webhook_transport import resolve_destination, UnsafeWebhookDestination
 
 
 class EmailNotificationPreferenceSerializer(serializers.ModelSerializer):
@@ -79,29 +75,9 @@ class WebhookSubscriptionSerializer(serializers.ModelSerializer):
 
     def validate_url(self, value):
         try:
-            parsed = urlparse(value)
-            port = parsed.port
-            if (not parsed.hostname or parsed.username is not None or parsed.password is not None
-                    or parsed.fragment or "%" in parsed.hostname
-                    or parsed.scheme not in {"http", "https"}
-                    or any(ord(char) <= 32 for char in value)):
-                raise ValueError("invalid webhook authority")
-        except ValueError as exc:
-            raise serializers.ValidationError("Webhook URL is invalid.") from exc
-        if parsed.scheme != "https" and not settings.DEBUG:
-            raise serializers.ValidationError("Webhook URLs must use HTTPS.")
-        try:
-            addresses = socket.getaddrinfo(parsed.hostname, port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
-            if not addresses:
-                raise ValueError("empty DNS answer")
-            for address in addresses:
-                ip = ipaddress.ip_address(address[4][0])
-                if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-                    ip = ip.ipv4_mapped
-                if not settings.DEBUG and (not ip.is_global or ip.is_multicast or ip.is_reserved):
-                    raise serializers.ValidationError("Webhook URLs must target public unicast addresses.")
-        except (socket.gaierror, ValueError) as exc:
-            raise serializers.ValidationError("Webhook hostname could not be resolved safely.") from exc
+            resolve_destination(value)
+        except UnsafeWebhookDestination as exc:
+            raise serializers.ValidationError(str(exc)) from exc
         return value
 
     def validate_categories(self, value):
@@ -115,5 +91,18 @@ class WebhookDeliverySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WebhookDelivery
-        fields = ["id", "event", "status", "attempts", "response_code", "last_error", "delivered_at", "created_at"]
+        fields = ["id", "event", "status", "attempts", "attempt_limit", "response_code", "last_error", "delivered_at", "created_at"]
         read_only_fields = fields
+
+
+class WebhookDeliveryIdField(serializers.UUIDField):
+    def to_internal_value(self, data):
+        # DRF also accepts integers (including booleans) as UUIDs; the wire
+        # contract requires a UUID string rather than numeric coercion.
+        if not isinstance(data, str):
+            self.fail("invalid", value=data)
+        return super().to_internal_value(data)
+
+
+class WebhookRetrySerializer(serializers.Serializer):
+    delivery_id = WebhookDeliveryIdField(required=True)
