@@ -42,7 +42,7 @@ class IntegrationApiTests(TestCase):
         self.assertEqual(user.role, "User")
 
 
-@override_settings(API_TOKEN_PEPPER="integration-test-pepper", DATA_ENCRYPTION_KEY="integration-test-data-key")
+@override_settings(API_TOKEN_PEPPER="integration-test-pepper", DATA_ENCRYPTION_KEY="integration-test-data-key", WEBHOOK_MASTER_KEY="integration-webhook-test-key")
 class IntegrationManagementCommandTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -89,3 +89,53 @@ class IntegrationManagementCommandTests(TestCase):
         replay = self.client.post("/api/v1/users/imports", {"file": SimpleUploadedFile("users.csv", content, content_type="text/csv")}, **headers)
         self.assertEqual(first.status_code, 400); self.assertEqual(replay.status_code, 400)
         self.assertEqual(first.data, replay.data)
+
+    def test_token_issue_rejects_malformed_input_without_creating_tokens(self):
+        headers = {"HTTP_X_ORGANIZATION_ID": str(self.org.pk), "HTTP_IDEMPOTENCY_KEY": "invalid-token",
+                   "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2006"}
+        for payload in ({"scopes": [{}]}, {"scopes": [["users:read"]]}, {"name": "x" * 121}, ["users:read"]):
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/v1/integrations/service-tokens", payload, format="json", **headers)
+                self.assertEqual(response.status_code, 400)
+        self.assertFalse(ServiceToken.objects.exists())
+        self.assertFalse(IdempotencyRecord.objects.exists())
+
+    def test_missing_token_is_404_and_malformed_action_is_400(self):
+        headers = {"HTTP_X_ORGANIZATION_ID": str(self.org.pk), "HTTP_IDEMPOTENCY_KEY": "token-action",
+                   "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2007", "HTTP_IF_MATCH": "ACTIVE"}
+        missing = "/api/v1/integrations/service-tokens/00000000-0000-0000-0000-000000000001"
+        self.assertEqual(self.client.post(missing, {"action": "revoke"}, format="json", **headers).status_code, 404)
+        token, _ = ServiceToken.issue(self.org, "test", ["users:read"])
+        response = self.client.post(f"/api/v1/integrations/service-tokens/{token.pk}", {"action": []}, format="json", **headers)
+        self.assertEqual(response.status_code, 400)
+        token.refresh_from_db()
+        self.assertTrue(token.is_active)
+
+    def test_crm_subscription_has_tenant_and_member_cannot_rotate_secret(self):
+        from notifications.models import WebhookSubscription
+        headers = {"HTTP_X_ORGANIZATION_ID": str(self.org.pk), "HTTP_IDEMPOTENCY_KEY": "crm-create",
+                   "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2008"}
+        with patch("integrations.serializers.socket.getaddrinfo", return_value=[(None, None, None, None, ("93.184.216.34", 443))]):
+            response = self.client.post("/api/v1/integrations/crm/connections", {
+                "name": "CRM", "endpoint": "https://crm.example.test", "secret": "long-enough-test-secret",
+            }, format="json", **headers)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(WebhookSubscription.objects.get().organization_id, self.org.pk)
+        member = User.objects.create_user(email="crm-member@example.test", password="test")
+        OrganizationMembership.objects.create(user=member, organization=self.org, role="member")
+        self.client.force_authenticate(member)
+        denied = self.client.patch(f"/api/v1/integrations/crm/connections/{response.data['id']}", {
+            "secret": "different-long-secret",
+        }, format="json", **{**headers, "HTTP_IF_MATCH": response.data["updated_at"]})
+        self.assertEqual(denied.status_code, 403)
+
+    def test_revoked_token_cannot_be_rotated_into_new_access(self):
+        token, _ = ServiceToken.issue(self.org, "revoked", ["users:read"])
+        token.is_active = False
+        token.revoked_at = timezone.now()
+        token.save(update_fields=["is_active", "revoked_at"])
+        headers = {"HTTP_X_ORGANIZATION_ID": str(self.org.pk), "HTTP_IDEMPOTENCY_KEY": "revoked-rotate",
+                   "HTTP_X_REQUEST_ID": "84acb666-d825-4dba-b579-c7feb4af2009", "HTTP_IF_MATCH": "REVOKED"}
+        response = self.client.post(f"/api/v1/integrations/service-tokens/{token.pk}", {"action": "rotate"}, format="json", **headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(ServiceToken.objects.count(), 1)

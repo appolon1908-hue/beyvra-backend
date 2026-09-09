@@ -2,11 +2,13 @@ import csv
 import hashlib
 import hmac
 import io
+import re
 import uuid
 
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, status, throttling
 from rest_framework.parsers import JSONParser, MultiPartParser
@@ -18,7 +20,7 @@ from users.models import User
 from .crypto import decrypt, decrypt_secret, encrypt, encrypt_secret, fingerprint
 from .models import CRMConnection, DemoAccount, DemoLedgerEntry, ExternalIdentity, IntegrationAuditEvent, ServiceToken, UserImport, UserImportRow
 from .permissions import HasScope, ScopedBearerAuthentication, organization_for_request
-from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, ServiceTokenMetadataSerializer, UserCreateSerializer
+from .serializers import CRMConnectionSerializer, DemoAccountSerializer, ImportRowSerializer, ImportSerializer, ServiceTokenMetadataSerializer, ServiceTokenIssueSerializer, ServiceTokenActionSerializer, UserCreateSerializer
 from .tasks import process_user_import
 from .throttles import CRMInboundThrottle, ImportActionThrottle, ImportThrottle, UserCreateThrottle
 from .observability import IMPORT_ROWS_TOTAL, INVALID_SIGNATURE_TOTAL, USER_CREATE_TOTAL, count
@@ -176,28 +178,73 @@ class CRMInboundUserView(APIView):
     parser_classes = [JSONParser]
     throttle_classes = [CRMInboundThrottle]
 
+    @transaction.atomic
     def post(self, request, connection_id):
-        if int(request.META.get("CONTENT_LENGTH") or 0) > 1024 * 1024:
+        try:
+            declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
+        except (TypeError, ValueError):
+            return Response({"detail": "invalid content length"}, status=400)
+        if declared_length < 0:
+            return Response({"detail": "invalid content length"}, status=400)
+        if declared_length > 1024 * 1024:
             return Response({"detail": "payload too large"}, status=413)
-        connection = CRMConnection.objects.filter(id=connection_id, is_active=True).first()
-        if not connection: return Response({"detail": "connection not found"}, status=404)
-        timestamp = request.headers.get("X-Codestra-Timestamp", ""); event_id = request.headers.get("X-Codestra-Event-Id") or request.headers.get("Idempotency-Key"); signature = request.headers.get("X-Codestra-Signature-256", "")
-        try: signed_at = int(timestamp)
-        except ValueError: return Response({"detail": "invalid timestamp"}, status=401)
-        if abs(int(timezone.now().timestamp()) - signed_at) > 300 or not event_id: return Response({"detail": "expired or missing event"}, status=401)
+        body = request.body
+        if len(body) > 1024 * 1024:
+            return Response({"detail": "payload too large"}, status=413)
+        connection = CRMConnection.objects.select_for_update().filter(
+            id=connection_id, is_active=True, organization__is_active=True,
+            secret_revoked_at__isnull=True,
+        ).first()
+        if connection is None:
+            return Response({"detail": "connection not found"}, status=404)
+        timestamp = request.headers.get("X-Codestra-Timestamp", "")
+        event_id = request.headers.get("X-Codestra-Event-Id") or request.headers.get("Idempotency-Key", "")
+        signature = request.headers.get("X-Codestra-Signature-256", "").removeprefix("sha256=")
+        if not re.fullmatch(r"[0-9]{1,12}", timestamp) or not re.fullmatch(r"[0-9a-f]{64}", signature):
+            return Response({"detail": "invalid signature or timestamp"}, status=401)
+        if not event_id.strip() or len(event_id) > 255:
+            return Response({"detail": "invalid event identifier"}, status=400)
+        if abs(int(timezone.now().timestamp()) - int(timestamp)) > 300:
+            return Response({"detail": "expired event"}, status=401)
         connection_secret = decrypt_secret(connection.secret_ciphertext, connection.secret_nonce, connection.secret_key_version) if connection.secret_ciphertext else decrypt_secret(connection.secret_encrypted)
-        expected = hmac.new(connection_secret.encode(), f"{timestamp}.".encode() + request.body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature.removeprefix("sha256="), expected):
+        expected = hmac.new(connection_secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
             count(INVALID_SIGNATURE_TOTAL, "crm")
             return Response({"detail": "invalid signature"}, status=401)
-        replay_key = f"crm-replay:{connection.id}:{event_id}"
-        if not cache.add(replay_key, "seen", timeout=900): return Response({"detail": "replay"}, status=409)
-        if IntegrationAuditEvent.objects.filter(organization=connection.organization, action="crm.inbound", metadata__event_id=event_id).exists(): return Response({"detail": "replay"}, status=409)
-        serializer = UserCreateSerializer(data=request.data); serializer.is_valid(raise_exception=True); data = serializer.validated_data; data["organization_id"] = connection.organization.id
-        try: user, account = _create_user(data, connection.organization, f"crm:{connection.id}:{event_id}")
-        except (ValueError, IntegrityError): return Response({"detail": "duplicate identity"}, status=409)
-        IntegrationAuditEvent.objects.create(organization=connection.organization, action="crm.inbound", metadata={"event_id": event_id, "user_id": str(user.id)})
-        return Response(_result(user, account), status=201)
+        try:
+            record, created = begin_idempotent_request(
+                key=event_id, tenant_ref=connection.organization_id,
+                actor_ref=f"crm-connection:{connection.pk}",
+                endpoint=f"/api/v1/integrations/crm/{connection.pk}/users",
+                method="POST", request_data={"body_sha256": hashlib.sha256(body).hexdigest()},
+            )
+        except IdempotencyConflict:
+            return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
+        if not created:
+            return _replay(record)
+        # Preserve the pre-idempotency audit guard for already processed events.
+        if IntegrationAuditEvent.objects.filter(
+            organization=connection.organization, action="crm.inbound",
+            metadata__event_id=event_id, metadata__connection_id__isnull=True,
+        ).exists():
+            record.delete()
+            return Response({"detail": "legacy event already processed"}, status=409)
+        serializer = UserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        data["organization_id"] = connection.organization_id
+        try:
+            user, account = _create_user(data, connection.organization, f"crm:{connection.pk}:{event_id}")
+        except (ValueError, IntegrityError):
+            record.delete()
+            return Response({"detail": "duplicate identity"}, status=409)
+        IntegrationAuditEvent.objects.create(
+            organization=connection.organization, action="crm.inbound",
+            metadata={"event_id": event_id, "connection_id": str(connection.pk), "user_id": str(user.pk)},
+        )
+        result = _result(user, account)
+        complete_idempotent_request(record, status=201, body=result, resource_type="user", resource_id=user.pk)
+        return Response(result, status=201)
 
 
 class CSVTemplateView(APIView):
@@ -311,7 +358,7 @@ class CRMConnectionListView(APIView):
         except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
         if not created: return _replay(record)
         data = serializer.validated_data; secret = data.pop("secret"); ciphertext, nonce, version = encrypt_secret(secret); connection = CRMConnection.objects.create(organization=org, owner=request.user, secret_encrypted="", secret_ciphertext=ciphertext, secret_nonce=nonce, secret_key_version=version, secret_fingerprint=fingerprint(secret), secret_created_at=timezone.now(), **data)
-        WebhookSubscription.objects.create(user=request.user, url=connection.endpoint, categories=connection.event_categories, is_active=connection.is_active, **__import__("notifications.services", fromlist=["encrypted_webhook_fields"]).encrypted_webhook_fields(secret))
+        WebhookSubscription.objects.create(organization=org, user=request.user, url=connection.endpoint, categories=connection.event_categories, is_active=connection.is_active, **__import__("notifications.services", fromlist=["encrypted_webhook_fields"]).encrypted_webhook_fields(secret))
         body = CRMConnectionSerializer(connection).data
         _command_audit(organization=org, request=request, action="crm.connection.create", correlation_id=correlation_id, metadata={"request_id": request_id, "connection_id": str(connection.pk)})
         complete_idempotent_request(record, status=201, body=body, resource_type="crm_connection", resource_id=connection.pk)
@@ -320,18 +367,22 @@ class CRMConnectionListView(APIView):
 
 class CRMConnectionDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    def get_object(self, request, connection_id): return CRMConnection.objects.get(id=connection_id, organization=organization_for_request(request))
+    def get_object(self, request, connection_id): return get_object_or_404(CRMConnection, id=connection_id, organization=organization_for_request(request))
     def get(self, request, connection_id): return Response(CRMConnectionSerializer(self.get_object(request, connection_id)).data)
     @extend_schema(parameters=VERSIONED_COMMAND_PARAMETERS)
     @transaction.atomic
     def patch(self, request, connection_id):
+        if not request.user.is_staff:
+            return Response({"detail": "organization administrator required"}, status=403)
         command, error = _command_context(request, require_version=True)
         if error: return error
         key, request_id, correlation_id, expected_version = command
         org = organization_for_request(request)
-        obj = CRMConnection.objects.select_for_update().get(id=connection_id, organization=org)
+        obj = get_object_or_404(CRMConnection.objects.select_for_update(), id=connection_id, organization=org)
         old_endpoint = obj.endpoint
-        data = request.data.copy(); secret = data.pop("secret", None); serializer = CRMConnectionSerializer(obj, data=data, partial=True); serializer.is_valid(raise_exception=True)
+        serializer = CRMConnectionSerializer(obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        secret = serializer.validated_data.pop("secret", None)
         try: record, created = _begin_command(request, organization=org, key=key, payload={"connection_id": str(connection_id), "expected_version": expected_version, **request.data})
         except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
         if not created: return _replay(record)
@@ -344,7 +395,7 @@ class CRMConnectionDetailView(APIView):
             ciphertext, nonce, version = encrypt_secret(secret); obj.secret_encrypted = ""; obj.secret_ciphertext = ciphertext; obj.secret_nonce = nonce; obj.secret_key_version = version; obj.secret_fingerprint = fingerprint(secret); obj.secret_rotated_at = timezone.now(); obj.save(update_fields=["secret_encrypted", "secret_ciphertext", "secret_nonce", "secret_key_version", "secret_fingerprint", "secret_rotated_at", "updated_at"])
             from notifications.services import encrypted_webhook_fields
             subscription_updates.update(encrypted_webhook_fields(secret))
-        WebhookSubscription.objects.filter(user=obj.owner, url=old_endpoint).update(**subscription_updates)
+        WebhookSubscription.objects.filter(organization=org, user=obj.owner, url=old_endpoint).update(**subscription_updates)
         body = CRMConnectionSerializer(obj).data
         _command_audit(organization=org, request=request, action="crm.connection.update", correlation_id=correlation_id, metadata={"request_id": request_id, "connection_id": str(obj.pk), "secret_rotated": bool(secret)})
         complete_idempotent_request(record, status=200, body=body, resource_type="crm_connection", resource_id=obj.pk)
@@ -361,14 +412,13 @@ class ServiceTokenListView(APIView):
     def post(self, request):
         if not request.user.is_staff:
             return Response({"detail": "organization administrator required"}, status=403)
-        scopes = request.data.get("scopes", [])
-        allowed = {"users:read", "users:write", "users:import", "demo_accounts:read", "crm_connections:read", "crm_connections:write", "crm_deliveries:read", "crm_deliveries:retry", "webhooks:read", "webhooks:write"}
-        if not isinstance(scopes, list) or not set(scopes).issubset(allowed):
-            return Response({"detail": "invalid scopes"}, status=400)
+        serializer = ServiceTokenIssueSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        scopes = payload["scopes"]
         org = organization_for_request(request); command, error = _command_context(request)
         if error: return error
         key, request_id, correlation_id, _ = command
-        payload = {"name": request.data.get("name", "integration"), "scopes": sorted(scopes)}
         try: record, created = _begin_command(request, organization=org, key=key, payload=payload)
         except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
         if not created: return _replay_secret(record)
@@ -388,13 +438,18 @@ class ServiceTokenActionView(APIView):
         if error: return error
         key, request_id, correlation_id, expected_version = command
         org = organization_for_request(request)
-        token = ServiceToken.objects.select_for_update().get(id=token_id, organization=org)
-        if not request.user.is_staff: return Response({"detail": "organization administrator required"}, status=403)
-        action = request.data.get("action", "revoke")
-        if action not in {"revoke", "rotate"}: return Response({"detail": "unsupported action"}, status=400)
+        if not request.user.is_staff:
+            return Response({"detail": "organization administrator required"}, status=403)
+        token = get_object_or_404(ServiceToken.objects.select_for_update(), id=token_id, organization=org)
+        serializer = ServiceTokenActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
         try: record, created = _begin_command(request, organization=org, key=key, payload={"token_id": str(token_id), "action": action, "expected_version": expected_version})
         except IdempotencyConflict: return Response({"detail": "IDEMPOTENCY_CONFLICT"}, status=409)
         if not created: return _replay_secret(record) if action == "rotate" else _replay(record)
+        if action == "rotate" and (not token.is_active or token.revoked_at is not None):
+            record.delete()
+            return Response({"detail": "revoked tokens cannot be rotated"}, status=409)
         current_version = "ACTIVE" if token.is_active and token.revoked_at is None else "REVOKED"
         if expected_version != current_version:
             record.delete(); return Response({"detail": "VERSION_CONFLICT"}, status=409)
