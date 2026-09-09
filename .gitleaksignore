@@ -4,3 +4,7 @@
 # Reviewed SHA-256 workflow digest in the release-policy validator; not a credential.
 de1898949505d4104edec025e2a23b1c2ffab74f:.codestra/validate-production-orchestrator-contract.py:generic-api-key:452
 08b0abeeaf25ec944e0d92ab5bbc3e011fb6cf84:.codestra/validate-production-orchestrator-contract.py:generic-api-key:389
+# Reviewed SHA-256 release-policy mappings; exact historical false positives.
+1493fbb360459239006a874a1edaea111ae05232:.codestra/validate-production-orchestrator-contract.py:generic-api-key:483
+1493fbb360459239006a874a1edaea111ae05232:.codestra/validate-production-orchestrator-contract.py:generic-api-key:617
+1493fbb360459239006a874a1edaea111ae05232:.codestra/validate-production-orchestrator-contract.py:generic-api-key:620
