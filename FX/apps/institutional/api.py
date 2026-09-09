@@ -12,6 +12,7 @@ from rest_framework.permissions import SAFE_METHODS
 from rest_framework.views import APIView
 
 from integrations.models import OrganizationMembership
+from integrations.permissions import organization_for_request
 from apps.foundation.events import payload_hash
 from apps.foundation.models import ApplicationAuditEvent
 from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
@@ -49,7 +50,14 @@ RECONCILIATION_RESPONSE = inline_serializer("InstitutionalReconciliationResult",
 
 
 def _membership(request):
-    return OrganizationMembership.objects.select_related("organization").filter(user=request.user, is_active=True, organization__is_active=True).order_by("organization_id").first()
+    memberships = OrganizationMembership.objects.select_related("organization").filter(
+        user=request.user, is_active=True, organization__is_active=True,
+    )
+    # Preserve the unconfigured-account response without staging side effects.
+    if not memberships.exists() and not request.headers.get("X-Organization-ID"):
+        return None
+    organization = organization_for_request(request)
+    return memberships.filter(organization=organization).first()
 
 
 def _customer_institution(request):
