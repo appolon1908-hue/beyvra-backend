@@ -19,6 +19,7 @@ from notifications.tasks import deliver_webhook, purge_expired_notifications
 from integrations.models import Organization, OrganizationMembership
 
 
+@override_settings(WEBHOOK_MASTER_KEY="isolated-notification-test-only-key")
 class NotificationInboxTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
