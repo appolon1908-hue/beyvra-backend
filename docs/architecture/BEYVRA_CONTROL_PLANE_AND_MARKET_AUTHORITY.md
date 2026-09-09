@@ -1,6 +1,7 @@
 # Beyvra control plane and market-data authority
 
-Status: candidate architecture, fail-closed, simulation only  
+Status: candidate architecture, fail-closed, simulation only
+
 Contract: `2026-08-27.v1`
 
 ## Purpose
