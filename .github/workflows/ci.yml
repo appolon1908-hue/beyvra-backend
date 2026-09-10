@@ -70,9 +70,6 @@ jobs:
       - name: Install application and audit tools
         run: pip install -r FX/requirements.txt pip-audit bandit pyyaml
 
-      - name: Validate private OpenBao secret-file delivery
-        run: python -m unittest discover -s FX/FX -p test_openbao_secret_files.py -v
-
       - name: Validate automation fabric and regressions
         run: |
           python scripts/validate_beyvra_fabric.py

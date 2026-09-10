@@ -91,4 +91,3 @@ Logical prefix: `codestra/<environment>/beyvra/funding/providers/`.
 | --- | --- | --- |
 | `STRIPE_SECRET_KEY` | `STRIPE_SECRET_KEY_FILE` | When integration requires it |
 | `STRIPE_ENDPOINT_SECRET` | `STRIPE_ENDPOINT_SECRET_FILE` | When integration requires it |
-
