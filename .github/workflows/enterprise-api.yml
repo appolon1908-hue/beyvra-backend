@@ -97,7 +97,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/enterprise-evidence
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          git rev-parse --verify refs/remotes/origin/main >/dev/null
+          git fetch --no-tags origin main:refs/remotes/origin/main
           printf 'HEAD_SHA=%s\nBASE_SHA=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse origin/main)" | tee /tmp/enterprise-evidence/refs.txt
           git merge-base --is-ancestor origin/main HEAD
       - uses: actions/setup-python@v7
