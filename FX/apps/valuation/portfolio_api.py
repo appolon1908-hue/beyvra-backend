@@ -90,22 +90,36 @@ def _position_rows(account):
         if len(matches) == 1:
             instruments[symbol] = matches[0]
 
+    fx_rate_cache = {}
+
+    def _resolve_cached_rate(base_currency):
+        # Most positions in a portfolio share a handful of currency pairs, so
+        # resolve each pair's rate once per request instead of once per position.
+        base_currency = base_currency.upper()
+        quote_currency = account.quote_currency.upper()
+        cache_key = (base_currency, quote_currency)
+        if cache_key not in fx_rate_cache:
+            try:
+                rate, fx_refs, _ = FxValuationService.resolve_rate(
+                    base_currency, quote_currency, at=at,
+                )
+                if any(ref.rate <= 0 or ref.rate_time < cutoff for ref in fx_refs):
+                    raise ValueError("FX_RATE_STALE_OR_INVALID")
+            except ValueError as exc:
+                fx_rate_cache[cache_key] = (None, str(exc))
+            else:
+                fx_rate_cache[cache_key] = (rate, None)
+        return fx_rate_cache[cache_key]
+
     rows = []
     for position in positions:
         price = position.selected_market_price
         market_value = None
         valuation_error = None
         if price is not None:
-            try:
-                market_value, fx_refs, _ = FxValuationService.convert(
-                    position.quantity * price, position.selected_price_currency,
-                    account.quote_currency, at=at,
-                )
-                if any(ref.rate <= 0 or ref.rate_time < cutoff for ref in fx_refs):
-                    raise ValueError("FX_RATE_STALE_OR_INVALID")
-            except ValueError as exc:
-                market_value = None
-                valuation_error = str(exc)
+            rate, valuation_error = _resolve_cached_rate(position.selected_price_currency)
+            if rate is not None:
+                market_value = position.quantity * price * rate
         # Simulated settlement debits cash and records cost in account currency.
         unrealized = (
             market_value - (position.quantity * position.average_price)

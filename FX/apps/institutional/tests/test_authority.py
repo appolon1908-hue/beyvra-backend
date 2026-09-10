@@ -189,7 +189,7 @@ class InstitutionalAuthorityTests(TestCase):
         client = APIClient(); client.force_authenticate(self.operator)
         headers = {"HTTP_IDEMPOTENCY_KEY": "invalid-reference", "HTTP_X_REQUEST_ID": "44bb62c2-bc51-49fd-a490-2ccb62ea272d"}
         for endpoint in ("subaccounts", "reconciliation/run"):
-            for payload in ({}, [], {"institution_id": "invalid"}, {"institution_id": []}, {"institution_id": {}}):
+            for payload in ({}, [], {"institution_id": "invalid"}, {"institution_id": []}, {"institution_id": {}}, {"institution_id": True}, {"institution_id": 1}):
                 with self.subTest(endpoint=endpoint, payload=payload):
                     response = client.post(f"/api/v1/operator/institutional/{endpoint}", payload, format="json", **headers)
                     self.assertEqual(response.status_code, 400)
