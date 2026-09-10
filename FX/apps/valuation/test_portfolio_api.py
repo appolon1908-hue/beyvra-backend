@@ -195,3 +195,34 @@ class CanonicalPortfolioApiTests(TestCase):
         body = self.client.get("/api/v1/portfolio/summary").json()
         self.assertEqual(body["market_value"], "240.00000000")
         self.assertEqual(body["positions"][0]["price_currency"], "USD")
+
+    def test_fx_resolution_is_shared_by_currency_within_one_response(self):
+        from unittest.mock import patch
+        from apps.valuation.fx import FxValuationService
+        for index, currency in enumerate(("EUR", "eur")):
+            reference = f"EUR-{index}"
+            SimulatedPosition.objects.create(account=self.account, instrument_id=reference,
+                quantity=Decimal("2"), average_price=Decimal("100"))
+            self.add_price(instrument_id=reference, currency=currency)
+        FxValuationRate.objects.create(base_currency="EUR", quote_currency="USD", rate=Decimal("1.2"),
+            rate_time=self.now, provider_id="fixture", source_ref="shared", quality_state="FRESH", policy_version="1")
+        with patch.object(FxValuationService, "resolve_rate", wraps=FxValuationService.resolve_rate) as resolve:
+            body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["market_value"], "748.00000000")
+        self.assertEqual(sum(call.args == ("EUR", "USD") for call in resolve.call_args_list), 1)
+
+    def test_missing_fx_is_cached_only_for_the_current_request(self):
+        from unittest.mock import patch
+        from apps.valuation.fx import FxValuationService
+        for index in range(2):
+            reference = f"MISSING-{index}"
+            SimulatedPosition.objects.create(account=self.account, instrument_id=reference,
+                quantity=Decimal("1"), average_price=Decimal("100"))
+            self.add_price(instrument_id=reference, currency="EUR")
+        with patch.object(FxValuationService, "resolve_rate", wraps=FxValuationService.resolve_rate) as resolve:
+            body = self.client.get("/api/v1/portfolio/summary").json()
+        self.assertEqual(body["valuation_quality"], "PARTIAL")
+        self.assertEqual(sum(call.args == ("EUR", "USD") for call in resolve.call_args_list), 1)
+        FxValuationRate.objects.create(base_currency="EUR", quote_currency="USD", rate=Decimal("1.2"),
+            rate_time=self.now, provider_id="fixture", source_ref="new-evidence", quality_state="FRESH", policy_version="1")
+        self.assertEqual(self.client.get("/api/v1/portfolio/summary").json()["valuation_quality"], "COMPLETE")
