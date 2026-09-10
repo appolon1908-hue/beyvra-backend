@@ -42,6 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install pinned workflow parser
+        run: python -m pip install --disable-pip-version-check --no-input PyYAML==6.0.3
+
       - name: Validate certification authority
         shell: bash
         run: |
@@ -65,15 +68,20 @@ jobs:
             operations/verify_previous_release.py \
             scripts/database_fingerprint.py
 
-          ruby -e '
-            require "yaml"
-            YAML.load_file(".github/workflows/deploy.yml")
-            YAML.load_file(".github/workflows/certify-deployment.yml")
-            YAML.load_file(".github/workflows/certification-ci.yml")
-            YAML.load_file(".github/workflows/release-intent-dispatch.yml")
-            YAML.load_file(".github/workflows/promote-production-readonly.yml")
-            YAML.load_file(".github/workflows/go-live-readonly.yml")
-          '
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for path in (
+              ".github/workflows/deploy.yml",
+              ".github/workflows/certify-deployment.yml",
+              ".github/workflows/certification-ci.yml",
+              ".github/workflows/release-intent-dispatch.yml",
+              ".github/workflows/promote-production-readonly.yml",
+              ".github/workflows/go-live-readonly.yml",
+          ):
+              yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+          PY
 
           attest_sha=1e69f48acb82d1966a394da916b4c1698aa569d6
           test "$(grep -Fc "actions/attest@$attest_sha" \

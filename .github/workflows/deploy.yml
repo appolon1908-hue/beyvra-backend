@@ -78,7 +78,7 @@ jobs:
       NGINX_BASE_IMAGE: "docker.io/nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
     steps:
       - name: Require the workflow and source to come from protected main
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
@@ -165,14 +165,14 @@ jobs:
     env:
       BUILD_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.eligibility.outputs.source_sha }}
           fetch-depth: 0
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -192,7 +192,7 @@ jobs:
 
       - id: backend
         name: Build and publish backend
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: FX/Dockerfile
@@ -209,7 +209,7 @@ jobs:
 
       - id: edge
         name: Build and publish read-only edge
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./nginx
           file: ./nginx/Dockerfile
@@ -302,12 +302,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       BUILD_ATTESTATION_TYPE: https://github.com/appolon1908-hue/beyvra-backend/attestations/build/v1
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.eligibility.outputs.source_sha }}
           fetch-depth: 0
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -416,7 +416,7 @@ jobs:
             }' > release-manifest.json
           sha256sum release-manifest.json > release-manifest.json.sha256
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: beyvra-backend-release-${{ needs.eligibility.outputs.source_sha }}
           path: |
@@ -464,7 +464,7 @@ jobs:
       ALLOW_SCHEMA_MIGRATIONS: ${{ inputs.allow_schema_migrations }}
       MIGRATION_COMPATIBILITY_APPROVED: ${{ inputs.migration_compatibility_approved }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.eligibility.outputs.source_sha }}
           fetch-depth: 0
@@ -590,7 +590,7 @@ jobs:
             evidence/ || true
           rm -f evidence/workflow.env evidence/*/workflow.env
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: beyvra-backend-deployment-${{ inputs.target }}-${{ inputs.change_id }}
