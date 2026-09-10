@@ -20,24 +20,17 @@ from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from .secret_files import environment_secret
+
 load_dotenv()
 
 
-def _provider_credential(name: str) -> str:
-    """Load a provider credential from one environment or mounted-file source."""
-    value = os.getenv(name, "").strip()
-    file_reference = os.getenv(f"{name}_FILE", "").strip()
-    if value and file_reference:
-        raise ImproperlyConfigured(f"Configure only one source for {name}")
-    if not file_reference:
-        return value
+def _provider_credential(name: str, default: str = "") -> str:
+    """Load one private file or legacy inline source without environment mutation."""
     try:
-        secret = Path(file_reference).read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise ImproperlyConfigured(f"Unable to read configured secret file for {name}") from exc
-    if not secret:
-        raise ImproperlyConfigured(f"Configured secret file for {name} is empty")
-    return secret
+        return environment_secret(name, default)
+    except ValueError as exc:
+        raise ImproperlyConfigured(str(exc)) from None
 
 API_ENV = os.getenv("API_ENV", os.getenv("API_ENVIRONMENT", "production")).lower()
 NUM_PROXIES = int(os.getenv("NUM_PROXIES", "0"))
@@ -56,7 +49,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = _provider_credential("SECRET_KEY")
 
 # Keycloak is the sole human credential, MFA, and recovery authority when enabled.
 # The browser uses Authorization Code + PKCE; this backend remains a confidential
@@ -88,7 +81,7 @@ EMAIL_OTP_TTL_SECONDS = int(os.getenv("EMAIL_OTP_TTL_SECONDS", "600"))
 EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv("EMAIL_OTP_MAX_ATTEMPTS", "5"))
 EMAIL_OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv("EMAIL_OTP_RESEND_COOLDOWN_SECONDS", "60"))
 EMAIL_OTP_MAX_SENDS_PER_HOUR = int(os.getenv("EMAIL_OTP_MAX_SENDS_PER_HOUR", "5"))
-EMAIL_OTP_PEPPER = os.getenv("EMAIL_OTP_PEPPER", SECRET_KEY)
+EMAIL_OTP_PEPPER = _provider_credential("EMAIL_OTP_PEPPER", SECRET_KEY)
 STAGING_TEST_OTP_SECRET = os.getenv("STAGING_TEST_OTP_SECRET", "")
 PENDING_REGISTRATION_TTL_SECONDS = int(os.getenv("PENDING_REGISTRATION_TTL_SECONDS", "86400"))
 TRANSACTIONAL_EMAIL_ENABLED = os.getenv("TRANSACTIONAL_EMAIL_ENABLED", "false").lower() == "true"
@@ -98,7 +91,7 @@ BEYVRA_EMAIL_CLIENT_SECRET_FILE = os.getenv("BEYVRA_EMAIL_CLIENT_SECRET_FILE", "
 WELCOME_EMAIL_ENABLED = os.getenv("WELCOME_EMAIL_ENABLED", "false").lower() == "true"
 GOOGLE_AUTH_ENABLED = os.getenv("GOOGLE_AUTH_ENABLED", "false").lower() == "true"
 GOOGLE_OIDC_CLIENT_ID = os.getenv("GOOGLE_OIDC_CLIENT_ID", "")
-GOOGLE_OIDC_CLIENT_SECRET = os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")
+GOOGLE_OIDC_CLIENT_SECRET = _provider_credential("GOOGLE_OIDC_CLIENT_SECRET", "")
 GOOGLE_OIDC_REDIRECT_URI = os.getenv(
     "GOOGLE_OIDC_REDIRECT_URI", "https://api.beyvra.com/api/v1/auth/google/callback"
 )
@@ -153,7 +146,7 @@ NEWSDATA_ARCHIVE_ENTITLED = os.getenv("NEWSDATA_ARCHIVE_ENTITLED", "false").lowe
 NEWSDATA_DELAYED = os.getenv("NEWSDATA_DELAYED", "true").lower() == "true"
 COMPLIANCE_PROVIDER_ENABLED = False
 COMPLIANCE_POLICY_VERSION = "compliance-2026-08-11.v1"
-COMPLIANCE_WEBHOOK_SECRET = os.getenv("COMPLIANCE_WEBHOOK_SECRET", "")
+COMPLIANCE_WEBHOOK_SECRET = _provider_credential("COMPLIANCE_WEBHOOK_SECRET", "")
 COMPLIANCE_WEBHOOK_MAX_AGE_SECONDS = 300
 COMPLIANCE_PROVIDER_RESULT_MAX_AGE_SECONDS = 86400
 PLATFORM_WEBHOOK_SECRETS = {}
@@ -312,7 +305,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("DB_NAME"),
         "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "PASSWORD": _provider_credential("DB_PASSWORD"),
         "HOST": os.getenv("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
         "TEST": {
@@ -344,7 +337,7 @@ FINANCIAL_SERVICE_CIRCUIT_RECOVERY_SECONDS = int(os.getenv("FINANCIAL_SERVICE_CI
 REDIS_CACHE_CUSTOM_TIMEOUT = os.getenv("REDIS_CACHE_CUSTOM_TIMEOUT", 30)
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT")
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_PASSWORD = _provider_credential("REDIS_PASSWORD")
 REDIS_DATABASE = os.getenv("REDIS_DATABASE")
 REDIS_POOL_MAX_CONNECTIONS = os.getenv("REDIS_POOL_MAX_CONNECTIONS")
 REDIS_EXPIRE_KEY = os.getenv("REDIS_EXPIRE_KEY")
@@ -523,12 +516,12 @@ AUTH_USER_MODEL = "users.User"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-API_KEY_ALPACA = os.getenv("API_KEY_ALPACA")
-SECRET_KEY_ALPACA = os.getenv("API_SECRET_ALPACA")
+API_KEY_ALPACA = _provider_credential("API_KEY_ALPACA")
+SECRET_KEY_ALPACA = _provider_credential("API_SECRET_ALPACA")
 # Stripe Settings
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_ENDPOINT_SECRET = os.getenv("STRIPE_ENDPOINT_SECRET")
+STRIPE_SECRET_KEY = _provider_credential("STRIPE_SECRET_KEY")
+STRIPE_ENDPOINT_SECRET = _provider_credential("STRIPE_ENDPOINT_SECRET")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", PUBLIC_SITE_URL).rstrip("/")
 SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN") or None
@@ -558,14 +551,14 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_PORT = os.getenv("EMAIL_PORT")
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+EMAIL_HOST_PASSWORD = _provider_credential("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 
 GEOIP_PATH = os.path.join(BASE_DIR, "GeoLite2-Country.mmdb")
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_AUTH_TOKEN = _provider_credential("TWILIO_AUTH_TOKEN")
 TWILIO_SEND_FROM_NUMBER = os.getenv("TWILIO_SEND_FROM_NUMBER")
 
 
@@ -619,17 +612,17 @@ if not DEBUG:
 
 NEWS_DATA_API_KEY: str = _provider_credential("NEWS_DATA_API_KEY")
 POLYGON_API_KEY: str = _provider_credential("POLYGON_API_KEY")
-TWELVE_DATA_API_KEY: str = os.getenv("TWELVE_DATA_API_KEY", "")
+TWELVE_DATA_API_KEY: str = _provider_credential("TWELVE_DATA_API_KEY", "")
 PROVIDER_CREDENTIAL_ROOT: str = os.getenv("PROVIDER_CREDENTIAL_ROOT", "/etc/codestra/providers")
 COINGECKO_API_KEY: str = _provider_credential("COINGECKO_API_KEY")
-SCHEMA_API_KEY: str = os.getenv("SCHEMA_API_KEY", "")
+SCHEMA_API_KEY: str = _provider_credential("SCHEMA_API_KEY", "")
 TWELVE_DATA_REST_URL: str = os.getenv(
     "TWELVE_DATA_REST_URL", "https://api.twelvedata.com/time_series"
 )
 TWELVE_DATA_WEBSOCKET_URL: str = os.getenv(
     "TWELVE_DATA_WEBSOCKET_URL", "wss://ws.twelvedata.com/v1/quotes/price"
 )
-FIXER_API_KEY: str = os.getenv("FIXER_API_KEY", "")
+FIXER_API_KEY: str = _provider_credential("FIXER_API_KEY", "")
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
