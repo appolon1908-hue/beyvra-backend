@@ -1,5 +1,7 @@
 """Runtime secret delivery regressions; all material below is invalid test data."""
+import hashlib
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -71,6 +73,47 @@ class SecretFileTests(unittest.TestCase):
         replacement.chmod(0o400)
         replacement.replace(self.path)
         self.assertEqual(MODULE.read_secret_file(str(self.path), "EXAMPLE"), "rotated-fixture")
+
+    def test_inline_provider_credentials_keep_historic_trimming(self):
+        with patch.dict(os.environ, {"POLYGON_API_KEY": "  certification-placeholder\n"}, clear=True):
+            self.assertEqual(MODULE.environment_secret("POLYGON_API_KEY"), "certification-placeholder")
+
+    def test_inline_password_values_preserve_whitespace(self):
+        raw = "  database-password-with-spaces\n"
+        with patch.dict(os.environ, {"DB_PASSWORD": raw}, clear=True):
+            self.assertEqual(MODULE.environment_secret("DB_PASSWORD"), raw)
+
+    def test_crypto_key_file_uses_hardened_loader_and_never_falls_back(self):
+        if not os.getenv("DJANGO_SETTINGS_MODULE"):
+            self.skipTest("Django settings are required for the integration consumer regression")
+        from django.test import override_settings
+        from integrations import crypto
+
+        expected = hashlib.sha256(b"invalid-local-fixture").digest()
+        with patch.dict(os.environ, {"DATA_ENCRYPTION_KEY": "", "DATA_ENCRYPTION_KEY_FILE": ""}):
+            with override_settings(DATA_ENCRYPTION_KEY_FILE=str(self.path), DATA_ENCRYPTION_KEY=""):
+                self.assertEqual(crypto.data_key(), expected)
+
+            with override_settings(
+                DATA_ENCRYPTION_KEY_FILE=str(self.path),
+                DATA_ENCRYPTION_KEY="stale-inline-key",
+            ):
+                with self.assertRaisesRegex(RuntimeError, "only one source"):
+                    crypto.data_key()
+
+            self.path.chmod(0o644)
+            with override_settings(DATA_ENCRYPTION_KEY_FILE=str(self.path), DATA_ENCRYPTION_KEY=""):
+                with self.assertRaisesRegex(RuntimeError, "permissions"):
+                    crypto.data_key()
+
+    def test_contract_does_not_advertise_unused_password_reset_key(self):
+        contract = json.loads((ROOT / "openbao-secret-consumer.v1.json").read_text(encoding="utf-8"))
+        settings = {
+            binding["setting"]
+            for workload in contract["workloads"]
+            for binding in workload["bindings"]
+        }
+        self.assertNotIn("PASSWORD_RESET_SIGNING_KEY", settings)
 
 
 if __name__ == "__main__":

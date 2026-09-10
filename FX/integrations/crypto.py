@@ -8,22 +8,24 @@ from dataclasses import dataclass
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 
+from FX.secret_files import read_secret_file
+
 
 def _read_key(path_setting, env_setting, fallback=None):
     path = getattr(settings, path_setting, "")
+    inline = getattr(settings, env_setting, "") or os.getenv(env_setting, "")
     if path:
+        if inline:
+            raise RuntimeError(f"configure only one source for {env_setting}")
         try:
-            value = open(path, "rb").read().strip()
-            if value:
-                return value
-        except OSError:
-            pass
+            return read_secret_file(path, env_setting).encode()
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from None
     # Settings are the canonical application configuration surface. Production
     # settings populate these values from the protected environment, while
     # tests may safely override them without mutating the process environment.
-    value = getattr(settings, env_setting, "") or os.getenv(env_setting, "")
-    if value:
-        return value.encode()
+    if inline:
+        return inline.encode()
     return fallback
 
 

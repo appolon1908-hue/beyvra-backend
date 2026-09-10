@@ -6,6 +6,14 @@ from pathlib import Path
 
 MAX_SECRET_BYTES = 65536
 
+# Preserve byte-for-byte compatibility for inline secrets whose whitespace may be
+# significant. Provider/API credentials keep the historic normalization behavior.
+_RAW_INLINE_SECRET_NAMES = frozenset({"SECRET_KEY", "EMAIL_OTP_PEPPER"})
+
+
+def _preserve_inline_whitespace(name: str) -> bool:
+    return name.endswith("_PASSWORD") or name in _RAW_INLINE_SECRET_NAMES
+
 
 def read_secret_file(path: str, name: str) -> str:
     """Read one private regular UTF-8 file; never include its contents in errors."""
@@ -42,4 +50,7 @@ def environment_secret(name: str, default: str = "") -> str:
         if inline:
             raise ValueError(f"configure only one source for {name}")
         return read_secret_file(path, name)
-    return os.getenv(name, default)
+    value = os.getenv(name, default)
+    if _preserve_inline_whitespace(name):
+        return value
+    return value.strip()

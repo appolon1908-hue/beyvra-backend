@@ -40,6 +40,10 @@ read-only versus trading permissions, funding authorization and live account
 certification remain independent release requirements. This change preserves
 `PAPER_TRADING_ONLY = True` and does not turn on financial effects.
 
+Password-reset tokens continue to use Django's established `SECRET_KEY` token
+signing path. `PASSWORD_RESET_SIGNING_KEY_FILE` is not part of this OpenBao
+consumer contract until a separately reviewed token generator consumes it.
+
 ## beyvra-api
 
 Logical prefix: `codestra/<environment>/beyvra/api/runtime/`.
@@ -58,7 +62,6 @@ Logical prefix: `codestra/<environment>/beyvra/api/runtime/`.
 | `DATA_ENCRYPTION_KEY` | `DATA_ENCRYPTION_KEY_FILE` | When integration requires it |
 | `API_TOKEN_PEPPER` | `API_TOKEN_PEPPER_FILE` | When integration requires it |
 | `WEBHOOK_MASTER_KEY` | `WEBHOOK_MASTER_KEY_FILE` | When integration requires it |
-| `PASSWORD_RESET_SIGNING_KEY` | `PASSWORD_RESET_SIGNING_KEY_FILE` | When integration requires it |
 
 ## beyvra-trading-executor
 
