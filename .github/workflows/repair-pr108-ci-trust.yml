@@ -10,15 +10,8 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: repair-pr108-ci-trust
-  cancel-in-progress: false
-
 jobs:
   repair:
-    if: >-
-      github.repository == 'appolon1908-hue/beyvra-backend' &&
-      github.ref == 'refs/heads/remediation/openbao-api-secret-files-20260910'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -29,73 +22,82 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Repair credential-free ancestry checks and re-pin reviewed hashes
+      - name: Repair ancestry checks and reviewed hashes
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          from __future__ import annotations
-
           import hashlib
+          import re
           from pathlib import Path
 
-          ci = Path('.github/workflows/ci.yml')
-          enterprise = Path('.github/workflows/enterprise-api.yml')
-          validator = Path('.codestra/validate-production-orchestrator-contract.py')
-          self_path = Path('.github/workflows/repair-pr108-ci-trust.yml')
+          ci = Path(".github/workflows/ci.yml")
+          enterprise = Path(".github/workflows/enterprise-api.yml")
+          validator = Path(".codestra/validate-production-orchestrator-contract.py")
+          self_path = Path(".github/workflows/repair-pr108-ci-trust.yml")
 
-          ci_text = ci.read_text(encoding='utf-8')
+          ci_text = ci.read_text(encoding="utf-8")
           ci_old = '          git fetch origin "$EXPECTED_BASE_SHA"\n'
           ci_new = '          git rev-parse --verify "$EXPECTED_BASE_SHA^{commit}" >/dev/null\n'
           if ci_text.count(ci_old) != 1:
-              raise SystemExit('unexpected ci.yml ancestry-fetch shape')
-          ci.write_text(ci_text.replace(ci_old, ci_new, 1), encoding='utf-8')
+              raise SystemExit("unexpected ci.yml ancestry-fetch shape")
+          ci.write_text(ci_text.replace(ci_old, ci_new, 1), encoding="utf-8")
 
-          enterprise_text = enterprise.read_text(encoding='utf-8')
+          enterprise_text = enterprise.read_text(encoding="utf-8")
           enterprise_old = '          git fetch --no-tags origin main:refs/remotes/origin/main\n'
           enterprise_new = '          git rev-parse --verify refs/remotes/origin/main >/dev/null\n'
           if enterprise_text.count(enterprise_old) != 1:
-              raise SystemExit('unexpected enterprise-api.yml ancestry-fetch shape')
+              raise SystemExit("unexpected enterprise-api.yml ancestry-fetch shape")
           enterprise.write_text(
               enterprise_text.replace(enterprise_old, enterprise_new, 1),
-              encoding='utf-8',
+              encoding="utf-8",
           )
 
           ci_hash = hashlib.sha256(ci.read_bytes()).hexdigest()
           enterprise_hash = hashlib.sha256(enterprise.read_bytes()).hexdigest()
 
-          validator_text = validator.read_text(encoding='utf-8')
-          old_ci_pin = (
-              '        ".github/workflows/ci.yml": '
-              '"8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67",'
+          validator_text = validator.read_text(encoding="utf-8")
+          ci_pin = re.compile(
+              r'(?m)^(\s*"\.github/workflows/ci\.yml":\s*")'
+              r'8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67'
+              r'(",)$'
           )
-          new_ci_pin = f'        ".github/workflows/ci.yml": "{ci_hash}",'
-          if validator_text.count(old_ci_pin) != 1:
-              raise SystemExit('unexpected ci.yml trust pin')
-          validator_text = validator_text.replace(old_ci_pin, new_ci_pin, 1)
-
-          old_enterprise_pin = '''        ".github/workflows/enterprise-api.yml": (
-            "59cefdff03e0524db9e55202a5d87376"
-            "d8e296dc9842daf853afb7698f1ffb3d"
-        ),'''
-          new_enterprise_pin = f'''        ".github/workflows/enterprise-api.yml": (
-            "{enterprise_hash[:32]}"
-            "{enterprise_hash[32:]}"
-        ),'''
-          if validator_text.count(old_enterprise_pin) != 1:
-              raise SystemExit('unexpected enterprise-api.yml trust pin')
-          validator_text = validator_text.replace(
-              old_enterprise_pin,
-              new_enterprise_pin,
-              1,
+          validator_text, ci_count = ci_pin.subn(
+              lambda match: match.group(1) + ci_hash + match.group(2),
+              validator_text,
+              count=1,
           )
-          validator.write_text(validator_text, encoding='utf-8')
+          if ci_count != 1:
+              raise SystemExit("unexpected ci.yml trust pin")
 
-          compile(validator_text, str(validator), 'exec')
+          enterprise_pin = re.compile(
+              r'(?ms)^(\s*"\.github/workflows/enterprise-api\.yml":\s*\(\n'
+              r'\s*")59cefdff03e0524db9e55202a5d87376("\n'
+              r'\s*")d8e296dc9842daf853afb7698f1ffb3d("\n'
+              r'\s*\),)$'
+          )
+          def replace_enterprise(match):
+              return (
+                  match.group(1)
+                  + enterprise_hash[:32]
+                  + match.group(2)
+                  + enterprise_hash[32:]
+                  + match.group(3)
+              )
+          validator_text, enterprise_count = enterprise_pin.subn(
+              replace_enterprise,
+              validator_text,
+              count=1,
+          )
+          if enterprise_count != 1:
+              raise SystemExit("unexpected enterprise-api.yml trust pin")
+
+          compile(validator_text, str(validator), "exec")
+          validator.write_text(validator_text, encoding="utf-8")
           self_path.unlink()
 
-          print(f'CI_WORKFLOW_SHA256={ci_hash}')
-          print(f'ENTERPRISE_WORKFLOW_SHA256={enterprise_hash}')
+          print(f"CI_WORKFLOW_SHA256={ci_hash}")
+          print(f"ENTERPRISE_WORKFLOW_SHA256={enterprise_hash}")
           PY
 
           git diff --check
@@ -103,24 +105,20 @@ jobs:
           import subprocess
 
           expected = sorted([
-              '.codestra/validate-production-orchestrator-contract.py',
-              '.github/workflows/ci.yml',
-              '.github/workflows/enterprise-api.yml',
-              '.github/workflows/repair-pr108-ci-trust.yml',
+              ".codestra/validate-production-orchestrator-contract.py",
+              ".github/workflows/ci.yml",
+              ".github/workflows/enterprise-api.yml",
+              ".github/workflows/repair-pr108-ci-trust.yml",
           ])
           observed = sorted(filter(None, subprocess.check_output(
-              ['git', 'diff', '--name-only'], text=True
+              ["git", "diff", "--name-only"], text=True
           ).splitlines()))
           if observed != expected:
-              raise SystemExit(f'unexpected repair diff: {observed}')
+              raise SystemExit(f"unexpected repair diff: {observed}")
           PY
 
-          git config user.name 'appolon1908-hue'
-          git config user.email 'appolon1908@gmail.com'
-          git add \
-            .codestra/validate-production-orchestrator-contract.py \
-            .github/workflows/ci.yml \
-            .github/workflows/enterprise-api.yml \
-            .github/workflows/repair-pr108-ci-trust.yml
-          git commit -m 'fix(ci): repair credential-free ancestry validation'
+          git config user.name "appolon1908-hue"
+          git config user.email "appolon1908@gmail.com"
+          git add -A
+          git commit -m "fix(ci): repair credential-free ancestry validation"
           git push origin HEAD:remediation/openbao-api-secret-files-20260910
