@@ -16,6 +16,7 @@ class ProviderCredentialTests(SimpleTestCase):
         with tempfile.TemporaryDirectory() as directory:
             secret_file = Path(directory) / "provider-secret"
             secret_file.write_text("certification-placeholder\n", encoding="utf-8")
+            secret_file.chmod(0o400)
             with patch.dict(
                 os.environ,
                 {"POLYGON_API_KEY": "", "POLYGON_API_KEY_FILE": str(secret_file)},

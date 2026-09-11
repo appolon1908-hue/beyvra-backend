@@ -135,3 +135,11 @@ class TradeSecurityTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, Decimal("100.00"))
+
+
+# Included in the existing trade.test_security CI suite.
+from FX import test_openbao_secret_files
+
+
+class OpenBaoSecretDeliveryTests(test_openbao_secret_files.SecretFileTests):
+    """Exercise private secret delivery in the established application test suite."""
