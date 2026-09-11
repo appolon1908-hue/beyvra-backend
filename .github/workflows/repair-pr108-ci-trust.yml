@@ -28,7 +28,6 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import hashlib
-          import re
           from pathlib import Path
 
           ci = Path(".github/workflows/ci.yml")
@@ -57,40 +56,17 @@ jobs:
           enterprise_hash = hashlib.sha256(enterprise.read_bytes()).hexdigest()
 
           validator_text = validator.read_text(encoding="utf-8")
-          ci_pin = re.compile(
-              r'(?m)^(\s*"\.github/workflows/ci\.yml":\s*")'
-              r'8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67'
-              r'(",)$'
-          )
-          validator_text, ci_count = ci_pin.subn(
-              lambda match: match.group(1) + ci_hash + match.group(2),
-              validator_text,
-              count=1,
-          )
-          if ci_count != 1:
+          old_ci_pin = '        ".github/workflows/ci.yml": "8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67",'
+          new_ci_pin = f'        ".github/workflows/ci.yml": "{ci_hash}",'
+          if validator_text.count(old_ci_pin) != 1:
               raise SystemExit("unexpected ci.yml trust pin")
+          validator_text = validator_text.replace(old_ci_pin, new_ci_pin, 1)
 
-          enterprise_pin = re.compile(
-              r'(?ms)^(\s*"\.github/workflows/enterprise-api\.yml":\s*\(\n'
-              r'\s*")59cefdff03e0524db9e55202a5d87376("\n'
-              r'\s*")d8e296dc9842daf853afb7698f1ffb3d("\n'
-              r'\s*\),)$'
-          )
-          def replace_enterprise(match):
-              return (
-                  match.group(1)
-                  + enterprise_hash[:32]
-                  + match.group(2)
-                  + enterprise_hash[32:]
-                  + match.group(3)
-              )
-          validator_text, enterprise_count = enterprise_pin.subn(
-              replace_enterprise,
-              validator_text,
-              count=1,
-          )
-          if enterprise_count != 1:
+          old_enterprise_pin = '        ".github/workflows/enterprise-api.yml": ("59cefdff03e0524db9e55202a5d87376" "d8e296dc9842daf853afb7698f1ffb3d"),'
+          new_enterprise_pin = f'        ".github/workflows/enterprise-api.yml": ("{enterprise_hash[:32]}" "{enterprise_hash[32:]}"),'
+          if validator_text.count(old_enterprise_pin) != 1:
               raise SystemExit("unexpected enterprise-api.yml trust pin")
+          validator_text = validator_text.replace(old_enterprise_pin, new_enterprise_pin, 1)
 
           compile(validator_text, str(validator), "exec")
           validator.write_text(validator_text, encoding="utf-8")
