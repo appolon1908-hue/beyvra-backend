@@ -424,7 +424,7 @@ APPROVED_CONTROL_PLANE_WORKFLOW_SHA256: dict[str, dict[str, str]] = {
         ),
     },
     "appolon1908-hue/beyvra-backend": {
-        ".github/workflows/ci.yml": "8ef6d32c28f9d831964f13e2be9942fc3cdc3c188e22538e61b019cc1af11a67",
+        ".github/workflows/ci.yml": "bc0543a382d1be820a82922cdfb86c0ddb09467141882408420ebf1fbf665053",
     },
     "appolon1908-hue/beyvra-frontend": {
         ".github/workflows/ci.yml": "8dfd828f1c50f774d34d22008cc8e5eb3ce4961165b388e058fd3cab6130e2e5",
@@ -467,7 +467,7 @@ APPROVED_JOB_EXECUTABLE_CONFIGURATION_SHA256: dict[str, dict[str, str]] = {
     },
     "appolon1908-hue/beyvra-backend": {
         # Isolated PostgreSQL test services; exact workflow bytes remain pinned.
-        ".github/workflows/enterprise-api.yml": ("59cefdff03e0524db9e55202a5d87376" "d8e296dc9842daf853afb7698f1ffb3d"),
+        ".github/workflows/enterprise-api.yml": ("521929336b5c277a2bcc4bf23013e3e8" "eeda95c4622bbaca1338944e5094f96f"),
         ".github/workflows/workspace-api.yml": ("cc81f48ede81ffd8425e256c0cb44972" "6490e7937f5a2e6fce23aaca6ccbb86b"),
         ".github/workflows/registration-safety-ci.yml": ("ad1a8a5da49415b1ee672000409cc3f7" "1acafebe149038abeb576ae1778691e8"),
         ".github/workflows/security-command-ci.yml": ("a47a0f78eb38348b2c23e784e9048b13" "11297ffe30080c4b063048b296e66d41"),
