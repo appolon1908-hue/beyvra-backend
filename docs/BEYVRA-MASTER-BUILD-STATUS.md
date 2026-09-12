@@ -30,8 +30,11 @@ are used with explicit provenance, not represented as uploaded originals.
   tracked FX snapshot are removed. CI may generate an ignored temporary snapshot.
 - Regeneration captures 21 routes already present in code but missing from the
   previous snapshot. Watchlist handler operation IDs match their maintained
-  contract. Treasury/financial contracts now have all 55 previously missing IDs;
-  invalid operation references and malformed response descriptions are repaired.
+  contract. The owned treasury contract now has its 37 missing IDs; invalid
+  operation references and malformed response descriptions are repaired. The
+  upstream Financial Service snapshot keeps its original bytes and SHA pin;
+  its 18 operations without IDs are validated as a dependency, not renamed by
+  this consumer or counted as owned platform operations.
 - Validation rejects missing/duplicate/retired IDs, duplicate YAML keys, broken
   local references, retired tags/paths, provider customer URLs and direct wallet
   mutation paths. Contract CI also runs full OpenAPI semantic validation.
@@ -65,8 +68,10 @@ approval. Later changes require their own final-head CI and review; those older
 results do not certify the current working branch.
 
 The expanded local PostgreSQL suite passes all 116 tests, including the missing-
-calendar rollback regression. Fourteen OpenAPI, eleven matrix and ten AsyncAPI
-regressions accompany full semantic validation of all six current documents. Frontend build/typecheck pass;
+calendar rollback regression. Fifteen OpenAPI, eleven matrix and ten AsyncAPI
+regressions accompany full semantic validation of all six current documents.
+The five Financial Service consumer-contract tests additionally enforce the
+unchanged upstream snapshot, scopes, absent owner operations and fixture shapes. Frontend build/typecheck pass;
 lint has one pre-existing requireAuth hook warning and no errors. Ten session
 preflight tests, three isolated V2 protocol tests and seven public browser tests
 pass. Full authenticated staging E2E, final load, financial/provider certification,

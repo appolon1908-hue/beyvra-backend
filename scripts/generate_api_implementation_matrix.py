@@ -147,6 +147,8 @@ def render(rows, missing_ids):
         "evidence is absent; no implementation status is assigned. Existing contracts include "
         "compatibility APIs awaiting migration to the revised written mission. Duplicate snapshots "
         "of the same operation are counted once after resolving server base paths.",
+        "The separately pinned Financial Service dependency remains byte-for-byte upstream data "
+        "and is validated independently; the consumer does not assign its missing operation IDs.",
         "",
         "Only reviewed, source-bound records in `contracts/implementation-evidence.json` can assign "
         "IMPLEMENTED, IMPLEMENTED_GATED or REMOVED. A resolved route, a generic response or a feature "

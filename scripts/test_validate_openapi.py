@@ -4,7 +4,13 @@ import unittest
 
 import yaml
 
-from validate_openapi import UniqueKeyLoader, canonical_specs, validate_document
+from validate_openapi import (
+    PINNED_FINANCIAL_SPEC,
+    UniqueKeyLoader,
+    canonical_specs,
+    validate_document,
+    validate_file,
+)
 
 
 def contract():
@@ -16,6 +22,10 @@ def contract():
 
 
 class OpenApiValidationTests(unittest.TestCase):
+    def test_pinned_dependency_keeps_upstream_identity_and_validation(self):
+        self.assertNotIn(PINNED_FINANCIAL_SPEC, canonical_specs())
+        validate_file(PINNED_FINANCIAL_SPEC)
+
     def test_checked_in_documents(self):
         self.assertTrue(canonical_specs())
         for path in canonical_specs():

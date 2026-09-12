@@ -10,6 +10,12 @@ branch, commit, source path, and file digest verified during certification.
 `consumer-expectations.json` distinguishes supported operations from owner
 contracts that are explicitly absent and therefore remain fail-closed.
 
+The platform operation matrix indexes owned contracts under `contracts/openapi/`.
+This dependency retains its upstream bytes and optional operation IDs. Consumer
+normalization must never rewrite it or silently update its provenance digest.
+The general contract validator also checks its references and, in semantic mode,
+its full OpenAPI schema after verifying the existing pin.
+
 CI validates the pinned copy with:
 
 ```bash

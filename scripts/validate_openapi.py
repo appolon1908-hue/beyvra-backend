@@ -17,10 +17,8 @@ HTTP_METHODS = frozenset(
 # Single source of truth for the checked-in contract surface. CI and
 # scripts/production_gate.py both invoke this script with no arguments, so a
 # spec added under these paths is covered everywhere without touching either.
-CANONICAL_SPEC_GLOBS = (
-    "contracts/openapi/*.yaml",
-    "contracts/financial-service/v1/openapi.yaml",
-)
+CANONICAL_SPEC_GLOBS = ("contracts/openapi/*.yaml",)
+PINNED_FINANCIAL_SPEC = ROOT / "contracts/financial-service/v1/openapi.yaml"
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -52,7 +50,7 @@ def canonical_specs():
     return discovered
 
 
-def validate_document(document):
+def validate_document(document, *, require_operation_ids=True):
     if not isinstance(document, dict) or not isinstance(document.get("openapi"), str):
         raise ValueError("not an OpenAPI document")
     if not isinstance(document.get("paths"), dict):
@@ -98,7 +96,9 @@ def validate_document(document):
                 raise ValueError("direct financial balance mutation")
             operation_id = operation.get("operationId")
             if operation_id is None:
-                raise ValueError(f"missing operationId: {method} {path}")
+                if require_operation_ids:
+                    raise ValueError(f"missing operationId: {method} {path}")
+                continue
             if not isinstance(operation_id, str) or not operation_id.strip():
                 raise ValueError(f"invalid operationId: {method} {path}")
             if operation_id in {
@@ -158,6 +158,27 @@ def validate_document(document):
     walk(document)
 
 
+def validate_file(path, *, semantic=False):
+    with open(path, encoding="utf-8") as source:
+        document = yaml.load(source, Loader=UniqueKeyLoader)
+    pinned_dependency = path.resolve() == PINNED_FINANCIAL_SPEC.resolve()
+    if pinned_dependency:
+        from validate_financial_service_contract import validate
+
+        failures = validate(path, require_pinned=True)
+        if failures:
+            raise ValueError(
+                "pinned Financial Service contract failed: " + "; ".join(failures)
+            )
+    # Upstream operation IDs are optional in OpenAPI. A consumer must not edit
+    # a certified vendor snapshot to invent IDs or silently update its digest.
+    validate_document(document, require_operation_ids=not pinned_dependency)
+    if semantic:
+        from openapi_spec_validator import validate
+
+        validate(document)
+
+
 def main(paths, *, semantic=False):
     # An empty argv means "validate the whole contract surface", never
     # "validate nothing" -- reporting success without opening a file would
@@ -167,14 +188,10 @@ def main(paths, *, semantic=False):
         raise SystemExit(
             "no OpenAPI documents found; refusing to report success vacuously"
         )
+    if not paths:
+        documents.append(PINNED_FINANCIAL_SPEC)
     for path in documents:
-        with open(path, encoding="utf-8") as source:
-            document = yaml.load(source, Loader=UniqueKeyLoader)
-        validate_document(document)
-        if semantic:
-            from openapi_spec_validator import validate
-
-            validate(document)
+        validate_file(path, semantic=semantic)
         print(f"OPENAPI_VALID={path}")
     print(f"OPENAPI_DOCUMENTS_VALIDATED={len(documents)}")
 
