@@ -64,6 +64,8 @@ are used with explicit provenance, not represented as uploaded originals.
   identity provisioned through normal sign-in. Missing credentials fail before
   requests or evidence generation; the retired session-creation fallback is gone.
   Two isolated regressions cover this boundary without contacting staging.
+  The orchestrator’s existing source pin is refreshed for this reviewed helper
+  change; no classification rule or required check is disabled.
 
 ### Validation and release evidence
 
@@ -104,6 +106,7 @@ Fixed-Time labels and legacy display types remain F01/F05 cleanup work.
 
 Legacy payment, wallet and provider-specific compatibility routes retain their
 removal-after-caller-migration policy. No production credentials, financial
-activation flags or protected release controls have been changed. Main requires
+activation flags have been changed. The certifier source pin change remains
+subject to independent review. Main requires
 independent approval and green required checks; an author's approval cannot
 replace another review or bypass protection.
