@@ -45,6 +45,12 @@ YAML keys. It does not claim full OpenAPI semantic validation or that an endpoin
 is implemented. Existing missing IDs remain migration work. External references
 fail explicitly rather than being silently accepted or fetched over the network.
 
+The first CI run rejected a modification to the integrity-protected `ci.yml`.
+That workflow has been restored. New tests and lint checks run in the separate
+read-only `api-contract-validation.yml`; no workflow trust pins, branch rules,
+or production controls were relaxed. The repository orchestrator validator and
+its release-intent self-tests pass locally with this configuration.
+
 ### Runtime and caller findings
 
 | Existing surface | Revised disposition | Evidence / dependency |
