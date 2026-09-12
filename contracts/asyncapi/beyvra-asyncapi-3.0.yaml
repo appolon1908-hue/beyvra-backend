@@ -1,0 +1,1182 @@
+asyncapi: 3.0.0
+id: urn:beyvra:realtime:v2
+info:
+  title: Beyvra Realtime V2
+  version: 2026.1.0
+  description: Reconstructed target contract from the revised written PAPER/LIVE mission, not an uploaded original.
+    B17 must implement and certify all declared channels before this is production evidence. All events are sent
+    by Beyvra; browser subscriptions are authorized separately.
+defaultContentType: application/json
+servers:
+  customerGateway:
+    host: api.beyvra.com
+    pathname: /ws/v2
+    protocol: wss
+    description: Target gateway address, not an assertion of deployment readiness. Obtain an authorized realtime
+      session via POST /api/v1/realtime/session before connecting.
+    security:
+    - $ref: '#/components/securitySchemes/browserSession'
+channels:
+  quotes:
+    address: quotes.{instrumentId}
+    messages:
+      event:
+        $ref: '#/components/messages/QuoteUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: MARKET_ENTITLEMENT
+    x-beyvra-snapshot: /api/v1/market-data/quotes
+    parameters:
+      instrumentId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  candles:
+    address: candles.{instrumentId}.{interval}
+    messages:
+      event:
+        $ref: '#/components/messages/CandleUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: MARKET_ENTITLEMENT
+    x-beyvra-snapshot: /api/v1/market-data/candles
+    parameters:
+      instrumentId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+      interval:
+        description: Provider-supported interval; unsupported periods must be rejected.
+        enum:
+        - 1s
+        - 5s
+        - 15s
+        - 30s
+        - 1m
+        - 5m
+        - 15m
+        - 30m
+        - 1h
+        - 4h
+        - 1d
+        - 1w
+        - 1mo
+  accountOrders:
+    address: accounts.{accountId}.orders
+    messages:
+      event:
+        $ref: '#/components/messages/OrderUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/orders
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  accountExecutions:
+    address: accounts.{accountId}.executions
+    messages:
+      event:
+        $ref: '#/components/messages/ExecutionUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/executions
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  accountPositions:
+    address: accounts.{accountId}.positions
+    messages:
+      event:
+        $ref: '#/components/messages/PositionUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/positions
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  accountBalances:
+    address: accounts.{accountId}.balances
+    messages:
+      event:
+        $ref: '#/components/messages/BalanceUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/accounts/{accountId}/balances
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  accountFunding:
+    address: accounts.{accountId}.funding
+    messages:
+      event:
+        $ref: '#/components/messages/FundingUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/deposits
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+    x-beyvra-snapshots:
+    - /api/v1/deposits
+    - /api/v1/withdrawals
+    - /api/v1/transfers
+  accountCrypto:
+    address: accounts.{accountId}.crypto
+    messages:
+      event:
+        $ref: '#/components/messages/CryptoUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/crypto/deposits
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+    x-beyvra-snapshots:
+    - /api/v1/crypto/deposits
+    - /api/v1/crypto/withdrawals
+  accountRisk:
+    address: accounts.{accountId}.risk
+    messages:
+      event:
+        $ref: '#/components/messages/RiskUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: ACCOUNT_OWNER
+    x-beyvra-snapshot: /api/v1/accounts/{accountId}
+    parameters:
+      accountId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  customerNotifications:
+    address: customers.{customerId}.notifications
+    messages:
+      event:
+        $ref: '#/components/messages/NotificationUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: CUSTOMER_SELF
+    x-beyvra-snapshot: /api/v1/notifications
+    parameters:
+      customerId:
+        description: Opaque backend identifier. Server authorization is mandatory for private scope.
+  systemStatus:
+    address: system.status
+    messages:
+      event:
+        $ref: '#/components/messages/SystemStatusUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: SESSION
+    x-beyvra-snapshot: /api/v1/capabilities
+  adminApprovals:
+    address: admin.approvals
+    messages:
+      event:
+        $ref: '#/components/messages/ApprovalUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: WORKFORCE_APPROVALS_READ
+    x-beyvra-snapshot: /api/admin/v1/approvals
+  adminIncidents:
+    address: admin.incidents
+    messages:
+      event:
+        $ref: '#/components/messages/IncidentUpdated'
+    servers:
+    - $ref: '#/servers/customerGateway'
+    x-beyvra-authorization: WORKFORCE_INCIDENTS_READ
+    x-beyvra-snapshot: /api/admin/v1/incidents
+operations:
+  sendQuotes:
+    action: send
+    channel:
+      $ref: '#/channels/quotes'
+    messages:
+    - $ref: '#/channels/quotes/messages/event'
+    summary: Publish authorized quote updates.
+  sendCandles:
+    action: send
+    channel:
+      $ref: '#/channels/candles'
+    messages:
+    - $ref: '#/channels/candles/messages/event'
+    summary: Publish authorized candle updates.
+  sendAccountOrders:
+    action: send
+    channel:
+      $ref: '#/channels/accountOrders'
+    messages:
+    - $ref: '#/channels/accountOrders/messages/event'
+    summary: Publish authorized order updates.
+  sendAccountExecutions:
+    action: send
+    channel:
+      $ref: '#/channels/accountExecutions'
+    messages:
+    - $ref: '#/channels/accountExecutions/messages/event'
+    summary: Publish authorized execution updates.
+  sendAccountPositions:
+    action: send
+    channel:
+      $ref: '#/channels/accountPositions'
+    messages:
+    - $ref: '#/channels/accountPositions/messages/event'
+    summary: Publish authorized position updates.
+  sendAccountBalances:
+    action: send
+    channel:
+      $ref: '#/channels/accountBalances'
+    messages:
+    - $ref: '#/channels/accountBalances/messages/event'
+    summary: Publish authorized balance updates.
+  sendAccountFunding:
+    action: send
+    channel:
+      $ref: '#/channels/accountFunding'
+    messages:
+    - $ref: '#/channels/accountFunding/messages/event'
+    summary: Publish authorized funding updates.
+  sendAccountCrypto:
+    action: send
+    channel:
+      $ref: '#/channels/accountCrypto'
+    messages:
+    - $ref: '#/channels/accountCrypto/messages/event'
+    summary: Publish authorized crypto updates.
+  sendAccountRisk:
+    action: send
+    channel:
+      $ref: '#/channels/accountRisk'
+    messages:
+    - $ref: '#/channels/accountRisk/messages/event'
+    summary: Publish authorized risk updates.
+  sendCustomerNotifications:
+    action: send
+    channel:
+      $ref: '#/channels/customerNotifications'
+    messages:
+    - $ref: '#/channels/customerNotifications/messages/event'
+    summary: Publish authorized notification updates.
+  sendSystemStatus:
+    action: send
+    channel:
+      $ref: '#/channels/systemStatus'
+    messages:
+    - $ref: '#/channels/systemStatus/messages/event'
+    summary: Publish authorized systemstatus updates.
+  sendAdminApprovals:
+    action: send
+    channel:
+      $ref: '#/channels/adminApprovals'
+    messages:
+    - $ref: '#/channels/adminApprovals/messages/event'
+    summary: Publish authorized approval updates.
+  sendAdminIncidents:
+    action: send
+    channel:
+      $ref: '#/channels/adminIncidents'
+    messages:
+    - $ref: '#/channels/adminIncidents/messages/event'
+    summary: Publish authorized incident updates.
+components:
+  securitySchemes:
+    browserSession:
+      type: httpApiKey
+      name: beyvra_access
+      in: cookie
+      description: HttpOnly application session. Provider credentials are never browser credentials. A connection
+        session does not authorize arbitrary private subscriptions.
+  messages:
+    QuoteUpdated:
+      name: QuoteUpdated
+      title: Quote event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/QuoteEvent'
+    CandleUpdated:
+      name: CandleUpdated
+      title: Candle event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/CandleEvent'
+    OrderUpdated:
+      name: OrderUpdated
+      title: Order event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/OrderEvent'
+    ExecutionUpdated:
+      name: ExecutionUpdated
+      title: Execution event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/ExecutionEvent'
+    PositionUpdated:
+      name: PositionUpdated
+      title: Position event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/PositionEvent'
+    BalanceUpdated:
+      name: BalanceUpdated
+      title: Balance event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/BalanceEvent'
+    FundingUpdated:
+      name: FundingUpdated
+      title: Funding event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/FundingEvent'
+    CryptoUpdated:
+      name: CryptoUpdated
+      title: Crypto event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/CryptoEvent'
+    RiskUpdated:
+      name: RiskUpdated
+      title: Risk event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/RiskEvent'
+    NotificationUpdated:
+      name: NotificationUpdated
+      title: Notification event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/NotificationEvent'
+    SystemStatusUpdated:
+      name: SystemStatusUpdated
+      title: SystemStatus event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/SystemStatusEvent'
+    ApprovalUpdated:
+      name: ApprovalUpdated
+      title: Approval event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/ApprovalEvent'
+    IncidentUpdated:
+      name: IncidentUpdated
+      title: Incident event
+      contentType: application/json
+      correlationId:
+        location: $message.payload#/correlation_id
+      payload:
+        $ref: '#/components/schemas/IncidentEvent'
+  schemas:
+    EventEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        correlation_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        stream_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sequence:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        occurred_at:
+          type: string
+          format: date-time
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        customer_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        data:
+          type: object
+        event_type:
+          type: string
+          minLength: 1
+          maxLength: 128
+        schema_version:
+          type: integer
+          enum:
+          - 1
+      required:
+      - event_id
+      - correlation_id
+      - stream_id
+      - sequence
+      - occurred_at
+      - data
+      - event_type
+      - schema_version
+    Quote:
+      type: object
+      additionalProperties: false
+      properties:
+        instrument_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        bid:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        ask:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        last:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        quoted_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+      required:
+      - instrument_id
+      - quoted_at
+      - stale
+      anyOf:
+      - required:
+        - bid
+        - ask
+      - required:
+        - last
+    Candle:
+      type: object
+      additionalProperties: false
+      properties:
+        instrument_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        interval:
+          type: string
+          enum:
+          - 1s
+          - 5s
+          - 15s
+          - 30s
+          - 1m
+          - 5m
+          - 15m
+          - 30m
+          - 1h
+          - 4h
+          - 1d
+          - 1w
+          - 1mo
+        opened_at:
+          type: string
+          format: date-time
+        open:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        high:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        low:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        close:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        volume:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        closed:
+          type: boolean
+      required:
+      - instrument_id
+      - interval
+      - opened_at
+      - open
+      - high
+      - low
+      - close
+      - closed
+    Order:
+      type: object
+      additionalProperties: false
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        instrument_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        side:
+          type: string
+          enum:
+          - BUY
+          - SELL
+        order_type:
+          type: string
+          enum:
+          - MARKET
+          - LIMIT
+          - STOP
+          - STOP_LIMIT
+        quantity:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        limit_price:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        stop_price:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        time_in_force:
+          type: string
+        status:
+          type: string
+          enum:
+          - CREATED
+          - VALIDATING
+          - ACCEPTED
+          - ROUTING
+          - PARTIALLY_FILLED
+          - FILLED
+          - CANCEL_PENDING
+          - CANCELED
+          - REJECTED
+          - EXPIRED
+        filled_quantity:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        average_fill_price:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - order_id
+      - account_id
+      - instrument_id
+      - side
+      - order_type
+      - quantity
+      - time_in_force
+      - status
+      - filled_quantity
+      - created_at
+      - updated_at
+    Execution:
+      type: object
+      additionalProperties: false
+      properties:
+        execution_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        instrument_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        quantity:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        price:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        fee:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        executed_at:
+          type: string
+          format: date-time
+        provider_reference:
+          type: string
+          maxLength: 128
+          description: Opaque external reference, never a provider credential.
+      required:
+      - execution_id
+      - order_id
+      - account_id
+      - instrument_id
+      - quantity
+      - price
+      - fee
+      - executed_at
+    Position:
+      type: object
+      additionalProperties: false
+      properties:
+        position_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        instrument_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        quantity:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        average_entry:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        mark_price:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        cost_basis:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        realized_pnl:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        unrealized_pnl:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        margin:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        stop_loss:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        take_profit:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - position_id
+      - account_id
+      - instrument_id
+      - quantity
+      - average_entry
+      - cost_basis
+      - realized_pnl
+      - updated_at
+    Balance:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        asset:
+          type: string
+          minLength: 1
+          maxLength: 16
+        total:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        available:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        reserved:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        pending:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        as_of:
+          type: string
+          format: date-time
+      required:
+      - account_id
+      - asset
+      - total
+      - available
+      - reserved
+      - pending
+      - as_of
+    Funding:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        transaction_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        transaction_type:
+          type: string
+          enum:
+          - DEPOSIT
+          - WITHDRAWAL
+          - TRANSFER
+        status:
+          type: string
+          minLength: 1
+          maxLength: 40
+        amount:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        asset:
+          type: string
+          maxLength: 16
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - account_id
+      - transaction_id
+      - transaction_type
+      - status
+      - amount
+      - asset
+      - updated_at
+    Crypto:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        transaction_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        transaction_type:
+          type: string
+          enum:
+          - DEPOSIT
+          - WITHDRAWAL
+        network_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        asset:
+          type: string
+          maxLength: 16
+        amount:
+          type: string
+          pattern: ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$
+          maxLength: 80
+          description: Exact decimal string; never a floating-point financial amount.
+        status:
+          type: string
+          maxLength: 40
+        transaction_hash:
+          type: string
+          maxLength: 256
+        confirmations:
+          type: integer
+          minimum: 0
+        required_confirmations:
+          type: integer
+          minimum: 1
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - account_id
+      - transaction_id
+      - transaction_type
+      - network_id
+      - asset
+      - amount
+      - status
+      - updated_at
+    Risk:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reason_code:
+          type: string
+          maxLength: 80
+        severity:
+          type: string
+          enum:
+          - INFO
+          - WARNING
+          - CRITICAL
+        message:
+          type: string
+          maxLength: 2000
+        trading_enabled:
+          type: boolean
+        occurred_at:
+          type: string
+          format: date-time
+      required:
+      - account_id
+      - reason_code
+      - severity
+      - message
+      - trading_enabled
+      - occurred_at
+    Notification:
+      type: object
+      additionalProperties: false
+      properties:
+        notification_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        customer_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        category:
+          type: string
+          maxLength: 64
+        title:
+          type: string
+          maxLength: 250
+        body:
+          type: string
+          maxLength: 4000
+        created_at:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+      required:
+      - notification_id
+      - customer_id
+      - category
+      - title
+      - body
+      - created_at
+      - read
+    SystemStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        domain:
+          type: string
+          maxLength: 64
+        status:
+          type: string
+          enum:
+          - AVAILABLE
+          - DEGRADED
+          - UNAVAILABLE
+          - MAINTENANCE
+        as_of:
+          type: string
+          format: date-time
+      required:
+      - domain
+      - status
+      - as_of
+    Approval:
+      type: object
+      additionalProperties: false
+      properties:
+        approval_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        requester_user_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        approver_user_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        action_type:
+          type: string
+          maxLength: 80
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - REVIEWED
+          - APPROVED
+          - EXECUTED
+          - REJECTED
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - approval_id
+      - requester_user_id
+      - action_type
+      - status
+      - updated_at
+    Incident:
+      type: object
+      additionalProperties: false
+      properties:
+        incident_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        severity:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - MITIGATED
+          - RESOLVED
+        title:
+          type: string
+          maxLength: 250
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - incident_id
+      - severity
+      - status
+      - title
+      - updated_at
+    QuoteEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Quote'
+          account_id: false
+          customer_id: false
+    CandleEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Candle'
+          account_id: false
+          customer_id: false
+    OrderEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Order'
+          customer_id: false
+        required:
+        - account_id
+    ExecutionEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Execution'
+          customer_id: false
+        required:
+        - account_id
+    PositionEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Position'
+          customer_id: false
+        required:
+        - account_id
+    BalanceEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Balance'
+          customer_id: false
+        required:
+        - account_id
+    FundingEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Funding'
+          customer_id: false
+        required:
+        - account_id
+    CryptoEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Crypto'
+          customer_id: false
+        required:
+        - account_id
+    RiskEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Risk'
+          customer_id: false
+        required:
+        - account_id
+    NotificationEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Notification'
+          account_id: false
+        required:
+        - customer_id
+    SystemStatusEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/SystemStatus'
+          account_id: false
+          customer_id: false
+    ApprovalEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Approval'
+    IncidentEvent:
+      allOf:
+      - $ref: '#/components/schemas/EventEnvelope'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Incident'
+x-beyvra-provenance:
+  source: Revised user-written PAPER/LIVE mission
+  reconstructed_on: '2026-09-12'
+  original_file_available: false
+x-beyvra-recovery:
+  sequence_scope: stream_id
+  gap_action: Pause local assumptions; fetch authorized REST snapshots and resume at the snapshot stream cursor.
+  authorization: Reauthorize account/customer/workforce scope on subscribe and reconnect. A supplied ID is never
+    authorization.
+  scope_consistency: Channel scope IDs, envelope account/customer IDs, and data account/customer IDs must match.
+    Enforce in the server publisher and subscription authorization.

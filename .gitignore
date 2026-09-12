@@ -149,6 +149,7 @@ backups/*.sql.gz
 backups/*-web-inspect.json
 venv/
 .venv/
+**/node_modules/
 
 # Additional files for debug
 FX/dhelp_manage.py

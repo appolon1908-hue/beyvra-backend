@@ -42,6 +42,13 @@ identify that provenance; they must not be described as uploaded originals.
 - The paired frontend B00 branch removes application Demo API clients. Practice
   entry redirects through secure login, platform flags use workspace bootstrap,
   and PAPER accounts cannot enable financial UI capabilities.
+- A reconstructed AsyncAPI 3.0 target declares all thirteen shared realtime
+  channels, typed payloads, scope policy and REST recovery metadata. Design notes
+  preserve the written mission and explicitly identify the missing original
+  attachments. Neither document claims runtime or production certification.
+- Contract CI now validates AsyncAPI with a locked parser and ten payload
+  regressions, including private scopes, decimal strings and RFC3339 dates.
+  Tool dependencies are excluded from the backend container build context.
 
 These changes are not deployed. The two B00 branches form a coordinated migration,
 not the start of a later frontend milestone. Frontend application callers must be
@@ -53,6 +60,9 @@ merged and released before backend route retirement reaches a running workload.
   application validation and container scans. Those results do not certify later
   commits; each new head requires fresh CI.
 - Twelve contract regression tests pass against seven current documents.
+- Ten AsyncAPI payload regressions and the AsyncAPI parser pass locally. The
+  contract tooling dependency audit reports zero known vulnerabilities. These
+  checks supplement, rather than replace, the outstanding B17 runtime tests.
 - PostgreSQL account, retirement and full canonical trading regression run:
   109 tests passed after lock-order and timestamp-preservation refinements.
 - Frontend dependency installation, build and typecheck pass. Lint has no errors
