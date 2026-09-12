@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Validate checked-in OpenAPI identities and document-local references."""
 
+import argparse
 from pathlib import Path
 import re
-import sys
 from urllib.parse import unquote
 
 import yaml
@@ -20,7 +20,6 @@ HTTP_METHODS = frozenset(
 CANONICAL_SPEC_GLOBS = (
     "contracts/openapi/*.yaml",
     "contracts/financial-service/v1/openapi.yaml",
-    "FX/openapi.platform-ops.yaml",
 )
 
 
@@ -98,12 +97,24 @@ def validate_document(document):
             ):
                 raise ValueError("direct financial balance mutation")
             operation_id = operation.get("operationId")
-            # Some existing auxiliary contracts omit IDs. The migration audit
-            # records those gaps; supplied IDs must already be valid and unique.
             if operation_id is None:
-                continue
+                raise ValueError(f"missing operationId: {method} {path}")
             if not isinstance(operation_id, str) or not operation_id.strip():
                 raise ValueError(f"invalid operationId: {method} {path}")
+            if operation_id in {
+                "createDemoSession",
+                "previewDemoOrder",
+                "createDemoOrder",
+                "listDemoOrders",
+                "getDemoOrder",
+                "cancelDemoOrder",
+                "listDemoTrades",
+                "getDemoWallet",
+                "refillDemoWallet",
+                "adminDemoCredit",
+                "adminDemoReset",
+            }:
+                raise ValueError("retired Demo operationId")
             if operation_id in operation_ids:
                 raise ValueError(f"duplicate operationId: {operation_id}")
             operation_ids.add(operation_id)
@@ -147,7 +158,7 @@ def validate_document(document):
     walk(document)
 
 
-def main(paths):
+def main(paths, *, semantic=False):
     # An empty argv means "validate the whole contract surface", never
     # "validate nothing" -- reporting success without opening a file would
     # let a broken spec reach production behind a green check.
@@ -160,9 +171,21 @@ def main(paths):
         with open(path, encoding="utf-8") as source:
             document = yaml.load(source, Loader=UniqueKeyLoader)
         validate_document(document)
+        if semantic:
+            from openapi_spec_validator import validate
+
+            validate(document)
         print(f"OPENAPI_VALID={path}")
     print(f"OPENAPI_DOCUMENTS_VALIDATED={len(documents)}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("paths", nargs="*")
+    parser.add_argument(
+        "--semantic",
+        action="store_true",
+        help="Also validate the full OpenAPI specification schema",
+    )
+    arguments = parser.parse_args()
+    main(arguments.paths, semantic=arguments.semantic)

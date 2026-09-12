@@ -1,26 +1,26 @@
 # Beyvra PAPER/LIVE API migration authority
 
-The revised 2026 PAPER/LIVE mission supersedes the separate Demo API freeze.
-PAPER and LIVE are account execution modes, with shared orders, executions,
-positions, portfolio, and realtime contracts. PAPER funds never enter the live
-financial ledger. A customer cannot promote a PAPER account to LIVE.
+The revised written PAPER/LIVE mission governs this migration. Accounts determine
+execution mode. PAPER and LIVE share the target order, execution, position,
+portfolio and realtime surfaces. PAPER funds never enter the real ledger and a
+customer cannot promote a PAPER account to LIVE.
 
-`contracts/openapi/beyvra-v1.yaml` remains the checked-in runtime snapshot during
-B00. The requested OpenAPI 3.1, AsyncAPI 3.0, and design-notes files were not
-provided in either repository or the workspace. Any reconstructed contract must
-identify the written mission as its source and must not be represented as an
-uploaded original.
+`contracts/openapi/beyvra-openapi-3.1.yaml` is the generated runtime snapshot. It
+extends the existing Django schema with OpenAPI 3.1 and explicit account identity.
+It records its provenance and is not presented as an unavailable uploaded
+original or as evidence that every final target API already exists. Auxiliary
+domain contracts remain checked; duplicate tracked runtime snapshots are removed.
 
-The obsolete `codestra-demo-v1.yaml` duplicate has been retired. Its historical
-payment/wallet entries are not authority to enable or delete funding handlers.
-Legacy funding routes retain their existing removal-after-migration policy.
+The retired Demo namespace/tag/operation IDs cannot be reintroduced. The old Demo
+specification is removed. Legacy funding routes are removed after callers migrate;
+their presence never grants permission to enable funding or external execution.
 
-B00 removes the Demo routes and guest-session creation, adds PAPER/LIVE account
-identity with isolated virtual projections, and migrates frontend callers in a
-paired B00 branch. Contract reconstruction, the implementation matrix, and
-remaining B00 checks must be completed before this milestone is merge-ready.
+`docs/API-IMPLEMENTATION-MATRIX.md` is generated from operation IDs. Verified
+backend implementations have source-bound evidence; unverified rows have no
+assigned status. Final certification rejects missing evidence. Returning a generic
+response or FEATURE_DISABLED does not establish an implemented provider adapter.
 
-An API operation is not implemented merely because it appears in a schema.
-Provider-dependent operations may be marked implemented and gated only when the
-adapter and failure paths are implemented and verified. B19 must prove complete
-operation-to-route-to-service-to-test coverage before backend certification.
+B00 establishes this migration foundation and its paired caller/test-harness
+changes. The subsequent milestones extend the existing services, reconcile target
+paths, add provider integrations and finish frontend wiring. B19 and final staging
+certification must prove complete coverage before production release.

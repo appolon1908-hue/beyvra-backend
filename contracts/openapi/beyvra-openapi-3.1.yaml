@@ -1,8 +1,14 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: Tradi Trading API
+  title: Beyvra Trading API
   version: 1.0.0
-  description: Versioned API contract for the Tradi paper-trading platform.
+  x-beyvra-provenance:
+    source: Existing Django runtime, extended under the revised written PAPER/LIVE
+      mission
+    original_file_available: false
+    runtime_snapshot_is_not_completion_evidence: true
+  description: Beyvra API with shared PAPER/LIVE account identity. Compatibility surfaces
+    remain documented during migration.
 paths:
   /api/admin/dashboard/over_views:
     get:
@@ -191,23 +197,17 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                description: User banned successfully.
-          description: ''
         '403':
           content:
             application/json:
               schema:
                 description: Unauthorized action.
           description: ''
-        '404':
+        '409':
           content:
             application/json:
               schema:
-                description: User not found.
+                description: Governed account restriction workflow required.
           description: ''
   /api/admin/users/{user_id}/delete/:
     delete:
@@ -222,8 +222,13 @@ paths:
       tags:
       - admin
       responses:
-        '204':
-          description: No response body
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/admin/users/{user_id}/details/:
     get:
       operationId: admin_users_details_retrieve
@@ -270,11 +275,12 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedUserVerificationStatusRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserVerificationStatus'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/face/status/:
     patch:
@@ -303,11 +309,12 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedUserVerificationStatusRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserVerificationStatus'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/reset-password/:
     post:
@@ -332,11 +339,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/roles/:
     get:
@@ -354,7 +362,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
     put:
       operationId: admin_users_roles_update
@@ -382,7 +398,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
     patch:
       operationId: admin_users_roles_partial_update
@@ -410,7 +434,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/toggle-status/:
     patch:
@@ -436,11 +468,12 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/unban/:
     post:
@@ -467,23 +500,17 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                description: User unbanned successfully.
-          description: ''
         '403':
           content:
             application/json:
               schema:
                 description: Unauthorized action.
           description: ''
-        '404':
+        '409':
           content:
             application/json:
               schema:
-                description: User not found.
+                description: Governed account restriction workflow required.
           description: ''
   /api/admin/users/{user_id}/update/:
     put:
@@ -509,11 +536,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/update-status/:
     patch:
@@ -539,11 +567,12 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/{user_id}/verification/status/:
     patch:
@@ -572,11 +601,12 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedUserVerificationStatusRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserVerificationStatus'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/bulk/:
     post:
@@ -599,11 +629,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/bulk-reset-password/:
     post:
@@ -622,11 +653,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/bulk/create/:
     post:
@@ -682,11 +714,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/export/:
     get:
@@ -914,6 +947,12 @@ paths:
               schema:
                 description: User not found.
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                description: Governed compliance approval workflow required.
+          description: ''
     patch:
       operationId: admin_users_kyc_verify_partial_update
       description: Verify user KYC
@@ -955,6 +994,12 @@ paths:
               schema:
                 description: User not found.
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                description: Governed compliance approval workflow required.
+          description: ''
   /api/admin/users/rbac/roles/:
     get:
       operationId: admin_users_rbac_roles_retrieve
@@ -984,11 +1029,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/rbac/users/assign-role/:
     post:
@@ -1007,11 +1053,12 @@ paths:
             schema:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '409':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                type: object
+                additionalProperties: {}
           description: ''
   /api/admin/users/rbac/users/check-permissions/:
     post:
@@ -1284,6 +1331,23 @@ paths:
     post:
       operationId: bank_account_create
       description: APIs to get, create, update and delete a bank account for a user.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - bank_account
       requestBody:
@@ -1316,6 +1380,28 @@ paths:
     patch:
       operationId: bank_account_partial_update
       description: APIs to get, create, update and delete a bank account for a user.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - bank_account
       requestBody:
@@ -1347,6 +1433,28 @@ paths:
     delete:
       operationId: bank_account_destroy
       description: APIs to get, create, update and delete a bank account for a user.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - bank_account
       responses:
@@ -1836,12 +1944,13 @@ paths:
         schema:
           type: string
           format: date
+        description: Optional last market date in ISO 8601 format (YYYY-MM-DD).
       - in: query
         name: start
         schema:
           type: string
           format: date
-          default: '2026-09-02'
+        description: First market date. Supply an ISO 8601 date (YYYY-MM-DD).
         required: true
       tags:
       - get-calendar
@@ -1857,9 +1966,7 @@ paths:
   /api/get-clock/:
     get:
       operationId: get_clock_retrieve
-      description: |-
-        Gets the current market timestamp, whether or not the market is
-        currently open, as well as the times of the next market open and close
+      description: Return the current market clock from the governed provider.
       tags:
       - get-clock
       responses:
@@ -1898,24 +2005,16 @@ paths:
   /api/get-news/:
     get:
       operationId: get_news_retrieve
-      description: |-
-        News Alpaca serializer.
-
-        - Attributes:
-            * ```symbol``` (str): The comma-separated list of symbols to query news for.
-            * ```start``` (str): The start date for the data. If missing, the default value is the beginning of the current day.
-            * ```end``` (str): The end date for the data. If missing, the default value is the current time.
-            * ```sort``` (str): Sort articles by updated date.
-            * ```include_content``` (bool): Boolean indicator to include content for news articles (if available)
-            * ```exclude_contentless``` (bool): Boolean indicator to exclude news articles that do not contain content
-            * ```limit``` (int): Limit of news items to be returned for given page. The default is 10
+      description: Return governed provider news without freezing date defaults into
+        OpenAPI.
       parameters:
       - in: query
         name: end
         schema:
           type: string
           format: date
-          default: '2026-09-02'
+        description: Inclusive end date. If omitted, the provider uses the current
+          UTC date.
       - in: query
         name: exclude_contentless
         schema:
@@ -1950,7 +2049,8 @@ paths:
         schema:
           type: string
           format: date
-          default: '2026-09-02'
+        description: Inclusive start date. If omitted, the provider uses the current
+          UTC date.
       - in: query
         name: symbol
         schema:
@@ -2005,6 +2105,20 @@ paths:
     post:
       operationId: internal_v1_accounts_freeze_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: account_id
         schema:
@@ -2034,6 +2148,20 @@ paths:
     post:
       operationId: internal_v1_accounts_legal_holds_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: account_id
         schema:
@@ -2063,6 +2191,20 @@ paths:
     post:
       operationId: internal_v1_accounts_statements_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: account_id
         schema:
@@ -2109,6 +2251,21 @@ paths:
   /api/internal/v1/actions:
     post:
       operationId: internal_v1_actions_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - internal
       requestBody:
@@ -2133,6 +2290,25 @@ paths:
     post:
       operationId: internal_v1_actions_approve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: request_id
         schema:
@@ -2163,6 +2339,25 @@ paths:
     post:
       operationId: internal_v1_actions_execute_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: request_id
         schema:
@@ -2307,6 +2502,21 @@ paths:
   /api/internal/v1/reconciliation/run:
     post:
       operationId: internal_v1_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - internal
       requestBody:
@@ -2391,6 +2601,21 @@ paths:
   /api/internal/v1/trading/halt:
     post:
       operationId: internal_v1_trading_halt_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - internal
       requestBody:
@@ -2551,6 +2776,23 @@ paths:
     post:
       operationId: notification_alerts_create
       description: Get all alerts for the authenticated user
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - notification
       requestBody:
@@ -2592,6 +2834,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceAlert'
           description: ''
+    patch:
+      operationId: notification_alerts_partial_update
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+    delete:
+      operationId: notification_alerts_destroy
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notification
+      responses:
+        '204':
+          description: No response body
   /api/notification/email-preferences/:
     get:
       operationId: notification_email_preferences_retrieve
@@ -2606,6 +2935,28 @@ paths:
           description: ''
     patch:
       operationId: notification_email_preferences_partial_update
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - notification
       requestBody:
@@ -2649,6 +3000,22 @@ paths:
     post:
       operationId: notification_inbox_read_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: event_id
         schema:
@@ -2678,6 +3045,23 @@ paths:
   /api/notification/inbox/read-all/:
     post:
       operationId: notification_inbox_read_all_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - notification
       requestBody:
@@ -2740,6 +3124,23 @@ paths:
   /api/notification/toggle_notification/:
     put:
       operationId: notification_toggle_notification_update
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - notification
       requestBody:
@@ -2782,6 +3183,23 @@ paths:
           description: ''
     post:
       operationId: notification_webhooks_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - notification
       requestBody:
@@ -2824,6 +3242,27 @@ paths:
     put:
       operationId: notification_webhooks_update
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -2881,6 +3320,27 @@ paths:
     delete:
       operationId: notification_webhooks_destroy
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -3047,8 +3507,6 @@ paths:
   /api/portfolio/summary/:
     get:
       operationId: portfolio_summary_retrieve
-      description: Single authenticated source for dashboard portfolio totals and
-        holdings.
       tags:
       - portfolio
       responses:
@@ -3327,6 +3785,27 @@ paths:
     delete:
       operationId: security_country_whitelist_delete_destroy
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -3404,6 +3883,27 @@ paths:
     delete:
       operationId: security_ip_blacklist_delete_destroy
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -3535,6 +4035,27 @@ paths:
     delete:
       operationId: security_ip_whitelist_delete_destroy
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -3766,6 +4287,27 @@ paths:
 
         action: allow or block
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -3796,6 +4338,27 @@ paths:
       operationId: security_users_reset_settings_create
       description: Reset user settings to default.
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -3814,6 +4377,27 @@ paths:
 
         two_factor_auth_type: SMS or AUTHENTICATOR_APP
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -3851,6 +4435,27 @@ paths:
 
         custom_characters: Custom characters for password complexity.
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -3881,6 +4486,27 @@ paths:
       operationId: security_users_set_password_length_partial_update
       description: Password length configuration for a user.
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -3914,6 +4540,27 @@ paths:
 
         password_strength: MODERATE, STRONG, WEAK
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: user_id
         schema:
@@ -4139,8 +4786,6 @@ paths:
       operationId: trades_market_candles_retrieve
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4153,8 +4798,6 @@ paths:
       operationId: trades_market_feed_health_retrieve
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4181,8 +4824,6 @@ paths:
       operationId: trades_market_instruments_retrieve
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4201,8 +4842,6 @@ paths:
         required: true
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4221,8 +4860,6 @@ paths:
         required: true
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4235,8 +4872,6 @@ paths:
       operationId: trades_market_quotes_retrieve
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4255,8 +4890,6 @@ paths:
         required: true
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4275,8 +4908,6 @@ paths:
         required: true
       tags:
       - trades
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -4346,8 +4977,13 @@ paths:
       tags:
       - user
       responses:
-        '204':
-          description: No response body
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/user/disable_walkthrough/:
     put:
       operationId: user_disable_walkthrough_update
@@ -5200,6 +5836,17 @@ paths:
           description: ''
     post:
       operationId: v1_admin_compliance_cases_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -5224,6 +5871,22 @@ paths:
     post:
       operationId: v1_admin_compliance_cases_events_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: case_id
         schema:
@@ -5253,6 +5916,23 @@ paths:
   /api/v1/admin/compliance/overrides:
     post:
       operationId: v1_admin_compliance_overrides_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -5277,6 +5957,22 @@ paths:
     post:
       operationId: v1_admin_compliance_overrides_approve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: override_id
         schema:
@@ -5306,6 +6002,23 @@ paths:
   /api/v1/admin/compliance/restrictions:
     post:
       operationId: v1_admin_compliance_restrictions_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -5430,6 +6143,167 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/alerts:
+    get:
+      operationId: v1_alerts_retrieve
+      description: Get all alerts for the authenticated user
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+    post:
+      operationId: v1_alerts_create
+      description: Get all alerts for the authenticated user
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceAlertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PriceAlertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PriceAlertRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+  /api/v1/alerts/{alert_id}:
+    get:
+      operationId: v1_alerts_retrieve_2
+      description: Get a particular alert by ID
+      parameters:
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+    patch:
+      operationId: v1_alerts_partial_update
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+    delete:
+      operationId: v1_alerts_destroy
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
   /api/v1/auth/2fa-method/:
     patch:
       operationId: v1_auth_2fa_method_partial_update
@@ -5492,8 +6366,13 @@ paths:
       tags:
       - v1
       responses:
-        '204':
-          description: No response body
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/auth/disable_walkthrough/:
     put:
       operationId: v1_auth_disable_walkthrough_update
@@ -6266,13 +7145,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/EmailRegistrationInputRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/EmailRegistrationInputRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/EmailRegistrationInputRequest'
+        required: true
       security:
       - {}
       responses:
@@ -6645,6 +7525,19 @@ paths:
               $ref: '#/components/schemas/GenericApiResponseRequest'
       security:
       - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/control-plane/context:
+    get:
+      operationId: v1_control_plane_context_retrieve
+      description: Compose the caller's canonical account, tenant and policy decisions.
+      tags:
+      - v1
       responses:
         '200':
           content:
@@ -7324,8 +8217,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7344,8 +8235,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7364,8 +8253,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7439,6 +8326,23 @@ paths:
           description: ''
     post:
       operationId: v1_integrations_crm_connections_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -7481,6 +8385,27 @@ paths:
     patch:
       operationId: v1_integrations_crm_connections_partial_update
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: connection_id
         schema:
@@ -7521,6 +8446,23 @@ paths:
           description: ''
     post:
       operationId: v1_integrations_service_tokens_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -7545,6 +8487,27 @@ paths:
     post:
       operationId: v1_integrations_service_tokens_create_2
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: token_id
         schema:
@@ -7613,8 +8576,6 @@ paths:
       operationId: v1_market_data_candles_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7627,8 +8588,6 @@ paths:
       operationId: v1_market_data_snapshot_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7641,8 +8600,6 @@ paths:
       operationId: v1_market_data_status_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7674,8 +8631,6 @@ paths:
       operationId: v1_market_candles_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7707,8 +8662,6 @@ paths:
       operationId: v1_market_feed_health_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7765,8 +8718,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7779,8 +8730,6 @@ paths:
       operationId: v1_market_quotes_retrieve
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7811,8 +8760,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -7831,8 +8778,6 @@ paths:
         required: true
       tags:
       - v1
-      security:
-      - jwtAuth: []
       responses:
         '200':
           content:
@@ -8043,6 +8988,23 @@ paths:
     post:
       operationId: v1_notifications_alerts_create
       description: Get all alerts for the authenticated user
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -8084,6 +9046,93 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceAlert'
           description: ''
+    patch:
+      operationId: v1_notifications_alerts_partial_update
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPriceAlertRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+          description: ''
+    delete:
+      operationId: v1_notifications_alerts_destroy
+      description: Get a particular alert by ID
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: alert_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
   /api/v1/notifications/email-preferences/:
     get:
       operationId: v1_notifications_email_preferences_retrieve
@@ -8098,6 +9147,28 @@ paths:
           description: ''
     patch:
       operationId: v1_notifications_email_preferences_partial_update
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -8141,6 +9212,22 @@ paths:
     post:
       operationId: v1_notifications_inbox_read_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: event_id
         schema:
@@ -8170,6 +9257,23 @@ paths:
   /api/v1/notifications/inbox/read-all/:
     post:
       operationId: v1_notifications_inbox_read_all_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -8319,6 +9423,23 @@ paths:
   /api/v1/notifications/toggle_notification/:
     put:
       operationId: v1_notifications_toggle_notification_update
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -8361,6 +9482,23 @@ paths:
           description: ''
     post:
       operationId: v1_notifications_webhooks_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -8403,6 +9541,27 @@ paths:
     put:
       operationId: v1_notifications_webhooks_update
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -8460,6 +9619,27 @@ paths:
     delete:
       operationId: v1_notifications_webhooks_destroy
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: id
         schema:
@@ -8549,6 +9729,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebhookSubscription'
           description: ''
+  /api/v1/operator/audit/events:
+    get:
+      operationId: v1_operator_audit_events_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/operator/execution/providers:
     get:
       operationId: v1_operator_execution_providers_retrieve
@@ -8619,6 +9811,17 @@ paths:
     post:
       operationId: v1_operator_execution_providers_halt_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Provider version returned by the API.
+        required: true
       - in: path
         name: provider_id
         schema:
@@ -8648,6 +9851,25 @@ paths:
     post:
       operationId: v1_operator_execution_providers_paper_enable_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: provider_id
         schema:
@@ -8659,24 +9881,42 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/ExecutionPaperEnableCommandRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/ExecutionPaperEnableCommandRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/ExecutionPaperEnableCommandRequest'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/ExecutionPaperEnableResult'
+          description: ''
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionPaperEnableResult'
           description: ''
   /api/v1/operator/execution/providers/{provider_id}/resume:
     post:
       operationId: v1_operator_execution_providers_resume_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Provider version returned by the API.
+        required: true
       - in: path
         name: provider_id
         schema:
@@ -8728,25 +9968,29 @@ paths:
           description: ''
     post:
       operationId: v1_operator_execution_reconciliation_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/ExecutionReconciliationCommandResult'
           description: ''
   /api/v1/operator/execution/routes:
     get:
@@ -8824,6 +10068,18 @@ paths:
   /api/v1/operator/execution/venues:
     get:
       operationId: v1_operator_execution_venues_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/halts:
+    get:
+      operationId: v1_operator_halts_retrieve
       tags:
       - v1
       responses:
@@ -8981,25 +10237,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_reconciliation_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalReconciliationResult'
           description: ''
   /api/v1/operator/institutional/reconciliation/run:
     get:
@@ -9015,25 +10287,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalReconciliationCommandRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalReconciliationResult'
           description: ''
   /api/v1/operator/institutional/segregated-accounts:
     get:
@@ -9073,25 +10361,41 @@ paths:
           description: ''
     post:
       operationId: v1_operator_institutional_subaccounts_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
+              $ref: '#/components/schemas/InstitutionalSubaccountCreateRequest'
+        required: true
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/InstitutionalSubaccount'
           description: ''
   /api/v1/operator/institutional/subaccounts/{subaccount_id}:
     get:
@@ -9115,6 +10419,25 @@ paths:
     patch:
       operationId: v1_operator_institutional_subaccounts_partial_update
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: subaccount_id
         schema:
@@ -9127,13 +10450,116 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+              $ref: '#/components/schemas/PatchedInstitutionalSubaccountRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitutionalSubaccount'
+          description: ''
+  /api/v1/operator/limits/{restriction_id}/approve:
+    post:
+      operationId: v1_operator_limits_approve_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: restriction_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/limits/proposals:
+    get:
+      operationId: v1_operator_limits_proposals_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: v1_operator_limits_proposals_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/orders:
+    get:
+      operationId: v1_operator_orders_retrieve
+      tags:
+      - v1
       responses:
         '200':
           content:
@@ -9188,6 +10614,22 @@ paths:
     post:
       operationId: v1_operator_post_trade_exceptions_assign_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Exception version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -9218,6 +10660,22 @@ paths:
     post:
       operationId: v1_operator_post_trade_exceptions_escalate_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Exception version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -9248,6 +10706,22 @@ paths:
     post:
       operationId: v1_operator_post_trade_exceptions_resolve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Exception version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -9288,6 +10762,17 @@ paths:
           description: ''
     post:
       operationId: v1_operator_post_trade_reconciliation_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -9322,6 +10807,17 @@ paths:
           description: ''
     post:
       operationId: v1_operator_post_trade_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -9414,6 +10910,30 @@ paths:
           type: string
           format: uuid
         required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/providers/health:
+    get:
+      operationId: v1_operator_providers_health_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/operator/reconciliation/breaks:
+    get:
+      operationId: v1_operator_reconciliation_breaks_retrieve
       tags:
       - v1
       responses:
@@ -9628,6 +11148,22 @@ paths:
     post:
       operationId: v1_operator_surveillance_cases_assign_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: case_id
         schema:
@@ -9658,6 +11194,22 @@ paths:
     post:
       operationId: v1_operator_surveillance_cases_escalate_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: case_id
         schema:
@@ -9688,6 +11240,22 @@ paths:
     post:
       operationId: v1_operator_surveillance_cases_resolve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: case_id
         schema:
@@ -9759,6 +11327,17 @@ paths:
           description: ''
     post:
       operationId: v1_operator_surveillance_restrictions_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -9783,6 +11362,22 @@ paths:
     post:
       operationId: v1_operator_surveillance_restrictions_approve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: restriction_id
         schema:
@@ -9813,6 +11408,22 @@ paths:
     post:
       operationId: v1_operator_surveillance_restrictions_remove_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Resource version returned by the API.
+        required: true
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: restriction_id
         schema:
@@ -10458,6 +12069,25 @@ paths:
     post:
       operationId: v1_operator_treasury_exceptions_assign_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -10488,6 +12118,25 @@ paths:
     post:
       operationId: v1_operator_treasury_exceptions_escalate_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -10518,6 +12167,25 @@ paths:
     post:
       operationId: v1_operator_treasury_exceptions_resolve_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: exception_id
         schema:
@@ -10577,6 +12245,21 @@ paths:
           description: ''
     post:
       operationId: v1_operator_treasury_reconciliation_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -10611,6 +12294,21 @@ paths:
           description: ''
     post:
       operationId: v1_operator_treasury_reconciliation_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -10646,6 +12344,21 @@ paths:
   /api/v1/operator/treasury/stress/run:
     post:
       operationId: v1_operator_treasury_stress_run_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -10682,6 +12395,25 @@ paths:
     post:
       operationId: v1_operator_treasury_transfer_plans_cancel_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: plan_id
         schema:
@@ -10712,6 +12444,25 @@ paths:
     post:
       operationId: v1_operator_treasury_transfer_plans_simulate_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       - in: path
         name: plan_id
         schema:
@@ -11014,6 +12765,78 @@ paths:
         schema:
           type: string
         required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/allocations:
+    get:
+      operationId: v1_portfolio_allocations_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/evidence-quality:
+    get:
+      operationId: v1_portfolio_evidence_quality_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/performance:
+    get:
+      operationId: v1_portfolio_performance_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/positions:
+    get:
+      operationId: v1_portfolio_positions_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/risk:
+    get:
+      operationId: v1_portfolio_risk_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/portfolio/summary:
+    get:
+      operationId: v1_portfolio_summary_retrieve
       tags:
       - v1
       responses:
@@ -12372,6 +14195,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/system/version:
+    get:
+      operationId: v1_system_version_retrieve
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
   /api/v1/tax-lots:
     get:
       operationId: v1_tax_lots_retrieve
@@ -12461,7 +14298,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/AccountCollection'
           description: ''
   /api/v1/trading/accounts/{account_id}:
     get:
@@ -12551,6 +14388,17 @@ paths:
     post:
       operationId: v1_trading_orders_cancel_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: Order version returned by the API.
+        required: true
       - in: path
         name: order_id
         schema:
@@ -12634,6 +14482,7 @@ paths:
   /api/v1/trading/portfolio:
     get:
       operationId: v1_trading_portfolio_retrieve
+      description: Keep legacy presentation fields without a second valuation authority.
       tags:
       - v1
       responses:
@@ -13184,6 +15033,21 @@ paths:
   /api/v1/treasury/transfer-plans/preview:
     post:
       operationId: v1_treasury_transfer_plans_preview_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+        required: true
       tags:
       - v1
       requestBody:
@@ -13207,6 +15071,23 @@ paths:
   /api/v1/users:
     post:
       operationId: v1_users_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -13230,6 +15111,23 @@ paths:
   /api/v1/users/:
     post:
       operationId: v1_users_create_2
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -13253,6 +15151,23 @@ paths:
   /api/v1/users/imports:
     post:
       operationId: v1_users_imports_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -13270,6 +15185,23 @@ paths:
   /api/v1/users/imports/:
     post:
       operationId: v1_users_imports_create_2
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       tags:
       - v1
       requestBody:
@@ -13325,6 +15257,22 @@ paths:
     post:
       operationId: v1_users_imports_cancel_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: import_id
         schema:
@@ -13373,6 +15321,22 @@ paths:
     post:
       operationId: v1_users_imports_commit_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Correlation-ID
+        schema:
+          type: string
+          format: uuid
+      - in: header
+        name: X-Request-ID
+        schema:
+          type: string
+          format: uuid
+        required: true
       - in: path
         name: import_id
         schema:
@@ -13902,6 +15866,170 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
+  /api/v1/watchlists:
+    get:
+      operationId: listWatchlists
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: createWatchlist
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/watchlists/{watchlist_id}:
+    get:
+      operationId: getWatchlist
+      parameters:
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    patch:
+      operationId: renameWatchlist
+      parameters:
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    delete:
+      operationId: deleteWatchlist
+      parameters:
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
+  /api/v1/watchlists/{watchlist_id}/items:
+    get:
+      operationId: listWatchlistItems
+      parameters:
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+    post:
+      operationId: addWatchlistItem
+      parameters:
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericApiResponseRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericApiResponse'
+          description: ''
+  /api/v1/watchlists/{watchlist_id}/items/{instrument_id}:
+    delete:
+      operationId: deleteWatchlistItem
+      parameters:
+      - in: path
+        name: instrument_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: watchlist_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '204':
+          description: No response body
   /api/v1/withdrawals/:
     get:
       operationId: v1_withdrawals_retrieve
@@ -14173,10 +16301,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericApiResponse'
+                $ref: '#/components/schemas/WorkspaceBootstrap'
           description: ''
 components:
   schemas:
+    AccountCollection:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperAccountProjection'
+          readOnly: true
+      required:
+      - results
     AccountDeletion:
       type: object
       properties:
@@ -14192,15 +16330,17 @@ components:
           format: date-time
           readOnly: true
         reviewed_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         completed_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         policy_version:
           type: string
           readOnly: true
@@ -14299,9 +16439,10 @@ components:
         role:
           $ref: '#/components/schemas/RoleEnum'
         last_login:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         date_joined:
           type: string
           format: date-time
@@ -14334,9 +16475,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - allocation_method
       - code
@@ -14355,9 +16497,10 @@ components:
           type: string
           maxLength: 128
         allocation_group_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
           readOnly: true
         source_account_id:
           type: string
@@ -14561,80 +16704,68 @@ components:
         bank_name:
           type: string
           maxLength: 255
-        account_number:
-          type: string
-          maxLength: 50
+        is_active:
+          type: boolean
+          readOnly: true
         account_holder_name:
           type: string
           maxLength: 255
         last_name:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Last name of the account holder
-          maxLength: 255
-        routing_number:
-          type: string
-          nullable: true
-          maxLength: 50
-        swift_code:
-          type: string
-          nullable: true
-          maxLength: 50
-        iban:
-          type: string
-          nullable: true
-          maxLength: 50
         country:
-          type: string
-          nullable: true
-          maxLength: 50
+          type:
+          - string
+          - 'null'
       required:
       - account_holder_name
-      - account_number
       - bank_name
       - created_at
       - id
+      - is_active
       - updated_at
     BankAccountRequest:
       type: object
       properties:
-        withdrawal_request:
-          allOf:
-          - $ref: '#/components/schemas/WithdrawalRequestCreateWithBankRequest'
+        account_number:
+          type: string
+          writeOnly: true
+          minLength: 4
+          maxLength: 50
+        routing_number:
+          type:
+          - string
+          - 'null'
+          writeOnly: true
+        swift_code:
+          type:
+          - string
+          - 'null'
+          writeOnly: true
+        iban:
+          type:
+          - string
+          - 'null'
           writeOnly: true
         bank_name:
           type: string
           minLength: 1
           maxLength: 255
-        account_number:
-          type: string
-          minLength: 1
-          maxLength: 50
         account_holder_name:
           type: string
           minLength: 1
           maxLength: 255
         last_name:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Last name of the account holder
-          maxLength: 255
-        routing_number:
-          type: string
-          nullable: true
-          maxLength: 50
-        swift_code:
-          type: string
-          nullable: true
-          maxLength: 50
-        iban:
-          type: string
-          nullable: true
-          maxLength: 50
         country:
-          type: string
-          nullable: true
-          maxLength: 50
+          type:
+          - string
+          - 'null'
       required:
       - account_holder_name
       - account_number
@@ -14654,17 +16785,19 @@ components:
           format: uuid
           readOnly: true
         subaccount_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
           readOnly: true
         execution_provider_id:
           type: string
           maxLength: 80
         clearing_broker_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
           readOnly: true
         provider_account_ref:
           type: string
@@ -14679,9 +16812,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - account_role
       - clearing_broker_id
@@ -14703,13 +16837,15 @@ components:
         kind:
           $ref: '#/components/schemas/KindEnum'
         opens_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         closes_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         reason:
           type: string
           maxLength: 160
@@ -14797,9 +16933,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         relationship_type:
           $ref: '#/components/schemas/RelationshipTypeEnum'
         status:
@@ -14878,9 +17015,10 @@ components:
         required:
           type: boolean
         deadline:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         user_action:
           type: string
       required:
@@ -14926,9 +17064,10 @@ components:
           maxLength: 160
         terms: {}
         supersedes_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
           readOnly: true
       required:
       - action_id
@@ -14975,9 +17114,14 @@ components:
         country:
           type: string
           maxLength: 100
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - country
       - id
+      - updated_at
     CountryWhitelistRequest:
       type: object
       description: Serializer for Country Whitelist
@@ -15051,6 +17195,33 @@ components:
       - marketing
       - security
       - updated_at
+    EmailRegistrationInputRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+        displayName:
+          type: string
+          default: ''
+          maxLength: 120
+        locale:
+          type: string
+          minLength: 1
+          default: en
+          maxLength: 16
+        legalAccepted:
+          type: boolean
+      required:
+      - email
+      - legalAccepted
+      - password
     EnvironmentEnum:
       enum:
       - SIMULATION
@@ -15061,6 +17232,62 @@ components:
         * `SIMULATION` - SIMULATION
         * `PAPER` - PAPER
         * `SANDBOX_REFERENCE` - SANDBOX_REFERENCE
+    ExecutionModeEnum:
+      enum:
+      - PAPER
+      - LIVE
+      type: string
+      description: |-
+        * `PAPER` - Paper
+        * `LIVE` - Live
+    ExecutionPaperEnableCommandRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+      required:
+      - reason
+    ExecutionPaperEnableResult:
+      type: object
+      properties:
+        change_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+        status:
+          type: string
+        enabled:
+          type: boolean
+        maker_checker_required:
+          type: boolean
+        mode:
+          type: string
+        live:
+          type: boolean
+        version:
+          type: string
+      required:
+      - change_id
+      - enabled
+      - provider_id
+      - status
+      - version
+    ExecutionReconciliationCommandResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        critical_count:
+          type: integer
+      required:
+      - critical_count
+      - id
+      - status
     FraudCase:
       type: object
       properties:
@@ -15086,18 +17313,20 @@ components:
           format: date-time
           readOnly: true
         resolved_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         resolution:
           type: string
           readOnly: true
         account:
           type: integer
         assigned_to:
-          type: integer
-          nullable: true
+          type:
+          - integer
+          - 'null'
       required:
       - account
       - case_id
@@ -15124,8 +17353,9 @@ components:
         account:
           type: integer
         assigned_to:
-          type: integer
-          nullable: true
+          type:
+          - integer
+          - 'null'
       required:
       - account
       - case_type
@@ -15236,9 +17466,14 @@ components:
           readOnly: true
         ip_address:
           type: string
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - id
       - ip_address
+      - updated_at
     IPBlacklistRequest:
       type: object
       description: Serializer for IP Blacklist
@@ -15268,10 +17503,15 @@ components:
           items:
             $ref: '#/components/schemas/IPBlacklist'
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - country_whitelist
       - ip_blacklist
       - ip_whitelist
+      - updated_at
     IPRestrictionsRequest:
       type: object
       properties:
@@ -15285,17 +17525,24 @@ components:
           type: integer
           readOnly: true
         ip_address:
+          type:
+          - string
+          - 'null'
+        updated_at:
           type: string
-          nullable: true
+          format: date-time
+          readOnly: true
       required:
       - id
+      - updated_at
     IPWhitelistRequest:
       type: object
       description: Serializer for IP Whitelist
       properties:
         ip_address:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           minLength: 1
     IdTypeEnum:
       enum:
@@ -15307,6 +17554,147 @@ components:
         * `passport` - Passport
         * `id_card` - ID Card
         * `driver_license` - Driver License
+    InstitutionalReconciliationCommandRequest:
+      type: object
+      properties:
+        institution_id:
+          type: string
+          format: uuid
+      required:
+      - institution_id
+    InstitutionalReconciliationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        violations:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - id
+      - status
+      - violations
+    InstitutionalSubaccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        institution_id:
+          type: string
+          format: uuid
+          readOnly: true
+        tenant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        parent_subaccount_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 40
+        display_name:
+          type: string
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - base_currency
+      - code
+      - created_at
+      - display_name
+      - effective_from
+      - id
+      - institution_id
+      - parent_subaccount_id
+      - subaccount_type
+      - tenant_id
+      - updated_at
+    InstitutionalSubaccountCreateRequest:
+      type: object
+      properties:
+        institution_id:
+          type: string
+          format: uuid
+          writeOnly: true
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - base_currency
+      - code
+      - display_name
+      - effective_from
+      - institution_id
+      - subaccount_type
     Instrument:
       type: object
       properties:
@@ -15326,8 +17714,9 @@ components:
           type: string
           maxLength: 12
         venue:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         calendar:
           type: string
         status:
@@ -15637,17 +18026,20 @@ components:
           format: date-time
           readOnly: true
         sent_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         delivered_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         read_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         dedup_key:
           type: string
           maxLength: 128
@@ -15693,8 +18085,7 @@ components:
       - payload
       - title
     NullEnum:
-      enum:
-      - null
+      type: 'null'
     OperatorCustody:
       type: object
       properties:
@@ -15714,9 +18105,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         custody_model:
           $ref: '#/components/schemas/CustodyModelEnum'
         provider:
@@ -15818,9 +18210,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - custody_structure_id
       - effective_from
@@ -16519,6 +18912,84 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WebhookSubscription'
+    PaperAccountProjection:
+      type: object
+      description: Existing compatibility response; no separate trading account authority.
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          readOnly: true
+        execution_mode:
+          allOf:
+          - $ref: '#/components/schemas/ExecutionModeEnum'
+          readOnly: true
+        base_currency:
+          type: string
+          readOnly: true
+          maxLength: 16
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status9a8Enum'
+          readOnly: true
+        trading_enabled:
+          type: boolean
+          readOnly: true
+        funding_enabled:
+          type: boolean
+          readOnly: true
+        withdrawals_enabled:
+          type: boolean
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        account_ref:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+        available:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+        reserved:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+        pending:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,18})?$
+          readOnly: true
+        simulation:
+          type: boolean
+          readOnly: true
+      required:
+      - account_id
+      - account_ref
+      - available
+      - base_currency
+      - currency
+      - execution_mode
+      - funding_enabled
+      - id
+      - pending
+      - reserved
+      - simulation
+      - status
+      - total
+      - trading_enabled
+      - withdrawals_enabled
     PasswordChangeRequest:
       type: object
       properties:
@@ -16557,10 +19028,10 @@ components:
         complexity:
           $ref: '#/components/schemas/ComplexityEnum'
         custom_characters:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Enter custom characters like @%^$ if 'Custom' is selected.
-          maxLength: 255
         min_length:
           type: integer
           maximum: 9223372036854775807
@@ -16573,6 +19044,12 @@ components:
           format: int64
         strength:
           $ref: '#/components/schemas/StrengthEnum'
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
     PasswordPolicyRequest:
       type: object
       description: Serializer for PasswordPolicy
@@ -16580,10 +19057,10 @@ components:
         complexity:
           $ref: '#/components/schemas/ComplexityEnum'
         custom_characters:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Enter custom characters like @%^$ if 'Custom' is selected.
-          maxLength: 255
         min_length:
           type: integer
           maximum: 9223372036854775807
@@ -16642,43 +19119,43 @@ components:
     PatchedBankAccountRequest:
       type: object
       properties:
-        withdrawal_request:
-          allOf:
-          - $ref: '#/components/schemas/WithdrawalRequestCreateWithBankRequest'
+        account_number:
+          type: string
+          writeOnly: true
+          minLength: 4
+          maxLength: 50
+        routing_number:
+          type:
+          - string
+          - 'null'
+          writeOnly: true
+        swift_code:
+          type:
+          - string
+          - 'null'
+          writeOnly: true
+        iban:
+          type:
+          - string
+          - 'null'
           writeOnly: true
         bank_name:
           type: string
           minLength: 1
           maxLength: 255
-        account_number:
-          type: string
-          minLength: 1
-          maxLength: 50
         account_holder_name:
           type: string
           minLength: 1
           maxLength: 255
         last_name:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Last name of the account holder
-          maxLength: 255
-        routing_number:
-          type: string
-          nullable: true
-          maxLength: 50
-        swift_code:
-          type: string
-          nullable: true
-          maxLength: 50
-        iban:
-          type: string
-          nullable: true
-          maxLength: 50
         country:
-          type: string
-          nullable: true
-          maxLength: 50
+          type:
+          - string
+          - 'null'
     PatchedEmailNotificationPreferenceRequest:
       type: object
       properties:
@@ -16710,6 +19187,41 @@ components:
       properties:
         restriction_type:
           $ref: '#/components/schemas/RestrictionTypeEnum'
+    PatchedInstitutionalSubaccountRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 40
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        subaccount_type:
+          $ref: '#/components/schemas/SubaccountTypeEnum'
+        base_currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        status:
+          $ref: '#/components/schemas/StatusB38Enum'
+        risk_profile_ref:
+          type: string
+          maxLength: 255
+        trading_policy_ref:
+          type: string
+          maxLength: 255
+        allocation_eligible:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
     PatchedKYCFileRequest:
       type: object
       properties:
@@ -16757,6 +19269,22 @@ components:
           minLength: 1
           maxLength: 12
         enabled:
+          type: boolean
+    PatchedPriceAlertRequest:
+      type: object
+      description: Price Alert Serializer
+      properties:
+        asset_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        price_threshold:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        direction:
+          $ref: '#/components/schemas/DirectionEnum'
+        status:
           type: boolean
     PatchedUser2FAMethodRequest:
       type: object
@@ -16835,22 +19363,24 @@ components:
           default: ''
           maxLength: 255
         profile_picture:
-          type: string
+          type:
+          - string
+          - 'null'
           format: binary
-          nullable: true
         address:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         gender:
-          nullable: true
           oneOf:
           - $ref: '#/components/schemas/GenderEnum'
           - $ref: '#/components/schemas/BlankEnum'
           - $ref: '#/components/schemas/NullEnum'
         dob:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
-          nullable: true
         two_factor_authentication_enabled:
           type: boolean
         hidden_account_balances_toggle_enabled:
@@ -16860,18 +19390,20 @@ components:
         one_click_trade_closing_toggle_enabled:
           type: boolean
         email_verified_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         email_verification_source:
           type: string
           maxLength: 32
         is_guest_demo:
           type: boolean
         guest_demo_expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         role:
           $ref: '#/components/schemas/RoleEnum'
         document_verification:
@@ -16887,10 +19419,10 @@ components:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
         brand:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Where we got the contact from.
-          maxLength: 120
     PatchedUserVerificationStatusRequest:
       type: object
       properties:
@@ -16931,9 +19463,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - code
       - effective_from
@@ -17019,10 +19552,6 @@ components:
           type: string
           format: date-time
           readOnly: true
-        organization:
-          type: string
-          format: uuid
-          nullable: true
       required:
       - asset_id
       - created_at
@@ -17046,10 +19575,6 @@ components:
           $ref: '#/components/schemas/DirectionEnum'
         status:
           type: boolean
-        organization:
-          type: string
-          format: uuid
-          nullable: true
       required:
       - asset_id
       - direction
@@ -17069,15 +19594,17 @@ components:
           format: date-time
           readOnly: true
         completed_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         policy_version:
           type: string
           readOnly: true
@@ -17118,9 +19645,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - effective_from
       - provider_id
@@ -17165,15 +19693,17 @@ components:
           format: date-time
           readOnly: true
         completed_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         reconciliation_passed:
           type: boolean
           readOnly: true
@@ -17229,9 +19759,10 @@ components:
         reason_code:
           type: string
         expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
       required:
       - expires_at
       - reason_code
@@ -17307,9 +19838,10 @@ components:
           type: string
           format: date-time
         effective_to:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         asset_class:
           type: string
           maxLength: 32
@@ -17324,16 +19856,18 @@ components:
           type: string
           format: uuid
         subaccount:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
         custody_structure:
           type: string
           format: uuid
         broker_account_mapping:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          nullable: true
       required:
       - asset_class
       - created_at
@@ -17415,8 +19949,9 @@ components:
           type: string
           maxLength: 500
         supersedes:
-          type: integer
-          nullable: true
+          type:
+          - integer
+          - 'null'
       required:
       - id
       - issued_at
@@ -17433,6 +19968,20 @@ components:
         * `P` - PENDING
         * `S` - SUCCESSFUL
         * `F` - FAILED
+    Status9a8Enum:
+      enum:
+      - PENDING
+      - ACTIVE
+      - RESTRICTED
+      - SUSPENDED
+      - CLOSED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `ACTIVE` - Active
+        * `RESTRICTED` - Restricted
+        * `SUSPENDED` - Suspended
+        * `CLOSED` - Closed
     StatusB38Enum:
       enum:
       - PENDING
@@ -17459,6 +20008,28 @@ components:
         * `STRONG` - STRONG
         * `MODERATE` - MODERATE
         * `WEAK` - WEAK
+    SubaccountTypeEnum:
+      enum:
+      - TRADING
+      - STRATEGY
+      - PORTFOLIO
+      - CLIENT
+      - FUND
+      - SLEEVE
+      - HOUSE_REFERENCE
+      - SETTLEMENT_REFERENCE
+      - TEST
+      type: string
+      description: |-
+        * `TRADING` - TRADING
+        * `STRATEGY` - STRATEGY
+        * `PORTFOLIO` - PORTFOLIO
+        * `CLIENT` - CLIENT
+        * `FUND` - FUND
+        * `SLEEVE` - SLEEVE
+        * `HOUSE_REFERENCE` - HOUSE_REFERENCE
+        * `SETTLEMENT_REFERENCE` - SETTLEMENT_REFERENCE
+        * `TEST` - TEST
     SupportCase:
       type: object
       properties:
@@ -17484,10 +20055,11 @@ components:
           format: date-time
           readOnly: true
         resolved_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         safe_summary:
           type: string
           maxLength: 500
@@ -17541,12 +20113,13 @@ components:
         user:
           $ref: '#/components/schemas/User'
         subject:
-          type: string
-          nullable: true
-          maxLength: 255
+          type:
+          - string
+          - 'null'
         message:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         status:
           $ref: '#/components/schemas/TicketStatusEnum'
         created_at:
@@ -17658,15 +20231,17 @@ components:
         category:
           type: integer
         duration:
-          type: integer
+          type:
+          - integer
+          - 'null'
           maximum: 9223372036854775807
           minimum: -9223372036854775808
           format: int64
-          nullable: true
         result_time:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         net:
           type: string
           format: decimal
@@ -17717,11 +20292,12 @@ components:
         transaction:
           $ref: '#/components/schemas/TransactionCompact'
         duration:
-          type: integer
+          type:
+          - integer
+          - 'null'
           maximum: 9223372036854775807
           minimum: -9223372036854775808
           format: int64
-          nullable: true
         open:
           type: string
           format: decimal
@@ -17739,9 +20315,10 @@ components:
                 Decimal: Percentage change. Positive for gain, negative for loss.
           readOnly: true
         result_time:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -17789,9 +20366,10 @@ components:
           type: string
           format: date-time
         settled_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         source_ref:
           type: string
           maxLength: 128
@@ -17831,6 +20409,12 @@ components:
       properties:
         auth_type:
           $ref: '#/components/schemas/AuthTypeEnum'
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
     TwoFactorAuthRequest:
       type: object
       description: User Global 2FA Settings Serializer
@@ -17918,33 +20502,35 @@ components:
           format: date-time
           readOnly: true
         anonymous_user:
-          type: string
-          nullable: true
-          maxLength: 50
+          type:
+          - string
+          - 'null'
         action_type:
           $ref: '#/components/schemas/UserActivityActionTypeEnum'
         action_status:
           $ref: '#/components/schemas/ActionStatusEnum'
         description:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         ip_address:
           type: string
         geolocation:
-          type: string
-          nullable: true
-          maxLength: 255
+          type:
+          - string
+          - 'null'
         device_type:
-          type: string
-          nullable: true
-          maxLength: 50
+          type:
+          - string
+          - 'null'
         device_model:
-          type: string
-          nullable: true
-          maxLength: 100
+          type:
+          - string
+          - 'null'
         user_agent:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
       required:
       - created_at
       - id
@@ -18035,9 +20621,14 @@ components:
         id:
           type: integer
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - id
       - ip_address
+      - updated_at
     UserIPBlacklistRequest:
       type: object
       properties:
@@ -18166,22 +20757,24 @@ components:
           default: ''
           maxLength: 255
         profile_picture:
-          type: string
+          type:
+          - string
+          - 'null'
           format: binary
-          nullable: true
         address:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         gender:
-          nullable: true
           oneOf:
           - $ref: '#/components/schemas/GenderEnum'
           - $ref: '#/components/schemas/BlankEnum'
           - $ref: '#/components/schemas/NullEnum'
         dob:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
-          nullable: true
         two_factor_authentication_enabled:
           type: boolean
         hidden_account_balances_toggle_enabled:
@@ -18191,18 +20784,20 @@ components:
         one_click_trade_closing_toggle_enabled:
           type: boolean
         email_verified_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         email_verification_source:
           type: string
           maxLength: 32
         is_guest_demo:
           type: boolean
         guest_demo_expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         role:
           $ref: '#/components/schemas/RoleEnum'
         document_verification:
@@ -18218,10 +20813,10 @@ components:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
         brand:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Where we got the contact from.
-          maxLength: 120
       required:
       - email
       - first_name
@@ -18244,10 +20839,11 @@ components:
           type: string
           pattern: ^[a-zA-Z ]+$
         last_login:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
           readOnly: true
-          nullable: true
         is_superuser:
           type: boolean
           readOnly: true
@@ -18279,22 +20875,24 @@ components:
           default: ''
           maxLength: 255
         profile_picture:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uri
-          nullable: true
         address:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         gender:
-          nullable: true
           oneOf:
           - $ref: '#/components/schemas/GenderEnum'
           - $ref: '#/components/schemas/BlankEnum'
           - $ref: '#/components/schemas/NullEnum'
         dob:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
-          nullable: true
         two_factor_authentication_enabled:
           type: boolean
         hidden_account_balances_toggle_enabled:
@@ -18314,13 +20912,15 @@ components:
           type: boolean
           readOnly: true
         country_name:
-          type: string
+          type:
+          - string
+          - 'null'
           readOnly: true
-          nullable: true
         country_iso_code:
-          type: string
+          type:
+          - string
+          - 'null'
           readOnly: true
-          nullable: true
         is_mfa_enabled:
           type: boolean
           readOnly: true
@@ -18328,25 +20928,28 @@ components:
           type: boolean
           readOnly: true
         email_verified_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         email_verification_source:
           type: string
           maxLength: 32
         is_guest_demo:
           type: boolean
         guest_demo_expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         phone_verified:
           type: boolean
           readOnly: true
         trader_id:
-          type: integer
+          type:
+          - integer
+          - 'null'
           readOnly: true
-          nullable: true
         is_walkthrough:
           type: boolean
           readOnly: true
@@ -18368,10 +20971,10 @@ components:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
         brand:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Where we got the contact from.
-          maxLength: 120
       required:
       - country_iso_code
       - country_name
@@ -18426,22 +21029,24 @@ components:
           default: ''
           maxLength: 255
         profile_picture:
-          type: string
+          type:
+          - string
+          - 'null'
           format: binary
-          nullable: true
         address:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
         gender:
-          nullable: true
           oneOf:
           - $ref: '#/components/schemas/GenderEnum'
           - $ref: '#/components/schemas/BlankEnum'
           - $ref: '#/components/schemas/NullEnum'
         dob:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date
-          nullable: true
         two_factor_authentication_enabled:
           type: boolean
         hidden_account_balances_toggle_enabled:
@@ -18451,18 +21056,20 @@ components:
         one_click_trade_closing_toggle_enabled:
           type: boolean
         email_verified_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         email_verification_source:
           type: string
           maxLength: 32
         is_guest_demo:
           type: boolean
         guest_demo_expires_at:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
         role:
           $ref: '#/components/schemas/RoleEnum'
         document_verification:
@@ -18478,22 +21085,15 @@ components:
           - $ref: '#/components/schemas/VerificationStatusEnum'
           - $ref: '#/components/schemas/BlankEnum'
         brand:
-          type: string
-          nullable: true
+          type:
+          - string
+          - 'null'
           description: Where we got the contact from.
-          maxLength: 120
       required:
       - email
       - first_name
       - last_name
       - phone_number
-    UserVerificationStatus:
-      type: object
-      properties:
-        status:
-          $ref: '#/components/schemas/UserVerificationStatusStatusEnum'
-      required:
-      - status
     UserVerificationStatusStatusEnum:
       enum:
       - PENDING
@@ -18587,36 +21187,113 @@ components:
           type: boolean
       required:
       - url
-    WithdrawalRequestCreateWithBank:
+    WorkspaceAccount:
       type: object
       properties:
-        amount:
+        account_id:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-        currency:
-          type: integer
-        description:
+          format: uuid
+          readOnly: true
+        execution_mode:
+          allOf:
+          - $ref: '#/components/schemas/ExecutionModeEnum'
+          readOnly: true
+        base_currency:
           type: string
-          nullable: true
+          readOnly: true
+          maxLength: 16
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status9a8Enum'
+          readOnly: true
+        trading_enabled:
+          type: boolean
+          readOnly: true
+        funding_enabled:
+          type: boolean
+          readOnly: true
+        withdrawals_enabled:
+          type: boolean
+          readOnly: true
+        id:
+          type: string
+          format: uuid
+          readOnly: true
       required:
-      - amount
-      - currency
-    WithdrawalRequestCreateWithBankRequest:
+      - account_id
+      - base_currency
+      - execution_mode
+      - funding_enabled
+      - id
+      - status
+      - trading_enabled
+      - withdrawals_enabled
+    WorkspaceBootstrap:
       type: object
       properties:
-        amount:
+        state:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
-        currency:
-          type: integer
-        description:
-          type: string
-          nullable: true
+          readOnly: true
+        tenant:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        account:
+          allOf:
+          - $ref: '#/components/schemas/WorkspaceAccount'
+          readOnly: true
+        realtime:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        wallet:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        notifications:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+          readOnly: true
+        instrument:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        instruments:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        tradingRules:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        savedAssetTabs:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        chartPreferences:
+          type: object
+          additionalProperties: {}
+          readOnly: true
       required:
-      - amount
-      - currency
+      - account
+      - chartPreferences
+      - features
+      - instrument
+      - instruments
+      - notifications
+      - realtime
+      - savedAssetTabs
+      - state
+      - tenant
+      - tradingRules
+      - wallet
   securitySchemes:
     jwtAuth:
       type: http

@@ -21,7 +21,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from users.views import ManageUserView, SessionResolveView
-from trade.demo_engine import WorkspaceBootstrapView
+from apps.workspace.bootstrap import WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
 from notifications import views as notification_views

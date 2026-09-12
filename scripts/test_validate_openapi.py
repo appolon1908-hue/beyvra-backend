@@ -76,6 +76,18 @@ class OpenApiValidationTests(unittest.TestCase):
             ):
                 validate_document(document)
 
+    def test_missing_operation_id_is_rejected(self):
+        document = contract()
+        document["paths"]["/api/v1/accounts"]["get"].pop("operationId")
+        with self.assertRaisesRegex(ValueError, "missing operationId"):
+            validate_document(document)
+
+    def test_retired_operation_id_cannot_hide_under_canonical_path(self):
+        document = contract()
+        document["paths"]["/api/v1/accounts"]["get"]["operationId"] = "getDemoWallet"
+        with self.assertRaisesRegex(ValueError, "retired Demo operationId"):
+            validate_document(document)
+
     def test_retired_and_provider_specific_customer_paths_are_rejected(self):
         for path in (
             "/api/v1/demo",

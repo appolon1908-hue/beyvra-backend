@@ -18,6 +18,8 @@ from users.models import User
 from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
 from apps.compliance.models import ComplianceProfile
 from integrations.models import Organization, OrganizationMembership
+from apps.post_trade.models import SettlementCalendar
+from .fixtures import ensure_paper_settlement_calendar
 
 
 SIMULATION = override_settings(
@@ -36,6 +38,7 @@ def approve_for_simulation(user, label):
 @SIMULATION
 class SimulatedTradingE2ETests(TestCase):
     def setUp(self):
+        ensure_paper_settlement_calendar()
         self.user = User.objects.create_user(email=f"sim-{uuid.uuid4()}@example.invalid", phone_number=f"+1202{uuid.uuid4().int % 10000000:07d}", password="test")
         organization = Organization.objects.create(name=f"Simulation Test {uuid.uuid4()}")
         OrganizationMembership.objects.create(user=self.user, organization=organization)
@@ -84,6 +87,19 @@ class SimulatedTradingE2ETests(TestCase):
         position = SimulatedPosition.objects.get(instrument_id="BTC-USD"); self.assertEqual(position.quantity, Decimal("10"))
         account = position.account; self.assertEqual(account.total_balance, Decimal("8999"))
         self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "CONSUMED")
+
+    def test_missing_calendar_rolls_back_fill_and_preserves_the_reservation(self):
+        order = TradingOrder.objects.get(pk=self.post_order().json()["id"])
+        initial_state = order.state
+        SettlementCalendar.objects.all().delete()
+        with self.assertRaisesRegex(ValueError, "SETTLEMENT_CALENDAR_UNAVAILABLE"):
+            process_created_order(order.id, "IMMEDIATE_FULL_FILL")
+        order.refresh_from_db()
+        self.assertEqual(order.state, initial_state)
+        self.assertEqual(order.filled_quantity, Decimal("0"))
+        self.assertFalse(SimulatedTrade.objects.filter(order=order).exists())
+        self.assertFalse(SimulatedPosition.objects.exists())
+        self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "ACTIVE")
 
     def test_partial_four_then_six_has_exact_effects_and_no_overfill(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"])

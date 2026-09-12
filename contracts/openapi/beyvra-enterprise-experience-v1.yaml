@@ -84,7 +84,7 @@ paths:
     get:
       operationId: getPriceAlert
       responses:
-        "200": {description: Alert including updated_at, used verbatim as If-Match}
+        "200": {description: "Alert including updated_at, used verbatim as If-Match"}
         "404": {description: Alert absent or outside the caller scope}
     patch:
       operationId: updatePriceAlert
@@ -197,7 +197,7 @@ paths:
     get:
       operationId: listProviderHealth
       responses:
-        "200": {description: Provider governance, connection and circuit health}
+        "200": {description: "Provider governance, connection and circuit health"}
         "403": {description: Staff and current-session MFA are required}
   /operator/reconciliation/breaks:
     get:
@@ -232,7 +232,7 @@ paths:
       operationId: approveOperatorLimitProposal
       responses:
         "200": {description: Independent checker approval recorded}
-        "403": {description: MFA, manager role and maker/checker separation are required}
+        "403": {description: "MFA, manager role and maker/checker separation are required"}
   /operator/audit/events:
     get:
       operationId: listAuditEvents
