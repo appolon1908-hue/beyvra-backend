@@ -23,5 +23,6 @@ class DemoFinancialIsolationTests(TestCase):
             "/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.organization.id)
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data["account"]["demoOnly"])
+        self.assertFalse(response.data["account"]["funding_enabled"])
+        self.assertFalse(response.data["account"]["withdrawals_enabled"])
         financial_request.assert_not_called()

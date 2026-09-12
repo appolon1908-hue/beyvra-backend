@@ -4424,37 +4424,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
-  /api/user/guest-demo/:
-    post:
-      operationId: user_guest_demo_create
-      description: |-
-        Issue a short-lived, anonymous paper-trading access token.
-
-        No PII is accepted or returned, no refresh token is issued, and the
-        identity is explicitly marked as demo-only. This endpoint is enabled only
-        while the server is in paper-trading mode.
-      tags:
-      - user
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
-          description: ''
   /api/user/kyc/:
     get:
       operationId: user_kyc_list
@@ -5779,37 +5748,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GenericApiResponse'
           description: ''
-  /api/v1/auth/guest-demo/:
-    post:
-      operationId: v1_auth_guest_demo_create
-      description: |-
-        Issue a short-lived, anonymous paper-trading access token.
-
-        No PII is accepted or returned, no refresh token is issued, and the
-        identity is explicitly marked as demo-only. This endpoint is enabled only
-        while the server is in paper-trading mode.
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-      security:
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
-          description: ''
   /api/v1/auth/kyc/:
     get:
       operationId: v1_auth_kyc_list
@@ -6737,50 +6675,6 @@ paths:
         required: true
       tags:
       - v1
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
-          description: ''
-  /api/v1/demo/config:
-    get:
-      operationId: v1_demo_config_retrieve
-      description: Compatibility read model for practice-terminal presentation limits.
-      tags:
-      - v1
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericApiResponse'
-          description: ''
-  /api/v1/demo/sessions:
-    post:
-      operationId: v1_demo_sessions_create
-      description: |-
-        Issue a short-lived, anonymous paper-trading access token.
-
-        No PII is accepted or returned, no refresh token is issued, and the
-        identity is explicitly marked as demo-only. This endpoint is enabled only
-        while the server is in paper-trading mode.
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/GenericApiResponseRequest'
-      security:
-      - {}
       responses:
         '200':
           content:

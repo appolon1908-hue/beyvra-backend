@@ -1,92 +1,90 @@
 # Beyvra PAPER/LIVE master build
 
-## Authority and sequencing
+The revised 2026 mission supersedes the separate Demo/Live design. Execute
+backend B00–B19, frontend F00–F15, final cleanup, then integrated certification.
+Each milestone requires a tested branch, push, PR, green required checks,
+review, merge and main synchronization. This mission is not complete.
 
-The revised 2026 mission supersedes the earlier separate Demo/Live design.
-Customer orders, executions, positions, portfolio and realtime must share one
-contract. The account selects PAPER or LIVE execution. PAPER funds must never
-enter the real ledger. Credentials do not grant production activation.
+## B00 — API Contract Migration: in progress
 
-Execute backend B00–B19, frontend F00–F15, final cleanup, then integrated
-certification. Each milestone requires its own tested branch, push, PR, required
-green checks, independent review, merge and main synchronization. Do not advance
-past an unfinished milestone or bypass branch protection.
+Baseline: backend `688d6b1`, frontend `46472a1e780f20c531297c74b1ab603156abea93`.
+No repository `AGENTS.md` was found in either fresh checkout.
 
-## B00: in progress, not merge-ready
+The named `beyvra-openapi-3.1.yaml`, `beyvra-asyncapi-3.0.yaml`, and
+`beyvra-api-design-notes.md` were not found in the workspace or either repository.
+Work continues from the user's written specification. Reconstructed files must
+identify that provenance; they must not be described as uploaded originals.
 
-Baseline audited on 2026-09-12:
+### Implemented on the B00 branches
 
-- Backend main: `688d6b1`.
-- Frontend main: `46472a1e780f20c531297c74b1ab603156abea93`.
-- No repository `AGENTS.md` was found in either fresh checkout.
-- The requested `beyvra-openapi-3.1.yaml`, `beyvra-asyncapi-3.0.yaml`, and
-  `beyvra-api-design-notes.md` were not found in either checkout or the workspace.
-  Their location has been requested. Existing contracts are audit inputs, not
-  assumed substitutes for the missing authoritative files.
+- Contract validation rejects duplicate operation IDs, broken local references,
+  duplicate YAML keys, retired Demo paths/tags, named provider customer paths,
+  and direct wallet balance/credit mutation routes. External references fail
+  explicitly; the checker does not claim full OpenAPI semantic validation.
+- The protected CI workflow is unchanged. A separate read-only workflow runs
+  contract regression tests and lint. No trust pins or protection rules changed.
+- `TradingAccount` now stores PAPER/LIVE identity separately from virtual balance
+  projections. PostgreSQL constraints prevent PAPER funding/withdrawals and LIVE
+  ownership of a paper projection. A trigger prevents execution-mode conversion
+  and identity reassignment. New LIVE records must begin PENDING with effects off.
+- Migration `0010` backfills existing virtual accounts as PAPER while retaining
+  IDs, ownership, currency, restrictions, timestamps and virtual funds. Migration
+  `0011` installs the identity boundary. Reverse migration retains virtual funds.
+- Existing account lookup and serialization use the new identity; account state
+  and trading permission participate in risk evaluation. Identity lookup does not
+  reactivate restricted accounts. Lock ordering remains projection then identity.
+- Runtime `/api/v1/demo/*` routes and guest-session creation routes are removed.
+  Unreferenced guest-session and Demo-configuration views are removed. The existing
+  session reader still supports already-issued identities during migration.
+- Active OpenAPI snapshots no longer advertise the removed routes. The duplicate
+  `codestra-demo-v1.yaml` contract is retired; historical funding entries in that
+  snapshot were not authorization to enable or delete funding handlers.
+- The paired frontend B00 branch removes application Demo API clients. Practice
+  entry redirects through secure login, platform flags use workspace bootstrap,
+  and PAPER accounts cannot enable financial UI capabilities.
 
-### Existing contract inventory
+These changes are not deployed. The two B00 branches form a coordinated migration,
+not the start of a later frontend milestone. Frontend application callers must be
+merged and released before backend route retirement reaches a running workload.
 
-Counts are HTTP operations, not path items; generated evidence snapshots are
-excluded. These counts do not establish implementation completeness.
+### Current validation evidence
 
-| Contract in `contracts/openapi/` | Operations | Missing operation IDs |
-| --- | ---: | ---: |
-| `beyvra-v1.yaml` | 671 | 0 |
-| `codestra-demo-v1.yaml` | 240 | 0 |
-| `beyvra-treasury-v1.yaml` | 37 | 37 |
-| `beyvra-enterprise-experience-v1.yaml` | 26 | 0 |
-| `codestra-real-wallet-v1.yaml` | 14 | 0 |
-| `beyvra-workspace-v1.yaml` | 8 | 0 |
-
-The current validator discovers eight documents, including the Financial
-Service and platform-operations contracts. Validation now rejects duplicate
-operation IDs, broken local references, invalid operation shapes, and duplicate
-YAML keys. It does not claim full OpenAPI semantic validation or that an endpoint
-is implemented. Existing missing IDs remain migration work. External references
-fail explicitly rather than being silently accepted or fetched over the network.
-
-The first CI run rejected a modification to the integrity-protected `ci.yml`.
-That workflow has been restored. New tests and lint checks run in the separate
-read-only `api-contract-validation.yml`; no workflow trust pins, branch rules,
-or production controls were relaxed. The repository orchestrator validator and
-its release-intent self-tests pass locally with this configuration.
-
-### Runtime and caller findings
-
-| Existing surface | Revised disposition | Evidence / dependency |
-| --- | --- | --- |
-| `/api/v1/demo/sessions` | REMOVE after caller migration | `FX/FX/urls.py`; frontend `codestraAuthApi.guestDemo` is called from `SignInForm.tsx`. Guest identity creation is not equivalent to authenticated PAPER account creation. |
-| `/api/v1/demo/config` | REMOVE after caller migration | `FX/FX/urls.py`; frontend generated client, endpoint registry, and `useDemoConfig.ts` reference the route. Fixed-Time settings must not silently become spot-order rules. |
-| Other `/api/v1/demo/*` paths | REMOVE stale contract entries | The old Demo contract advertises paths already absent from runtime; `trade/test_demo_event_producer.py` asserts four removals. |
-| `/api/v1/trading/*` | COMPATIBILITY during migration | Existing simulation order service is in `apps.trading.application.simulation`; the new contract requires `/orders`, `/positions`, `/executions`, and `/accounts`. |
-| `/api/payment/**` | REMOVE after funding and frontend migration | Preserve the existing Financial Service boundary; do not enable old Stripe/Binance mutations. |
-| `/api/v1/market/*` | COMPATIBILITY during migration | Revised authority is `/api/v1/market-data/*`; reconcile the older consolidation inventory when successors are working. |
-
-`SimulatedAccount` currently owns virtual balance projections; it is not the
-requested unified `TradingAccount`. Orders and events still use simulation flags
-and `SIMULATION` values. A textual DEMO-to-PAPER replacement cannot establish
-account ownership, isolation, creation eligibility, or internal routing.
+- The initial preparatory head `558bb9c` passed all six GitHub checks, including
+  application validation and container scans. Those results do not certify later
+  commits; each new head requires fresh CI.
+- Twelve contract regression tests pass against seven current documents.
+- PostgreSQL account, retirement and full canonical trading regression run:
+  109 tests passed after lock-order and timestamp-preservation refinements.
+- Frontend dependency installation, build and typecheck pass. Lint has no errors
+  and one existing `requireAuth` hook-dependency warning. Five targeted client and
+  capability tests pass. This does not establish full E2E certification.
 
 ### Remaining B00 work
 
-1. Obtain and inspect the three authoritative source files.
-2. Reconcile supplied operations with current Django routes and frontend callers.
-3. Implement the PAPER/LIVE contract migration and required data migration,
-   preserving virtual and real authority separation.
-4. Migrate affected callers before route removal; reconcile this cross-repository
-   dependency with backend-first milestone delivery.
-5. Generate `API-IMPLEMENTATION-MATRIX.md` with evidence-backed module, service,
-   authorization, gates, test and caller mappings. Do not label a stub as
-   `IMPLEMENTED_GATED` or invent implementation evidence.
-6. Validate OpenAPI/AsyncAPI, migration compatibility, runtime behavior and all
-   required CI checks, then obtain the required independent approval and merge.
+1. Finish reconstructing and validating the OpenAPI 3.1, AsyncAPI 3.0 and design
+   notes from the written specification, and reconcile all contract operations.
+2. Generate the implementation matrix from operation IDs with evidence-backed
+   service, authorization, feature-gate, test and frontend-caller mappings. Never
+   label an unimplemented provider adapter as implemented and gated.
+3. Finish the paired frontend test-harness migration: older E2E/load fixtures still
+   reference retired guest/Demo routes and require authenticated PAPER fixtures.
+4. Update remaining inventories and schema account definitions, validate migration
+   compatibility and all required CI checks, and review the final milestone diff.
+5. Complete the coordinated B00 PR reviews and merges before starting B01.
 
-No runtime routes, account data, provider credentials or financial activation
-flags have changed in this preparatory work. No milestone is complete.
+### Preserved boundaries and limitations
 
-## Review gate
+`SimulatedAccount` remains the internal virtual projection during engine migration;
+it is not a second public trading account model. The legacy simulation header and
+`/api/v1/trading/*` compatibility contract still require migration to the final
+account-selected `/orders`, `/executions`, and `/positions` contract. B06 must finish
+PAPER execution behind that common surface; B12 must finish governed LIVE routing.
 
-Backend main currently requires one approving review, dismisses stale approvals,
-enforces protection for administrators, and requires `container`,
-`exact-head-base-ci`, `secrets`, `validate`, and `orchestrator-contract` against an
-up-to-date branch. These requirements must be rechecked on the final PR head.
+Legacy `/api/payment/**`, wallet mutations and other provider-specific compatibility
+surfaces retain their removal-after-migration policy. No provider credentials,
+production deployment or live financial activation was changed.
+
+Backend main currently requires an independent approving review and green
+`container`, `exact-head-base-ci`, `secrets`, `validate`, and `orchestrator-contract`
+checks with current main ancestry. GitHub does not count an author's self-approval
+as that required review. Recheck protection on the final PR head; do not bypass it.

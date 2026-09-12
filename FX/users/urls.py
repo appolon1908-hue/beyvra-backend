@@ -29,7 +29,6 @@ urlpatterns = [
     path("delete/", views.DeleteUserView.as_view(), name="delete"),
     path("me/", views.ManageUserView.as_view(), name="me"),
     path("token/refresh/", views.CookieTokenRefreshView.as_view(), name="token_refresh"),
-    path("guest-demo/", views.GuestDemoSessionView.as_view(), name="guest_demo_session"),
     path("disable_walkthrough/", views.DisableWalkthroughView.as_view(), name="disable_walkthrough"),
     path("send_phone_verification/", views.SendPhoneVerificationView.as_view(), name="send_phone_verification"),
     path("verify_phone/", views.VerifyPhoneCodeView.as_view(), name="verify_phone"),

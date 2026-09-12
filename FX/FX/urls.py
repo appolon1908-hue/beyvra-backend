@@ -20,8 +20,8 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from users.views import GuestDemoSessionView, ManageUserView, SessionResolveView
-from trade.demo_engine import DemoConfigView, WorkspaceBootstrapView
+from users.views import ManageUserView, SessionResolveView
+from trade.demo_engine import WorkspaceBootstrapView
 from ws import v2 as realtime_v2
 from news_app import views as news_views
 from notifications import views as notification_views
@@ -45,10 +45,8 @@ urlpatterns = [
     path("api/v1/notifications/", include("notifications.urls")),
     path("api/v1/alerts", notification_views.UserAlertsListing.as_view(), name="alerts_v1"),
     path("api/v1/alerts/<uuid:alert_id>", notification_views.UserAlertDetail.as_view(), name="alert_detail_v1"),
-    path("api/v1/demo/sessions", GuestDemoSessionView.as_view(), name="guest_demo_session_v1"),
     path("api/v1/session", SessionResolveView.as_view(), name="session_resolve_v1"),
     path("api/v1/workspace/bootstrap", WorkspaceBootstrapView.as_view(), name="workspace_bootstrap_v1"),
-    path("api/v1/demo/config", DemoConfigView.as_view(), name="demo_config_v1"),
     path("api/v1/realtime/v2/connection-token", realtime_v2.connection_token, name="realtime_v2_connection_token"),
     path("api/v1/realtime/v2/subscription-token", realtime_v2.subscription_token, name="realtime_v2_subscription_token"),
     path("api/v1/realtime/v2/authorize-subscription", realtime_v2.authorize_subscription, name="realtime_v2_authorize_subscription"),

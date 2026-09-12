@@ -76,6 +76,42 @@ class OpenApiValidationTests(unittest.TestCase):
             ):
                 validate_document(document)
 
+    def test_retired_and_provider_specific_customer_paths_are_rejected(self):
+        for path in (
+            "/api/v1/demo",
+            "/api/v1/demo/orders",
+            "/api/admin/v1/accounts/{accountId}/demo-credit",
+            "/api/admin/v1/accounts/{accountId}/demo-reset/",
+            "/api/v1/polygon/quotes",
+            "/api/v1/funding/stripe/deposits",
+        ):
+            document = contract()
+            document["paths"][path] = {"post": {"operationId": "forbiddenCommand"}}
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                validate_document(document)
+
+    def test_demo_tag_cannot_be_reintroduced(self):
+        document = contract()
+        document["tags"] = [{"name": "Demo"}]
+        with self.assertRaisesRegex(ValueError, "Demo tag"):
+            validate_document(document)
+        document.pop("tags")
+        document["paths"]["/api/v1/accounts"]["get"]["tags"] = ["Demo"]
+        with self.assertRaisesRegex(ValueError, "Demo tag"):
+            validate_document(document)
+
+    def test_wallet_balance_reads_are_allowed_but_mutations_are_rejected(self):
+        document = contract()
+        document["paths"]["/api/v1/wallet/USD/balance"] = {
+            "get": {"operationId": "readBalance"}
+        }
+        validate_document(document)
+        document["paths"]["/api/v1/wallet/USD/balance"]["patch"] = {
+            "operationId": "editBalance"
+        }
+        with self.assertRaisesRegex(ValueError, "direct financial"):
+            validate_document(document)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 import base64
 import io
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import uuid4
 
 import pandas as pd
@@ -35,6 +35,7 @@ from operations.services import (
 from operations.authentication import SessionBoundJWTAuthentication
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.pagination import LimitOffsetPagination, PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -44,7 +45,6 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.views import TokenRefreshView
 from trade.models import Trade, Transaction
-from trade.models import DemoLedgerEntry
 from trade.serializers import (
     TradeDetailSerializer,
     TradeHistorySerializer,
@@ -80,7 +80,6 @@ from users.utils import confirm_action
 from wallet.constants import DEMO_BALANCE, DEMO_WALLET_NAME
 from wallet.models import Currency, Wallet
 from wallet.serializers import WalletDetailSerializer
-from integrations.models import Organization, OrganizationMembership
 
 from .models import KYC, KYCFile, PhoneVerificationCode
 from .tasks import (
@@ -552,69 +551,6 @@ class LoginView(generics.CreateAPIView):
             serializer.errors,
             status=status.HTTP_401_UNAUTHORIZED if invalid_credentials else status.HTTP_400_BAD_REQUEST,
         )
-
-
-class GuestDemoSessionView(APIView):
-    """Issue a short-lived, anonymous paper-trading access token.
-
-    No PII is accepted or returned, no refresh token is issued, and the
-    identity is explicitly marked as demo-only. This endpoint is enabled only
-    while the server is in paper-trading mode.
-    """
-
-    permission_classes = [permissions.AllowAny]
-    throttle_scope = "guest_demo"
-
-    def post(self, request):
-        if not getattr(settings, "GUEST_DEMO_ENABLED", False) or not getattr(settings, "PAPER_TRADING_ONLY", True):
-            return Response({"code": "GUEST_DEMO_DISABLED", "message": "Demo access is unavailable."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        expires_at = timezone.now() + timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS)
-        with transaction.atomic():
-            guest = User.objects.create_user(
-                email=f"guest-{uuid4().hex}@guest.invalid",
-                password=uuid4().hex,
-                first_name="Guest",
-                last_name="Demo",
-                phone_number=f"+999{uuid4().int % 10**12:012d}",
-                is_active=True,
-                is_walkthrough=True,
-                email_verified=False,
-                email_verification_source="guest_demo",
-                is_guest_demo=True,
-                guest_demo_expires_at=expires_at,
-            )
-            organization, _ = Organization.objects.get_or_create(name="Codestra staging")
-            OrganizationMembership.objects.get_or_create(
-                user=guest,
-                organization=organization,
-                defaults={"role": "member"},
-            )
-            demo_currency, _ = Currency.objects.get_or_create(name="Đ", defaults={"symbol": "DEMO", "longer_name": "Demo Dollar"})
-            wallet = Wallet.objects.create(
-                name=DEMO_WALLET_NAME,
-                currency=demo_currency,
-                user=guest,
-                organization=organization,
-                balance=10000,
-                is_real=False,
-            )
-            DemoLedgerEntry.objects.create(wallet=wallet, entry_type="INITIAL", amount=10000, idempotency_key=f"initial:{wallet.pk}", description="Initial virtual demo funds")
-
-        refresh = AuthTokenObtainPairSerializer.get_token(guest)
-        access = refresh.access_token
-        access["guest_demo"] = True
-        access["demo_only"] = True
-        access["guest_expires_at"] = int(expires_at.timestamp())
-        access.set_exp(lifetime=timedelta(seconds=settings.GUEST_DEMO_TTL_SECONDS))
-        payload = {"access": str(access), "expiresIn": settings.GUEST_DEMO_TTL_SECONDS, "guestDemo": True, "demoOnly": True, "nextPath": "/platform"}
-        response = Response(payload, status=status.HTTP_201_CREATED)
-        response.set_cookie("codestra_guest_session", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
-        response.set_cookie("access_token", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Lax", path="/")
-        # The SPA uses this HttpOnly cookie and discards the demo bearer body.
-        # Explicit API clients may retain the response token for compatibility.
-        response.set_cookie("beyvra_access", payload["access"], max_age=settings.GUEST_DEMO_TTL_SECONDS, secure=True, httponly=True, samesite="Strict", path="/")
-        return response
 
 
 class SessionResolveView(APIView):

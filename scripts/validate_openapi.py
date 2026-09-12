@@ -2,6 +2,7 @@
 """Validate checked-in OpenAPI identities and document-local references."""
 
 from pathlib import Path
+import re
 import sys
 from urllib.parse import unquote
 
@@ -58,7 +59,31 @@ def validate_document(document):
     if not isinstance(document.get("paths"), dict):
         raise ValueError("OpenAPI paths must be a mapping")
     operation_ids = set()
+    if any(
+        tag.get("name", "").casefold() == "demo"
+        for tag in document.get("tags", [])
+        if isinstance(tag, dict)
+    ):
+        raise ValueError("retired Demo tag")
     for path, item in document["paths"].items():
+        if path.rstrip("/") == "/api/v1/demo" or path.startswith("/api/v1/demo/"):
+            raise ValueError("retired Demo namespace")
+        if path.startswith("/api/admin/v1/accounts/") and path.rstrip("/").endswith(
+            ("/demo-credit", "/demo-reset")
+        ):
+            raise ValueError("retired Demo administration command")
+        if path.startswith("/api/v1/") and set(path.casefold().split("/")) & {
+            "polygon",
+            "massive",
+            "twelve-data",
+            "coingecko",
+            "alpaca",
+            "stripe",
+            "binance-pay",
+            "bitgo",
+            "newsdata",
+        }:
+            raise ValueError("provider-specific customer path")
         if not isinstance(item, dict):
             raise ValueError(f"invalid path item: {path}")
         for method, operation in item.items():
@@ -66,6 +91,12 @@ def validate_document(document):
                 continue
             if not isinstance(operation, dict):
                 raise ValueError(f"invalid operation: {method} {path}")
+            if any(str(tag).casefold() == "demo" for tag in operation.get("tags", [])):
+                raise ValueError("retired Demo tag")
+            if method in {"patch", "put", "post"} and re.fullmatch(
+                r"/api/v1/wallets?/[^/]+/(?:balance|credit)/?", path
+            ):
+                raise ValueError("direct financial balance mutation")
             operation_id = operation.get("operationId")
             # Some existing auxiliary contracts omit IDs. The migration audit
             # records those gaps; supplied IDs must already be valid and unique.

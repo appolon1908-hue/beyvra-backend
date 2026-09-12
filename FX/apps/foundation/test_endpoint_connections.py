@@ -44,7 +44,6 @@ class FrontendBackendEndpointConnectionTests(SimpleTestCase):
             "/api/portfolio/total-profit-loss/",
             "/api/assets/",
             "/api/get-clock/",
-            "/api/v1/demo/config",
             "/api/v1/auth/token/",
             "/api/v1/auth/create/",
             "/api/v1/auth/token/logout/",

@@ -9,6 +9,7 @@ from apps.foundation.models import ApplicationAuditEvent, OutboxEvent, TradingCo
 from apps.foundation.services import begin_idempotent_request, complete_idempotent_request, consume_once, enqueue_event
 from apps.trading.domain.orders import OrderState, transition_order
 from apps.trading.models import RiskDecision, SimulatedAccount, SimulatedReservation, SimulatedTrade, TradingOrder
+from apps.trading.application.accounts import ensure_paper_identity, serialize_trading_account
 from apps.trading.execution_authority import preview_route, record_quality
 from apps.trading.risk import RiskEngine
 from apps.surveillance.engine import SurveillanceEngine
@@ -77,9 +78,11 @@ def order_correlation(order):
     return correlation_uuid(value)
 
 
+@transaction.atomic
 def account_for(user, tenant_ref="default"):
     tenant, subject, account_ref = refs(user, tenant_ref)
     account, _ = SimulatedAccount.objects.get_or_create(tenant_ref=tenant, subject_ref=subject, account_ref=account_ref)
+    ensure_paper_identity(account)
     return account
 
 
@@ -110,11 +113,12 @@ def normalized_payload(data):
 def evaluate(user, data):
     payload = normalized_payload(data)
     account = account_for(user)
+    identity = ensure_paper_identity(account)
     financial = SimulatedFinancialAdapter()
     available = financial.available_quote(account)
     notional = payload["quantity"] * payload["price"]
     state = control_state(payload["instrument_id"])
-    inputs = {"account_status": account.status, "simulation_eligible": True, "instrument_status": "ACTIVE", "market_status": "OPEN", "side": payload["side"], "quantity": payload["quantity"], "min_quantity": "0.0001", "max_quantity": "100", "notional": notional, "min_notional": "1", "max_notional": "1000000", "available_funds": available if payload["side"] == "BUY" else Decimal("Infinity"), "projected_position": payload["quantity"], "position_limit": "100", "daily_notional": "0", "daily_notional_limit": "1000000", "daily_loss": "0", "daily_loss_limit": "10000", "market_data_stale": settings.SIMULATED_MARKET_DATA_STALE, "provider_health": "HEALTHY", "compliance_eligible": True, "control_state": state, "reference_price": payload["price"], "order_price": payload["limit_price"] or payload["price"], "price_band_percent": "5"}
+    inputs = {"account_status": identity.status if identity.trading_enabled else "RESTRICTED", "simulation_eligible": True, "instrument_status": "ACTIVE", "market_status": "OPEN", "side": payload["side"], "quantity": payload["quantity"], "min_quantity": "0.0001", "max_quantity": "100", "notional": notional, "min_notional": "1", "max_notional": "1000000", "available_funds": available if payload["side"] == "BUY" else Decimal("Infinity"), "projected_position": payload["quantity"], "position_limit": "100", "daily_notional": "0", "daily_notional_limit": "1000000", "daily_loss": "0", "daily_loss_limit": "10000", "market_data_stale": settings.SIMULATED_MARKET_DATA_STALE, "provider_health": "HEALTHY", "compliance_eligible": True, "control_state": state, "reference_price": payload["price"], "order_price": payload["limit_price"] or payload["price"], "price_band_percent": "5"}
     if state == "CANCEL_ONLY" or (state == "CLOSE_ONLY" and payload["side"] == "BUY"):
         inputs["control_state"] = "HALTED"
     with RISK_DURATION.labels("true").time(): result = RiskEngine().evaluate_order(inputs)
@@ -371,4 +375,4 @@ def serialize_order(order):
 
 def serialize_account(account):
     reserved = account.reservations.filter(state=SimulatedReservation.State.ACTIVE).aggregate(total=__import__("django.db.models", fromlist=["Sum"]).Sum("remaining_amount"))["total"] or Decimal("0")
-    return {"id": str(account.id), "account_ref": account.account_ref, "currency": account.quote_currency, "total": str(account.total_balance), "available": str(SimulatedFinancialAdapter.available_quote(account)), "reserved": str(reserved), "pending": str(account.pending_balance), "simulation": True}
+    return {"id": str(account.id), "account_ref": account.account_ref, "currency": account.quote_currency, "total": str(account.total_balance), "available": str(SimulatedFinancialAdapter.available_quote(account)), "reserved": str(reserved), "pending": str(account.pending_balance), "simulation": True, **serialize_trading_account(ensure_paper_identity(account))}
