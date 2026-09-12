@@ -38,3 +38,4 @@ jobs:
           node scripts/validate_asyncapi.mjs
           python3 -m unittest discover -s scripts -p 'test_api_implementation_matrix.py'
           python3 scripts/generate_api_implementation_matrix.py --check
+          python3 -m unittest discover -s scripts -p 'test_staging_certifier.py'

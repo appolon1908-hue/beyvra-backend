@@ -60,6 +60,10 @@ are used with explicit provenance, not represented as uploaded originals.
 - Repeated database testing exposed migration-seed dependence in trading tests.
   Those tests now declare their settlement-calendar fixture. A regression proves
   a genuinely missing calendar rolls back fills and preserves reservations.
+- The staging API certifier requires `BEYVRA_STAGING_ACCESS_TOKEN` for a dedicated
+  identity provisioned through normal sign-in. Missing credentials fail before
+  requests or evidence generation; the retired session-creation fallback is gone.
+  Two isolated regressions cover this boundary without contacting staging.
 
 ### Validation and release evidence
 
