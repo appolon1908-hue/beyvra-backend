@@ -345,8 +345,8 @@ APPROVED_COMPLEX_SCRIPT_SHA256: dict[str, dict[str, str]] = {
         "FX/release-init-prod.sh": "cef5fadd788f5ae5c9ba28a857bfe516e47b671e36aafcf3817b4c20b9e5115b",
         "operations/verify_release_identity.py": "8aadfc14fa376ba46483216c6323d589d4603c71d42f5a77c29286edb5b5cf0a",
         "scripts/certify_staging_api.py": (
-            "a154c1bcd011c42442263d06b530e243"
-            "901ec8487c6b34f032e53810f12a5a30"
+            "f2233c960af5a92160278b76a398de2d"
+            "9586f9a74a76c786c8bad58f8080c127"
         ),
     },
     "appolon1908-hue/scrapper": {

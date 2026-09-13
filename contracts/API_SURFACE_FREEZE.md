@@ -1,39 +1,26 @@
-# API surface freeze — Beyvra Demo v1
+# Beyvra PAPER/LIVE API migration authority
 
-Generated from the Django URL resolver on 2026-08-04.
+The revised written PAPER/LIVE mission governs this migration. Accounts determine
+execution mode. PAPER and LIVE share the target order, execution, position,
+portfolio and realtime surfaces. PAPER funds never enter the real ledger and a
+customer cannot promote a PAPER account to LIVE.
 
-## Counts
+`contracts/openapi/beyvra-openapi-3.1.yaml` is the generated runtime snapshot. It
+extends the existing Django schema with OpenAPI 3.1 and explicit account identity.
+It records its provenance and is not presented as an unavailable uploaded
+original or as evidence that every final target API already exists. Auxiliary
+domain contracts remain checked; duplicate tracked runtime snapshots are removed.
 
-- 200 registered API route patterns (including DRF format variants).
-- 197 logical URL templates after format-variant normalization.
-- 18 core Demo/tenant/integration/webhook URLs in the product inventory,
-  including `/api/v1/workspace/bootstrap`.
-- 8 logical webhook-capable URLs, including the legacy Stripe receiver.
-- 3 supported legacy WebSocket routes: `/ws/trades/`, `/ws/users/`, and
-  `/ws/market-data/`.
+The retired Demo namespace/tag/operation IDs cannot be reintroduced. The old Demo
+specification is removed. Legacy funding routes are removed after callers migrate;
+their presence never grants permission to enable funding or external execution.
 
-The authoritative route inventory is `API_WEBHOOK_INVENTORY.md`; the versioned
-OpenAPI document is `contracts/openapi/codestra-demo-v1.yaml`.
+`docs/API-IMPLEMENTATION-MATRIX.md` is generated from operation IDs. Verified
+backend implementations have source-bound evidence; unverified rows have no
+assigned status. Final certification rejects missing evidence. Returning a generic
+response or FEATURE_DISABLED does not establish an implemented provider adapter.
 
-## Client drift found during freeze
-
-The current frontend still references contracts not present in the backend
-route tree: `platform/config`, `v1/market/snapshot`, `v1/market/candles`,
-`v1/economic-calendar`, `v1/realtime/health`, and `ws/v1/*` realtime channels.
-Workspace bootstrap is now implemented at `/api/v1/workspace/bootstrap`.
-These must be implemented behind a versioned service or removed; they must not
-silently fall back to mock data.
-
-The frontend also contains direct `fetch()` call sites and legacy payment,
-deposit and withdrawal hooks. Those routes remain compatibility-only and must
-stay inaccessible from the Demo UI.
-
-## Freeze rules
-
-1. New client calls must use the generated/typed client and a documented
-   operation ID.
-2. Existing endpoints require contract tests before behavior changes.
-3. Any retirement requires a deprecation marker, a migration window and a
-   negative test proving the Demo UI cannot call it.
-4. No real-money or external order-routing endpoint may be added under the Demo
-   product mode.
+B00 establishes this migration foundation and its paired caller/test-harness
+changes. The subsequent milestones extend the existing services, reconcile target
+paths, add provider integrations and finish frontend wiring. B19 and final staging
+certification must prove complete coverage before production release.

@@ -149,6 +149,8 @@ backups/*.sql.gz
 backups/*-web-inspect.json
 venv/
 .venv/
+**/node_modules/
+FX/openapi.platform-ops.yaml
 
 # Additional files for debug
 FX/dhelp_manage.py

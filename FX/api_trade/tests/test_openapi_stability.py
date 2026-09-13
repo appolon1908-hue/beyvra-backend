@@ -8,6 +8,8 @@ class OpenApiStabilityTests(SimpleTestCase):
         response = APIClient().get(reverse("schema"), HTTP_ACCEPT="application/json")
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["openapi"], "3.1.0")
+        self.assertEqual(response.json()["info"]["title"], "Beyvra Trading API")
         paths = response.json()["paths"]
 
         for path in ("/api/get-calendar/", "/api/get-news/"):
@@ -20,3 +22,28 @@ class OpenApiStabilityTests(SimpleTestCase):
             self.assertEqual(set(date_parameters), {"start", "end"})
             for parameter in date_parameters.values():
                 self.assertNotIn("default", parameter["schema"])
+
+    def test_account_schema_uses_shared_execution_modes_and_explicit_permissions(self):
+        response = APIClient().get(reverse("schema"), HTTP_ACCEPT="application/json")
+        self.assertEqual(response.status_code, 200)
+        schemas = response.json()["components"]["schemas"]
+        collection = schemas["AccountCollection"]
+        item = collection["properties"]["results"]["items"]["$ref"].split("/")[-1]
+        account = schemas[item]
+        self.assertTrue(
+            {
+                "account_id",
+                "execution_mode",
+                "base_currency",
+                "status",
+                "trading_enabled",
+                "funding_enabled",
+                "withdrawals_enabled",
+            }.issubset(account["required"])
+        )
+        mode = account["properties"]["execution_mode"]
+        if "allOf" in mode:
+            mode = mode["allOf"][0]
+        if "$ref" in mode:
+            mode = schemas[mode["$ref"].split("/")[-1]]
+        self.assertEqual(set(mode["enum"]), {"PAPER", "LIVE"})

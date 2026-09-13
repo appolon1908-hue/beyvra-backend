@@ -1,50 +1,518 @@
 openapi: 3.0.3
-info: {title: Beyvra Treasury Simulation API, version: 1.0.0}
-servers: [{url: /api/v1}]
-security: [{bearerAuth: []}]
+info:
+  title: Beyvra Treasury Simulation API
+  version: 1.0.0
+servers:
+- url: /api/v1
+security:
+- bearerAuth: []
 paths:
-  /treasury/accounts: {get: {$ref: '#/components/x-read'}}
-  /treasury/cash: {get: {$ref: '#/components/x-read'}}
-  /treasury/cash/{currency}: {get: {$ref: '#/components/x-read'}}
-  /treasury/liquidity: {get: {$ref: '#/components/x-read'}}
-  /treasury/liquidity/{currency}: {get: {$ref: '#/components/x-read'}}
-  /institutional/liquidity: {get: {$ref: '#/components/x-read'}}
-  /treasury/collateral: {get: {$ref: '#/components/x-read'}}
-  /treasury/collateral/{asset}: {get: {$ref: '#/components/x-read'}}
-  /treasury/collateral/mobility/preview: {post: {$ref: '#/components/x-preview'}}
-  /treasury/funding-requirements: {get: {$ref: '#/components/x-read'}}
-  /treasury/funding-requirements/{id}: {get: {$ref: '#/components/x-read'}}
-  /treasury/intraday: {get: {$ref: '#/components/x-read'}}
-  /treasury/intraday/{currency}: {get: {$ref: '#/components/x-read'}}
-  /treasury/forecast: {get: {$ref: '#/components/x-read'}}
-  /treasury/forecast/{currency}: {get: {$ref: '#/components/x-read'}}
-  /treasury/transfer-plans/preview: {post: {$ref: '#/components/x-preview'}}
-  /treasury/transfer-plans: {get: {$ref: '#/components/x-read'}}
-  /treasury/transfer-plans/{id}: {get: {$ref: '#/components/x-read'}}
-  /treasury/settlement-funding: {get: {$ref: '#/components/x-read'}}
-  /treasury/settlement-funding/{settlement_id}: {get: {$ref: '#/components/x-read'}}
-  /treasury/stress/preview: {post: {$ref: '#/components/x-preview'}}
-  /treasury/reconciliation/status: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/accounts: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/accounts/{id}: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/transfer-plans: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/transfer-plans/{id}/simulate: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/transfer-plans/{id}/cancel: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/stress-scenarios: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/stress/run: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/exceptions: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/exceptions/{id}: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/exceptions/{id}/assign: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/exceptions/{id}/escalate: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/exceptions/{id}/resolve: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/reconciliation: {get: {$ref: '#/components/x-read'}}
-  /operator/treasury/reconciliation/run: {post: {$ref: '#/components/x-preview'}}
-  /operator/treasury/funding-requirements/{id}/evidence: {get: {$ref: '#/components/x-read'}}
+  /treasury/accounts:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_accounts_retrieve
+  /treasury/cash:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_cash_retrieve
+  /treasury/cash/{currency}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_cash_retrieve_2
+    parameters:
+    - name: currency
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/liquidity:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_liquidity_retrieve
+  /treasury/liquidity/{currency}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_liquidity_retrieve_2
+    parameters:
+    - name: currency
+      in: path
+      required: true
+      schema:
+        type: string
+  /institutional/liquidity:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_institutional_liquidity_retrieve
+  /treasury/collateral:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_collateral_retrieve
+  /treasury/collateral/{asset}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_collateral_retrieve_2
+    parameters:
+    - name: asset
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/collateral/mobility/preview:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_collateral_mobility_preview_create
+  /treasury/funding-requirements:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_funding_requirements_retrieve
+  /treasury/funding-requirements/{id}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryGetTreasuryFundingRequirementsId
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/intraday:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_intraday_retrieve
+  /treasury/intraday/{currency}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_intraday_retrieve_2
+    parameters:
+    - name: currency
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/forecast:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_forecast_retrieve
+  /treasury/forecast/{currency}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_forecast_retrieve_2
+    parameters:
+    - name: currency
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/transfer-plans/preview:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_transfer_plans_preview_create
+  /treasury/transfer-plans:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_transfer_plans_retrieve
+  /treasury/transfer-plans/{id}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryGetTreasuryTransferPlansId
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/settlement-funding:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_settlement_funding_retrieve
+  /treasury/settlement-funding/{settlement_id}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_settlement_funding_retrieve_2
+    parameters:
+    - name: settlement_id
+      in: path
+      required: true
+      schema:
+        type: string
+  /treasury/stress/preview:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_stress_preview_create
+  /treasury/reconciliation/status:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_treasury_reconciliation_status_retrieve
+  /operator/treasury/accounts:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_accounts_retrieve
+  /operator/treasury/accounts/{id}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryGetOperatorTreasuryAccountsId
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/transfer-plans:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_transfer_plans_retrieve
+  /operator/treasury/transfer-plans/{id}/simulate:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryPostOperatorTreasuryTransferPlansIdSimulate
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/transfer-plans/{id}/cancel:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryPostOperatorTreasuryTransferPlansIdCancel
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/stress-scenarios:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_stress_scenarios_retrieve
+  /operator/treasury/stress/run:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_stress_run_create
+  /operator/treasury/exceptions:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_exceptions_retrieve
+  /operator/treasury/exceptions/{id}:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryGetOperatorTreasuryExceptionsId
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/exceptions/{id}/assign:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryPostOperatorTreasuryExceptionsIdAssign
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/exceptions/{id}/escalate:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryPostOperatorTreasuryExceptionsIdEscalate
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/exceptions/{id}/resolve:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryPostOperatorTreasuryExceptionsIdResolve
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  /operator/treasury/reconciliation:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_reconciliation_retrieve
+  /operator/treasury/reconciliation/run:
+    post:
+      summary: Side-effect-free simulation preview
+      responses:
+        '200':
+          description: Simulation result with no financial effect
+        '400':
+          description: Safe validation error
+        '403':
+          description: Tenant or role denied
+      operationId: v1_operator_treasury_reconciliation_run_create
+  /operator/treasury/funding-requirements/{id}/evidence:
+    get:
+      summary: Tenant-scoped simulation/readiness data
+      responses:
+        '200':
+          description: Simulation response
+        '401':
+          description: Authentication required
+        '403':
+          description: Tenant or role denied
+      operationId: treasuryGetOperatorTreasuryFundingRequirementsIdEvidence
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
 components:
-  securitySchemes: {bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}}
-  x-read:
-    summary: Tenant-scoped simulation/readiness data
-    responses: {'200': {description: Simulation response}, '401': {description: Authentication required}, '403': {description: Tenant or role denied}}
-  x-preview:
-    summary: Side-effect-free simulation preview
-    responses: {'200': {description: Simulation result with no financial effect}, '400': {description: Safe validation error}, '403': {description: Tenant or role denied}}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

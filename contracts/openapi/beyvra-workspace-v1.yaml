@@ -52,7 +52,7 @@ paths:
               $ref: '#/components/schemas/VersionedWatchlistMutation'
       responses:
         '200': {description: Updated}
-        '409': {description: Version, duplicate-name, or idempotency conflict}
+        '409': {description: "Version, duplicate-name, or idempotency conflict"}
         '428': {description: Version required}
     delete:
       operationId: deleteWatchlist
@@ -97,7 +97,7 @@ paths:
                 version: {type: integer, minimum: 1}
       responses:
         '201': {description: Added}
-        '409': {description: Ambiguous instrument, version, or idempotency conflict}
+        '409': {description: "Ambiguous instrument, version, or idempotency conflict"}
         '428': {description: Version required}
   /api/v1/watchlists/{watchlist_id}/items/{instrument_id}:
     parameters:

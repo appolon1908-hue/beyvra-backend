@@ -4,6 +4,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, transaction
 from rest_framework import exceptions, permissions, status, views
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from integrations.models import OrganizationMembership
 from integrations.permissions import organization_for_request
@@ -60,6 +61,10 @@ class WorkspaceOwnedView(views.APIView):
         )
 
 
+@extend_schema_view(
+    get=extend_schema(operation_id="listWatchlists"),
+    post=extend_schema(operation_id="createWatchlist"),
+)
 class WatchlistCollectionView(WorkspaceOwnedView):
     def get(self, request):
         rows = self.watchlists()
@@ -128,6 +133,11 @@ class WatchlistCollectionView(WorkspaceOwnedView):
         return Response(data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(operation_id="getWatchlist"),
+    patch=extend_schema(operation_id="renameWatchlist"),
+    delete=extend_schema(operation_id="deleteWatchlist"),
+)
 class WatchlistDetailView(WorkspaceOwnedView):
     def get(self, request, watchlist_id):
         row = self.watchlist(watchlist_id)
@@ -304,6 +314,10 @@ class WatchlistDetailView(WorkspaceOwnedView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    get=extend_schema(operation_id="listWatchlistItems"),
+    post=extend_schema(operation_id="addWatchlistItem"),
+)
 class WatchlistItemCollectionView(WorkspaceOwnedView):
     def get(self, request, watchlist_id):
         row = self.watchlist(watchlist_id)
@@ -435,6 +449,7 @@ class WatchlistItemCollectionView(WorkspaceOwnedView):
         return Response(data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(delete=extend_schema(operation_id="deleteWatchlistItem"))
 class WatchlistItemDetailView(WorkspaceOwnedView):
     @transaction.atomic
     def delete(self, request, watchlist_id, instrument_id):

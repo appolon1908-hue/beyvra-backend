@@ -1,0 +1,7 @@
+{
+  "name": "beyvra-contract-validation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"validate:asyncapi": "node ../../scripts/validate_asyncapi.mjs"},
+  "devDependencies": {"@asyncapi/parser": "3.6.3"}
+}

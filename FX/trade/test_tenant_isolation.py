@@ -51,8 +51,9 @@ class DemoTenantIsolationTests(TestCase):
     def test_workspace_bootstrap_is_tenant_scoped_and_demo_only(self):
         response = self.client.get("/api/v1/workspace/bootstrap", HTTP_X_ORGANIZATION_ID=str(self.tenant_a.id))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["account"]["kind"], "DEMO")
-        self.assertTrue(response.data["account"]["demoOnly"])
+        self.assertEqual(response.data["account"]["execution_mode"], "PAPER")
+        self.assertFalse(response.data["account"]["funding_enabled"])
+        self.assertFalse(response.data["account"]["withdrawals_enabled"])
         self.assertEqual(response.data["realtime"], {
             "demo_order_channel": f"simulation.order.sim-{self.user.id}",
             "demo_execution_channel": f"simulation.execution.sim-{self.user.id}",

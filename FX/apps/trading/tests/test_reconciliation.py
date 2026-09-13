@@ -8,6 +8,7 @@ from users.models import User
 from apps.compliance.domain import AccountState, AmlState, JurisdictionState, KycState, SanctionsState
 from apps.compliance.models import ComplianceProfile
 from integrations.models import Organization, OrganizationMembership
+from .fixtures import ensure_paper_settlement_calendar
 
 def approve(user, name):
     organization=Organization.objects.create(name=name); OrganizationMembership.objects.create(user=user,organization=organization)
@@ -44,6 +45,10 @@ class ReconciliationDetectionTests(SimpleTestCase):
 
 @override_settings(DEPLOYMENT_ENV="test",SIMULATED_TRADING_ENABLED=True,REAL_TRADING_ENABLED=False,EXTERNAL_EXECUTION_ENABLED=False,REAL_MONEY_ENABLED=False,SIMULATED_EXECUTION_PRICES={"BTC-USD":"100"})
 class ReconciliationPersistenceTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        ensure_paper_settlement_calendar()
+
     def test_valid_database_state_persists_immutable_pass_evidence(self):
         user=User.objects.create_user(email="reconcile@example.invalid",phone_number="+12025550199",password=None)
         approve(user,"Reconciliation Test Tenant")

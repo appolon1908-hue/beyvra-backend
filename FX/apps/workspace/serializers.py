@@ -1,7 +1,27 @@
 from rest_framework import serializers
+from apps.trading.api.serializers import TradingAccountSerializer
 
 from .instruments import InstrumentResolutionError, resolve_active_instrument
 from .models import Watchlist, WatchlistItem
+
+
+class WorkspaceAccountSerializer(TradingAccountSerializer):
+    id = serializers.UUIDField(read_only=True)
+
+
+class WorkspaceBootstrapSerializer(serializers.Serializer):
+    state = serializers.CharField(read_only=True)
+    tenant = serializers.DictField(read_only=True)
+    account = WorkspaceAccountSerializer(read_only=True)
+    realtime = serializers.DictField(read_only=True)
+    wallet = serializers.DictField(read_only=True)
+    notifications = serializers.DictField(read_only=True)
+    features = serializers.DictField(child=serializers.BooleanField(), read_only=True)
+    instrument = serializers.DictField(read_only=True)
+    instruments = serializers.ListField(child=serializers.CharField(), read_only=True)
+    tradingRules = serializers.DictField(read_only=True)
+    savedAssetTabs = serializers.ListField(child=serializers.CharField(), read_only=True)
+    chartPreferences = serializers.DictField(read_only=True)
 
 
 class WatchlistItemSerializer(serializers.ModelSerializer):

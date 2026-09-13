@@ -11,6 +11,7 @@ from apps.foundation.services import IdempotencyConflict
 from integrations.financial.simulated import SimulationFinancialError
 from .errors import error_response
 from apps.valuation.portfolio_api import PortfolioSummaryView
+from .serializers import AccountCollectionSerializer
 
 
 def _guard(request):
@@ -109,6 +110,7 @@ class PositionsView(APIView):
 
 class AccountsView(APIView):
     permission_classes = (IsAuthenticated,)
+    @extend_schema(responses={200: AccountCollectionSerializer})
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
         return Response({"results": [serialize_account(account_for(request.user))]})

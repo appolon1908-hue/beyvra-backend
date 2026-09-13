@@ -72,6 +72,65 @@ class SimulatedAccount(models.Model):
         constraints = [models.UniqueConstraint(fields=("tenant_ref", "subject_ref", "account_ref"), name="simulation_account_scope_unique")]
 
 
+class TradingAccount(models.Model):
+    """Shared account identity; virtual balances remain a separate projection."""
+
+    class ExecutionMode(models.TextChoices):
+        PAPER = "PAPER"
+        LIVE = "LIVE"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING"
+        ACTIVE = "ACTIVE"
+        RESTRICTED = "RESTRICTED"
+        SUSPENDED = "SUSPENDED"
+        CLOSED = "CLOSED"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_ref = models.CharField(max_length=128)
+    subject_ref = models.CharField(max_length=128)
+    account_ref = models.CharField(max_length=128)
+    execution_mode = models.CharField(max_length=5, choices=ExecutionMode.choices)
+    base_currency = models.CharField(max_length=16, default="USD")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    trading_enabled = models.BooleanField(default=False)
+    funding_enabled = models.BooleanField(default=False)
+    withdrawals_enabled = models.BooleanField(default=False)
+    paper_projection = models.OneToOneField(
+        SimulatedAccount,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="trading_account",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_ref", "subject_ref", "account_ref"),
+                name="trading_account_scope_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=["PENDING", "ACTIVE", "RESTRICTED", "SUSPENDED", "CLOSED"]),
+                name="trading_account_valid_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        execution_mode="PAPER",
+                        paper_projection__isnull=False,
+                        funding_enabled=False,
+                        withdrawals_enabled=False,
+                    )
+                    | models.Q(execution_mode="LIVE", paper_projection__isnull=True)
+                ),
+                name="trading_account_mode_boundary",
+            ),
+        ]
+
+
 class SimulatedReservation(models.Model):
     class State(models.TextChoices):
         ACTIVE = "ACTIVE"

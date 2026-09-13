@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Non-destructive staging API verifier.
 
-Uses an optional pre-provisioned synthetic token. Without one it creates a
-short-lived guest-demo session and restricts itself to read/fail-closed probes.
+Requires a pre-provisioned token for a dedicated staging test identity.
+Missing credentials stop certification before any network request.
 Tokens and response bodies are never written to evidence.
 """
 
@@ -92,23 +92,10 @@ def main():
     token = os.getenv("BEYVRA_STAGING_ACCESS_TOKEN", "").strip()
     principal = "preprovisioned_synthetic"
     if not token:
-        principal = "guest_demo"
-        status, payload = call(
-            args.base_url,
-            "POST",
-            "/api/v1/demo/sessions",
-            body={},
-            idempotency=f"api-cert-{uuid.uuid4()}",
+        raise SystemExit(
+            "BEYVRA_STAGING_ACCESS_TOKEN is required; provision a dedicated "
+            "staging test identity through normal sign-in before certification"
         )
-        if (
-            status != 201
-            or not isinstance(payload, dict)
-            or not payload.get("access")
-        ):
-            raise SystemExit(
-                f"Unable to create guest demo session: HTTP {status}"
-            )
-        token = payload["access"]
 
     probes = [
         ("GET", "/health/live", None, {200}),
@@ -140,9 +127,7 @@ def main():
     results, failed = [], False
     for method, path, body, allowed in probes:
         try:
-            idempotency = (
-                f"api-cert-{uuid.uuid4()}" if method != "GET" else None
-            )
+            idempotency = f"api-cert-{uuid.uuid4()}" if method != "GET" else None
             status, payload = call(
                 args.base_url,
                 method,
@@ -151,9 +136,7 @@ def main():
                 body=body,
                 idempotency=idempotency,
             )
-            serialized = (
-                json.dumps(payload).lower() if payload is not None else ""
-            )
+            serialized = json.dumps(payload).lower() if payload is not None else ""
             safe = not any(term in serialized for term in SAFE_ERROR_FORBIDDEN)
             schema_valid = isinstance(payload, (dict, list))
             passed = status in allowed and schema_valid and safe
@@ -197,8 +180,7 @@ def main():
         anonymous_status == 401
         and isinstance(anonymous_payload, dict)
         and isinstance(anonymous_payload.get("error"), dict)
-        and anonymous_payload["error"].get("code")
-        == "AUTHENTICATION_REQUIRED"
+        and anonymous_payload["error"].get("code") == "AUTHENTICATION_REQUIRED"
     )
     evidence = {
         "schema_version": 2,

@@ -1,0 +1,381 @@
+{
+  "schema_version": 1,
+  "operations": {
+    "listWatchlists": {
+      "method": "GET",
+      "path": "/api/v1/watchlists",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistCollectionView.get",
+      "service": "FX/apps/workspace/api.py::WorkspaceOwnedView.watchlists",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "createWatchlist": {
+      "method": "POST",
+      "path": "/api/v1/watchlists",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistCollectionView.post",
+      "service": "FX/apps/workspace/commands.py::begin_command",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "getWatchlist": {
+      "method": "GET",
+      "path": "/api/v1/watchlists/{watchlist_id}",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistDetailView.get",
+      "service": "FX/apps/workspace/api.py::WorkspaceOwnedView.watchlists",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "renameWatchlist": {
+      "method": "PATCH",
+      "path": "/api/v1/watchlists/{watchlist_id}",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistDetailView.patch",
+      "service": "FX/apps/workspace/commands.py::begin_command",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "deleteWatchlist": {
+      "method": "DELETE",
+      "path": "/api/v1/watchlists/{watchlist_id}",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistDetailView.delete",
+      "service": "FX/apps/workspace/commands.py::begin_command",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "listWatchlistItems": {
+      "method": "GET",
+      "path": "/api/v1/watchlists/{watchlist_id}/items",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistItemCollectionView.get",
+      "service": "FX/apps/workspace/api.py::WorkspaceOwnedView.watchlists",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "addWatchlistItem": {
+      "method": "POST",
+      "path": "/api/v1/watchlists/{watchlist_id}/items",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistItemCollectionView.post",
+      "service": "FX/apps/workspace/commands.py::begin_command",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    },
+    "deleteWatchlistItem": {
+      "method": "DELETE",
+      "path": "/api/v1/watchlists/{watchlist_id}/items/{instrument_id}",
+      "backend_module": "FX/apps/workspace/api.py::WatchlistItemDetailView.delete",
+      "service": "FX/apps/workspace/commands.py::begin_command",
+      "authorization": "IsAuthenticated; organization membership and user ownership",
+      "feature_gate": "NONE",
+      "test_file": "FX/apps/workspace/tests.py::WatchlistApiTests",
+      "frontend_caller": "NONE: F02 customer UI wiring is outstanding",
+      "implementation_status": "IMPLEMENTED",
+      "file_sha256": {
+        "FX/apps/workspace/api.py": {
+          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+        },
+        "FX/apps/workspace/commands.py": {
+          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+        },
+        "FX/apps/workspace/models.py": {
+          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+        },
+        "FX/apps/workspace/serializers.py": {
+          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+        },
+        "FX/apps/workspace/instruments.py": {
+          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+        },
+        "FX/apps/workspace/urls.py": {
+          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+        },
+        "FX/apps/workspace/tests.py": {
+          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+        },
+        "FX/integrations/permissions.py": {
+          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+        },
+        "FX/apps/foundation/services.py": {
+          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+        },
+        "FX/apps/foundation/models.py": {
+          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+        },
+        "FX/apps/trading/api/serializers.py": {
+          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+        }
+      },
+      "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
+    }
+  }
+}

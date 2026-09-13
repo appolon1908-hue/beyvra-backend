@@ -1,0 +1,41 @@
+name: API contract validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  contract-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install validation tools
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3 ruff==0.15.6 jsonschema==4.26.0 rfc3339-validator==0.1.4 openapi-spec-validator==0.7.2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Install locked AsyncAPI validation tools
+        working-directory: contracts/tooling
+        run: npm ci --ignore-scripts --no-fund --no-audit
+      - name: Lint and format contract validation code
+        run: |
+          ruff check scripts/validate_openapi.py scripts/test_validate_openapi.py scripts/test_asyncapi_contract.py
+          ruff format --check scripts/validate_openapi.py scripts/test_validate_openapi.py scripts/test_asyncapi_contract.py
+          ruff check scripts/generate_api_implementation_matrix.py scripts/test_api_implementation_matrix.py
+          ruff format --check scripts/generate_api_implementation_matrix.py scripts/test_api_implementation_matrix.py
+      - name: Test contract validation and all checked-in contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_validate_openapi.py'
+          python3 scripts/validate_openapi.py --semantic
+          python3 -m unittest discover -s scripts -p 'test_asyncapi_contract.py'
+          node scripts/validate_asyncapi.mjs
+          python3 -m unittest discover -s scripts -p 'test_api_implementation_matrix.py'
+          python3 scripts/generate_api_implementation_matrix.py --check
+          python3 -m unittest discover -s scripts -p 'test_staging_certifier.py'

@@ -527,8 +527,16 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", PUBLIC_SITE_URL).rstrip("/")
 SESSION_COOKIE_DOMAIN = os.getenv("SESSION_COOKIE_DOMAIN") or None
 CSRF_COOKIE_DOMAIN = os.getenv("CSRF_COOKIE_DOMAIN") or None
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Tradi Trading API",
-    "DESCRIPTION": "Versioned API contract for the Tradi paper-trading platform.",
+    "TITLE": "Beyvra Trading API",
+    "DESCRIPTION": "Beyvra API with shared PAPER/LIVE account identity. Compatibility surfaces remain documented during migration.",
+    "OAS_VERSION": "3.1.0",
+    "EXTENSIONS_INFO": {
+        "x-beyvra-provenance": {
+            "source": "Existing Django runtime, extended under the revised written PAPER/LIVE mission",
+            "original_file_available": False,
+            "runtime_snapshot_is_not_completion_evidence": True,
+        },
+    },
     "VERSION": "1.0.0",
     "COMPONENT_SPLIT_REQUEST": True,
     # Legacy hand-built JSON responses are represented by the documented
