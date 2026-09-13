@@ -13,6 +13,7 @@ from .fixtures import ensure_paper_settlement_calendar
 def approve(user, name):
     organization=Organization.objects.create(name=name); OrganizationMembership.objects.create(user=user,organization=organization)
     ComplianceProfile.objects.create(user=user,organization=organization,account_state=AccountState.ACTIVE,kyc_state=KycState.APPROVED,aml_state=AmlState.CLEARED,sanctions_state=SanctionsState.CLEAR,jurisdiction_state=JurisdictionState.SUPPORTED)
+    return organization
 
 def valid_snapshot():
     return {"orders":[{"id":"o1","quantity":"10","filled_quantity":"10","state":"FILLED","account_id":"a1"}],
@@ -51,10 +52,10 @@ class ReconciliationPersistenceTests(TestCase):
 
     def test_valid_database_state_persists_immutable_pass_evidence(self):
         user=User.objects.create_user(email="reconcile@example.invalid",phone_number="+12025550199",password=None)
-        approve(user,"Reconciliation Test Tenant")
+        organization=approve(user,"Reconciliation Test Tenant")
         body,_=create(user,{"instrument":"BTC-USD","side":"BUY","order_type":"MARKET","quantity":"1"},"reconcile-valid")
         process_created_order(body["id"],"IMMEDIATE_FULL_FILL")
-        report=run(candidate_sha="test-candidate")
+        report=run(tenant=str(organization.id),candidate_sha="test-candidate")
         self.assertEqual(report["status"],"PASS"); self.assertEqual(report["violations"],[])
         record=ReconciliationRun.objects.get(pk=report["run_id"]); self.assertEqual(record.status,"PASS"); self.assertEqual(len(record.summary_hash),64)
         record.scope="orders"

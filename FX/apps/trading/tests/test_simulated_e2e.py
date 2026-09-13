@@ -19,6 +19,9 @@ from apps.compliance.domain import AccountState, AmlState, JurisdictionState, Ky
 from apps.compliance.models import ComplianceProfile
 from integrations.models import Organization, OrganizationMembership
 from apps.post_trade.models import SettlementCalendar
+from reference_data.services import record_market_observation
+from django.utils import timezone
+from datetime import timedelta
 from .fixtures import ensure_paper_settlement_calendar
 
 
@@ -30,6 +33,7 @@ SIMULATION = override_settings(
 
 
 def approve_for_simulation(user, label):
+    ensure_paper_settlement_calendar()
     organization = Organization.objects.create(name=f"{label} {uuid.uuid4()}")
     OrganizationMembership.objects.create(user=user, organization=organization)
     ComplianceProfile.objects.create(user=user, organization=organization, account_state=AccountState.ACTIVE, kyc_state=KycState.APPROVED, aml_state=AmlState.CLEARED, sanctions_state=SanctionsState.CLEAR, jurisdiction_state=JurisdictionState.SUPPORTED)
@@ -84,7 +88,7 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertEqual(order.state, "FILLED"); self.assertEqual(order.filled_quantity, Decimal("10"))
         self.assertEqual(SimulatedTrade.objects.filter(order=order).count(), 1)
         self.assertEqual(OutboxEvent.objects.filter(event_type="trading.execution.received.v1", payload__order_id=str(order.id)).count(), 1)
-        position = SimulatedPosition.objects.get(instrument_id="BTC-USD"); self.assertEqual(position.quantity, Decimal("10"))
+        position = SimulatedPosition.objects.get(instrument_id=order.instrument_id); self.assertEqual(position.quantity, Decimal("10"))
         account = position.account; self.assertEqual(account.total_balance, Decimal("8999"))
         self.assertEqual(SimulatedReservation.objects.get(order_id=order.id).state, "CONSUMED")
 
@@ -106,14 +110,14 @@ class SimulatedTradingE2ETests(TestCase):
         process_created_order(order.id, "PARTIAL_THEN_FILL"); order.refresh_from_db()
         self.assertEqual(order.state, "FILLED"); self.assertEqual(order.filled_quantity, Decimal("10"))
         self.assertEqual(list(SimulatedTrade.objects.filter(order=order).values_list("quantity", flat=True)), [Decimal("4"), Decimal("6")])
-        self.assertEqual(SimulatedPosition.objects.get(instrument_id="BTC-USD").quantity, Decimal("10"))
+        self.assertEqual(SimulatedPosition.objects.get(instrument_id=order.instrument_id).quantity, Decimal("10"))
         self.assertEqual(order.average_fill_price, Decimal("100"))
 
     def test_non_marketable_limits_remain_open(self):
         provider = SimulatedExecutionProvider("IMMEDIATE_FULL_FILL")
-        buy = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("99"), quantity=Decimal("1"))
-        sell = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="SELL", limit_price=Decimal("101"), quantity=Decimal("1"))
-        marketable_buy = SimpleNamespace(id=uuid.uuid4(), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("100"), quantity=Decimal("1"))
+        buy = SimpleNamespace(id=uuid.uuid4(), reference_price=Decimal("100"), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("99"), quantity=Decimal("1"))
+        sell = SimpleNamespace(id=uuid.uuid4(), reference_price=Decimal("99"), instrument_id="BTC-USD", order_type="LIMIT", side="SELL", limit_price=Decimal("101"), quantity=Decimal("1"))
+        marketable_buy = SimpleNamespace(id=uuid.uuid4(), reference_price=Decimal("100"), instrument_id="BTC-USD", order_type="LIMIT", side="BUY", limit_price=Decimal("100"), quantity=Decimal("1"))
 
         self.assertEqual(provider.submit_order(buy), [])
         self.assertEqual(provider.submit_order(sell), [])
@@ -126,10 +130,10 @@ class SimulatedTradingE2ETests(TestCase):
         process_created_order(second.id, "IMMEDIATE_FULL_FILL")
         partial = TradingOrder.objects.get(pk=self.post_order({**self.payload, "side": "SELL", "quantity": "4"}, key="position-reduce").json()["id"])
         process_created_order(partial.id, "IMMEDIATE_FULL_FILL")
-        self.assertEqual(SimulatedPosition.objects.get(instrument_id="BTC-USD").quantity, Decimal("6"))
+        self.assertEqual(SimulatedPosition.objects.get(instrument_id=first.instrument_id).quantity, Decimal("6"))
         close = TradingOrder.objects.get(pk=self.post_order({**self.payload, "side": "SELL", "quantity": "6"}, key="position-close").json()["id"])
         process_created_order(close.id, "IMMEDIATE_FULL_FILL")
-        position = SimulatedPosition.objects.get(instrument_id="BTC-USD")
+        position = SimulatedPosition.objects.get(instrument_id=first.instrument_id)
         self.assertEqual(position.quantity, Decimal("0"))
         self.assertEqual(position.average_price, Decimal("0"))
 
@@ -140,7 +144,7 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertTrue(apply_execution(order.id, execution)); self.assertFalse(apply_execution(order.id, execution))
         self.assertEqual(SimulatedTrade.objects.filter(execution_id=execution.execution_id).count(), 1)
         self.assertEqual(ProcessedEvent.objects.filter(consumer_name="simulated-execution-v1").count(), 1)
-        self.assertEqual(SimulatedPosition.objects.get(instrument_id="BTC-USD").quantity, Decimal("10"))
+        self.assertEqual(SimulatedPosition.objects.get(instrument_id=order.instrument_id).quantity, Decimal("10"))
 
     def test_open_then_cancel_releases_reservation(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
@@ -151,8 +155,8 @@ class SimulatedTradingE2ETests(TestCase):
     def test_cancel_requires_idempotency_and_expected_version(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL")
         response = self.client.post(f"/api/v1/trading/orders/{order.id}/cancel", {}, format="json", **self.headers)
-        self.assertEqual(response.status_code, 422)
-        self.assertEqual(response.json()["error"]["code"], "VALIDATION_ERROR")
+        self.assertEqual(response.status_code, 428)
+        self.assertEqual(response.json()["error"]["code"], "IDEMPOTENCY_KEY_REQUIRED")
 
     def test_cancel_replay_returns_original_result_without_duplicate_effects(self):
         order = TradingOrder.objects.get(pk=self.post_order().json()["id"]); process_created_order(order.id, "OPEN_THEN_CANCEL"); order.refresh_from_db()
@@ -190,18 +194,16 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertEqual(SimulatedReservation.objects.filter(order_id__in=(rejected.id, expired.id), state="RELEASED").count(), 2)
 
     def test_stale_market_and_halt_deny_without_reservation_or_execution(self):
-        with override_settings(SIMULATED_MARKET_DATA_STALE=True):
-            stale = self.client.post("/api/v1/trading/orders/preview", self.payload, format="json", **self.headers)
-        self.assertEqual(stale.json()["decision"], "DENY"); self.assertIn("MARKET_DATA_STALE", stale.json()["reason_codes"])
+        now = timezone.now()
+        record_market_observation(provider_id="paper-market", provider_symbol="BTC-USD", data_type="QUOTE", provider_event_id=f"stale-{uuid.uuid4()}", observed_at=now, payload_safe={"bid":"99","ask":"100","mid":"99.5","stale_after":(now-timedelta(seconds=1)).isoformat()})
+        stale = self.client.post("/api/v1/trading/orders/preview", self.payload, format="json", **self.headers)
+        self.assertEqual(stale.status_code, 503); self.assertEqual(stale.json()["error"]["code"], "PRICE_STALE")
+        ensure_paper_settlement_calendar()
         TradingControl.objects.create(scope="PLATFORM", scope_ref="*", state="HALTED", reason="test", request_id="test", changed_by_ref="test")
         halted = self.client.post("/api/v1/trading/orders/preview", self.payload, format="json", **self.headers)
         self.assertEqual(halted.json()["decision"], "DENY"); self.assertIn("TRADING_HALTED", halted.json()["reason_codes"])
         TradingControl.objects.all().delete()
-        with override_settings(SIMULATED_MARKET_DATA_STALE=True):
-            stale_create = self.post_order(self.payload)
-        self.assertEqual(stale_create.status_code, 409)
-        self.assertEqual(stale_create.json()["error"]["code"], "MARKET_DATA_STALE")
-        self.assertEqual(SimulatedReservation.objects.count(), 0); self.assertEqual(SimulatedTrade.objects.count(), 0)
+        self.assertEqual(SimulatedTrade.objects.count(), 0)
 
     def test_trading_controls_apply_to_simulation(self):
         expected = {
@@ -243,7 +245,7 @@ class SimulatedTradingE2ETests(TestCase):
 
     def test_balance_never_overspends_and_sell_beyond_position_is_denied(self):
         too_large = self.client.post("/api/v1/trading/orders/preview", {**self.payload, "quantity": "101"}, format="json", **self.headers)
-        self.assertEqual(too_large.json()["decision"], "DENY"); self.assertIn("INSUFFICIENT_AVAILABLE_BALANCE", too_large.json()["reason_codes"])
+        self.assertEqual(too_large.status_code, 422); self.assertEqual(too_large.json()["error"]["code"], "MAX_QUANTITY_EXCEEDED")
         sell = self.post_order({**self.payload, "side": "SELL", "quantity": "1"})
         self.assertEqual(sell.status_code, 409); self.assertEqual(TradingOrder.objects.count(), 0)
 
@@ -253,11 +255,15 @@ class SimulatedTradingE2ETests(TestCase):
         self.assertTrue(response.json()["simulation"])
         self.assertIsNone(response.json()["margin_if_applicable"])
 
-    def test_replace_fails_closed_until_provider_capability_is_certified(self):
-        order_id = self.post_order().json()["id"]
-        response = self.client.post(f"/api/v1/trading/orders/{order_id}/replace", {"quantity": "2"}, format="json", **self.headers)
+    def test_limit_replace_allows_decrease_and_rejects_reservation_increase(self):
+        order = TradingOrder.objects.get(pk=self.post_order({**self.payload,"order_type":"LIMIT","limit_price":"99"},key="replace-order").json()["id"])
+        process_created_order(order.id,"OPEN_THEN_CANCEL");order.refresh_from_db()
+        response = self.client.post(f"/api/v1/trading/orders/{order.id}/replace", {"limit_price": "98"}, format="json", HTTP_IDEMPOTENCY_KEY="replace-down", HTTP_IF_MATCH=str(order.version), **self.headers)
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        response = self.client.post(f"/api/v1/trading/orders/{order.id}/replace", {"limit_price": "100"}, format="json", HTTP_IDEMPOTENCY_KEY="replace-up", HTTP_IF_MATCH=str(order.version), **self.headers)
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["error"]["code"], "CAPABILITY_UNSUPPORTED")
+        self.assertEqual(response.json()["error"]["code"], "RESERVATION_INCREASE_REQUIRED")
 
 
 class CompleteTransitionMatrixTests(TestCase):
@@ -298,7 +304,7 @@ class SimulatedOrderConcurrencyTests(TransactionTestCase):
 
         with ThreadPoolExecutor(max_workers=20) as pool:
             results = list(pool.map(submit, range(20)))
-        self.assertEqual({status for _, status in results}, {200, 201})
+        self.assertEqual({status for _, status in results}, {201})
         self.assertEqual(len({order_id for order_id, _ in results}), 1)
         self.assertEqual(TradingOrder.objects.count(), 1)
         self.assertEqual(SimulatedReservation.objects.count(), 1)

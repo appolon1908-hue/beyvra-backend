@@ -24,7 +24,9 @@ class SimulatedExecutionProvider(ExecutionProvider):
             raise ValueError("INVALID_SIMULATION_SCENARIO")
 
     def submit_order(self, order):
-        price = Decimal(str(settings.SIMULATED_EXECUTION_PRICES[order.instrument_id]))
+        if order.reference_price is None:
+            raise ValueError("PRICE_EVIDENCE_REQUIRED")
+        price = Decimal(order.reference_price)
         prefix = f"sim:{order.id}"
         if self.scenario == "REJECT": return [SimulatedExecution(prefix + ":reject", Decimal("0"), price, True, "REJECT")]
         if self.scenario == "EXPIRE": return [SimulatedExecution(prefix + ":expire", Decimal("0"), price, True, "EXPIRE")]
@@ -40,7 +42,7 @@ class SimulatedExecutionProvider(ExecutionProvider):
         return [SimulatedExecution(prefix + ":1", order.quantity, price, True)]
 
     def capabilities(self): return {"mode":"SIMULATION","network":False,"submit":True,"cancel":True,"replace":True}
-    def preview_order(self, order): return {"reference_price":str(settings.SIMULATED_EXECUTION_PRICES[order.instrument_id]),"simulation":True}
+    def preview_order(self, order): return {"reference_price":str(order.reference_price),"simulation":True}
     def cancel_order(self, provider_order_id): return {"provider_order_id": str(provider_order_id), "state": "CANCELLED", "simulated": True}
     def replace_order(self, provider_order_id, changes): return {"provider_order_id":str(provider_order_id),"state":"REPLACED","changes":dict(changes),"simulated":True}
     def get_order(self, provider_order_id): return {"provider_order_id": str(provider_order_id), "simulated": True}

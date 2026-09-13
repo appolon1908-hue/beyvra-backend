@@ -17,7 +17,9 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+from apps.trading.application.context import TradingContext
 from integrations.models import OrganizationMembership
+from users.models import User
 
 
 CHANNEL_REGISTRY = {
@@ -73,14 +75,20 @@ def _channel_entry(channel):
     return None, None
 
 
-def _tenant(user):
-    membership = OrganizationMembership.objects.filter(user_id=user.id).order_by("id").values_list("organization_id", flat=True).first()
-    return str(membership) if membership else "default"
+def _tenant(user, requested=None):
+    return TradingContext.for_user(user, requested).tenant_ref
 
 
-def _owns_demo_account(user_id, channel):
+def _owns_demo_account(user_id, channel, tenant_id=None):
     if channel.startswith(("simulation.order.", "simulation.execution.", "simulation.position.", "simulation.execution-quality.")):
-        return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
+        user = User.objects.filter(pk=user_id).first()
+        if user is None:
+            return False
+        try:
+            context = TradingContext.for_user(user, tenant_id)
+        except ValueError:
+            return False
+        return channel.rsplit(".", 1)[-1] == context.account_ref
     return False
 
 
@@ -89,13 +97,14 @@ def _claims(request, *, audience, extra=None):
     if not secret:
         return None
     now = int(time.time())
-    tenant_id = _tenant(request.user)
+    context = TradingContext.from_request(request)
+    tenant_id = context.tenant_ref
     claims = {
         "sub": str(request.user.id),
         "user_id": str(request.user.id),
         "tenant_id": tenant_id,
-        "workspace_id": "default",
-        "account_scope": [f"demo:{request.user.id}"],
+        "workspace_id": tenant_id,
+        "account_scope": [context.account_ref],
         "allowed_channel_patterns": list(CHANNEL_REGISTRY),
         "iat": now,
         "exp": now + 60,
@@ -114,7 +123,10 @@ def _claims(request, *, audience, extra=None):
 def connection_token(request):
     if not _enabled():
         return JsonResponse({"code": "REALTIME_V2_DISABLED"}, status=404)
-    token = _claims(request, audience="centrifugo")
+    try:
+        token = _claims(request, audience="centrifugo")
+    except Exception:
+        return JsonResponse({"code": "TENANT_SELECTION_REQUIRED"}, status=400)
     if token is None:
         return JsonResponse({"code": "REALTIME_V2_NOT_CONFIGURED"}, status=503)
     return JsonResponse({"token": token, "expires_in": 60, "gateway": "/ws/v2/"})
@@ -132,14 +144,18 @@ def subscription_token(request):
     if not entry:
         return JsonResponse({"code": "UNSUPPORTED_CHANNEL"}, status=403)
     user_id = str(request.user.id)
+    try:
+        context = TradingContext.from_request(request)
+    except Exception:
+        return JsonResponse({"code": "TENANT_SELECTION_REQUIRED"}, status=400)
     if entry["visibility"] == "private":
-        if pattern and pattern.startswith("simulation.") and not _owns_demo_account(request.user.id, channel):
+        if pattern and pattern.startswith("simulation.") and not _owns_demo_account(request.user.id, channel, context.tenant_ref):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
         if pattern in {"notification.{user_id}", "account.security.{user_id}"} and not channel.endswith(user_id):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
-        if pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(request.user)}":
+        if pattern == "treasury.{tenant_id}" and channel != f"treasury.{context.tenant_ref}":
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
-        if entry["account_scope"] and not (user_id in channel or _owns_demo_account(request.user.id, channel)):
+        if entry["account_scope"] and not _owns_demo_account(request.user.id, channel, context.tenant_ref):
             return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
     if entry["required_permission"].startswith("demo.") and not request.user.is_active:
         return JsonResponse({"code": "FORBIDDEN_CHANNEL"}, status=403)
@@ -158,19 +174,25 @@ def authorize_subscription(request):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     channel = request.data.get("channel")
     user_id = str(request.data.get("user", ""))
+    tenant_id = str(request.data.get("tenant_id") or "") or None
     pattern, entry = _channel_entry(channel) if isinstance(channel, str) else (None, None)
     if not entry:
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and pattern and pattern.startswith("simulation.") and not _owns_demo_account(user_id, channel):
+    if entry["visibility"] == "private" and pattern and pattern.startswith("simulation.") and not _owns_demo_account(user_id, channel, tenant_id):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
-    if entry["visibility"] == "private" and pattern == "treasury.{tenant_id}" and channel != f"treasury.{_tenant(type('UserRef', (), {'id': user_id})())}":
+    user = User.objects.filter(pk=user_id).first()
+    try:
+        resolved_tenant = _tenant(user, tenant_id) if user else ""
+    except ValueError:
+        resolved_tenant = ""
+    if entry["visibility"] == "private" and pattern == "treasury.{tenant_id}" and channel != f"treasury.{resolved_tenant}":
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     user_scoped = pattern in {
         "notification.{user_id}",
         "account.security.{user_id}",
         "institutional.subaccount.updated.v1.{user_id}",
     } and channel.rsplit(".", 1)[-1] == user_id
-    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_scoped or (entry["account_scope"] and _owns_demo_account(user_id, channel))):
+    if entry["visibility"] == "private" and pattern != "treasury.{tenant_id}" and not (user_scoped or (entry["account_scope"] and _owns_demo_account(user_id, channel, tenant_id))):
         return JsonResponse({"error": {"code": 403, "message": "forbidden"}})
     return JsonResponse({"result": {}})
 

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AccountsView, EmptyDetailView, FeesView, OrderCancelView, OrderCollectionView, OrderDetailView, OrderPreviewView, OrderReplaceView, PortfolioView, PositionsView, TradeDetailView, TradesView
+from .views import AccountDetailView, AccountsView, FeesView, OrderCancelView, OrderCollectionView, OrderDetailView, OrderPreviewView, OrderReplaceView, PortfolioView, PositionCloseView, PositionDetailView, PositionReduceView, PositionsView, TradeDetailView, TradesView
 
 urlpatterns = [
     path("orders/preview", OrderPreviewView.as_view()),
@@ -11,9 +11,11 @@ urlpatterns = [
     path("trades", TradesView.as_view()),
     path("trades/<uuid:trade_id>", TradeDetailView.as_view()),
     path("positions", PositionsView.as_view()),
-    path("positions/<uuid:position_id>", EmptyDetailView.as_view()),
+    path("positions/<uuid:position_id>", PositionDetailView.as_view()),
+    path("positions/<uuid:position_id>/close", PositionCloseView.as_view()),
+    path("positions/<uuid:position_id>/reduce", PositionReduceView.as_view()),
     path("accounts", AccountsView.as_view()),
     path("portfolio", PortfolioView.as_view()),
-    path("accounts/<uuid:account_id>", EmptyDetailView.as_view()),
+    path("accounts/<uuid:account_id>", AccountDetailView.as_view()),
     path("fees", FeesView.as_view()),
 ]

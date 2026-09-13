@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.api.errors import error_response
+from apps.trading.application.context import TradingContext
 from apps.foundation.models import ApplicationAuditEvent
 from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 
@@ -17,7 +18,9 @@ from .models import PostTradeException, SettlementInstruction, TradeConfirmation
 from .reconciliation import PositionReconciler
 
 
-def account_ref(request): return f"sim:{request.user.pk}"
+def trading_scope(request):
+    context=TradingContext.from_request(request)
+    return context.tenant_ref,context.account_ref
 
 
 COMMAND_PARAMETERS = [OpenApiParameter("Idempotency-Key", str, OpenApiParameter.HEADER, required=True), OpenApiParameter("X-Request-ID", str, OpenApiParameter.HEADER, required=True)]
@@ -59,13 +62,15 @@ class CustomerCollection(APIView):
     permission_classes = (IsAuthenticated,)
     model = None; serializer = staticmethod(lambda row: {})
     def get(self, request):
-        rows = self.model.objects.filter(account_ref=account_ref(request), trade__tenant_ref="default").order_by("-trade__trade_time", "-id")
+        tenant_ref,account_ref=trading_scope(request)
+        rows = self.model.objects.filter(account_ref=account_ref, trade__tenant_ref=tenant_ref).order_by("-trade__trade_time", "-id")
         return Response({"results": [self.serializer(row) for row in rows]})
 
 
 class CustomerDetail(CustomerCollection):
     def get(self, request, resource_id):
-        row = self.model.objects.filter(pk=resource_id, account_ref=account_ref(request), trade__tenant_ref="default").first()
+        tenant_ref,account_ref=trading_scope(request)
+        row = self.model.objects.filter(pk=resource_id, account_ref=account_ref, trade__tenant_ref=tenant_ref).first()
         return Response(self.serializer(row)) if row else error_response(request, "RESOURCE_NOT_FOUND", 404)
 
 
@@ -85,7 +90,9 @@ class PositionEffectDetail(CustomerDetail): model = TradePositionEffect; seriali
 
 class ReconciliationStatus(APIView):
     permission_classes = (IsAuthenticated,)
-    def get(self, request): return Response({"status": PositionReconciler.run(tenant_ref="default", persist=False)["status"], "simulation": True})
+    def get(self, request):
+        tenant_ref,_account_ref=trading_scope(request)
+        return Response({"status": PositionReconciler.run(tenant_ref=tenant_ref, persist=False)["status"], "simulation": True})
 
 
 class PostTradeRole(BasePermission):

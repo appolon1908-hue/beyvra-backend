@@ -115,7 +115,20 @@ def market_data_access(account, provider_capability, at=None, tenant_ref=None):
     return "NOT_AVAILABLE"
 
 
-def calculate_fee(*, account, fee_type, notional, quantity, asset_class="", at=None):
+def calculate_fee(
+    *,
+    account,
+    fee_type,
+    notional,
+    quantity,
+    asset_class="",
+    instrument_ref=None,
+    venue_ref="",
+    side="",
+    order_type="",
+    jurisdiction="",
+    at=None,
+):
     at = at or timezone.now()
     if not isinstance(notional, Decimal) or not isinstance(quantity, Decimal):
         raise ValueError("Money and quantity must use Decimal")
@@ -123,8 +136,25 @@ def calculate_fee(*, account, fee_type, notional, quantity, asset_class="", at=N
         raise ValueError("Negative context values are invalid")
     waiver = FeeWaiver.objects.filter(account=account, fee_type=fee_type, effective_from__lte=at).filter(Q(effective_to__isnull=True)|Q(effective_to__gt=at)).exists()
     if waiver:
-        return {"amount": Decimal("0"), "currency": None, "rule_version": None, "breakdown": {"waiver": True}, "estimated": True}
-    rule = FeeRule.objects.filter(schedule__fee_type=fee_type, schedule__status="ACTIVE", effective_from__lte=at).filter(Q(effective_to__isnull=True)|Q(effective_to__gt=at)).filter(Q(asset_class="")|Q(asset_class=asset_class)).select_related("schedule").order_by("schedule__priority", "-rule_version").first()
+        return {"amount": Decimal("0"), "currency": None, "rule_version": None, "schedule_version": "WAIVER", "breakdown": {"waiver": True}, "estimated": True}
+    rules = FeeRule.objects.filter(
+        schedule__fee_type=fee_type,
+        schedule__status="ACTIVE",
+        schedule__effective_from__lte=at,
+        effective_from__lte=at,
+    ).filter(
+        Q(schedule__effective_to__isnull=True) | Q(schedule__effective_to__gt=at),
+        Q(effective_to__isnull=True) | Q(effective_to__gt=at),
+        Q(asset_class="") | Q(asset_class=asset_class),
+        Q(instrument_ref__isnull=True) | Q(instrument_ref=instrument_ref),
+        Q(venue_ref="") | Q(venue_ref=venue_ref),
+        Q(side="") | Q(side=side),
+        Q(order_type="") | Q(order_type=order_type),
+        Q(jurisdiction="") | Q(jurisdiction=jurisdiction),
+        Q(min_notional__isnull=True) | Q(min_notional__lte=notional),
+        Q(max_notional__isnull=True) | Q(max_notional__gte=notional),
+    ).select_related("schedule")
+    rule = rules.order_by("schedule__priority", "-rule_version", "pk").first()
     if not rule:
         raise ValueError("FEE_POLICY_UNAVAILABLE")
     bases = {"FLAT": Decimal("1"), "PERCENT": notional / Decimal("100"), "BASIS_POINTS": notional / Decimal("10000"), "PER_SHARE": quantity, "PER_CONTRACT": quantity, "PER_UNIT": quantity}
@@ -138,4 +168,11 @@ def calculate_fee(*, account, fee_type, notional, quantity, asset_class="", at=N
     amount = amount.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
     if amount < 0 and not rule.is_rebate:
         raise ValueError("UNEXPECTED_NEGATIVE_FEE")
-    return {"amount": amount, "currency": rule.currency, "rule_version": rule.rule_version, "breakdown": {"customer_fee": amount}, "estimated": True}
+    return {
+        "amount": amount,
+        "currency": rule.currency,
+        "rule_version": rule.rule_version,
+        "schedule_version": f"{rule.schedule.code}:{rule.rule_version}",
+        "breakdown": {"commission": amount},
+        "estimated": True,
+    }

@@ -37,11 +37,11 @@ def seed_safe_authorities():
     provider, _ = ExecutionProviderRecord.objects.get_or_create(
         provider_id="simulation", defaults={"display_name": "Beyvra Simulation", "mode": "SIMULATION", "enabled": True,
         "health": "HEALTHY", "supported_asset_classes": ["CRYPTO", "EQUITY", "ETF"],
-        "supported_order_types": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"], "supported_venues": ["BEYVRA-SIM"],
+        "supported_order_types": ["MARKET", "LIMIT"], "supported_venues": ["BEYVRA-SIM"],
         "capabilities": {"submit": True, "cancel": True, "replace": True, "partial_fills": True, "network": False}}
     )
     ExecutionVenue.objects.get_or_create(venue_id="BEYVRA-SIM", defaults={"display_name": "Beyvra Simulation Venue", "active": True,
-        "asset_classes": ["CRYPTO", "EQUITY", "ETF"], "order_types": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"],
+        "asset_classes": ["CRYPTO", "EQUITY", "ETF"], "order_types": ["MARKET", "LIMIT"],
         "metadata": {"simulation": True, "external": False}})
     return provider
 
@@ -53,17 +53,18 @@ def preview_route(user, data, *, persist=False, order=None):
         order_type = str(data.get("order_type") or "MARKET").upper()
         side = str(data.get("side") or "").upper()
         quantity = Decimal(str(data.get("quantity")))
-        reference_price = Decimal(str(data.get("reference_price") or settings.SIMULATED_EXECUTION_PRICES.get(instrument)))
-    except (InvalidOperation, TypeError):
+        reference_price = Decimal(str(data.get("reference_price")))
+    except (InvalidOperation, TypeError, ValueError):
         raise ValueError("VALIDATION_ERROR")
     if not instrument or side not in {"BUY", "SELL"} or quantity <= 0 or reference_price <= 0:
         raise ValueError("VALIDATION_ERROR")
     if data.get("market_data_stale") is True: raise ValueError("MARKET_DATA_STALE")
-    snapshot={"instrument":instrument,"reference_price":str(reference_price),"source":data.get("market_source","deterministic_fixture")}
+    snapshot={"instrument":instrument,"reference_price":str(reference_price),"source":data.get("market_source")}
     request={"instrument_id":instrument,"side":side,"order_type":order_type,"quantity":str(quantity),"reference_price":str(reference_price),"mode":mode,
         "asset_class":str(data.get("asset_class") or "CRYPTO").upper(),"time_in_force":str(data.get("time_in_force") or "DAY").upper(),
         "limit_price":str(data["limit_price"]) if data.get("limit_price") is not None else None,"market_snapshot_hash":digest(snapshot),
         "pricing_snapshot_hash":digest({"fees":data.get("fees","fixture-policy")}),"risk_snapshot_hash":str(data.get("risk_snapshot_hash") or digest({"risk":"prechecked"})),
+        "fees":data.get("fees") or {},"tenant_ref":str(data.get("tenant_ref") or ""),"subject_ref":str(data.get("subject_ref") or user.pk),
         "correlation_id":str(data.get("correlation_id") or uuid.uuid4())}
     result=SmartOrderRouter().route(user,request,order=order,persist=persist)
     result.update({"decision":"SELECTED" if result["routable"] else "DENIED","selected_provider_id":result["selected_route_summary"]["provider_id"] if result["routable"] else None,

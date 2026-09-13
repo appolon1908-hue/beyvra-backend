@@ -12,23 +12,24 @@ class SimulationFinancialError(ValueError):
 
 
 class SimulatedFinancialAdapter:
-    fee_rate = Decimal("0.001")
-
     @staticmethod
     def available_quote(account):
         reserved = account.reservations.filter(state=SimulatedReservation.State.ACTIVE, asset=account.quote_currency).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
         return account.total_balance - account.pending_balance - reserved
 
     @transaction.atomic
-    def reserve_funds(self, *, account, order_id, instrument_id, side, quantity, price):
+    def reserve_funds(self, *, account, order_id, instrument_id, side, quantity, price, fee=Decimal("0")):
         account = SimulatedAccount.objects.select_for_update().get(pk=account.pk)
-        quantity, price = Decimal(quantity), Decimal(price)
+        quantity, price, fee = Decimal(quantity), Decimal(price), Decimal(fee)
         if side == "BUY":
-            amount, asset = quantity * price * (Decimal("1") + self.fee_rate), account.quote_currency
+            amount, asset = quantity * price + fee, account.quote_currency
             if self.available_quote(account) < amount:
                 raise SimulationFinancialError("INSUFFICIENT_AVAILABLE_BALANCE")
         else:
-            asset = instrument_id.split("-")[0]
+            # Positions and orders use the canonical instrument UUID. Keeping
+            # that UUID as the reservation asset prevents symbol parsing from
+            # becoming an economic authority.
+            asset = str(instrument_id)
             position = SimulatedPosition.objects.select_for_update().filter(account=account, instrument_id=instrument_id).first()
             already = account.reservations.filter(state=SimulatedReservation.State.ACTIVE, asset=asset).aggregate(total=Sum("remaining_amount"))["total"] or Decimal("0")
             if not position or position.quantity - already < quantity:
@@ -53,6 +54,7 @@ class SimulatedFinancialAdapter:
         account = SimulatedAccount.objects.select_for_update().get(pk=reservation.account_id)
         quantity, price, fee = Decimal(quantity), Decimal(price), Decimal(fee)
         position, _ = SimulatedPosition.objects.select_for_update().get_or_create(account=account, instrument_id=instrument_id)
+        realized_pnl = Decimal("0")
         if side == "BUY":
             debit = quantity * price + fee
             if reservation.remaining_amount < debit:
@@ -65,7 +67,8 @@ class SimulatedFinancialAdapter:
         else:
             if position.quantity < quantity or reservation.remaining_amount < quantity:
                 raise SimulationFinancialError("INSUFFICIENT_AVAILABLE_POSITION")
-            position.realized_pnl += (price - position.average_price) * quantity - fee
+            realized_pnl = (price - position.average_price) * quantity - fee
+            position.realized_pnl += realized_pnl
             position.quantity -= quantity
             account.total_balance += quantity * price - fee
             reservation.remaining_amount -= quantity
@@ -76,4 +79,4 @@ class SimulatedFinancialAdapter:
         position.save()
         account.save(update_fields=("total_balance", "updated_at"))
         reservation.save(update_fields=("remaining_amount", "state", "updated_at"))
-        return account, position, reservation
+        return account, position, reservation, realized_pnl

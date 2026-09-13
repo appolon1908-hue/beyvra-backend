@@ -1,6 +1,4 @@
 from decimal import Decimal
-from types import SimpleNamespace
-
 from django.db import IntegrityError, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db import connection
@@ -12,16 +10,20 @@ from apps.trading.application.accounts import (
 )
 from apps.trading.application.simulation import account_for
 from apps.trading.models import SimulatedAccount, TradingAccount
+from integrations.models import Organization, OrganizationMembership
+from users.models import User
 
 
 class TradingAccountContractTests(TestCase):
     def setUp(self):
-        self.user = SimpleNamespace(pk="account-contract-owner")
-        self.projection = account_for(self.user, "tenant-a")
+        self.user = User.objects.create_user(email="account-contract@example.invalid", password=None)
+        self.organization = Organization.objects.create(name="Account contract tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=self.organization)
+        self.projection = account_for(self.user, str(self.organization.id))
         self.account = self.projection.trading_account
 
     def test_existing_virtual_projection_gets_one_paper_identity(self):
-        again = account_for(self.user, "tenant-a")
+        again = account_for(self.user, str(self.organization.id))
         self.assertEqual(again.pk, self.projection.pk)
         self.assertEqual(TradingAccount.objects.count(), 1)
         self.assertEqual(self.account.id, self.projection.id)
@@ -40,8 +42,12 @@ class TradingAccountContractTests(TestCase):
         )
 
     def test_tenant_and_subject_scopes_do_not_share_identity_or_funds(self):
-        other_tenant = account_for(self.user, "tenant-b")
-        other_subject = account_for(SimpleNamespace(pk="another-owner"), "tenant-a")
+        other_organization = Organization.objects.create(name="Other tenant")
+        OrganizationMembership.objects.create(user=self.user, organization=other_organization)
+        other_tenant = account_for(self.user, str(other_organization.id))
+        other_user = User.objects.create_user(email="other-account-contract@example.invalid", password=None)
+        OrganizationMembership.objects.create(user=other_user, organization=self.organization)
+        other_subject = account_for(other_user, str(self.organization.id))
         self.assertEqual(
             len({self.projection.pk, other_tenant.pk, other_subject.pk}), 3
         )
@@ -64,7 +70,7 @@ class TradingAccountContractTests(TestCase):
 
     def test_live_identity_starts_pending_with_all_effects_disabled(self):
         live = TradingAccount.objects.create(
-            tenant_ref="tenant-a",
+            tenant_ref=str(self.organization.id),
             subject_ref=self.user.pk,
             account_ref="live-application-result",
             execution_mode="LIVE",
@@ -84,7 +90,7 @@ class TradingAccountContractTests(TestCase):
         TradingAccount.objects.filter(pk=self.account.pk).update(
             status="RESTRICTED", trading_enabled=False
         )
-        identity = account_for(self.user, "tenant-a").trading_account
+        identity = account_for(self.user, str(self.organization.id)).trading_account
         self.assertEqual(identity.status, "RESTRICTED")
         self.assertFalse(identity.trading_enabled)
 
@@ -120,7 +126,7 @@ class TradingAccountContractTests(TestCase):
 
 class TradingAccountMigrationTests(TransactionTestCase):
     migrate_from = [("canonical_trading", "0009_merge_converged_trading_graph")]
-    migrate_to = [("canonical_trading", "0011_account_identity_boundary")]
+    migrate_to = [("canonical_trading", "0015_realized_daily_risk")]
 
     def test_backfill_preserves_virtual_funds_and_restrictions(self):
         executor = MigrationExecutor(connection)

@@ -14,13 +14,11 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
 from prometheus_client import Counter
 
-from integrations.models import OrganizationMembership
-from operations.services import notification_group, tenant_for
+from operations.services import notification_group
 from provider_governance.service import ProviderNotAvailable, resolve_provider
-from trade.market_data import SUPPORTED_INTERVALS, SUPPORTED_SYMBOLS
+from trade.market_data import SUPPORTED_INTERVALS
 
 logger = logging.getLogger(__name__)
-CANONICAL_SYMBOLS = {"BTC-USD": "BTCUSDT", "ETH-USD": "ETHUSDT", "BNB-USD": "BNBUSDT", "SOL-USD": "SOLUSDT", "XRP-USD": "XRPUSDT"}
 legacy_ws_connections = Counter(
     "legacy_ws_connections_total",
     "Connections to compatibility WebSocket routes",
@@ -38,16 +36,10 @@ def _is_uuid(value: str) -> bool:
 
 @database_sync_to_async
 def _tenant_for_user(user_id: int, requested: str | None = None) -> str:
-    memberships = OrganizationMembership.objects.filter(user_id=user_id)
-    if requested and memberships.filter(organization_id=requested).exists():
-        return str(requested)
-    membership = memberships.order_by("id").values_list("organization_id", flat=True).first()
-    if membership:
-        return str(membership)
+    from apps.trading.application.context import TradingContext
     from users.models import User
-
     user = User.objects.get(pk=user_id)
-    return tenant_for(user)
+    return TradingContext.for_user(user, requested).tenant_ref
 
 
 @database_sync_to_async
@@ -115,7 +107,11 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4401)
             return
         query = parse_qs(self.scope.get("query_string", b"").decode())
-        self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
+        try:
+            self.tenant_id = await _tenant_for_user(user.id, query.get("organization_id", [None])[0])
+        except (ValueError, TypeError):
+            await self.close(code=4403)
+            return
         route = self.scope.get("path", "")
         legacy = route.startswith("/ws/v1/")
         if legacy:
@@ -205,9 +201,9 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
             return parts[1] == str(self.scope["user"].id)
         dotted = channel.split(".")
         if len(dotted) == 3 and dotted[0] == "market" and dotted[2] == "quote":
-            return dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])
+            return bool(dotted[1]) and len(dotted[1]) <= 64
         if len(dotted) == 4 and dotted[0] == "market" and dotted[2] == "candle":
-            return (dotted[1] in SUPPORTED_SYMBOLS or dotted[1] in CANONICAL_SYMBOLS or _is_uuid(dotted[1])) and dotted[3] in SUPPORTED_INTERVALS
+            return bool(dotted[1]) and len(dotted[1]) <= 64 and dotted[3] in SUPPORTED_INTERVALS
         return False
 
     async def _stream_market(self, channel: str):
@@ -215,15 +211,13 @@ class CanonicalGatewayConsumer(AsyncJsonWebsocketConsumer):
         requested_reference = parts[1]
         resolved = await _resolve_realtime_instrument(requested_reference)
         if resolved is None:
-            # Temporary compatibility for stacks not yet seeded with the
-            # reference authority. UUID references never bypass authority.
-            if _is_uuid(requested_reference):
-                await self._emit("market.status", {"status": "unavailable", "reason": "INSTRUMENT_NOT_FOUND"}, instrument_id=requested_reference)
-                return
-            instrument_id = requested_reference
-            symbol = CANONICAL_SYMBOLS.get(requested_reference, requested_reference)
-        else:
-            instrument_id, symbol = resolved
+            await self._emit(
+                "market.status",
+                {"status": "unavailable", "reason": "INSTRUMENT_NOT_FOUND"},
+                instrument_id=requested_reference,
+            )
+            return
+        instrument_id, symbol = resolved
         interval = parts[3] if len(parts) == 4 else "1m"
         if symbol not in {"BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"}:
             await self._emit("market.status", {"status": "unavailable"}, instrument_id=instrument_id)

@@ -17,14 +17,14 @@ class TradeCaptureService:
         quantity, price, fee = Decimal(quantity), Decimal(price), Decimal(fee)
         if quantity <= 0 or price <= 0:
             raise ValueError("INVALID_FILL")
-        if order.tenant_ref != "default" or not order.simulation:
+        if not order.tenant_ref or not order.account_ref or not order.simulation:
             raise ValueError("TRADE_SCOPE_INVALID")
         source_event_id = source_event_id or uuid.uuid5(uuid.NAMESPACE_URL, f"post-trade:{execution_id}")
         settlement_date, _policy = SettlementCalendarService.calculate_settlement_date(trade_date=executed_at.date(), asset_class="CRYPTO")
         trade, created = Trade.objects.get_or_create(execution_id=execution_id, defaults={"tenant_ref": order.tenant_ref, "account_ref": order.account_ref, "order_id": order.id, "instrument_id": order.instrument_id, "side": order.side, "quantity": quantity, "price": price, "gross_notional": quantity * price, "trade_currency": "USD", "execution_provider_id": "simulation", "venue_id": "SIMULATED", "execution_mode": "SIMULATION", "trade_time": executed_at, "captured_at": timezone.now(), "settlement_date": settlement_date, "source_event_id": source_event_id, "simulation": True})
         if not created:
             return trade, False
-        FeeSnapshot.objects.create(trade=trade, total_fee=fee, commission=fee, currency="USD", pricing_policy_version="simulation-fee-v1")
+        FeeSnapshot.objects.create(trade=trade, total_fee=fee, commission=fee, currency="USD", pricing_policy_version=(order.fee_schedule_version or "unavailable")[:32])
         audit(tenant_ref=trade.tenant_ref, actor_ref="system", action="trade.captured", resource_type="trade", resource_ref=trade.id, evidence={"execution_id": execution_id, "quantity": str(quantity), "price": str(price), "source_event_id": str(source_event_id)})
         publish(trade=trade, event_type="trading.trade.captured.v1", payload={"state": trade.trade_state, "instrument_id": trade.instrument_id, "quantity": str(quantity)})
         transaction.on_commit(lambda: TRADES_CAPTURED.labels("simulation", "created").inc())

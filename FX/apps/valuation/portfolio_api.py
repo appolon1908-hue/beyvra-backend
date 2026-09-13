@@ -9,6 +9,7 @@ from rest_framework import permissions, views
 from rest_framework.response import Response
 
 from apps.trading.application.simulation import account_for, simulation_available
+from apps.trading.application.context import TradingContext
 from apps.trading.models import SimulatedPosition, TradingOrder
 from integrations.financial.simulated import SimulatedFinancialAdapter
 from reference_data.models import Instrument
@@ -32,7 +33,7 @@ def _money(value):
 
 
 def _account_ref(request):
-    return f"sim:{request.user.pk}"
+    return TradingContext.from_request(request).account_ref
 
 
 def _instrument_metadata(instrument_id, instruments):
@@ -190,7 +191,7 @@ class PortfolioBaseView(views.APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def portfolio(self, request):
-        account = account_for(request.user)
+        account = account_for(TradingContext.from_request(request))
         positions = _position_rows(account)
         available = SimulatedFinancialAdapter.available_quote(account)
         market_value = sum(
@@ -314,8 +315,8 @@ class PortfolioRiskView(PortfolioBaseView):
         largest = max((abs(value) for value in priced_values), default=ZERO)
         quality = _valuation_quality(positions)
         open_orders = TradingOrder.objects.filter(
-            subject_ref=str(request.user.pk),
-            tenant_ref="default",
+            account_ref=account.account_ref,
+            tenant_ref=account.tenant_ref,
             simulation=True,
             state__in=("PENDING", "ACCEPTED", "OPEN", "PARTIALLY_FILLED", "CANCEL_PENDING"),
         ).count()

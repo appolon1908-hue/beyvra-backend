@@ -39,11 +39,10 @@ class SmartOrderRouter:
 
     def _economics(self,provider,request):
         ref=Decimal(request["reference_price"]); quantity=Decimal(request["quantity"])
-        adjustments={"simulation":Decimal("0"),"paper-a":Decimal("-0.0002"),"paper-b":Decimal("0.0001")}
-        fee_rates={"simulation":Decimal("0.001"),"paper-a":Decimal("0.0015"),"paper-b":Decimal("0.0005")}
         latency={"simulation":1,"paper-a":10,"paper-b":25}; fills={"simulation":Decimal("1"),"paper-a":Decimal("0.92"),"paper-b":Decimal("0.98")}
-        sign=Decimal("1") if request["side"]=="BUY" else Decimal("-1")
-        expected=ref*(Decimal("1")+sign*adjustments[provider.provider_id]); fee=expected*quantity*fee_rates[provider.provider_id]
+        expected=ref
+        fees=request.get("fees") or {}
+        fee=Decimal(str(fees.get("total", "0")))
         return {"expected_price":expected,"expected_fee":fee,"expected_slippage":abs(expected-ref),"available_quantity":quantity,
             "fill_probability":fills[provider.provider_id],"latency_ms":latency[provider.provider_id],"price_score":Decimal("1")-abs(expected-ref)/ref,
             "fee_score":Decimal("1")-min(fee/(ref*quantity),Decimal("1")),"latency_score":Decimal("1")-Decimal(latency[provider.provider_id])/Decimal("1000"),
@@ -80,7 +79,10 @@ class SmartOrderRouter:
         if selected: EXECUTION_ROUTE_SELECTED.labels(selected["provider"].provider_id,selected["venue"].venue_type,request["asset_class"],request["order_type"],request["mode"].lower()).inc()
         if persist:
             revision=(supersedes.revision+1) if supersedes else 1
-            decision=ExecutionRoutingDecision.objects.create(order=order,tenant_ref="default",subject_ref=str(user.pk),mode=request["mode"],status="SELECTED" if selected else "DENIED",
+            tenant_ref=str(request.get("tenant_ref") or (order.tenant_ref if order else ""))
+            subject_ref=str(request.get("subject_ref") or (order.subject_ref if order else user.pk))
+            if not tenant_ref: raise ValueError("TENANT_CONTEXT_REQUIRED")
+            decision=ExecutionRoutingDecision.objects.create(order=order,tenant_ref=tenant_ref,subject_ref=subject_ref,mode=request["mode"],status="SELECTED" if selected else "DENIED",
                 selected_provider_id=selected["provider"].provider_id if selected else "",selected_venue_id=selected["venue"].venue_id if selected else "",policy_version=policy.policy_version,
                 candidate_evidence=safe,exclusion_reasons=[x for x in safe if not x["eligible"]],market_snapshot_hash=request["market_snapshot_hash"],pricing_snapshot_hash=request["pricing_snapshot_hash"],
                 risk_snapshot_hash=request["risk_snapshot_hash"],request_hash=digest(request),evidence_hash=result["evidence_hash"],selected_score=selected["score"] if selected else None,reference_price=request["reference_price"],revision=revision,supersedes=supersedes)
@@ -90,6 +92,6 @@ class SmartOrderRouter:
                     estimated_latency_ms=e["latency_ms"],provider_health=item["provider"].health,score=item["score"],eligible=not item["reasons"],rejection_reasons=item["reasons"])
             correlation=__import__("uuid").UUID(str(request.get("correlation_id") or __import__("uuid").uuid4()))
             ApplicationAuditEvent.objects.create(actor_ref=str(user.pk),action="execution.route.selected" if selected else "execution.route.denied",resource_type="execution_route",resource_id=str(decision.decision_id),request_id="routing",correlation_id=correlation,context={"mode":request["mode"],"policy_version":policy.policy_version,"evidence_hash":result["evidence_hash"],"provider_ref":decision.selected_provider_id,"venue_ref":decision.selected_venue_id,"reason_code":self.explain_selection(selected)},reason=self.explain_selection(selected),occurred_at=timezone.now())
-            if selected: enqueue_event(aggregate_type="execution_route",aggregate_id=decision.decision_id,event_type="trading.execution.route.selected.v1",payload={"order_id":str(order.id) if order else None,"mode":request["mode"],"policy_version":policy.policy_version,"simulation":request["mode"]=="SIMULATION"},tenant_ref="default",correlation_id=correlation)
+            if selected: enqueue_event(aggregate_type="execution_route",aggregate_id=decision.decision_id,event_type="trading.execution.route.selected.v1",payload={"tenant_ref":tenant_ref,"account_ref":order.account_ref if order else "","order_id":str(order.id) if order else None,"mode":request["mode"],"policy_version":policy.policy_version,"simulation":request["mode"]=="SIMULATION"},tenant_ref=tenant_ref,correlation_id=correlation)
             result["decision_id"]=str(decision.decision_id)
         return result

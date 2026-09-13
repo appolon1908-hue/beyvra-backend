@@ -49,7 +49,7 @@ class OrderAndRiskTests(TestCase):
         self.assertEqual(engine.evaluate_order(base).decision, "ALLOW")
         denied = engine.evaluate_order({**base, "market_data_stale": True})
         self.assertEqual(denied.decision, "DENY")
-        self.assertIn("MARKET_DATA_STALE", denied.reason_codes)
+        self.assertIn("PRICE_STALE", denied.reason_codes)
         self.assertEqual(engine.evaluate_order({**base, "manual_review_required": True}).decision, "REVIEW")
         self.assertEqual(engine.evaluate_order({**base, "control_state": "HALTED"}).decision, "DENY")
 
@@ -71,7 +71,7 @@ class OrderAndRiskTests(TestCase):
         self.assertEqual(result.decision, "DENY")
         self.assertEqual(
             set(result.reason_codes),
-            {"QUANTITY_OUT_OF_RANGE", "DAILY_NOTIONAL_LIMIT", "PRICE_BAND_EXCEEDED"},
+            {"MAX_QUANTITY_EXCEEDED", "DAILY_LIMIT_EXCEEDED", "PRICE_BAND_EXCEEDED"},
         )
 
 
@@ -86,9 +86,9 @@ class CanonicalTradingApiTests(TestCase):
             self.assertEqual(response.status_code, 503)
             self.assertEqual(response.json()["error"]["code"], "FEATURE_DISABLED")
 
-    def test_real_reads_are_empty_not_fake(self):
+    def test_reads_require_explicit_paper_authority(self):
         for path in ("/api/v1/trading/orders", "/api/v1/trading/trades", "/api/v1/trading/positions", "/api/v1/trading/accounts", "/api/v1/trading/fees"):
-            self.assertEqual(self.client.get(path).status_code, 200)
+            self.assertEqual(self.client.get(path).status_code, 503)
 
 
 class ControlAndCompatibilityTests(TestCase):

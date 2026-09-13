@@ -34,7 +34,7 @@ class WorkspaceBootstrapView(APIView):
             "BTCUSDT"
         ]
         guest = bool(getattr(request.user, "is_guest_demo", False))
-        account_channel_ref = f"sim-{request.user.pk}"
+        account_channel_ref = account.account_ref
         return Response(
             {
                 "state": "guest.ready" if guest else "user.ready",

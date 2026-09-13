@@ -31,7 +31,7 @@ class RiskEngine:
         if inputs.get("control_state", "ACTIVE") in {"HALTED", "MAINTENANCE"}:
             reasons.append("TRADING_HALTED")
         if inputs.get("market_data_stale"):
-            reasons.append("MARKET_DATA_STALE")
+            reasons.append("PRICE_STALE")
         if inputs.get("provider_health") not in {None, "HEALTHY"}:
             reasons.append("PROVIDER_UNAVAILABLE")
         if not inputs.get("compliance_eligible", False):
@@ -39,27 +39,35 @@ class RiskEngine:
         quantity = Decimal(str(inputs.get("quantity", "0")))
         minimum_quantity = Decimal(str(inputs.get("min_quantity", "0")))
         maximum_quantity = Decimal(str(inputs.get("max_quantity", "Infinity")))
-        if quantity <= 0 or quantity < minimum_quantity or quantity > maximum_quantity:
-            reasons.append("QUANTITY_OUT_OF_RANGE")
+        if quantity <= 0 or quantity < minimum_quantity:
+            reasons.append("MIN_QUANTITY_NOT_MET")
+        elif quantity > maximum_quantity:
+            reasons.append("MAX_QUANTITY_EXCEEDED")
         notional = Decimal(str(inputs.get("notional", "0")))
         minimum_notional = Decimal(str(inputs.get("min_notional", "0")))
         maximum_notional = Decimal(str(inputs.get("max_notional", "Infinity")))
-        if notional <= 0 or notional < minimum_notional or notional > maximum_notional:
-            reasons.append("NOTIONAL_OUT_OF_RANGE")
-        if notional > Decimal(str(inputs.get("available_funds", "0"))):
-            reasons.append("INSUFFICIENT_AVAILABLE_BALANCE")
+        if notional <= 0 or notional < minimum_notional:
+            reasons.append("MIN_NOTIONAL_NOT_MET")
+        elif notional > maximum_notional:
+            reasons.append("MAX_NOTIONAL_EXCEEDED")
+        required_funds = Decimal(str(inputs.get("required_funds", notional)))
+        if inputs.get("side") == "BUY" and required_funds > Decimal(str(inputs.get("available_funds", "0"))):
+            reasons.append("INSUFFICIENT_FUNDS")
         if notional + Decimal(str(inputs.get("daily_notional", "0"))) > Decimal(
             str(inputs.get("daily_notional_limit", "Infinity"))
         ):
-            reasons.append("DAILY_NOTIONAL_LIMIT")
+            reasons.append("DAILY_LIMIT_EXCEEDED")
         if Decimal(str(inputs.get("daily_loss", "0"))) > Decimal(
             str(inputs.get("daily_loss_limit", "Infinity"))
         ):
-            reasons.append("DAILY_LOSS_LIMIT")
-        if Decimal(str(inputs.get("projected_position", quantity))) > Decimal(
+            reasons.append("DAILY_LIMIT_EXCEEDED")
+        projected_position = Decimal(str(inputs.get("projected_position", quantity)))
+        if projected_position < 0:
+            reasons.append("INSUFFICIENT_AVAILABLE_POSITION")
+        if projected_position > Decimal(
             str(inputs.get("position_limit", "Infinity"))
         ):
-            reasons.append("POSITION_LIMIT")
+            reasons.append("MAX_POSITION_EXCEEDED")
         reference_price = inputs.get("reference_price")
         order_price = inputs.get("order_price")
         price_band_percent = inputs.get("price_band_percent")

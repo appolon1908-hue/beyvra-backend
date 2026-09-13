@@ -15,6 +15,7 @@ from apps.trading.execution_control.reconciliation import ExecutionReconciler
 from apps.foundation.models import ApplicationAuditEvent
 from apps.foundation.services import IdempotencyConflict, begin_idempotent_request, complete_idempotent_request
 from apps.trading.models import ExecutionGovernanceChange, ExecutionProviderRecord, ExecutionQualityReport, ExecutionReconciliationRun, ExecutionRoutingDecision, ExecutionVenue, TradingOrder, UnknownExecutionOutcome
+from apps.trading.application.context import TradingContext
 from .errors import error_response
 
 
@@ -91,7 +92,9 @@ def _audit(request, *, action, resource_type, resource_id, request_id, correlati
 
 def _quality_rows(request, *, customer=False):
     rows=ExecutionQualityReport.objects.select_related("order","routing_decision")
-    if customer: rows=rows.filter(order__subject_ref=str(request.user.pk),order__tenant_ref="default")
+    if customer:
+        context=TradingContext.from_request(request)
+        rows=rows.filter(order__account_ref=context.account_ref,order__tenant_ref=context.tenant_ref)
     filters={"provider":"routing_decision__selected_provider_id","venue":"routing_decision__selected_venue_id","instrument":"order__instrument_id","mode":"routing_decision__mode","quality_outcome":"quality_state"}
     for query,field in filters.items():
         value=request.query_params.get(query)
@@ -134,7 +137,9 @@ class CapabilitiesView(APIView):
         rows = ExecutionProviderRecord.objects.exclude(mode="LIVE").order_by("provider_id")
         return Response({"results": [{"provider_id": x.provider_id, "name": x.display_name, "mode": x.mode, "enabled": x.enabled,
             "health": x.health, "capabilities": x.capabilities, "asset_classes": x.supported_asset_classes,
-            "order_types": x.supported_order_types, "venues": x.supported_venues, "version": _version(x)} for x in rows], "live_broker_routing_enabled": False})
+            "order_types": x.supported_order_types, "venues": x.supported_venues, "version": _version(x)} for x in rows],
+            "paper_capabilities":{"MARKET":True,"LIMIT":True,"CANCEL":True,"REPLACE":True,"POSITION_CLOSE":True,"POSITION_REDUCE":True,"STOP":False,"STOP_LIMIT":False},
+            "external_execution_enabled":False,"real_trading_enabled":False,"real_settlement_enabled":False,"live_broker_routing_enabled":False})
 
 
 class CapabilityDetailView(APIView):
@@ -175,7 +180,8 @@ class ProviderStatusView(APIView):
 class RouteView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request, order_id):
-        row = ExecutionRoutingDecision.objects.filter(order_id=order_id, subject_ref=str(request.user.pk), tenant_ref="default").order_by("-created_at").first()
+        context=TradingContext.from_request(request)
+        row = ExecutionRoutingDecision.objects.filter(order_id=order_id, order__account_ref=context.account_ref, tenant_ref=context.tenant_ref).order_by("-created_at").first()
         if not row: return error_response(request, "RESOURCE_NOT_FOUND", 404)
         return Response({"decision_id": str(row.decision_id), "order_id": str(row.order_id), "status": row.status,
             "mode": row.mode, "selected_provider_id": row.selected_provider_id or None, "selected_venue_id": row.selected_venue_id or None,
@@ -186,7 +192,8 @@ class RouteView(APIView):
 class QualityView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request, order_id):
-        order = TradingOrder.objects.filter(pk=order_id, subject_ref=str(request.user.pk), tenant_ref="default", simulation=True).first()
+        context=TradingContext.from_request(request)
+        order = TradingOrder.objects.filter(pk=order_id, account_ref=context.account_ref, tenant_ref=context.tenant_ref, simulation=True).first()
         if not order: return error_response(request, "RESOURCE_NOT_FOUND", 404)
         row = ExecutionQualityReport.objects.filter(order=order).order_by("-revision").first()
         return Response(serialize_quality(row)) if row else error_response(request, "EXECUTION_QUALITY_NOT_AVAILABLE", 404)
@@ -202,7 +209,8 @@ class ReportsView(APIView):
 class ReportView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request, report_id):
-        row = ExecutionQualityReport.objects.filter(pk=report_id, order__subject_ref=str(request.user.pk), order__tenant_ref="default").first()
+        context=TradingContext.from_request(request)
+        row = ExecutionQualityReport.objects.filter(pk=report_id, order__account_ref=context.account_ref, order__tenant_ref=context.tenant_ref).first()
         return Response(serialize_quality(row)) if row else error_response(request, "RESOURCE_NOT_FOUND", 404)
 
 

@@ -68,21 +68,25 @@ def evaluate_snapshot(snapshot, scope="full"):
         check("PROCESSED_EVENT_UNIQUENESS",[_violation("PROCESSED_EVENT_DUPLICATE","event",x["event_id"],x) for x in snapshot.get("duplicate_processed",[])])
     return checks,violations
 
-def collect_snapshot(tenant=None):
-    orders=TradingOrder.objects.filter(simulation=True); orders=orders.filter(tenant_ref=tenant) if tenant else orders
+def collect_snapshot(tenant):
+    if not tenant:
+        raise ValueError("TENANT_CONTEXT_REQUIRED")
+    orders=TradingOrder.objects.filter(simulation=True,tenant_ref=str(tenant))
     ids=list(orders.values_list("id",flat=True)); account_ids=list(orders.values_list("account_ref",flat=True))
     return {"orders":[{"id":x.id,"quantity":x.quantity,"filled_quantity":x.filled_quantity,"state":x.state,"account_id":x.account_ref} for x in orders],
       "trades":list(SimulatedTrade.objects.filter(order_id__in=ids).values("execution_id","order_id","instrument_id","side","quantity")),
       "reservations":list(SimulatedReservation.objects.filter(order_id__in=ids).values("order_id","state","remaining_amount")),
-      "positions":list(SimulatedPosition.objects.filter(account__account_ref__in=account_ids).values("account__account_ref","instrument_id","quantity")).copy(),
-      "accounts":list(SimulatedAccount.objects.filter(account_ref__in=account_ids).values("id","total_balance","pending_balance")),
-      "outbox_order_ids":list(OutboxEvent.objects.filter(aggregate_type="order",aggregate_id__in=[str(x) for x in ids]).values_list("aggregate_id",flat=True)),
+      "positions":list(SimulatedPosition.objects.filter(account__tenant_ref=str(tenant),account__account_ref__in=account_ids).values("account__account_ref","instrument_id","quantity")).copy(),
+      "accounts":list(SimulatedAccount.objects.filter(tenant_ref=str(tenant),account_ref__in=account_ids).values("id","total_balance","pending_balance")),
+      "outbox_order_ids":list(OutboxEvent.objects.filter(tenant_ref=str(tenant),aggregate_type="order",aggregate_id__in=[str(x) for x in ids]).values_list("aggregate_id",flat=True)),
       "execution_outbox_ids":list(OutboxEvent.objects.filter(aggregate_type="execution",aggregate_id__in=list(SimulatedTrade.objects.filter(order_id__in=ids).values_list("execution_id",flat=True))).values_list("aggregate_id",flat=True)),
-      "audit_order_ids":list(ApplicationAuditEvent.objects.filter(resource_type="simulation_order",resource_id__in=[str(x) for x in ids]).values_list("resource_id",flat=True)),
-      "duplicate_trades":list(SimulatedTrade.objects.values("execution_id").annotate(count=Count("trade_id")).filter(count__gt=1)),
-      "duplicate_settlements":[], "duplicate_processed":list(ProcessedEvent.objects.values("event_id","consumer_name").annotate(count=Count("id")).filter(count__gt=1))}
+      "audit_order_ids":list(ApplicationAuditEvent.objects.filter(resource_type="simulation_order",resource_id__in=[str(x) for x in ids],context__tenant_ref=str(tenant)).values_list("resource_id",flat=True)),
+      "duplicate_trades":list(SimulatedTrade.objects.filter(order_id__in=ids).values("execution_id").annotate(count=Count("trade_id")).filter(count__gt=1)),
+      "duplicate_settlements":[], "duplicate_processed":[]}
 
 def run(scope="full",tenant=None,persist=True,candidate_sha=None):
+    if not tenant:
+        raise ValueError("TENANT_CONTEXT_REQUIRED")
     started=timezone.now(); snapshot=collect_snapshot(tenant)
     # normalize position account key without exposing it in output
     for position in snapshot["positions"]: position["account_id"]=position.pop("account__account_ref")

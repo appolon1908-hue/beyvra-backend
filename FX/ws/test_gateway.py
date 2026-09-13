@@ -83,7 +83,7 @@ class CanonicalGatewayTests(TransactionTestCase):
 
         async_to_sync(scenario)()
 
-    def test_realtime_provider_gate_denies_before_outbound_connection(self):
+    def test_realtime_reference_authority_denies_before_outbound_connection(self):
         async def scenario():
             communicator = WebsocketCommunicator(application, f"/ws/v1/?ws_ticket={self.ticket()}")
             connected, _ = await communicator.connect()
@@ -92,7 +92,7 @@ class CanonicalGatewayTests(TransactionTestCase):
             await communicator.send_json_to({"action": "subscribe", "channels": ["market.BTC-USD.candle.1m"]})
             self.assertEqual((await communicator.receive_json_from())["added"], ["market.BTC-USD.candle.1m"])
             unavailable = await communicator.receive_json_from(timeout=2)
-            self.assertEqual(unavailable["data"]["reason"], "PROVIDER_NOT_AVAILABLE")
+            self.assertEqual(unavailable["data"]["reason"], "INSTRUMENT_NOT_FOUND")
             await communicator.disconnect()
 
         with patch("ws.gateway.aiohttp.ClientSession.ws_connect") as outbound:

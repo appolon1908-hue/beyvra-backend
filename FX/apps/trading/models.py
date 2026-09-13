@@ -31,11 +31,50 @@ class TradingOrder(models.Model):
     eligibility_reason_codes = models.JSONField(default=list)
     eligibility_evaluated_at = models.DateTimeField(null=True)
     idempotency_key = models.CharField(max_length=255, blank=True, default="")
+    reference_price = models.DecimalField(max_digits=36, decimal_places=18, null=True)
+    price_observation_id = models.UUIDField(null=True)
+    price_source = models.CharField(max_length=64, blank=True, default="")
+    price_observed_at = models.DateTimeField(null=True)
+    price_stale_after = models.DateTimeField(null=True)
+    fee_amount = models.DecimalField(max_digits=36, decimal_places=18, default=0)
+    fee_schedule_version = models.CharField(max_length=128, blank=True, default="")
+    version = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("tenant_ref", "subject_ref", "idempotency_key"), condition=~models.Q(idempotency_key=""), name="unique_sim_order_idempotency")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_ref", "account_ref", "idempotency_key"),
+                condition=~models.Q(idempotency_key=""),
+                name="unique_sim_order_idempotency",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="sim_order_quantity_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(filled_quantity__gte=0)
+                & models.Q(filled_quantity__lte=models.F("quantity")),
+                name="sim_order_fill_in_range",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(order_type="MARKET", limit_price__isnull=True)
+                    | models.Q(order_type="LIMIT", limit_price__gt=0)
+                ),
+                name="sim_order_type_price_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reference_price__isnull=True)
+                | models.Q(reference_price__gt=0),
+                name="sim_order_reference_positive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("tenant_ref", "account_ref", "-created_at"), name="sim_order_tenant_account_time"),
+            models.Index(fields=("tenant_ref", "instrument_id", "-created_at"), name="sim_order_tenant_instrument"),
+        ]
 
 
 class RiskDecision(models.Model):
@@ -69,7 +108,20 @@ class SimulatedAccount(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("tenant_ref", "subject_ref", "account_ref"), name="simulation_account_scope_unique")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_ref", "subject_ref", "account_ref"),
+                name="simulation_account_scope_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_balance__gte=0),
+                name="sim_account_balance_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(pending_balance__gte=0),
+                name="sim_account_pending_nonnegative",
+            ),
+        ]
 
 
 class TradingAccount(models.Model):
@@ -140,12 +192,25 @@ class SimulatedReservation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.ForeignKey(SimulatedAccount, on_delete=models.PROTECT, related_name="reservations")
     order_id = models.UUIDField(unique=True)
-    asset = models.CharField(max_length=32)
+    asset = models.CharField(max_length=64)
     original_amount = models.DecimalField(max_digits=36, decimal_places=18)
     remaining_amount = models.DecimalField(max_digits=36, decimal_places=18)
     state = models.CharField(max_length=16, choices=State.choices, default=State.ACTIVE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(original_amount__gte=0),
+                name="sim_reservation_original_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(remaining_amount__gte=0)
+                & models.Q(remaining_amount__lte=models.F("original_amount")),
+                name="sim_reservation_remaining_valid",
+            ),
+        ]
 
 
 class SimulatedTrade(models.Model):
@@ -157,8 +222,21 @@ class SimulatedTrade(models.Model):
     quantity = models.DecimalField(max_digits=36, decimal_places=18)
     price = models.DecimalField(max_digits=36, decimal_places=18)
     fee = models.DecimalField(max_digits=36, decimal_places=18)
+    realized_pnl = models.DecimalField(max_digits=36, decimal_places=18, default=0)
     executed_at = models.DateTimeField()
     simulation = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="sim_trade_quantity_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(price__gt=0),
+                name="sim_trade_price_positive",
+            ),
+        ]
 
 
 class SimulatedPosition(models.Model):
@@ -171,7 +249,16 @@ class SimulatedPosition(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=("account", "instrument_id"), name="simulation_position_unique")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("account", "instrument_id"),
+                name="simulation_position_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=0),
+                name="sim_position_long_only",
+            ),
+        ]
 
 
 class ReconciliationRun(models.Model):
