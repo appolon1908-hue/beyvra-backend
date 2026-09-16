@@ -14,7 +14,6 @@ urlpatterns = [
     path("instruments/<uuid:instrument_id>", InstrumentDetailView.as_view(), name="canonical-instrument-detail"),
     path("markets/status", MarketStatusView.as_view(), name="canonical-markets-status"),
     path("market/snapshot", CanonicalMarketSnapshotView.as_view(), name="canonical-market-snapshot"),
-    path("market/candles", CanonicalMarketCandlesView.as_view(), name="canonical-market-candles"),
     path("market/order-book", CanonicalMarketOrderBookView.as_view(), name="canonical-market-order-book"),
     path("market/trades", CanonicalMarketTradesView.as_view(), name="canonical-market-trades"),
     path("market/capabilities", CanonicalMarketCapabilitiesView.as_view(), name="canonical-market-capabilities"),
