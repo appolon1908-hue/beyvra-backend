@@ -1,13 +1,20 @@
 import hashlib
-from datetime import datetime, timezone
 from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone as django_timezone
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from reference_data.models import Instrument, MarketStatus
 from apps.trading.api.errors import error_response
+
+
+def _bounded_int(request, *, name, default, maximum):
+    raw_value = request.query_params.get(name, default)
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None, error_response(request, "VALIDATION_ERROR", 400, {name: "integer_required"})
+    return min(value, maximum), None
 
 
 class CanonicalMarketSnapshotView(APIView):
@@ -61,7 +68,9 @@ class CanonicalMarketCandlesView(APIView):
         symbol = request.query_params.get("symbol", "BTC-USD").upper()
         interval = request.query_params.get("interval", "1m")
         cursor = request.query_params.get("cursor")
-        limit = min(int(request.query_params.get("limit", 100)), 500)
+        limit, error = _bounded_int(request, name="limit", default=100, maximum=500)
+        if error:
+            return error
 
         now = django_timezone.now()
         price = settings.SIMULATED_EXECUTION_PRICES.get(symbol, "100.00") if hasattr(settings, "SIMULATED_EXECUTION_PRICES") else "100.00"
@@ -89,9 +98,11 @@ class CanonicalMarketCandlesView(APIView):
 class CanonicalMarketOrderBookView(APIView):
     permission_classes = (AllowAny,)
 
-    def get(self, request):
-        symbol = request.query_params.get("symbol", "BTC-USD").upper()
-        depth = min(int(request.query_params.get("depth", 20)), 100)
+    def get(self, request, symbol=None):
+        symbol = str(symbol or request.query_params.get("symbol", "BTC-USD")).upper()
+        depth, error = _bounded_int(request, name="depth", default=20, maximum=100)
+        if error:
+            return error
         price = settings.SIMULATED_EXECUTION_PRICES.get(symbol, "100.00") if hasattr(settings, "SIMULATED_EXECUTION_PRICES") else "100.00"
 
         bids = [[str(Decimal(price) * Decimal("0.999")), "5.00000000"]]
