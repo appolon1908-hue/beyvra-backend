@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
@@ -194,6 +194,26 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
             ["IDENTITY_VERIFICATION"],
         )
 
+    @patch(
+        "platform_ops.platform_api._resolve_compliance_organization",
+        return_value=platform_api._TENANT_SELECTION_REQUIRED,
+    )
+    def test_compliance_summary_marks_multi_tenant_selection_required(
+        self,
+        _resolve_compliance_organization,
+    ):
+        request = type("Request", (), {})()
+        request.user = type("User", (), {"is_authenticated": True})()
+        request.headers = {}
+
+        summary = platform_api._compliance_summary(request)
+
+        self.assertEqual(
+            summary["reason_codes"],
+            ["TENANT_SELECTION_REQUIRED"],
+        )
+        self.assertEqual(summary["requirements"], [])
+
     @patch("platform_ops.platform_api.get_trading_eligibility")
     @patch("platform_ops.platform_api.ComplianceProfile.objects.filter")
     @patch("platform_ops.platform_api._resolve_compliance_organization")
@@ -208,27 +228,11 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         request.user = type("User", (), {"is_authenticated": True})()
         request.headers = {}
 
-        profile = profile_filter.return_value.first.return_value = type(
-            "Profile",
-            (),
-            {},
-        )()
-        profile.requirements = type("Requirements", (), {})()
-        profile.requirements.filter = lambda **_kwargs: type(
-            "RequirementSet",
-            (),
-            {
-                "exclude": lambda self, **_exclude: type(
-                    "ValueList",
-                    (),
-                    {
-                        "values_list": lambda self, *_args, **_kwargs: [
-                            "IDENTITY_VERIFICATION"
-                        ]
-                    },
-                )()
-            },
-        )()
+        profile = profile_filter.return_value.first.return_value = Mock()
+        values_list = Mock(return_value=["IDENTITY_VERIFICATION"])
+        filtered_requirements = Mock()
+        filtered_requirements.exclude.return_value.values_list = values_list
+        profile.requirements.filter.return_value = filtered_requirements
         get_trading_eligibility.return_value = type(
             "Decision",
             (),
@@ -245,6 +249,9 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         profile_filter.assert_called_once_with(
             user=request.user,
             organization=organization,
+        )
+        filtered_requirements.exclude.assert_called_once_with(
+            status__in=("COMPLETED", "WAIVED")
         )
         self.assertEqual(summary["policy_version"], "fixture-policy")
         self.assertEqual(summary["reason_codes"], ["KYC_REQUIRED"])

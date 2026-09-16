@@ -19,6 +19,8 @@ from platform_ops.health.api import _safety_state
 from platform_ops.health.services import HealthAuthority
 from platform_ops.permissions import SRE_ROLES
 
+_TENANT_SELECTION_REQUIRED = object()
+
 
 def _etag(payload):
     stable = {key: value for key, value in payload.items() if key != "as_of"}
@@ -81,6 +83,9 @@ def _compliance_summary(request):
     if not getattr(user, "is_authenticated", False):
         return summary
     organization = _resolve_compliance_organization(request)
+    if organization is _TENANT_SELECTION_REQUIRED:
+        summary["reason_codes"] = ["TENANT_SELECTION_REQUIRED"]
+        return summary
     if organization is None:
         summary["reason_codes"] = ["KYC_REQUIRED"]
         summary["requirements"] = [RequirementType.IDENTITY_VERIFICATION.value]
@@ -99,7 +104,7 @@ def _compliance_summary(request):
     summary["reason_codes"] = list(decision.reason_codes)
     summary["requirements"] = list(
         profile.requirements.filter(required=True)
-        .exclude(status="COMPLETED")
+        .exclude(status__in=("COMPLETED", "WAIVED"))
         .values_list("type", flat=True)
     )
     return summary
@@ -130,6 +135,8 @@ def _resolve_compliance_organization(request):
     available = list(memberships[:2])
     if len(available) == 1:
         return available[0].organization
+    if len(available) > 1:
+        return _TENANT_SELECTION_REQUIRED
     return None
 
 
