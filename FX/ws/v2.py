@@ -83,7 +83,6 @@ def _owns_demo_account(user_id, channel):
         return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
     return False
 
-
 def _claims(request, *, audience, extra=None):
     secret = _secret()
     if not secret:
