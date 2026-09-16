@@ -1,16 +1,17 @@
-import hashlib
-import hmac
-import json
-import time
+import uuid
 from django.conf import settings
-from django.utils import timezone
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from financial_boundary.webhooks import WebhookDenied, verify_provider_webhook
+from financial_boundary.eventing import EventReplayConflict
+from financial_boundary.webhooks import (
+    WebhookDenied,
+    consume_verified_webhook,
+    verify_provider_webhook,
+)
 
-# In-memory durable inbox cache for duplicate suppression
-WEBHOOK_INBOX_DEDUPLICATION = set()
+
+DEFAULT_WEBHOOK_TENANT = uuid.uuid5(uuid.NAMESPACE_DNS, "beyvra-provider-webhooks")
 
 
 class CanonicalProviderWebhookView(APIView):
@@ -27,10 +28,14 @@ class CanonicalProviderWebhookView(APIView):
         if len(request.body) > 1024 * 1024:
             return Response({"error": {"code": "PAYLOAD_TOO_LARGE"}}, status=413)
 
-        # 3. Signature and replay check
-        secret = getattr(settings, "PROVIDER_WEBHOOK_SECRET", b"default_super_secret_signing_key_32bytes_minimum!")
+        secret = getattr(settings, "PROVIDER_WEBHOOK_SECRET", None)
         if isinstance(secret, str):
             secret = secret.encode("utf-8")
+        if not isinstance(secret, bytes) or len(secret) < 32:
+            return Response(
+                {"error": {"code": "WEBHOOK_AUTHORITY_UNAVAILABLE"}},
+                status=503,
+            )
 
         headers = {
             "X-Provider-Id": request.headers.get("X-Provider-Id", provider),
@@ -42,7 +47,7 @@ class CanonicalProviderWebhookView(APIView):
         try:
             verified = verify_provider_webhook(
                 expected_provider_id=provider,
-                tenant_ref="default",
+                tenant_ref=DEFAULT_WEBHOOK_TENANT,
                 headers=headers,
                 raw_body=request.body,
                 secret=secret,
@@ -51,10 +56,12 @@ class CanonicalProviderWebhookView(APIView):
         except WebhookDenied as exc:
             return Response({"error": {"code": "INVALID_WEBHOOK", "message": str(exc)}}, status=401)
 
-        # 4. Deduplication
-        dedup_key = f"{provider}:{verified.provider_event_id}"
-        if dedup_key in WEBHOOK_INBOX_DEDUPLICATION:
+        try:
+            first_seen = consume_verified_webhook(verified, lambda envelope: None)
+        except EventReplayConflict:
+            return Response({"error": {"code": "EVENT_REPLAY_CONFLICT"}}, status=409)
+
+        if not first_seen:
             return Response({"status": "duplicate"}, status=200)
 
-        WEBHOOK_INBOX_DEDUPLICATION.add(dedup_key)
         return Response({"status": "accepted", "event_id": str(verified.envelope.event_id)}, status=202)
