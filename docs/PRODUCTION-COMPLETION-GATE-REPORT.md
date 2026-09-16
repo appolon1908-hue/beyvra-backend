@@ -20,4 +20,4 @@ All 9 canonical domain implementations completed across stacked branches:
 4. **Optimistic Concurrency**:
    - `If-Match` ETags enforced for workspace reorder mutations.
 5. **HMAC Webhook Ingestion**:
-   - Ingestion pipeline with 300s replay window and deduplication cache.
+   - Ingestion pipeline with 300s replay window and durable inbox deduplication.
