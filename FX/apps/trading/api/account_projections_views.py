@@ -5,10 +5,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.trading.application.simulation import account_for, serialize_account, simulation_authorized
-from apps.trading.models import SimulatedAccount, SimulatedReservation
+from apps.trading.models import SimulatedAccount
+from apps.post_trade.api import trade_payload
 from apps.valuation.models import TaxLot
 from apps.post_trade.models import Trade
 from apps.trading.api.errors import error_response
+from integrations.financial.simulated import SimulatedFinancialAdapter
+
+
+def _available_and_reserved_cash(account):
+    available_cash = SimulatedFinancialAdapter.available_quote(account)
+    settled_cash = account.total_balance - account.pending_balance
+    reserved_cash = settled_cash - available_cash
+    if reserved_cash < Decimal("0"):
+        reserved_cash = Decimal("0")
+    return available_cash, reserved_cash
 
 
 class AccountDetailProjectionView(APIView):
@@ -33,12 +44,10 @@ class AccountBalancesProjectionView(APIView):
         if not account:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
 
-        # Cash segregation
         total_cash = account.total_balance
-        reserved_cash = account.pending_balance
+        available_cash, reserved_cash = _available_and_reserved_cash(account)
         settled_cash = total_cash - reserved_cash
         unsettled_cash = Decimal("0.00")
-        available_cash = total_cash - reserved_cash
 
         return Response({
             "account_id": str(account.id),
@@ -64,7 +73,7 @@ class AccountBuyingPowerProjectionView(APIView):
         if not account:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
 
-        available_cash = account.total_balance - account.pending_balance
+        available_cash, _reserved_cash = _available_and_reserved_cash(account)
         return Response({
             "account_id": str(account.id),
             "currency": account.quote_currency,
@@ -86,16 +95,17 @@ class AccountTransactionsProjectionView(APIView):
         if not account:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
 
-        trades = Trade.objects.filter(account_ref=f"sim:{request.user.pk}", tenant_ref="default").order_by("-trade_time")
+        trades = Trade.objects.select_related("fee_snapshot").filter(account_ref=account.account_ref, tenant_ref=account.tenant_ref).order_by("-trade_time")
         items = [
             {
+                **trade_payload(t),
                 "id": str(t.id),
                 "type": "TRADE",
-                "instrument_id": t.instrument_ref,
-                "amount": str(t.quantity * t.price),
-                "fee": str(t.fee_amount),
+                "instrument_id": t.instrument_id,
+                "amount": str(t.gross_notional),
+                "fee": str(t.fee_snapshot.total_fee),
                 "timestamp": t.trade_time.isoformat(),
-                "status": "SETTLED"
+                "status": t.trade_state,
             }
             for t in trades
         ]
@@ -136,16 +146,16 @@ class AccountTaxLotsProjectionView(APIView):
         if not account:
             return error_response(request, "RESOURCE_NOT_FOUND", 404)
 
-        lots = TaxLot.objects.filter(account_ref=f"sim:{request.user.pk}", tenant_ref="default").order_by("-acquired_at")
+        lots = TaxLot.objects.filter(account_ref=account.account_ref, tenant_ref=account.tenant_ref).order_by("-acquisition_date", "-created_at")
         items = [
             {
                 "lot_id": str(lot.id),
                 "instrument_id": lot.instrument_id,
-                "acquired_at": lot.acquired_at.isoformat(),
-                "quantity": str(lot.quantity),
-                "cost_basis_per_unit": str(lot.cost_basis_per_unit),
-                "total_cost_basis": str(lot.total_cost_basis),
-                "disposed_quantity": str(lot.disposed_quantity),
+                "acquired_at": lot.acquisition_date.isoformat(),
+                "quantity": str(lot.original_quantity),
+                "cost_basis_per_unit": str(lot.unit_cost),
+                "total_cost_basis": str(lot.total_cost),
+                "disposed_quantity": str(lot.original_quantity - lot.remaining_quantity),
             }
             for lot in lots
         ]
