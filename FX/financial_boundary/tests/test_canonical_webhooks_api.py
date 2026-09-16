@@ -43,22 +43,40 @@ class CanonicalProviderWebhooksApiTests(TestCase):
             "CONTENT_TYPE": "application/json"
         }
 
-        res = self.client.post(f"/api/v1/webhooks/executions/{provider}", body, **headers)
+        res = self.client.post(
+            f"/api/v1/webhooks/executions/{provider}",
+            body,
+            content_type="application/json",
+            **headers,
+        )
         self.assertEqual(res.status_code, 202)
         self.assertEqual(res.json()["status"], "accepted")
 
         # Duplicate submission
-        res_dup = self.client.post(f"/api/v1/webhooks/executions/{provider}", body, **headers)
+        res_dup = self.client.post(
+            f"/api/v1/webhooks/executions/{provider}",
+            body,
+            content_type="application/json",
+            **headers,
+        )
         self.assertEqual(res_dup.status_code, 200)
         self.assertEqual(res_dup.json()["status"], "duplicate")
 
     def test_ingest_disallowed_provider(self):
-        res = self.client.post("/api/v1/webhooks/executions/untrusted_broker", b"{}")
+        res = self.client.post(
+            "/api/v1/webhooks/executions/untrusted_broker",
+            b"{}",
+            content_type="application/json",
+        )
         self.assertEqual(res.status_code, 403)
 
     @override_settings(PROVIDER_WEBHOOK_SECRET=None)
     def test_ingest_requires_configured_webhook_secret(self):
-        res = self.client.post("/api/v1/webhooks/executions/alpaca", b"{}")
+        res = self.client.post(
+            "/api/v1/webhooks/executions/alpaca",
+            b"{}",
+            content_type="application/json",
+        )
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["error"]["code"], "WEBHOOK_AUTHORITY_UNAVAILABLE")
 
