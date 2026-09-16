@@ -200,6 +200,35 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
             ["IDENTITY_VERIFICATION"],
         )
 
+    @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    @patch("platform_ops.platform_api._provider_health_visible", return_value=False)
+    @patch("platform_ops.platform_api._optional_user")
+    @patch("platform_ops.platform_api.tenant_context_for_request")
+    @patch("platform_ops.platform_api.ComplianceProfile.objects.filter")
+    def test_authenticated_capabilities_use_optional_user_resolution(
+        self,
+        profile_filter,
+        tenant_context_for_request,
+        optional_user,
+        _provider_health_visible,
+        _system_state,
+    ):
+        optional_user.return_value = self.user
+        tenant_context_for_request.return_value = type(
+            "TenantContext",
+            (),
+            {"organization": object()},
+        )()
+        profile_filter.return_value.first.return_value = None
+
+        response = self.client.get("/api/v1/platform/capabilities")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["compliance"]["reason_codes"],
+            ["KYC_REQUIRED"],
+        )
+
     @patch(
         "platform_ops.platform_api._resolve_compliance_organization",
         return_value=platform_api._TENANT_SELECTION_REQUIRED,

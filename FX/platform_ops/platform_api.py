@@ -103,7 +103,7 @@ def _compliance_summary(request, user):
     }
     if not getattr(user, "is_authenticated", False):
         return summary
-    organization = _resolve_compliance_organization(request)
+    organization = _resolve_compliance_organization(request, user)
     if organization is _TENANT_SELECTION_REQUIRED:
         summary["reason_codes"] = ["TENANT_SELECTION_REQUIRED"]
         return summary
