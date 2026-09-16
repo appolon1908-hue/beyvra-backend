@@ -83,12 +83,7 @@ def _owns_demo_account(user_id, channel):
         return channel.rsplit(".", 1)[-1] == f"sim-{user_id}"
     return False
 
-
-from .realtime_views import RealtimeTicketView, RealtimeSnapshotView, RealtimeResumeView
-
-realtime_ticket_v1 = RealtimeTicketView.as_view()
-realtime_snapshot_v1 = RealtimeSnapshotView.as_view()
-realtime_resume_v1 = RealtimeResumeView.as_view()
+def _claims(request, *, audience, extra=None):
     secret = _secret()
     if not secret:
         return None
