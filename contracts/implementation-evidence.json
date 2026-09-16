@@ -13,37 +13,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -60,37 +60,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -107,37 +107,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -154,37 +154,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -201,37 +201,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -248,37 +248,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -295,37 +295,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
@@ -342,37 +342,37 @@
       "implementation_status": "IMPLEMENTED",
       "file_sha256": {
         "FX/apps/workspace/api.py": {
-          "sha256": "5d06fd6feafb02e38c8448eb56c5cd61610eb5c32dce2ebb50290c09e7c5d900"
+          "sha256": "835c39c45cd7e01fd284d9a7fea22ac1d7b18276561687e594878e54b3ee6c2a"
         },
         "FX/apps/workspace/commands.py": {
-          "sha256": "4cda1fca65fb142b7d1d3cf7c7be0444c8d5c9c25e5275d1a7dd684c66dd4ec9"
+          "sha256": "0b6c72e14431458185cbc588d7faf8fea80fab7636af2a3bdda0bc5ade413597"
         },
         "FX/apps/workspace/models.py": {
-          "sha256": "d4018b08162d9e493b7a1b931ede0a46873d3625d5d6931c9e9f7d46d44745f8"
+          "sha256": "2809cec717a9937664ac9f3b5639cad2bd1eb9b5da2236231d3fa526566fdf85"
         },
         "FX/apps/workspace/serializers.py": {
-          "sha256": "de3d1086d33a339e1d77c593a1eaf5f106c793fbf91c7d7534cc1be3f992f6a2"
+          "sha256": "aee2187af6f44fcbf5b69645e842671f83cfbe9b77669c70230c918ab854b0f9"
         },
         "FX/apps/workspace/instruments.py": {
-          "sha256": "507fcbe53659ec708f503c9ac4171d5c050114b3cd685edb9b0353270c47535c"
+          "sha256": "e77b6160908b165471c71a6ed8901e3e717c3b966c0ef16feb7e2f28fa9ef13f"
         },
         "FX/apps/workspace/urls.py": {
-          "sha256": "0ee99f97738599b3a600507fffc5f05901d42d4bf5c15ff1417878c83bfb6aee"
+          "sha256": "36d2dee45672e860970a43fca97066efc62ec6766f3fd265586f6632616446f8"
         },
         "FX/apps/workspace/tests.py": {
-          "sha256": "7b70820347e18ceeda5ece51609d2e46910dd97ae543ecece810406f57ea7565"
+          "sha256": "ed24f87f3bd3ab93e9dbc4b2a32e65e1d2eccac8986b5a2a8a4c002319c0e829"
         },
         "FX/integrations/permissions.py": {
-          "sha256": "dca03811854d1a116866d1cf9ee5383ab268b42e2355df47976cfaddfd5d3180"
+          "sha256": "2f42bd96b713ee47facb85c56638767dd4745a5c9ddd74e10223db256d521f29"
         },
         "FX/apps/foundation/services.py": {
-          "sha256": "79c0f2600065e026191261208673b6a9f610309e4e8c13a7f108880ed0c9216c"
+          "sha256": "c1b8b3f8db590d32304d7b1b6b51331775a165bc37ae3f8592c1aa0c8f7e440a"
         },
         "FX/apps/foundation/models.py": {
-          "sha256": "3b999486bdad60aba5008ca7e322f0aa4f5c483528aba4f07844baea90ac7da5"
+          "sha256": "26d29cf70a3b47720f6d5e4a7420c5a77a939cc5fad89abad29441f52b128f5b"
         },
         "FX/apps/trading/api/serializers.py": {
-          "sha256": "57950ccde1b83bdcf68d00a10631dbd37e51c4caf9639a0e8f85e943f5b3cd9e"
+          "sha256": "2b8c64f6a808197d02588ca90dbb2993bada2f8078a0ce116c3bfd07faa890d8"
         }
       },
       "verification": "PostgreSQL apps.workspace.tests included in 116 passing regressions on 2026-09-12; final CI must revalidate this head"
