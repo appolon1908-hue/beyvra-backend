@@ -36,17 +36,21 @@ class MarketDataCompletionApiTests(TestCase):
         self.assertEqual(data[0]["bid_price"], "100.00")
         self.assertEqual(data[0]["freshness"], "FRESH")
 
-    def test_get_market_candles(self):
-        res = self.client.get("/api/v1/market/candles?symbol=BTC-USD&interval=1m")
+    def test_get_market_orderbook_alias(self):
+        res = self.client.get("/api/v1/market/orderbook/BTC-USD")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["symbol"], "BTC-USD")
-        self.assertIn("results", data)
+        self.assertIn("bids", data)
 
     def test_get_market_capabilities(self):
         res = self.client.get("/api/v1/market/capabilities")
         self.assertEqual(res.status_code, 200)
         self.assertIn("supported_intervals", res.json())
+
+    def test_invalid_market_orderbook_depth_returns_validation_error(self):
+        res = self.client.get("/api/v1/market/orderbook/BTC-USD?depth=abc")
+        self.assertEqual(res.status_code, 400)
 
 
 class MarketDataStalePriceTests(TestCase):
