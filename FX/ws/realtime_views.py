@@ -40,7 +40,14 @@ class RealtimeResumeView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):
-        after_seq = int(request.query_params.get("after_sequence", 0))
+        raw_after_sequence = request.query_params.get("after_sequence", "0")
+        try:
+            after_seq = int(raw_after_sequence)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": {"code": "AFTER_SEQUENCE_INVALID"}},
+                status=400,
+            )
         current_seq = 1042
         if after_seq < current_seq - 1000:
             return Response({
