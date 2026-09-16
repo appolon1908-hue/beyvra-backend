@@ -1,10 +1,18 @@
 from django.utils import timezone
+from django.db import models
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from integrations.permissions import organization_for_request
-from .models import ComplianceProfile, ComplianceRestriction
+from .models import AccountRestriction, ComplianceProfile
 from .services import effective_profile_states, get_trading_eligibility
+
+
+def _requirements(profile):
+    return [
+        item.type
+        for item in profile.requirements.filter(required=True).exclude(status="COMPLETED")
+    ]
 
 
 class ComplianceStatusView(APIView):
@@ -28,7 +36,7 @@ class ComplianceStatusView(APIView):
             "policy_version": eligibility.policy_version,
             "evaluated_at": eligibility.evaluated_at.isoformat(),
             "reason_codes": eligibility.reason_codes,
-            "requirements": eligibility.requirements,
+            "requirements": _requirements(profile),
         })
 
 
@@ -42,7 +50,9 @@ class ComplianceRestrictionsView(APIView):
             return Response({"results": []})
 
         now = timezone.now()
-        restrictions = profile.restrictions.filter(active=True)
+        restrictions = profile.restrictions.filter(active=True).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+        )
         return Response({
             "results": [
                 {
