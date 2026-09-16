@@ -3,7 +3,7 @@ import json
 import time
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
-from financial_boundary.webhooks import webhook_signature
+from financial_boundary.webhooks import _canonical_event_type, webhook_signature
 
 SECRET = b"default_super_secret_signing_key_32bytes_minimum!"
 
@@ -55,3 +55,15 @@ class CanonicalProviderWebhooksApiTests(TestCase):
     def test_ingest_disallowed_provider(self):
         res = self.client.post("/api/v1/webhooks/executions/untrusted_broker", b"{}")
         self.assertEqual(res.status_code, 403)
+
+    @override_settings(PROVIDER_WEBHOOK_SECRET=None)
+    def test_ingest_requires_configured_webhook_secret(self):
+        res = self.client.post("/api/v1/webhooks/executions/alpaca", b"{}")
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(res.json()["error"]["code"], "WEBHOOK_AUTHORITY_UNAVAILABLE")
+
+    def test_existing_version_suffix_remains_canonical(self):
+        self.assertEqual(
+            _canonical_event_type("withdrawal.updated.v1"),
+            "financial.withdrawal.updated.v1",
+        )
