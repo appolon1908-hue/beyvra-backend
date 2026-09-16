@@ -15,6 +15,49 @@ from apps.valuation.portfolio_api import PortfolioSummaryView
 from .serializers import AccountCollectionSerializer
 
 
+def _canonical_contract(request):
+    return request.path.startswith("/api/v1/") and not request.path.startswith("/api/v1/trading/")
+
+
+def _canonical_order_payload(order):
+    return {
+        "order_id": str(order.id),
+        "account_id": order.account_ref,
+        "instrument_id": order.instrument_id,
+        "side": order.side,
+        "order_type": order.order_type,
+        "quantity": str(order.quantity),
+        "limit_price": str(order.limit_price) if order.limit_price is not None else None,
+        "stop_price": str(order.stop_price) if order.stop_price is not None else None,
+        "time_in_force": "DAY",
+        "status": "CANCELED" if order.state == "CANCELLED" else order.state,
+        "filled_quantity": str(order.filled_quantity),
+        "average_fill_price": str(order.average_fill_price) if order.average_fill_price is not None else None,
+        "created_at": order.created_at.isoformat(),
+        "updated_at": order.updated_at.isoformat(),
+    }
+
+
+def _order_payload_for_request(order, request):
+    if _canonical_contract(request):
+        return _canonical_order_payload(order)
+    return serialize_order(order)
+
+
+def _execution_payload(trade):
+    return {
+        "execution_id": trade.execution_id,
+        "order_id": str(trade.order_id),
+        "account_id": trade.order.account_ref,
+        "instrument_id": trade.instrument_id,
+        "quantity": str(trade.quantity),
+        "price": str(trade.price),
+        "fee": str(trade.fee),
+        "executed_at": trade.executed_at.isoformat(),
+        "provider_reference": trade.execution_id,
+    }
+
+
 def _guard(request):
     return None if simulation_authorized(request) else error_response(request, "FEATURE_DISABLED", 503)
 
@@ -32,13 +75,16 @@ class OrderCollectionView(APIView):
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
         orders = TradingOrder.objects.filter(subject_ref=str(request.user.pk), tenant_ref="default", simulation=True).order_by("-created_at")
-        return Response({"results": [serialize_order(order) for order in orders]})
+        return Response({"results": [_order_payload_for_request(order, request) for order in orders]})
     def post(self, request):
         if blocked := _guard(request): return blocked
         key = request.headers.get("Idempotency-Key")
         if not key: return error_response(request, "VALIDATION_ERROR", 422)
         try:
             body, status = create(request.user, request.data, key, getattr(request,"correlation_id",None))
+            if _canonical_contract(request) and 200 <= status < 300:
+                order = TradingOrder.objects.get(pk=body["id"], subject_ref=str(request.user.pk), tenant_ref="default", simulation=True)
+                body = _canonical_order_payload(order)
             return Response(body, status=status)
         except (ValueError, SimulationFinancialError, IdempotencyConflict) as error:
             return _failure(request, error)
@@ -58,7 +104,7 @@ class OrderDetailView(APIView):
     def get(self, request, order_id):
         if not simulation_authorized(request): return error_response(request, "RESOURCE_NOT_FOUND", 404)
         order = TradingOrder.objects.filter(pk=order_id, subject_ref=str(request.user.pk), tenant_ref="default", simulation=True).first()
-        return Response(serialize_order(order)) if order else error_response(request, "RESOURCE_NOT_FOUND", 404)
+        return Response(_order_payload_for_request(order, request)) if order else error_response(request, "RESOURCE_NOT_FOUND", 404)
 
 
 class OrderCancelView(APIView):
@@ -73,7 +119,12 @@ class OrderCancelView(APIView):
         expected_version = request.headers.get("If-Match")
         if not key or not expected_version:
             return error_response(request, "VALIDATION_ERROR", 422, {"required": ["Idempotency-Key", "If-Match"]})
-        try: return Response(cancel(request.user, order_id, key, expected_version, getattr(request, "correlation_id", None)))
+        try:
+            body = cancel(request.user, order_id, key, expected_version, getattr(request, "correlation_id", None))
+            if _canonical_contract(request):
+                order = TradingOrder.objects.get(pk=body["id"], subject_ref=str(request.user.pk), tenant_ref="default", simulation=True)
+                body = _canonical_order_payload(order)
+            return Response(body)
         except TradingOrder.DoesNotExist: return error_response(request, "RESOURCE_NOT_FOUND", 404)
         except (ValueError, SimulationFinancialError, IdempotencyConflict) as error: return _failure(request, error)
 
@@ -103,22 +154,25 @@ class ExecutionsView(APIView):
     permission_classes = (IsAuthenticated,)
     def get(self, request):
         if not simulation_authorized(request): return Response({"results": []})
-        trades = SimulatedTrade.objects.filter(order__subject_ref=str(request.user.pk), order__tenant_ref="default").order_by("-executed_at")
-        results = [
-            {
-                "trade_id": str(t.trade_id),
-                "order_id": str(t.order_id),
-                "execution_id": t.execution_id,
-                "instrument_id": t.instrument_id,
-                "side": t.side,
-                "quantity": str(t.quantity),
-                "price": str(t.price),
-                "fee": str(t.fee),
-                "executed_at": t.executed_at.isoformat(),
-                "simulation": t.simulation,
-            }
-            for t in trades
-        ]
+        trades = SimulatedTrade.objects.select_related("order").filter(order__subject_ref=str(request.user.pk), order__tenant_ref="default").order_by("-executed_at")
+        if _canonical_contract(request):
+            results = [_execution_payload(t) for t in trades]
+        else:
+            results = [
+                {
+                    "trade_id": str(t.trade_id),
+                    "order_id": str(t.order_id),
+                    "execution_id": t.execution_id,
+                    "instrument_id": t.instrument_id,
+                    "side": t.side,
+                    "quantity": str(t.quantity),
+                    "price": str(t.price),
+                    "fee": str(t.fee),
+                    "executed_at": t.executed_at.isoformat(),
+                    "simulation": t.simulation,
+                }
+                for t in trades
+            ]
         return Response({"results": results})
 
 
