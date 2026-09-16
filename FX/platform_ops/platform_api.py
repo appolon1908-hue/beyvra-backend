@@ -1,17 +1,69 @@
 import hashlib
 import json
-from datetime import datetime, timezone
 from django.conf import settings
 from django.utils import timezone as django_timezone
+from rest_framework import exceptions
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.trading.application.simulation import simulation_available
-from apps.compliance.domain import KycState
+from apps.compliance.domain import EligibilityResult
 from apps.compliance.models import ComplianceProfile
+from apps.compliance.services import get_trading_eligibility
+from apps.trading.application.simulation import simulation_available
+from integrations.permissions import organization_for_request
 from platform_ops.health.services import HealthAuthority
-from platform_ops.permissions import IsSreViewer
+
+
+def _etag(payload):
+    content_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+    return f'"{content_hash}"'
+
+
+def _reason_requirements(reason_codes):
+    requirements = []
+    if any(code.startswith("KYC_") for code in reason_codes):
+        requirements.append("IDENTITY_VERIFICATION")
+    if any(code.startswith("AML_") for code in reason_codes):
+        requirements.append("MANUAL_REVIEW")
+    if any(code.startswith("SANCTIONS_") for code in reason_codes):
+        requirements.append("MANUAL_REVIEW")
+    if "JURISDICTION_RESTRICTED" in reason_codes:
+        requirements.append("ADDRESS_VERIFICATION")
+    return requirements
+
+
+def _compliance_summary_for_request(request):
+    summary = {
+        "trading_eligible": False,
+        "policy_version": "2026.08.v1",
+        "reason_codes": [],
+        "requirements": [],
+    }
+    if not request.user.is_authenticated:
+        return summary
+    try:
+        organization = organization_for_request(request)
+    except exceptions.APIException as exc:
+        detail = exc.detail
+        if isinstance(detail, dict) and detail.get("code"):
+            summary["reason_codes"] = [str(detail["code"])]
+        else:
+            summary["reason_codes"] = ["ORGANIZATION_CONTEXT_REQUIRED"]
+        return summary
+
+    profile = ComplianceProfile.objects.filter(user_id=request.user.pk, organization=organization).first()
+    if not profile:
+        summary["reason_codes"] = ["KYC_REQUIRED"]
+        summary["requirements"] = ["IDENTITY_VERIFICATION"]
+        return summary
+
+    decision = get_trading_eligibility(profile, persist=False)
+    summary["trading_eligible"] = decision.result == EligibilityResult.ALLOWED
+    summary["policy_version"] = decision.policy_version
+    summary["reason_codes"] = list(decision.reason_codes)
+    summary["requirements"] = _reason_requirements(summary["reason_codes"])
+    return summary
 
 
 class PlatformConfigView(APIView):
@@ -33,17 +85,16 @@ class PlatformConfigView(APIView):
             "custody_enabled": False,
             "api_version": "v1",
             "supported_versions": ["v1"],
-            "as_of": django_timezone.now().isoformat(),
         }
-
-        # Compute deterministic ETag
-        content_hash = hashlib.sha256(json.dumps(config_data, sort_keys=True).encode("utf-8")).hexdigest()
-        etag = f'"{content_hash}"'
+        etag = _etag(config_data)
 
         if request.headers.get("If-None-Match") == etag:
             return Response(status=304)
 
-        response = Response(config_data)
+        response = Response({
+            **config_data,
+            "as_of": django_timezone.now().isoformat(),
+        })
         response["ETag"] = etag
         response["Cache-Control"] = "private, no-store"
         response["Pragma"] = "no-cache"
@@ -62,21 +113,7 @@ class PlatformCapabilitiesView(APIView):
         is_maintenance = system_state == "UNHEALTHY"
         is_degraded = system_state == "DEGRADED"
 
-        # Safe defaults
-        compliance_summary = {
-            "trading_eligible": False,
-            "policy_version": "2026.08.v1",
-            "reason_codes": [],
-            "requirements": [],
-        }
-
-        # Check authenticated user compliance if available
-        if request.user.is_authenticated:
-            profile = ComplianceProfile.objects.filter(user_id=request.user.pk).first()
-            if profile and profile.kyc_state == KycState.APPROVED:
-                compliance_summary["trading_eligible"] = True
-            else:
-                compliance_summary["reason_codes"].append("KYC_VERIFICATION_REQUIRED")
+        compliance_summary = _compliance_summary_for_request(request)
 
         # Hide internal provider details from non-operators
         is_operator = request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser)
@@ -113,20 +150,20 @@ class PlatformCapabilitiesView(APIView):
             },
             "provider_health_visible": is_operator,
             "compliance": compliance_summary,
-            "as_of": django_timezone.now().isoformat(),
         }
 
         if provider_health is not None:
             capabilities_data["provider_health"] = provider_health
 
-        # Compute deterministic ETag
-        content_hash = hashlib.sha256(json.dumps(capabilities_data, sort_keys=True).encode("utf-8")).hexdigest()
-        etag = f'"{content_hash}"'
+        etag = _etag(capabilities_data)
 
         if request.headers.get("If-None-Match") == etag:
             return Response(status=304)
 
-        response = Response(capabilities_data)
+        response = Response({
+            **capabilities_data,
+            "as_of": django_timezone.now().isoformat(),
+        })
         response["ETag"] = etag
         response["Cache-Control"] = "private, no-store"
         response["Pragma"] = "no-cache"
