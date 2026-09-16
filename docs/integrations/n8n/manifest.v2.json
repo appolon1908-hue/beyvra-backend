@@ -8,7 +8,9 @@
   "machine_client": "n8n-product-automation",
   "audience": "middleware-api",
   "grant_type": "client_credentials",
-  "command_prefixes": ["beyvra.operations."],
+  "command_prefixes": [
+    "beyvra.operations."
+  ],
   "required_scopes": [
     "automation.job.claim",
     "automation.job.read",
@@ -103,5 +105,13 @@
     "conflicting_replay_rejected": true,
     "workflow_activation_enables_capability": false,
     "live_apply_authorized": false
+  },
+  "dependencies": {
+    "n8n_governance_pr": 1,
+    "n8n_contract_pr": 9,
+    "middleware_contract_pr": 15,
+    "keycloak_contract_pr": 10,
+    "n8n_branch": "automation/beyvra-operations-v2-20260827",
+    "frontend_branch": "integration/automation-status-ui-v2-20260827"
   }
 }
