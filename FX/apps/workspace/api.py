@@ -546,22 +546,36 @@ class WatchlistItemDetailView(WorkspaceOwnedView):
 class WatchlistItemReorderView(WorkspaceOwnedView):
     @transaction.atomic
     def patch(self, request, watchlist_id):
-        row = self.watchlist(watchlist_id)
+        row = self.watchlist(watchlist_id, lock=True)
         if row is None:
-            return error_response(request, "RESOURCE_NOT_FOUND", 404)
+            return Response(error_body("RESOURCE_NOT_FOUND"), status=404)
 
         if_match = request.headers.get("If-Match", "").strip('"')
         expected_version = request.data.get("expected_version")
 
-        # Optimistic concurrency validation
         current_version = getattr(row, "version", 1) if hasattr(row, "version") else 1
         if if_match and if_match != str(current_version):
-            return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
+            return Response(
+                error_body(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    current_version=current_version,
+                ),
+                status=412,
+            )
         if expected_version is not None and expected_version != current_version:
-            return error_response(request, "OPTIMISTIC_CONCURRENCY_CONFLICT", 412)
+            return Response(
+                error_body(
+                    "OPTIMISTIC_CONCURRENCY_CONFLICT",
+                    current_version=current_version,
+                ),
+                status=412,
+            )
 
         ordered_ids = request.data.get("item_ids") or request.data.get("ordered_item_ids") or []
         for idx, item_id in enumerate(ordered_ids):
             WatchlistItem.objects.filter(watchlist=row, pk=item_id).update(sort_order=idx)
+        row.version += 1
+        row.save(update_fields=("version", "updated_at"))
+        row = self.watchlist(watchlist_id)
 
         return Response(WatchlistSerializer(row).data)
