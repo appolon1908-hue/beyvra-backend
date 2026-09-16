@@ -2,6 +2,8 @@
 
 Combined contract: `integration/all-open-pr-fixes-20260909`
 
+Parent contract: `integration/codestra-beyvra-fabric-v2`
+
 Source branches: `feat/governed-beyvra-automation-current-main` and `integration/codestra-beyvra-fabric-v2`.
 
 Focused implementation branches:
