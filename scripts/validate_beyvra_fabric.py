@@ -11,6 +11,7 @@ FABRIC_PATH = ROOT / "contracts/automation/beyvra-fabric.v2.json"
 N8N_MANIFEST_PATH = ROOT / "docs/integrations/n8n/manifest.v2.json"
 N8N_README_PATH = ROOT / "docs/integrations/n8n/README.md"
 OPENAPI_PATH = ROOT / "contracts/automation/beyvra-operations-api.v1.yaml"
+BRANCH_MAP_PATH = ROOT / "docs/branches/BEYVRA_FABRIC_BRANCH_MAP.md"
 
 ALLOWED_PREFIX = "beyvra.operations."
 WORKFLOW_FAMILY = "product.beyvra-nonfinancial"
@@ -72,6 +73,11 @@ EXPECTED_HEADERS = {
     "CorrelationId": {"name": "X-Correlation-ID", "in": "header", "required": False,
                       "schema": {"type": "string", "maxLength": 128}},
 }
+EXPECTED_BRANCH_REFS = {
+    "Combined contract: `integration/all-open-pr-fixes-20260909`",
+    "Parent contract: `integration/codestra-beyvra-fabric-v2`",
+    "Source branches: `feat/governed-beyvra-automation-current-main` and `integration/codestra-beyvra-fabric-v2`.",
+}
 
 
 def fail(message: str) -> None:
@@ -98,6 +104,13 @@ def load_json(path: Path) -> dict[str, Any]:
         fail(f"cannot parse {path}: {exc}")
     require(isinstance(value, dict), f"{path} must contain an object")
     return value
+
+
+def load_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        fail(f"cannot read {path}: {exc}")
 
 
 def exact_strings(value: Any, expected: set[str], label: str) -> None:
@@ -172,12 +185,15 @@ def validate_n8n_manifest(fabric: dict[str, Any]) -> dict[str, Any]:
     for key in ("unknown_outcome_reconciled_before_retry", "exact_replay_returns_original_result",
                 "conflicting_replay_rejected"):
         require(invariants.get(key) is True, f"invariant {key} must remain true")
-    try:
-        readme = N8N_README_PATH.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        fail(f"cannot read {N8N_README_PATH}: {exc}")
+    readme = load_text(N8N_README_PATH)
     require(f"machine_client  = {MACHINE_CLIENT}" in readme, "README machine client drift")
     return manifest
+
+
+def validate_branch_map() -> None:
+    branch_map = load_text(BRANCH_MAP_PATH)
+    for line in EXPECTED_BRANCH_REFS:
+        require(line in branch_map, f"branch map is missing: {line}")
 
 
 def security_scope(operation: dict[str, Any]) -> list[dict[str, list[str]]]:
@@ -285,6 +301,7 @@ def validate_openapi() -> None:
 def main() -> None:
     fabric = validate_fabric()
     validate_n8n_manifest(fabric)
+    validate_branch_map()
     validate_openapi()
     print("BEYVRA_INTEGRATION_FABRIC_V2=PASS")
 
