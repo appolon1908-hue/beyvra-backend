@@ -45,6 +45,12 @@ class WatchlistAlertsApiTests(TestCase):
             HTTP_IF_MATCH='"1"'
         )
         self.assertEqual(res.status_code, 200)
+        self.watchlist.refresh_from_db()
+        self.assertEqual(self.watchlist.version, 2)
+        self.assertEqual(
+            [item["id"] for item in res.json()["items"]],
+            [str(self.item2.id), str(self.item1.id)],
+        )
 
     def test_reorder_watchlist_items_optimistic_concurrency_conflict(self):
         res = self.client.patch(
@@ -54,3 +60,7 @@ class WatchlistAlertsApiTests(TestCase):
             HTTP_IF_MATCH='"99"'
         )
         self.assertEqual(res.status_code, 412)
+        self.assertEqual(
+            res.json()["error"]["code"],
+            "OPTIMISTIC_CONCURRENCY_CONFLICT",
+        )
