@@ -5,6 +5,7 @@ import uuid
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
+from rest_framework import exceptions
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -44,7 +45,15 @@ def _cached_response(payload, request):
 
 
 def _product_mode(safety):
-    return "HYBRID" if safety["real_trading_enabled"] else "SIMULATION_ONLY"
+    return (
+        "HYBRID"
+        if (
+            safety["live_trading_enabled"]
+            or safety["real_trading_enabled"]
+            or safety["external_execution_enabled"]
+        )
+        else "SIMULATION_ONLY"
+    )
 
 
 def _provider_health_visible(user):
@@ -109,11 +118,15 @@ def _resolve_compliance_organization(request):
         try:
             normalized_organization_id = uuid.UUID(str(organization_id))
         except (ValueError, TypeError, AttributeError):
-            return None
+            raise exceptions.PermissionDenied("invalid organization context")
         membership = memberships.filter(
             organization_id=normalized_organization_id
         ).first()
-        return membership.organization if membership else None
+        if membership is None:
+            raise exceptions.PermissionDenied(
+                "organization context is not authorized"
+            )
+        return membership.organization
     available = list(memberships[:2])
     if len(available) == 1:
         return available[0].organization

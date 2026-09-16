@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.utils import timezone
+from rest_framework import exceptions
 from rest_framework.test import APISimpleTestCase
 
 from platform_ops import platform_api
@@ -51,6 +52,13 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         )
         self.assertEqual(second.status_code, 304)
         self.assertEqual(second["ETag"], first["ETag"])
+
+    @override_settings(LIVE_TRADING_ENABLED=True)
+    def test_get_platform_config_uses_live_flag_for_product_mode(self):
+        response = self.client.get("/api/v1/platform/config")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["live_trading_enabled"])
+        self.assertEqual(response.json()["product_mode"], "HYBRID")
 
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
     def test_get_platform_capabilities_unauthenticated(self, _system_state):
@@ -240,3 +248,16 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         )
         self.assertEqual(summary["policy_version"], "fixture-policy")
         self.assertEqual(summary["reason_codes"], ["KYC_REQUIRED"])
+
+    @patch("platform_ops.platform_api.OrganizationMembership.objects.filter")
+    def test_invalid_tenant_header_keeps_permission_error(
+        self,
+        membership_filter,
+    ):
+        request = type("Request", (), {})()
+        request.user = type("User", (), {"is_authenticated": True})()
+        request.headers = {"X-Organization-ID": "not-a-uuid"}
+        membership_filter.return_value.select_related.return_value.order_by.return_value = []
+
+        with self.assertRaises(exceptions.PermissionDenied):
+            platform_api._resolve_compliance_organization(request)
