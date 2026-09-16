@@ -73,7 +73,6 @@ class PlatformCapabilitiesApiTests(TestCase):
         res_unapproved = self.client.get("/api/v1/platform/capabilities")
         self.assertFalse(res_unapproved.json()["compliance"]["trading_eligible"])
 
-        # Approve compliance
         org = Organization.objects.create(name=f"Org {uuid.uuid4()}")
         OrganizationMembership.objects.create(user=self.user, organization=org)
         ComplianceProfile.objects.create(
@@ -85,5 +84,24 @@ class PlatformCapabilitiesApiTests(TestCase):
             sanctions_state=SanctionsState.CLEAR,
             jurisdiction_state=JurisdictionState.SUPPORTED
         )
-        res_approved = self.client.get("/api/v1/platform/capabilities")
+        res_approved = self.client.get("/api/v1/platform/capabilities", HTTP_X_ORGANIZATION_ID=str(org.pk))
         self.assertTrue(res_approved.json()["compliance"]["trading_eligible"])
+
+    def test_get_platform_capabilities_requires_explicit_tenant_for_multi_membership_user(self):
+        self.client.force_authenticate(self.user)
+        first = Organization.objects.create(name=f"Org {uuid.uuid4()}")
+        second = Organization.objects.create(name=f"Org {uuid.uuid4()}")
+        OrganizationMembership.objects.create(user=self.user, organization=first)
+        OrganizationMembership.objects.create(user=self.user, organization=second)
+        ComplianceProfile.objects.create(
+            user=self.user,
+            organization=first,
+            account_state=AccountState.ACTIVE,
+            kyc_state=KycState.APPROVED,
+            aml_state=AmlState.CLEARED,
+            sanctions_state=SanctionsState.CLEAR,
+            jurisdiction_state=JurisdictionState.SUPPORTED
+        )
+        response = self.client.get("/api/v1/platform/capabilities")
+        self.assertFalse(response.json()["compliance"]["trading_eligible"])
+        self.assertIn("TENANT_SELECTION_REQUIRED", response.json()["compliance"]["reason_codes"])
