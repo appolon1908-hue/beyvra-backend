@@ -1,11 +1,12 @@
 import hashlib
 import json
-import uuid
 
+from django.contrib.auth.models import AnonymousUser
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from rest_framework import exceptions
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,7 +15,9 @@ from apps.compliance.domain import RequirementType
 from apps.compliance.models import ComplianceProfile
 from apps.compliance.services import POLICY_VERSION, get_trading_eligibility
 from apps.trading.application.simulation import simulation_available
+from integrations.permissions import tenant_context_for_request
 from integrations.models import OrganizationMembership
+from operations.authentication import SessionBoundJWTAuthentication
 from platform_ops.health.api import _safety_state
 from platform_ops.health.services import HealthAuthority
 from platform_ops.permissions import SRE_ROLES
@@ -72,8 +75,26 @@ def _provider_health_visible(user):
     )
 
 
-def _compliance_summary(request):
-    user = request.user
+def _optional_user(request):
+    try:
+        authenticated = SessionBoundJWTAuthentication().authenticate(request)
+    except (AuthenticationFailed, exceptions.PermissionDenied):
+        return AnonymousUser()
+    if authenticated is None:
+        return AnonymousUser()
+    user, _token = authenticated
+    return user
+
+
+def _request_with_user(request, user):
+    proxy = type("PlatformRequestProxy", (), {})()
+    proxy.user = user
+    proxy.headers = request.headers
+    proxy.service_token = getattr(request, "service_token", None)
+    return proxy
+
+
+def _compliance_summary(request, user):
     summary = {
         "trading_eligible": False,
         "policy_version": POLICY_VERSION,
@@ -110,37 +131,22 @@ def _compliance_summary(request):
     return summary
 
 
-def _resolve_compliance_organization(request):
-    if not getattr(request.user, "is_authenticated", False):
+def _resolve_compliance_organization(request, user):
+    if not getattr(user, "is_authenticated", False):
         return None
-    memberships = OrganizationMembership.objects.filter(
-        user=request.user,
-        is_active=True,
-        organization__is_active=True,
-    ).select_related("organization").order_by("organization_id")
-    organization_id = request.headers.get("X-Organization-ID")
-    if organization_id:
-        try:
-            normalized_organization_id = uuid.UUID(str(organization_id))
-        except (ValueError, TypeError, AttributeError):
-            raise exceptions.PermissionDenied("invalid organization context")
-        membership = memberships.filter(
-            organization_id=normalized_organization_id
-        ).first()
-        if membership is None:
-            raise exceptions.PermissionDenied(
-                "organization context is not authorized"
-            )
-        return membership.organization
-    available = list(memberships[:2])
-    if len(available) == 1:
-        return available[0].organization
-    if len(available) > 1:
+    proxy = _request_with_user(request, user)
+    try:
+        return tenant_context_for_request(proxy).organization
+    except exceptions.ValidationError:
         return _TENANT_SELECTION_REQUIRED
-    return None
+    except exceptions.PermissionDenied:
+        if request.headers.get("X-Organization-ID"):
+            raise
+        return None
 
 
 class PlatformConfigView(APIView):
+    authentication_classes = ()
     permission_classes = (AllowAny,)
 
     def get(self, request):
@@ -164,12 +170,14 @@ class PlatformConfigView(APIView):
 
 
 class PlatformCapabilitiesView(APIView):
+    authentication_classes = ()
     permission_classes = (AllowAny,)
 
     def get(self, request):
         safety = _safety_state()
         system_state = HealthAuthority.system_state()
-        provider_health_visible = _provider_health_visible(request.user)
+        user = _optional_user(request)
+        provider_health_visible = _provider_health_visible(user)
         payload = {
             "schema_version": "1.0",
             "environment": getattr(settings, "DEPLOYMENT_ENV", "staging"),
@@ -198,7 +206,7 @@ class PlatformCapabilitiesView(APIView):
                 "reason_code": "FEATURE_DISABLED",
             },
             "provider_health_visible": provider_health_visible,
-            "compliance": _compliance_summary(request),
+            "compliance": _compliance_summary(request, user),
             "as_of": timezone.now().isoformat(),
         }
         if provider_health_visible:

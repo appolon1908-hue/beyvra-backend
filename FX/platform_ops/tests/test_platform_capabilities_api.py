@@ -74,6 +74,7 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
 
     @patch("platform_ops.platform_api.HealthAuthority.latest", return_value=[])
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    @patch("platform_ops.platform_api._optional_user")
     @patch(
         "platform_ops.platform_api._compliance_summary",
         return_value={
@@ -86,10 +87,11 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
     def test_get_platform_capabilities_operator_sees_provider_health(
         self,
         _compliance_summary,
+        optional_user,
         _system_state,
         _latest,
     ):
-        self.client.force_authenticate(self.operator)
+        optional_user.return_value = self.operator
         response = self.client.get("/api/v1/platform/capabilities")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["provider_health_visible"])
@@ -118,13 +120,15 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         ],
     )
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    @patch("platform_ops.platform_api._optional_user")
     def test_get_platform_capabilities_etag_handles_datetime_provider_health(
         self,
+        optional_user,
         _system_state,
         _latest,
         _compliance_summary,
     ):
-        self.client.force_authenticate(self.operator)
+        optional_user.return_value = self.operator
         response = self.client.get("/api/v1/platform/capabilities")
         self.assertEqual(response.status_code, 200)
         self.assertIn("ETag", response)
@@ -139,16 +143,16 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         },
     )
     @patch("platform_ops.platform_api._provider_health_visible", return_value=False)
-    @patch("platform_ops.platform_api._resolve_compliance_organization", return_value=None)
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    @patch("platform_ops.platform_api._optional_user")
     def test_get_platform_capabilities_includes_compliance_summary(
         self,
+        optional_user,
         _system_state,
-        _resolve_compliance_organization,
         _provider_health_visible,
         _compliance_summary,
     ):
-        self.client.force_authenticate(self.user)
+        optional_user.return_value = self.user
         body = self.client.get("/api/v1/platform/capabilities").json()
         self.assertFalse(body["compliance"]["trading_eligible"])
         self.assertEqual(body["compliance"]["policy_version"], "fixture-policy")
@@ -179,14 +183,16 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
 
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
     @patch("platform_ops.platform_api._provider_health_visible", return_value=False)
+    @patch("platform_ops.platform_api._optional_user")
     @patch("platform_ops.platform_api._resolve_compliance_organization", return_value=None)
     def test_authenticated_capabilities_without_tenant_context_stay_readable(
         self,
         _resolve_compliance_organization,
+        optional_user,
         _provider_health_visible,
         _system_state,
     ):
-        self.client.force_authenticate(self.user)
+        optional_user.return_value = self.user
         response = self.client.get("/api/v1/platform/capabilities")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -203,10 +209,11 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         _resolve_compliance_organization,
     ):
         request = type("Request", (), {})()
-        request.user = type("User", (), {"is_authenticated": True})()
+        user = type("User", (), {"is_authenticated": True})()
+        request.user = user
         request.headers = {}
 
-        summary = platform_api._compliance_summary(request)
+        summary = platform_api._compliance_summary(request, user)
 
         self.assertEqual(
             summary["reason_codes"],
@@ -244,7 +251,7 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         )()
         resolve_compliance_organization.return_value = organization
 
-        summary = platform_api._compliance_summary(request)
+        summary = platform_api._compliance_summary(request, request.user)
 
         profile_filter.assert_called_once_with(
             user=request.user,
@@ -256,15 +263,18 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         self.assertEqual(summary["policy_version"], "fixture-policy")
         self.assertEqual(summary["reason_codes"], ["KYC_REQUIRED"])
 
-    @patch("platform_ops.platform_api.OrganizationMembership.objects.filter")
+    @patch("platform_ops.platform_api.tenant_context_for_request")
     def test_invalid_tenant_header_keeps_permission_error(
         self,
-        membership_filter,
+        tenant_context_for_request,
     ):
         request = type("Request", (), {})()
-        request.user = type("User", (), {"is_authenticated": True})()
+        user = type("User", (), {"is_authenticated": True})()
+        request.user = user
         request.headers = {"X-Organization-ID": "not-a-uuid"}
-        membership_filter.return_value.select_related.return_value.order_by.return_value = []
+        tenant_context_for_request.side_effect = exceptions.PermissionDenied(
+            "invalid organization context"
+        )
 
         with self.assertRaises(exceptions.PermissionDenied):
-            platform_api._resolve_compliance_organization(request)
+            platform_api._resolve_compliance_organization(request, user)
