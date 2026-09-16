@@ -1,5 +1,6 @@
 import hashlib
 import json
+import uuid
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
@@ -12,12 +13,10 @@ from apps.compliance.domain import RequirementType
 from apps.compliance.models import ComplianceProfile
 from apps.compliance.services import POLICY_VERSION, get_trading_eligibility
 from apps.trading.application.simulation import simulation_available
-from integrations.permissions import organization_for_request
 from integrations.models import OrganizationMembership
 from platform_ops.health.api import _safety_state
 from platform_ops.health.services import HealthAuthority
 from platform_ops.permissions import SRE_ROLES
-from rest_framework import exceptions
 
 
 def _etag(payload):
@@ -72,11 +71,8 @@ def _compliance_summary(request):
     }
     if not getattr(user, "is_authenticated", False):
         return summary
-    try:
-        organization = organization_for_request(request)
-    except exceptions.ValidationError:
-        raise
-    except exceptions.APIException:
+    organization = _resolve_compliance_organization(request)
+    if organization is None:
         summary["reason_codes"] = ["KYC_REQUIRED"]
         summary["requirements"] = [RequirementType.IDENTITY_VERIFICATION.value]
         return summary
@@ -98,6 +94,30 @@ def _compliance_summary(request):
         .values_list("type", flat=True)
     )
     return summary
+
+
+def _resolve_compliance_organization(request):
+    if not getattr(request.user, "is_authenticated", False):
+        return None
+    memberships = OrganizationMembership.objects.filter(
+        user=request.user,
+        is_active=True,
+        organization__is_active=True,
+    ).select_related("organization").order_by("organization_id")
+    organization_id = request.headers.get("X-Organization-ID")
+    if organization_id:
+        try:
+            normalized_organization_id = uuid.UUID(str(organization_id))
+        except (ValueError, TypeError, AttributeError):
+            return None
+        membership = memberships.filter(
+            organization_id=normalized_organization_id
+        ).first()
+        return membership.organization if membership else None
+    available = list(memberships[:2])
+    if len(available) == 1:
+        return available[0].organization
+    return None
 
 
 class PlatformConfigView(APIView):

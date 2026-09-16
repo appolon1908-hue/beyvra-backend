@@ -131,10 +131,12 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         },
     )
     @patch("platform_ops.platform_api._provider_health_visible", return_value=False)
+    @patch("platform_ops.platform_api._resolve_compliance_organization", return_value=None)
     @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
     def test_get_platform_capabilities_includes_compliance_summary(
         self,
         _system_state,
+        _resolve_compliance_organization,
         _provider_health_visible,
         _compliance_summary,
     ):
@@ -167,12 +169,29 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
             organization__is_active=True,
         )
 
+    @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    @patch("platform_ops.platform_api._provider_health_visible", return_value=False)
+    @patch("platform_ops.platform_api._resolve_compliance_organization", return_value=None)
+    def test_authenticated_capabilities_without_tenant_context_stay_readable(
+        self,
+        _resolve_compliance_organization,
+        _provider_health_visible,
+        _system_state,
+    ):
+        self.client.force_authenticate(self.user)
+        response = self.client.get("/api/v1/platform/capabilities")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["compliance"]["requirements"],
+            ["IDENTITY_VERIFICATION"],
+        )
+
     @patch("platform_ops.platform_api.get_trading_eligibility")
     @patch("platform_ops.platform_api.ComplianceProfile.objects.filter")
-    @patch("platform_ops.platform_api.organization_for_request")
+    @patch("platform_ops.platform_api._resolve_compliance_organization")
     def test_compliance_summary_uses_resolved_organization(
         self,
-        organization_for_request,
+        resolve_compliance_organization,
         profile_filter,
         get_trading_eligibility,
     ):
@@ -211,7 +230,7 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
                 "reason_codes": ("KYC_REQUIRED",),
             },
         )()
-        organization_for_request.return_value = organization
+        resolve_compliance_organization.return_value = organization
 
         summary = platform_api._compliance_summary(request)
 
