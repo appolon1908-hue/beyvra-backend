@@ -60,12 +60,14 @@ class OrderLifecycleV1ApiTests(TestCase):
             **self.headers
         )
         self.assertEqual(res_create.status_code, 201)
-        order_id = res_create.json()["id"]
+        order_data = res_create.json()
+        order_id = order_data["order_id"]
+        self.assertEqual(order_data["status"], OrderState.ACCEPTED.value)
 
         # Get Order
         res_get = self.client.get(f"/api/v1/orders/{order_id}", **self.headers)
         self.assertEqual(res_get.status_code, 200)
-        self.assertEqual(res_get.json()["id"], order_id)
+        self.assertEqual(res_get.json()["order_id"], order_id)
 
         # Get Order Events
         res_events = self.client.get(f"/api/v1/orders/{order_id}/events", **self.headers)
@@ -81,9 +83,15 @@ class OrderLifecycleV1ApiTests(TestCase):
             HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
             **self.headers
         )
-        order_id = res_create.json()["id"]
+        order_data = res_create.json()
+        order_id = order_data["order_id"]
 
-        res_cancel = self.client.post(f"/api/v1/orders/{order_id}/cancel", **self.headers)
+        res_cancel = self.client.post(
+            f"/api/v1/orders/{order_id}/cancel",
+            HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()),
+            HTTP_IF_MATCH=order_data["updated_at"],
+            **self.headers
+        )
         self.assertEqual(res_cancel.status_code, 200)
         self.assertEqual(res_cancel.json()["status"], OrderState.CANCELLED.value)
 
