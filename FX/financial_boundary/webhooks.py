@@ -31,6 +31,17 @@ def webhook_signature(*, provider_id: str, event_id: str, timestamp: int,
     return "v1=" + hmac.new(secret, message, hashlib.sha256).hexdigest()
 
 
+def _canonical_event_type(raw_event_type: str) -> str:
+    if re.fullmatch(r"financial\.[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\.v[1-9][0-9]*", raw_event_type):
+        return raw_event_type
+    normalized = str(raw_event_type or "").strip().lower().replace("-", "_")
+    if not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*", normalized):
+        raise WebhookDenied("event type denied")
+    if re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\.v[1-9][0-9]*", normalized):
+        return f"financial.{normalized}"
+    return f"financial.{normalized}.v1"
+
+
 def verify_provider_webhook(*, expected_provider_id: str, tenant_ref, headers: dict,
                             raw_body: bytes, secret: bytes, now=None,
                             replay_window_seconds: int = 300) -> VerifiedProviderWebhook:
@@ -62,9 +73,10 @@ def verify_provider_webhook(*, expected_provider_id: str, tenant_ref, headers: d
     except (TypeError, ValueError, UnicodeDecodeError):
         raise WebhookDenied("payload denied") from None
     payload, _ = canonical_payload(payload)
-    event_type = payload.pop("event_type", None)
-    if not isinstance(event_type, str):
+    raw_event_type = payload.pop("event_type", None)
+    if not isinstance(raw_event_type, str):
         raise WebhookDenied("event type denied")
+    event_type = _canonical_event_type(raw_event_type)
     event_uuid = uuid.uuid5(uuid.NAMESPACE_URL, f"beyvra-provider:{provider_id}:{event_id}")
     occurred_at = datetime.fromtimestamp(timestamp, tz=datetime_timezone.utc)
     try:
