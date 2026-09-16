@@ -2,24 +2,32 @@ import hashlib
 import json
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.compliance.domain import RequirementType
+from apps.compliance.models import ComplianceProfile
 from apps.compliance.services import POLICY_VERSION, get_trading_eligibility
 from apps.trading.application.simulation import simulation_available
+from integrations.permissions import organization_for_request
 from integrations.models import OrganizationMembership
 from platform_ops.health.api import _safety_state
 from platform_ops.health.services import HealthAuthority
 from platform_ops.permissions import SRE_ROLES
+from rest_framework import exceptions
 
 
 def _etag(payload):
     stable = {key: value for key, value in payload.items() if key != "as_of"}
     digest = hashlib.sha256(
-        json.dumps(stable, sort_keys=True).encode("utf-8")
+        json.dumps(
+            stable,
+            sort_keys=True,
+            cls=DjangoJSONEncoder,
+        ).encode("utf-8")
     ).hexdigest()
     return f'"{digest}"'
 
@@ -48,11 +56,14 @@ def _provider_health_visible(user):
         or OrganizationMembership.objects.filter(
             user=user,
             role__in=SRE_ROLES,
+            is_active=True,
+            organization__is_active=True,
         ).exists()
     )
 
 
-def _compliance_summary(user):
+def _compliance_summary(request):
+    user = request.user
     summary = {
         "trading_eligible": False,
         "policy_version": POLICY_VERSION,
@@ -61,7 +72,18 @@ def _compliance_summary(user):
     }
     if not getattr(user, "is_authenticated", False):
         return summary
-    profile = user.compliance_profiles.select_related("organization").first()
+    try:
+        organization = organization_for_request(request)
+    except exceptions.ValidationError:
+        raise
+    except exceptions.APIException:
+        summary["reason_codes"] = ["KYC_REQUIRED"]
+        summary["requirements"] = [RequirementType.IDENTITY_VERIFICATION.value]
+        return summary
+    profile = ComplianceProfile.objects.filter(
+        user=user,
+        organization=organization,
+    ).first()
     if profile is None:
         summary["reason_codes"] = ["KYC_REQUIRED"]
         summary["requirements"] = [RequirementType.IDENTITY_VERIFICATION.value]
@@ -136,7 +158,7 @@ class PlatformCapabilitiesView(APIView):
                 "reason_code": "FEATURE_DISABLED",
             },
             "provider_health_visible": provider_health_visible,
-            "compliance": _compliance_summary(request.user),
+            "compliance": _compliance_summary(request),
             "as_of": timezone.now().isoformat(),
         }
         if provider_health_visible:

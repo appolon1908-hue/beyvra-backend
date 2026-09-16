@@ -3,7 +3,10 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APISimpleTestCase
+
+from platform_ops import platform_api
 
 SIMULATION = override_settings(
     DEPLOYMENT_ENV="test",
@@ -89,6 +92,40 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
         return_value={
             "trading_eligible": False,
             "policy_version": "fixture-policy",
+            "reason_codes": [],
+            "requirements": [],
+        },
+    )
+    @patch(
+        "platform_ops.platform_api.HealthAuthority.latest",
+        return_value=[
+            {
+                "service": "market-data",
+                "criticality": "TIER_1",
+                "health": "HEALTHY",
+                "latency_ms": "12",
+                "observed_at": timezone.now(),
+                "failure_reason_safe": "NOT_OBSERVED",
+            }
+        ],
+    )
+    @patch("platform_ops.platform_api.HealthAuthority.system_state", return_value="HEALTHY")
+    def test_get_platform_capabilities_etag_handles_datetime_provider_health(
+        self,
+        _system_state,
+        _latest,
+        _compliance_summary,
+    ):
+        self.client.force_authenticate(self.operator)
+        response = self.client.get("/api/v1/platform/capabilities")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ETag", response)
+
+    @patch(
+        "platform_ops.platform_api._compliance_summary",
+        return_value={
+            "trading_eligible": False,
+            "policy_version": "fixture-policy",
             "reason_codes": ["KYC_REQUIRED"],
             "requirements": ["IDENTITY_VERIFICATION"],
         },
@@ -110,3 +147,77 @@ class PlatformCapabilitiesApiTests(APISimpleTestCase):
             body["compliance"]["requirements"],
             ["IDENTITY_VERIFICATION"],
         )
+
+    @patch("platform_ops.platform_api.OrganizationMembership.objects.filter")
+    def test_provider_health_visibility_requires_active_membership(
+        self,
+        membership_filter,
+    ):
+        membership_filter.return_value.exists.return_value = True
+        user = get_user_model()(
+            email=f"sre-user-{uuid.uuid4()}@example.invalid",
+            phone_number=f"+1204{uuid.uuid4().int % 10000000:07d}",
+        )
+
+        self.assertTrue(platform_api._provider_health_visible(user))
+        membership_filter.assert_called_once_with(
+            user=user,
+            role__in=platform_api.SRE_ROLES,
+            is_active=True,
+            organization__is_active=True,
+        )
+
+    @patch("platform_ops.platform_api.get_trading_eligibility")
+    @patch("platform_ops.platform_api.ComplianceProfile.objects.filter")
+    @patch("platform_ops.platform_api.organization_for_request")
+    def test_compliance_summary_uses_resolved_organization(
+        self,
+        organization_for_request,
+        profile_filter,
+        get_trading_eligibility,
+    ):
+        organization = object()
+        request = type("Request", (), {})()
+        request.user = type("User", (), {"is_authenticated": True})()
+        request.headers = {}
+
+        profile = profile_filter.return_value.first.return_value = type(
+            "Profile",
+            (),
+            {},
+        )()
+        profile.requirements = type("Requirements", (), {})()
+        profile.requirements.filter = lambda **_kwargs: type(
+            "RequirementSet",
+            (),
+            {
+                "exclude": lambda self, **_exclude: type(
+                    "ValueList",
+                    (),
+                    {
+                        "values_list": lambda self, *_args, **_kwargs: [
+                            "IDENTITY_VERIFICATION"
+                        ]
+                    },
+                )()
+            },
+        )()
+        get_trading_eligibility.return_value = type(
+            "Decision",
+            (),
+            {
+                "result": "DENIED",
+                "policy_version": "fixture-policy",
+                "reason_codes": ("KYC_REQUIRED",),
+            },
+        )()
+        organization_for_request.return_value = organization
+
+        summary = platform_api._compliance_summary(request)
+
+        profile_filter.assert_called_once_with(
+            user=request.user,
+            organization=organization,
+        )
+        self.assertEqual(summary["policy_version"], "fixture-policy")
+        self.assertEqual(summary["reason_codes"], ["KYC_REQUIRED"])
