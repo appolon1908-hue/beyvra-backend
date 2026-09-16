@@ -758,8 +758,8 @@ Only reviewed, source-bound records in `contracts/implementation-evidence.json` 
 
 ## Source documents
 
-- `contracts/openapi/beyvra-enterprise-experience-v1.yaml`
-- `contracts/openapi/beyvra-openapi-3.1.yaml`
-- `contracts/openapi/beyvra-treasury-v1.yaml`
-- `contracts/openapi/beyvra-workspace-v1.yaml`
-- `contracts/openapi/codestra-real-wallet-v1.yaml`
+- `contracts\openapi\beyvra-enterprise-experience-v1.yaml`
+- `contracts\openapi\beyvra-openapi-3.1.yaml`
+- `contracts\openapi\beyvra-treasury-v1.yaml`
+- `contracts\openapi\beyvra-workspace-v1.yaml`
+- `contracts\openapi\codestra-real-wallet-v1.yaml`
